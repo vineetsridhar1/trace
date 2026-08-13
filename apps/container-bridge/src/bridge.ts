@@ -10,13 +10,9 @@ import type {
   BridgeCommand,
   BridgeMessage,
   CodingToolAdapter,
-  GitCheckpointBridgePayload,
-  GitCheckpointTrigger,
   ToolOutput,
 } from "@trace/shared";
 import {
-  extractGitToolUsePending,
-  extractGitToolResultTrigger,
   parseBranchOutput,
   handleListFiles,
   handleReadFile,
@@ -29,10 +25,7 @@ import {
   handleListSkills,
   downloadAttachmentsToTempFiles,
   cleanupTempAttachments,
-  GIT_SHOW_ARGS,
-  GIT_DIFF_TREE_ARGS,
   isMissingToolSessionError,
-  parseGitShowOutput,
   inspectSessionCurrentBranch,
   inspectSessionGitSyncStatus,
   BridgeOutbox,
@@ -81,18 +74,6 @@ function hasExecutable(command: string): boolean {
   return resolveExecutable(command) !== null;
 }
 
-async function inspectGitCheckpoint(
-  cwd: string,
-  trigger: GitCheckpointTrigger,
-  command: string,
-): Promise<GitCheckpointBridgePayload> {
-  const [{ stdout: showStdout }, { stdout: diffStdout }] = await Promise.all([
-    execFileAsync("git", [...GIT_SHOW_ARGS], { cwd, maxBuffer: 1024 * 1024 }),
-    execFileAsync("git", [...GIT_DIFF_TREE_ARGS], { cwd, maxBuffer: 5 * 1024 * 1024 }),
-  ]);
-  return parseGitShowOutput(showStdout, diffStdout, trigger, command, new Date().toISOString());
-}
-
 function isPendingInputOutput(output: ToolOutput): boolean {
   return (
     output.type === "assistant" &&
@@ -137,11 +118,6 @@ export class ContainerBridge implements IBridgeClient {
   >();
   /** Sessions running in read-only mode (no worktree, using bare repo path) */
   private readOnlySessions = new Set<string>();
-  /** Phase-1 git detection: sessionId → Map<toolUseId → {trigger, command}> */
-  private pendingGitToolUses = new Map<
-    string,
-    Map<string, { trigger: import("@trace/shared").GitCheckpointTrigger; command: string }>
-  >();
   private pendingInputToolUseIds = new Map<string, string>();
   private sessionRunSequence = new Map<string, number>();
   private activeRuns = new Map<string, number>();
@@ -437,7 +413,7 @@ export class ContainerBridge implements IBridgeClient {
           defaultBranch,
           branch,
           preserveBranchName,
-          checkpointSha,
+          baseCommitSha,
           readOnly,
         } = cmd;
 
@@ -470,7 +446,7 @@ export class ContainerBridge implements IBridgeClient {
                   defaultBranch,
                   branch,
                   preserveBranchName,
-                  checkpointSha,
+                  baseCommitSha,
                   sessionGroupId,
                   slug,
                 });
@@ -575,7 +551,7 @@ export class ContainerBridge implements IBridgeClient {
           slug,
           repoRemoteUrl,
           defaultBranch,
-          checkpointSha,
+          baseCommitSha,
           designSystemPackage,
           sourceRepository,
         } = cmd;
@@ -588,7 +564,7 @@ export class ContainerBridge implements IBridgeClient {
               slug,
               repoRemoteUrl,
               defaultBranch,
-              checkpointSha,
+              baseCommitSha,
               sessionGroupKind,
             });
             if (sessionGroupKind === "design" && designSystemPackage) {
@@ -749,7 +725,6 @@ export class ContainerBridge implements IBridgeClient {
           this.sessionWorkdirs.get(cmd.sessionId) ??
           null;
         this.sessionWorkdirs.delete(cmd.sessionId);
-        this.pendingGitToolUses.delete(cmd.sessionId);
         this.terminalManager.destroyForSession(cmd.sessionId);
 
         // App sessions run managed dev-server processes (keyed by
@@ -1340,31 +1315,6 @@ export class ContainerBridge implements IBridgeClient {
         hasForwardedOutput = true;
         this.send({ type: "session_output", sessionId, data: output });
 
-        // Phase 1: collect tool_use blocks whose command is a git commit/push
-        const newPending = extractGitToolUsePending(output);
-        if (newPending.size > 0) {
-          const sessionPending = this.pendingGitToolUses.get(sessionId) ?? new Map();
-          for (const [id, val] of newPending) sessionPending.set(id, val);
-          this.pendingGitToolUses.set(sessionId, sessionPending);
-        }
-
-        // Phase 2: fire checkpoint when the matching tool_result arrives
-        const sessionPending = this.pendingGitToolUses.get(sessionId) ?? new Map();
-        const gitTrigger = extractGitToolResultTrigger(output, sessionPending);
-        if (gitTrigger) {
-          if (gitTrigger.toolUseId) sessionPending.delete(gitTrigger.toolUseId);
-          inspectGitCheckpoint(cwd, gitTrigger.trigger, gitTrigger.command)
-            .then((checkpoint) => {
-              if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
-              this.send({ type: "git_checkpoint", sessionId, checkpoint });
-            })
-            .catch((err: Error) => {
-              console.warn(
-                `[container-bridge] failed to inspect git checkpoint for ${sessionId}:`,
-                err.message,
-              );
-            });
-        }
         maybeReportToolSessionId();
 
         if (isPendingInputOutput(output)) {

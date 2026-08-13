@@ -22,7 +22,6 @@ vi.mock("@trace/shared/animal-names", () => ({
   generateAnimalSlug: generateAnimalSlugMock,
 }));
 
-
 describe("createWorktree", () => {
   beforeEach(() => {
     existsSyncMock.mockReset();
@@ -708,12 +707,7 @@ describe("createWorktree", () => {
     expect(generateAnimalSlugMock).not.toHaveBeenCalled();
     expect(execFileMock).toHaveBeenCalledWith(
       "git",
-      [
-        "worktree",
-        "add",
-        expect.stringContaining("/trace/sessions/repo-1/otter"),
-        "trace-otter",
-      ],
+      ["worktree", "add", expect.stringContaining("/trace/sessions/repo-1/otter"), "trace-otter"],
       expect.objectContaining({ cwd: "/tmp/repo" }),
       expect.any(Function),
     );
@@ -784,7 +778,7 @@ describe("createWorktree", () => {
     );
   });
 
-  it("continues when a checkout hook fails after git creates the worktree", async () => {
+  it("continues when git reports failure after creating the worktree", async () => {
     existsSyncMock.mockReturnValue(false);
     generateAnimalSlugMock.mockReturnValue("otter");
     getUsedSlugsMock.mockResolvedValue(new Set());
@@ -810,7 +804,7 @@ describe("createWorktree", () => {
           return {} as ReturnType<typeof execFileMock>;
         }
         if (args[0] === "worktree" && args[1] === "add") {
-          callback(new Error("post-checkout hook failed"));
+          callback(new Error("worktree command reported failure"));
           return {} as ReturnType<typeof execFileMock>;
         }
         if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") {
@@ -1128,7 +1122,6 @@ describe("adoptWorktree", () => {
   beforeEach(() => {
     existsSyncMock.mockReset();
     execFileMock.mockReset();
-    installOrRepairRepoHooksBestEffortMock.mockReset();
   });
 
   afterEach(() => {

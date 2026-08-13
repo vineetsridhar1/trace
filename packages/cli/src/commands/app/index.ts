@@ -30,7 +30,7 @@ const deployCommand = defineCommand({
   ],
   effects: [
     "Commits no files and performs no project analysis.",
-    "Queues a durable production deployment of the latest saved app checkpoint.",
+    "Queues a durable production deployment of the latest pushed app commit.",
     "May create or update AWS runtime resources and a persistent app database.",
   ],
   output: "The queued deployment, immutable commit, selected target, status, and eventual URL.",
@@ -136,7 +136,7 @@ const statusCommand = defineCommand({
   description: "List durable deployments for the current app",
   examples: ['"$TRACE_CLI" app status --json'],
   effects: ["Read-only; does not build, deploy, promote, or stop anything."],
-  output: "Recent deployments with target, checkpoint, status, URL, and safe failure details.",
+  output: "Recent deployments with target, commit, status, URL, and safe failure details.",
   nextSteps: [
     "If the deployment is still active, wait and run this command again; if it failed, inspect the returned error before retrying.",
   ],

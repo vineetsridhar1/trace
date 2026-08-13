@@ -3,7 +3,7 @@ import { prisma } from "../lib/db.js";
 import { storage } from "../lib/storage/index.js";
 import { createEndpointPreviewToken, ENDPOINT_PREVIEW_COOKIE } from "./endpoint-preview-auth.js";
 import { buildEndpointUrl } from "./endpoint-utils.js";
-import { designCheckpointPreviewUrl } from "../lib/design-checkpoint-preview-url.js";
+import { designCommitPreviewUrl } from "../lib/design-preview-url.js";
 
 const MAX_EXPORT_BYTES = 15 * 1024 * 1024;
 const EXPORT_TIMEOUT_MS = 60_000;
@@ -11,7 +11,7 @@ const MAX_CONCURRENT_EXPORTS = 2;
 let activeExports = 0;
 const exportWaiters: Array<() => void> = [];
 
-export type DesignCheckpointPreviewResult = {
+export type DesignPreviewResult = {
   previewStatus: "captured" | "unavailable" | "failed";
   previewKey?: string;
   previewUrl?: string;
@@ -69,14 +69,13 @@ async function fetchExport(url: string, headers: Record<string, string>): Promis
   }
 }
 
-export const designCheckpointPreviewService = {
+export const designPreviewService = {
   async publish(input: {
     organizationId: string;
     sessionGroupId: string;
-    checkpointId: string;
     commitSha: string;
     userId: string;
-  }): Promise<DesignCheckpointPreviewResult> {
+  }): Promise<DesignPreviewResult> {
     const endpoint = await prisma.sessionEndpoint.findFirst({
       where: {
         organizationId: input.organizationId,
@@ -111,38 +110,23 @@ export const designCheckpointPreviewService = {
         if (html.byteLength === 0 || html.byteLength > MAX_EXPORT_BYTES) {
           throw new Error("Design export has an invalid size");
         }
-        const previewKey = `design-previews/${input.organizationId}/${input.sessionGroupId}/${input.checkpointId}-${randomUUID()}.html`;
+        const previewKey = `design-previews/${input.organizationId}/${input.sessionGroupId}/${input.commitSha}-${randomUUID()}.html`;
         await storage.putObject(previewKey, html, "text/html; charset=utf-8");
         return { previewKey };
       });
       return {
         previewStatus: "captured",
         previewKey,
-        previewUrl: designCheckpointPreviewUrl(input.checkpointId),
+        previewUrl: designCommitPreviewUrl(input.sessionGroupId),
         previewContentType: "text/html",
         previewCapturedAt: new Date(),
       };
     } catch (error) {
-      console.warn("[design-checkpoint] preview export failed", {
-        checkpointId: input.checkpointId,
+      console.warn("[design-preview] export failed", {
         sessionGroupId: input.sessionGroupId,
         error: error instanceof Error ? error.message : String(error),
       });
       return { previewStatus: "failed", previewCapturedAt: new Date() };
     }
-  },
-
-  async publishCommit(input: {
-    organizationId: string;
-    sessionGroupId: string;
-    commitSha: string;
-    userId: string;
-  }): Promise<DesignCheckpointPreviewResult> {
-    return this.publish({
-      ...input,
-      // The object key is intentionally commit-addressed. Unlike a Trace
-      // checkpoint, this is only an S3 artifact identifier for a pushed ref.
-      checkpointId: `commit-${input.commitSha}`,
-    });
   },
 };

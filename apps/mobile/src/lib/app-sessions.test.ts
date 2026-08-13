@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EntityState } from "@trace/client-core";
-import type { GitCheckpoint, SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
+import type { SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
 import {
   appSessionSubtitle,
   buildAppSessionGroupIds,
@@ -200,26 +200,9 @@ describe("findReadyAppPreviewEndpointId", () => {
 
 describe("savedDesignPreviewUrl", () => {
   it("uses the group artifact when the runtime is unavailable", () => {
-    expect(savedDesignPreviewUrl("https://trace.test/design-previews/groups/design", [])).toBe(
+    expect(savedDesignPreviewUrl("https://trace.test/design-previews/groups/design")).toBe(
       "https://trace.test/design-previews/groups/design",
     );
-  });
-
-  it("falls back to the most recent captured checkpoint artifact", () => {
-    expect(
-      savedDesignPreviewUrl(null, [
-        {
-          previewStatus: "captured",
-          previewUrl: "https://trace.test/design-previews/older",
-          committedAt: "2026-07-10T12:00:00.000Z",
-        },
-        {
-          previewStatus: "captured",
-          previewUrl: "https://trace.test/design-previews/newer",
-          committedAt: "2026-07-11T12:00:00.000Z",
-        },
-      ] as unknown as GitCheckpoint[]),
-    ).toBe("https://trace.test/design-previews/newer");
   });
 });
 

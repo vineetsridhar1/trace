@@ -1073,7 +1073,7 @@ export class BridgeClient implements IBridgeClient {
           defaultBranch,
           branch,
           preserveBranchName,
-          checkpointSha,
+          baseCommitSha,
           readOnly,
           adoptWorktreePath,
         } = cmd;
@@ -1140,7 +1140,7 @@ export class BridgeClient implements IBridgeClient {
             defaultBranch,
             startBranch: branch,
             preserveBranchName,
-            checkpointSha,
+            baseCommitSha,
           });
           this.pendingWorktrees.set(worktreeKey, worktreePromise);
           void worktreePromise

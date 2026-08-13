@@ -36,5 +36,4 @@ export {
 export { PROVISIONED_RUNTIME_PREFIX, isProvisionedRuntimeId } from "./runtime-ids.js";
 export type { BuiltinSlashCommand } from "./slash-commands.js";
 export { BUILTIN_SLASH_COMMANDS } from "./slash-commands.js";
-export type { GitCheckpointContext, GitCheckpointTrigger } from "./git-checkpoint.js";
-export { shortSha } from "./git-checkpoint.js";
+export { shortSha } from "./git.js";

@@ -1,17 +1,15 @@
-import { Files, GitCommitHorizontal, GitCompareArrows } from "lucide-react";
+import { Files, GitCompareArrows } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { FileExplorer } from "./FileExplorer";
-import { CheckpointPanel } from "./CheckpointPanel";
 import { BranchChangesPanel } from "./BranchChangesPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 import type { FileTreeNode } from "./file-explorer-utils";
 
-export type SidebarTab = "files" | "git" | "changes";
+export type SidebarTab = "files" | "changes";
 
 interface SidebarPanelProps {
   sessionGroupId: string;
-  activeSessionId: string | null;
   activeTab: SidebarTab;
   fileTree: FileTreeNode[];
   filesLoading: boolean;
@@ -21,8 +19,6 @@ interface SidebarPanelProps {
   onRefreshFiles: () => Promise<void>;
   onLoadDirectory: (directoryPath: string) => Promise<void>;
   onDiffFileClick?: (filePath: string, status: string) => void;
-  highlightCheckpointId?: string | null;
-  onCheckpointClick?: (sessionId: string, promptEventId: string) => void;
   bridgeAccess?: BridgeRuntimeAccessInfo | null;
   onBridgeAccessRequested?: () => void | Promise<void>;
 }
@@ -33,7 +29,6 @@ const tabInactive = "text-muted-foreground hover:text-foreground border-b-2 bord
 
 export function SidebarPanel({
   sessionGroupId,
-  activeSessionId,
   activeTab,
   fileTree,
   filesLoading,
@@ -43,8 +38,6 @@ export function SidebarPanel({
   onRefreshFiles,
   onLoadDirectory,
   onDiffFileClick,
-  highlightCheckpointId,
-  onCheckpointClick,
   bridgeAccess,
   onBridgeAccessRequested,
 }: SidebarPanelProps) {
@@ -63,14 +56,6 @@ export function SidebarPanel({
         </button>
         <button
           type="button"
-          onClick={() => onTabChange("git")}
-          className={cn(tabClass, activeTab === "git" ? tabActive : tabInactive)}
-        >
-          <GitCommitHorizontal size={12} />
-          Checkpoints
-        </button>
-        <button
-          type="button"
           onClick={() => onTabChange("changes")}
           className={cn(tabClass, activeTab === "changes" ? tabActive : tabInactive)}
         >
@@ -80,7 +65,7 @@ export function SidebarPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        {!bridgeInteractionAllowed && activeTab !== "git" ? (
+        {!bridgeInteractionAllowed ? (
           <div className="p-3">
             <BridgeAccessNotice
               access={bridgeAccess ?? null}
@@ -102,14 +87,7 @@ export function SidebarPanel({
             sessionGroupId={sessionGroupId}
             onFileClick={onDiffFileClick ?? (() => {})}
           />
-        ) : (
-          <CheckpointPanel
-            sessionGroupId={sessionGroupId}
-            activeSessionId={activeSessionId}
-            highlightCheckpointId={highlightCheckpointId}
-            onCheckpointClick={onCheckpointClick}
-          />
-        )}
+        ) : null}
       </div>
     </div>
   );

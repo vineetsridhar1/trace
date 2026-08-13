@@ -34,7 +34,7 @@ export const commandGroups: readonly CommandGroupDefinition[] = [
     ],
     notes: [
       "The CLI never analyzes code or chooses infrastructure.",
-      "The latest saved checkpoint is the immutable deployment source.",
+      "The latest pushed app commit is the immutable deployment source.",
     ],
   },
   {

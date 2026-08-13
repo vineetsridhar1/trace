@@ -503,7 +503,6 @@ model Repo {
   sessions                    Session[]
   sessionGroups               SessionGroup[]
   channels                    Channel[]
-  gitCheckpoints              GitCheckpoint[]
   sessionSetupScriptRuns      SessionSetupScriptRun[]
   sessionApplicationProcesses SessionApplicationProcess[]
   sessionEndpoints            SessionEndpoint[]
@@ -643,7 +642,6 @@ model SessionGroup {
   setupError               String?
 
   sessions                    Session[]
-  gitCheckpoints              GitCheckpoint[]
   bridgeAccessGrants          BridgeAccessGrant[]
   bridgeAccessRequests        BridgeAccessRequest[]
   setupScriptRuns             SessionSetupScriptRun[]
@@ -1230,8 +1228,7 @@ model Event {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  timestamp      DateTime        @default(now())
-  gitCheckpoints GitCheckpoint[] @relation("GitCheckpointPromptEvent")
+  timestamp DateTime @default(now())
 
   @@index([organizationId, scopeType, scopeId])
   @@index([organizationId, scopeType, scopeId, timestamp])
@@ -1240,84 +1237,44 @@ model Event {
   @@index([parentId])
 }
 
-model GitCheckpoint {
-  id                 String    @id @default(uuid())
-  sessionId          String
-  sessionGroupId     String
-  repoId             String
-  promptEventId      String
-  commitSha          String
-  parentShas         String[]
-  treeSha            String
-  subject            String
-  author             String
-  committedAt        DateTime
-  filesChanged       Int
-  captureStatus      String?
-  captureKey         String?
-  captureUrl         String?
-  captureContentType String?
-  capturedAt         DateTime?
-  previewStatus      String?
-  previewKey         String?
-  previewUrl         String?
-  previewContentType String?
-  previewCapturedAt  DateTime?
-  createdAt          DateTime  @default(now())
-
-  sessionGroup   SessionGroup    @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repo           Repo            @relation(fields: [repoId], references: [id], onDelete: Cascade)
-  promptEvent    Event           @relation("GitCheckpointPromptEvent", fields: [promptEventId], references: [id], onDelete: Restrict)
-  appDeployments AppDeployment[]
-
-  @@unique([sessionGroupId, commitSha])
-  @@index([sessionId, committedAt])
-  @@index([sessionGroupId, committedAt])
-  @@index([repoId, committedAt])
-  @@index([promptEventId])
-}
-
 model AppDeployment {
-  id                 String              @id @default(uuid())
-  organizationId     String
-  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sessionGroupId     String
-  sessionGroup       SessionGroup        @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repoId             String
-  repo               Repo                @relation(fields: [repoId], references: [id], onDelete: Cascade)
-  sourceCheckpointId String
-  sourceCheckpoint   GitCheckpoint       @relation(fields: [sourceCheckpointId], references: [id], onDelete: Restrict)
-  commitSha          String
-  status             AppDeploymentStatus @default(queued)
-  target             String              @default("service")
-  spec               Json                @default("{}")
-  appSlug            String              @default("")
-  requestedByUserId  String
-  callbackTokenHash  String
+  id                     String              @id @default(uuid())
+  organizationId         String
+  organization           Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionGroupId         String
+  sessionGroup           SessionGroup        @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  repoId                 String
+  repo                   Repo                @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  commitSha              String
+  status                 AppDeploymentStatus @default(queued)
+  target                 String              @default("service")
+  spec                   Json                @default("{}")
+  appSlug                String              @default("")
+  requestedByUserId      String
+  callbackTokenHash      String
   callbackTokenEncrypted String?
-  callbackTokenIv    String?
-  clientMutationId   String?
-  dispatchAttempts   Int                 @default(0)
-  nextDispatchAt     DateTime            @default(now())
-  dispatchedAt       DateTime?
-  externalJobId      String?
-  imageDigest        String?
-  staticPrefix       String?
-  serviceName        String?
-  url                String?
-  errorMessage       String?
-  queuedAt           DateTime            @default(now())
-  startedAt          DateTime?
-  completedAt        DateTime?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  callbackTokenIv        String?
+  clientMutationId       String?
+  dispatchAttempts       Int                 @default(0)
+  nextDispatchAt         DateTime            @default(now())
+  dispatchedAt           DateTime?
+  externalJobId          String?
+  imageDigest            String?
+  staticPrefix           String?
+  serviceName            String?
+  url                    String?
+  errorMessage           String?
+  queuedAt               DateTime            @default(now())
+  startedAt              DateTime?
+  completedAt            DateTime?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
+  @@unique([organizationId, clientMutationId])
   @@index([organizationId, sessionGroupId, createdAt])
   @@index([sessionGroupId, status])
   @@index([appSlug, status])
-  @@index([sourceCheckpointId])
   @@index([status, nextDispatchAt])
-  @@unique([organizationId, clientMutationId])
 }
 
 model BridgeRuntime {

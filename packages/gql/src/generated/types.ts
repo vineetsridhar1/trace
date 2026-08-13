@@ -87,7 +87,6 @@ export type AppDeployment = {
   repoId: Scalars["ID"]["output"];
   serviceName?: Maybe<Scalars["String"]["output"]>;
   sessionGroupId: Scalars["ID"]["output"];
-  sourceCheckpointId: Scalars["ID"]["output"];
   spec: Scalars["JSON"]["output"];
   startedAt?: Maybe<Scalars["DateTime"]["output"]>;
   staticPrefix?: Maybe<Scalars["String"]["output"]>;
@@ -863,37 +862,6 @@ export type EventType =
   | "ticket_unassigned"
   | "ticket_unlinked"
   | "ticket_updated";
-
-export type GitCheckpoint = {
-  __typename?: "GitCheckpoint";
-  author: Scalars["String"]["output"];
-  captureContentType?: Maybe<Scalars["String"]["output"]>;
-  captureStatus?: Maybe<GitCheckpointCaptureStatus>;
-  captureUrl?: Maybe<Scalars["String"]["output"]>;
-  capturedAt?: Maybe<Scalars["DateTime"]["output"]>;
-  commitSha: Scalars["String"]["output"];
-  committedAt: Scalars["DateTime"]["output"];
-  createdAt: Scalars["DateTime"]["output"];
-  filesChanged: Scalars["Int"]["output"];
-  id: Scalars["ID"]["output"];
-  parentShas: Array<Scalars["String"]["output"]>;
-  previewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
-  previewContentType?: Maybe<Scalars["String"]["output"]>;
-  previewStatus?: Maybe<GitCheckpointCaptureStatus>;
-  previewUrl?: Maybe<Scalars["String"]["output"]>;
-  promptEvent?: Maybe<Event>;
-  promptEventId: Scalars["ID"]["output"];
-  repo?: Maybe<Repo>;
-  repoId: Scalars["ID"]["output"];
-  session?: Maybe<Session>;
-  sessionGroup?: Maybe<SessionGroup>;
-  sessionGroupId: Scalars["ID"]["output"];
-  sessionId: Scalars["ID"]["output"];
-  subject: Scalars["String"]["output"];
-  treeSha: Scalars["String"]["output"];
-};
-
-export type GitCheckpointCaptureStatus = "captured" | "failed" | "pending" | "unavailable";
 
 export type HostingMode = "cloud" | "local";
 
@@ -2537,7 +2505,6 @@ export type Session = {
   createdBy: User;
   createdById: Scalars["ID"]["output"];
   endpoints?: Maybe<SessionEndpoints>;
-  gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars["ID"]["output"];
   inputTokens: Scalars["Float"]["output"];
@@ -2696,13 +2663,12 @@ export type SessionGroup = {
   createdAt: Scalars["DateTime"]["output"];
   designPreviewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
   designPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
-  designPreviewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  designPreviewStatus?: Maybe<Scalars["String"]["output"]>;
   designPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   designSystemVersion?: Maybe<DesignSystemVersion>;
   designSystemVersionId?: Maybe<Scalars["ID"]["output"]>;
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
-  gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
   kind: SessionGroupKind;
   name: Scalars["String"]["output"];
@@ -2883,7 +2849,6 @@ export type StartSessionInput = {
   prompt?: InputMaybe<Scalars["String"]["input"]>;
   reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
-  restoreCheckpointId?: InputMaybe<Scalars["ID"]["input"]>;
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
   sourceSessionId?: InputMaybe<Scalars["ID"]["input"]>;

@@ -94,11 +94,8 @@ the previous active version untouched, and the authoring session remains open fo
 
 ### Git is the only authoring source of truth
 
-The design-system flow must not read, write, wait for, or restore from Trace's
-`GitCheckpoint` model or session checkpoint services. It does not persist a
-`workspaceCheckpointId`, `checkpointId`, or `promptEventId`, and it does not call the
-session checkpoint/capture pipeline. Current state is the managed branch HEAD; immutable
-identity is the Git commit SHA; recovery is clone/fetch/checkout from the managed remote.
+The design-system flow uses the managed branch HEAD as its current state and the Git commit SHA
+as its immutable identity. Recovery is clone/fetch/checkout from the managed remote.
 S3 objects and `DesignSystemCommitArtifact` rows are rebuildable projections keyed to Git
 commits, never a competing source of workbench state.
 
@@ -1090,8 +1087,7 @@ S3 commit artifacts and package publication are not enabled in this phase.
 ### Phase 3 — Per-commit S3 artifacts and automatic promotion
 
 - Add the managed-push consumer and exact-commit workbench-tree archive helper.
-- Drive it exclusively from managed Git ref updates and raw commit SHAs; do not integrate
-  with `GitCheckpoint` persistence, prompt events, or capture jobs.
+- Drive it exclusively from managed Git ref updates and raw commit SHAs.
 - Persist every distinct pushed commit to its own S3 artifact object and row.
 - Add artifact pending/saving/saved/failed state, monotonic latest-pointer guards,
   startup reconciliation, and retry mutation.
@@ -1168,8 +1164,7 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
 - Create authorizes the source repo, creates a managed `design_system` session, and emits
   full events atomically.
 - Each managed push creates commit artifacts but not a version.
-- Artifact creation, Save, and restore do not query or mutate `GitCheckpoint` and work
-  without a prompt-event association.
+- Artifact creation, Save, and restore work without a prompt-event association.
 - A single push containing multiple new commits creates an artifact for each commit in
   topological order.
 - Two rapid pushes both reach S3 even when workers finish out of order.
@@ -1186,8 +1181,7 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
 - Exact-commit workbench archival includes only tracked files and stays within its root.
 - Commit-artifact packaging is deterministic for identical Git trees.
 - Artifact persistence and automatic promotion succeed after the authoring runtime has stopped.
-- Workbench restore clones/fetches managed branch HEAD without consulting
-  `GitCheckpoint`.
+- Workbench restore clones/fetches managed branch HEAD.
 - Source checkout is separate, read-only, pinned to the requested commit, and excluded
   from managed-workbench commits/packages.
 - Restoring a workbench rehydrates both the managed repo and exact source commit.
@@ -1283,8 +1277,7 @@ The implementation should remain surgical, but likely touches:
       becoming the workbench repo.
 - [x] Every distinct pushed workbench commit is saved as an immutable S3/local artifact
       and can be persisted or retried without its authoring container.
-- [x] Managed Git branch HEAD and commit SHA are the only authoring authority; no
-      design-system path reads, writes, or waits for Trace `GitCheckpoint` records.
+- [x] Managed Git branch HEAD and commit SHA are the only authoring authority.
 - [x] A DesignSystemVersion is automatically published only from a valid managed branch HEAD;
       clients cannot supply a commit or package location.
 - [x] Commit artifacts and published package objects are immutable and retrievable through both

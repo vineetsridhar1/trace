@@ -18,8 +18,6 @@ import {
   isSupportedReasoningEffort,
   MAX_WORKSPACE_NAME_LENGTH,
   resolveGitHubCloneUrl,
-  type GitCheckpointBridgePayload,
-  type GitCheckpointContext,
   type BridgeSessionGitSyncStatus,
   type BridgeWorkspaceWarning,
   type BridgeRepoWorktree,
@@ -86,8 +84,6 @@ import {
 } from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
 import { managedGitService } from "./managed-git.js";
-import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
-import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
 import { gitStorage } from "../lib/git-storage/index.js";
 import { createAgentInvocationToken } from "../lib/agent-invocation-auth.js";
 import { parseGitTreeArchive } from "../lib/design-system-archive.js";
@@ -122,7 +118,7 @@ export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   clientSource?: string | null;
   forceNewGroup?: boolean;
   forkedFromSessionGroupId?: string | null;
-  checkpointSha?: string | null;
+  baseCommitSha?: string | null;
   provisionWithoutPrompt?: boolean;
   name?: string | null;
   allowVisibleSourceSession?: boolean;
@@ -170,10 +166,7 @@ type ConversionToolSelection = {
 type SessionStartMetadata = {
   prompt: string | null;
   promptEventId: string | null;
-  checkpointContextId: string | null;
   sourceSessionId: string | null;
-  restoreCheckpointId: string | null;
-  restoreCheckpointSha: string | null;
 };
 
 type PendingInputInfo = {
@@ -448,7 +441,6 @@ type PendingSessionCommand =
       prompt?: string | null;
       interactionMode?: string | null;
       clientSource?: string | null;
-      checkpointContext?: GitCheckpointContext | null;
       imageKeys?: string[] | null;
       workspaceUpgrade?: boolean;
       designAttachments?: DesignAttachmentRef[] | null;
@@ -458,7 +450,6 @@ type PendingSessionCommand =
       prompt: string;
       interactionMode?: string | null;
       clientSource?: string | null;
-      checkpointContext?: GitCheckpointContext | null;
       imageKeys?: string[] | null;
       workspaceUpgrade?: boolean;
       designAttachments?: DesignAttachmentRef[] | null;
@@ -740,81 +731,6 @@ function localEnvironmentRuntimeInstanceId(
     : null;
 }
 
-function shortCommitSha(commitSha: string): string {
-  return commitSha.slice(0, 7);
-}
-
-function parseCheckpointContext(raw: unknown): GitCheckpointContext | null {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-
-  const context = raw as Record<string, unknown>;
-  if (
-    typeof context.checkpointContextId !== "string" ||
-    typeof context.sessionId !== "string" ||
-    typeof context.sessionGroupId !== "string" ||
-    typeof context.repoId !== "string" ||
-    typeof context.updatedAt !== "string"
-  ) {
-    return null;
-  }
-
-  return {
-    checkpointContextId: context.checkpointContextId,
-    promptEventId: typeof context.promptEventId === "string" ? context.promptEventId : null,
-    sessionId: context.sessionId,
-    sessionGroupId: context.sessionGroupId,
-    repoId: context.repoId,
-    updatedAt: context.updatedAt,
-  };
-}
-
-function createCheckpointContext({
-  checkpointContextId,
-  promptEventId,
-  sessionId,
-  sessionGroupId,
-  repoId,
-}: {
-  checkpointContextId: string;
-  promptEventId?: string | null;
-  sessionId: string;
-  sessionGroupId: string;
-  repoId: string;
-}): GitCheckpointContext {
-  return {
-    checkpointContextId,
-    promptEventId: promptEventId ?? null,
-    sessionId,
-    sessionGroupId,
-    repoId,
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-function buildCheckpointContextFromStartMeta({
-  sessionId,
-  sessionGroupId,
-  repoId,
-  startMeta,
-}: {
-  sessionId: string;
-  sessionGroupId?: string | null;
-  repoId?: string | null;
-  startMeta?: Pick<SessionStartMetadata, "checkpointContextId" | "promptEventId"> | null;
-}): GitCheckpointContext | null {
-  if (!sessionGroupId || !repoId || !startMeta?.checkpointContextId) {
-    return null;
-  }
-
-  return createCheckpointContext({
-    checkpointContextId: startMeta.checkpointContextId,
-    promptEventId: startMeta.promptEventId,
-    sessionId,
-    sessionGroupId,
-    repoId,
-  });
-}
-
 const SESSION_GROUP_SUMMARY_SELECT = {
   id: true,
   name: true,
@@ -913,7 +829,7 @@ type PreparedSessionMove = {
   sessionsToMove: SessionWithInclude[];
   sourceRuntimeId: string | null;
   bootstrapPrompt: string;
-  checkpointSha: string | null;
+  baseCommitSha: string | null;
   sourceBranch: string | null;
   sourceConnection: SessionConnectionData;
   shouldCleanupGeneralWorkspace: boolean;
@@ -1043,58 +959,6 @@ function serializeSession(session: {
   };
 }
 
-function serializeGitCheckpoint(checkpoint: {
-  id: string;
-  sessionId: string;
-  sessionGroupId: string;
-  repoId: string;
-  promptEventId: string;
-  commitSha: string;
-  parentShas: string[];
-  treeSha: string;
-  subject: string;
-  author: string;
-  committedAt: Date;
-  filesChanged: number;
-  captureStatus?: string | null;
-  captureKey?: string | null;
-  captureUrl?: string | null;
-  captureContentType?: string | null;
-  capturedAt?: Date | null;
-  previewStatus?: string | null;
-  previewKey?: string | null;
-  previewUrl?: string | null;
-  previewContentType?: string | null;
-  previewCapturedAt?: Date | null;
-  createdAt: Date;
-}) {
-  return {
-    id: checkpoint.id,
-    sessionId: checkpoint.sessionId,
-    sessionGroupId: checkpoint.sessionGroupId,
-    repoId: checkpoint.repoId,
-    promptEventId: checkpoint.promptEventId,
-    commitSha: checkpoint.commitSha,
-    parentShas: checkpoint.parentShas,
-    treeSha: checkpoint.treeSha,
-    subject: checkpoint.subject,
-    author: checkpoint.author,
-    committedAt: checkpoint.committedAt.toISOString(),
-    filesChanged: checkpoint.filesChanged,
-    captureStatus: checkpoint.captureStatus ?? null,
-    captureKey: checkpoint.captureKey ?? null,
-    captureUrl: checkpoint.captureUrl ?? null,
-    captureContentType: checkpoint.captureContentType ?? null,
-    capturedAt: checkpoint.capturedAt?.toISOString() ?? null,
-    previewStatus: checkpoint.previewStatus ?? null,
-    previewKey: checkpoint.previewKey ?? null,
-    previewUrl: checkpoint.previewUrl ?? null,
-    previewContentType: checkpoint.previewContentType ?? null,
-    previewCapturedAt: checkpoint.previewCapturedAt?.toISOString() ?? null,
-    createdAt: checkpoint.createdAt.toISOString(),
-  };
-}
-
 function sortSessionsByRecency<
   T extends {
     updatedAt: Date;
@@ -1148,13 +1012,6 @@ function rewriteForkPayloadReferences(
 function jsonRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as Record<string, unknown>;
-}
-
-function gitCheckpointIdFromPayload(value: unknown): string | null {
-  const payload = jsonRecord(value);
-  if (payload.type !== "git_checkpoint" && payload.type !== "git_checkpoint_rewrite") return null;
-  const checkpoint = jsonRecord(payload.checkpoint);
-  return typeof checkpoint.id === "string" ? checkpoint.id : null;
 }
 
 /** Maximum length for session names (prompt-derived or title-tag-extracted). */
@@ -1602,25 +1459,15 @@ async function getSessionStartMetadata(sessionId: string): Promise<SessionStartM
     return {
       prompt: null,
       promptEventId: null,
-      checkpointContextId: null,
       sourceSessionId: null,
-      restoreCheckpointId: null,
-      restoreCheckpointSha: null,
     };
   }
 
-  const payload = startEvent.payload as Record<string, unknown>;
-  const metadata = startEvent.metadata as Record<string, unknown> | null;
+  const payload = jsonRecord(startEvent.payload);
   return {
     prompt: typeof payload.prompt === "string" ? payload.prompt : null,
     promptEventId: startEvent.id,
-    checkpointContextId:
-      typeof metadata?.checkpointContextId === "string" ? metadata.checkpointContextId : null,
     sourceSessionId: typeof payload.sourceSessionId === "string" ? payload.sourceSessionId : null,
-    restoreCheckpointId:
-      typeof payload.restoreCheckpointId === "string" ? payload.restoreCheckpointId : null,
-    restoreCheckpointSha:
-      typeof payload.restoreCheckpointSha === "string" ? payload.restoreCheckpointSha : null,
   };
 }
 
@@ -1896,7 +1743,7 @@ export class SessionService {
     reasoningEffort?: string | null;
     repo?: { id: string; name: string; remoteUrl: string | null; defaultBranch: string } | null;
     branch?: string | null;
-    checkpointSha?: string | null;
+    baseCommitSha?: string | null;
     createdById: string;
     organizationId: string;
     /** Actor that initiated provisioning; defaults to a user actor. Agents are
@@ -2000,7 +1847,7 @@ export class SessionService {
               }
             : null,
         branch: params.branch ?? undefined,
-        checkpointSha: params.checkpointSha ?? undefined,
+        baseCommitSha: params.baseCommitSha ?? undefined,
         createdById: params.createdById,
         organizationId: params.organizationId,
         readOnly: params.readOnly,
@@ -2176,55 +2023,57 @@ export class SessionService {
     }
 
     const isNewRuntimeRequest = eventType === "session_runtime_start_requested";
-    const result = await this.updateConnectionConditional(sessionId, (conn) => {
-      if (update.runtimeInstanceId) {
-        // A new launch may claim an unbound session, but every subsequent
-        // lifecycle event must belong to the runtime generation that is
-        // currently persisted. In particular, an old stop event must not
-        // apply after another path has cleared the binding while a new
-        // runtime is starting.
-        //
-        // A new launch may ALSO claim a connection whose previous runtime ended
-        // in a terminal state, or was deprovisioned by idle cleanup. That runtime
-        // is dead, so a fresh provision must be able to take over. Idle cleanup
-        // records its completed teardown as `disconnected` to preserve the reason,
-        // but it also keeps the old binding ids; treat that specific shape as stale.
-        // Without this, the replacement task is launched but its bridge is fenced
-        // out because the database still points at the old runtime generation.
-        const canClaimStaleConnection =
-          isNewRuntimeRequest &&
-          (!conn.runtimeInstanceId ||
-            isRuntimeTerminalState(conn.state) ||
-            isRuntimeComputeGone(conn));
-        if (conn.runtimeInstanceId !== update.runtimeInstanceId && !canClaimStaleConnection) {
+    const result = await this.updateConnectionConditional(
+      sessionId,
+      (conn) => {
+        if (update.runtimeInstanceId) {
+          // A new launch may claim an unbound session, but every subsequent
+          // lifecycle event must belong to the runtime generation that is
+          // currently persisted. In particular, an old stop event must not
+          // apply after another path has cleared the binding while a new
+          // runtime is starting.
+          //
+          // A new launch may ALSO claim a connection whose previous runtime ended
+          // in a terminal state, or was deprovisioned by idle cleanup. That runtime
+          // is dead, so a fresh provision must be able to take over. Idle cleanup
+          // records its completed teardown as `disconnected` to preserve the reason,
+          // but it also keeps the old binding ids; treat that specific shape as stale.
+          // Without this, the replacement task is launched but its bridge is fenced
+          // out because the database still points at the old runtime generation.
+          const canClaimStaleConnection =
+            isNewRuntimeRequest &&
+            (!conn.runtimeInstanceId ||
+              isRuntimeTerminalState(conn.state) ||
+              isRuntimeComputeGone(conn));
+          if (conn.runtimeInstanceId !== update.runtimeInstanceId && !canClaimStaleConnection) {
+            return null;
+          }
+        }
+
+        if (
+          isRuntimeTerminalState(conn.state) &&
+          eventType !== "session_runtime_start_requested" &&
+          eventType !== "session_runtime_start_failed" &&
+          eventType !== "session_runtime_start_timed_out" &&
+          eventType !== "session_runtime_stopping" &&
+          eventType !== "session_runtime_stopped" &&
+          eventType !== "session_runtime_deprovision_failed"
+        ) {
           return null;
         }
-      }
 
-      if (
-        isRuntimeTerminalState(conn.state) &&
-        eventType !== "session_runtime_start_requested" &&
-        eventType !== "session_runtime_start_failed" &&
-        eventType !== "session_runtime_start_timed_out" &&
-        eventType !== "session_runtime_stopping" &&
-        eventType !== "session_runtime_stopped" &&
-        eventType !== "session_runtime_deprovision_failed"
-      ) {
-        return null;
-      }
+        const adapterType = this.lifecycleAdapterType(conn, update);
+        const nextState = this.lifecycleConnectionState(eventType, adapterType);
+        if (
+          conn.state === "connected" &&
+          isRuntimeStartupState(nextState) &&
+          (conn.runtimeInstanceId || conn.providerRuntimeId || conn.connectedAt)
+        ) {
+          return null;
+        }
 
-      const adapterType = this.lifecycleAdapterType(conn, update);
-      const nextState = this.lifecycleConnectionState(eventType, adapterType);
-      if (
-        conn.state === "connected" &&
-        isRuntimeStartupState(nextState) &&
-        (conn.runtimeInstanceId || conn.providerRuntimeId || conn.connectedAt)
-      ) {
-        return null;
-      }
-
-      return { ...conn, ...this.lifecycleConnectionPatch(eventType, conn, update, adapterType) };
-    },
+        return { ...conn, ...this.lifecycleConnectionPatch(eventType, conn, update, adapterType) };
+      },
       // A restart can intentionally create a fresh runtime without a new user
       // message. Refresh activity in the same optimistic write that claims the
       // new generation, so idle cleanup cannot select the group as stale while
@@ -4221,20 +4070,6 @@ export class SessionService {
     return { sessions, sessionGroups };
   }
 
-  async listGitCheckpointsForSession(sessionId: string) {
-    return prisma.gitCheckpoint.findMany({
-      where: { sessionId },
-      orderBy: [{ committedAt: "asc" }, { createdAt: "asc" }],
-    });
-  }
-
-  async listGitCheckpointsForGroup(sessionGroupId: string) {
-    return prisma.gitCheckpoint.findMany({
-      where: { sessionGroupId },
-      orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
-    });
-  }
-
   async start(input: StartSessionServiceInput) {
     validateUploadKeysForOrganization(input.imageKeys, input.organizationId);
 
@@ -4245,31 +4080,6 @@ export class SessionService {
     input.clientMutationId = clientMutationId;
     const existingIdempotentSession = await this.findIdempotentStartedSession(input);
     if (existingIdempotentSession) return existingIdempotentSession;
-
-    if (input.restoreCheckpointId && input.sessionGroupId) {
-      throw new Error("restoreCheckpointId cannot reuse an existing session group");
-    }
-    if (input.restoreCheckpointId && input.sourceSessionId) {
-      throw new Error("restoreCheckpointId cannot be combined with sourceSessionId");
-    }
-
-    const restoreCheckpoint = input.restoreCheckpointId
-      ? await prisma.gitCheckpoint.findUnique({
-          where: { id: input.restoreCheckpointId },
-          select: {
-            id: true,
-            sessionId: true,
-            sessionGroupId: true,
-            repoId: true,
-            commitSha: true,
-            subject: true,
-          },
-        })
-      : null;
-
-    if (input.restoreCheckpointId && !restoreCheckpoint) {
-      throw new Error("Git checkpoint not found");
-    }
 
     const userDefaults: UserSessionDefaults | null = input.tool
       ? null
@@ -4284,21 +4094,7 @@ export class SessionService {
     const hasExplicitTool = !!input.tool;
     let tool = input.tool ?? userDefaults?.defaultSessionTool ?? FALLBACK_SESSION_TOOL;
 
-    const restoreGroup = restoreCheckpoint
-      ? await prisma.sessionGroup.findFirst({
-          where: {
-            id: restoreCheckpoint.sessionGroupId,
-            organizationId: input.organizationId,
-          },
-          select: SESSION_GROUP_SUMMARY_SELECT,
-        })
-      : null;
-
-    if (restoreCheckpoint && !restoreGroup) {
-      throw new Error("Checkpoint session group not found");
-    }
-
-    const sourceSessionId = input.sourceSessionId ?? restoreCheckpoint?.sessionId ?? null;
+    const sourceSessionId = input.sourceSessionId ?? null;
 
     const sourceSession = sourceSessionId
       ? await prisma.session.findUnique({
@@ -4328,7 +4124,6 @@ export class SessionService {
       throw new Error("Source session does not belong to this organization");
     }
     if (
-      !input.restoreCheckpointId &&
       input.sessionGroupId &&
       sourceSession?.sessionGroupId &&
       input.sessionGroupId !== sourceSession.sessionGroupId
@@ -4338,9 +4133,7 @@ export class SessionService {
 
     const existingGroupId = input.forceNewGroup
       ? null
-      : input.restoreCheckpointId
-        ? null
-        : (input.sessionGroupId ?? sourceSession?.sessionGroupId ?? null);
+      : (input.sessionGroupId ?? sourceSession?.sessionGroupId ?? null);
     const existingGroup = existingGroupId
       ? await prisma.sessionGroup.findFirst({
           where: { id: existingGroupId, organizationId: input.organizationId },
@@ -4363,7 +4156,7 @@ export class SessionService {
     } else if (resolvedGroup) {
       this.assertPrivateGroupOwner(resolvedGroup, input.createdById);
     }
-    const seedGroup = input.restoreCheckpointId ? restoreGroup : resolvedGroup;
+    const seedGroup = resolvedGroup;
     const resolvedKind = input.kind ?? seedGroup?.kind ?? "coding";
     if (input.designSystemVersionId && resolvedKind !== "design") {
       throw new ValidationError("Design-system versions may only be selected for Design sessions");
@@ -4418,10 +4211,10 @@ export class SessionService {
               : resolvedKind === "animation"
                 ? "Animation"
                 : "App";
-      if (input.sourceSessionId && !input.restoreCheckpointId) {
+      if (input.sourceSessionId) {
         throw new ValidationError(`${label} sessions cannot start from a source session`);
       }
-      if (!existingGroup && !input.restoreCheckpointId && input.repoId) {
+      if (!existingGroup && input.repoId) {
         throw new ValidationError(`${label} sessions cannot start from a linked repo`);
       }
       if (input.hosting === "local") {
@@ -4507,20 +4300,12 @@ export class SessionService {
     ) {
       throw new Error("Source session repo does not match the channel's linked repo");
     }
-    // A restore must stay on the checkpoint's repo. Allowing an explicit
-    // input.repoId to override it produces a group whose provisioning fails at
-    // token mint (e.g. attaching a GitHub repoId to a managed-repo checkpoint).
-    if (restoreCheckpoint?.repoId && input.repoId && input.repoId !== restoreCheckpoint.repoId) {
-      throw new Error("Restored session must use the checkpoint's repo");
-    }
-
     let resolvedRepoId =
       authoritativeChannelRepoId ??
       authoritativeProjectRepoId ??
       input.repoId ??
       seedGroup?.repoId ??
       sourceSession?.repoId ??
-      restoreCheckpoint?.repoId ??
       undefined;
     let resolvedRepo = resolvedRepoId
       ? await prisma.repo.findFirst({
@@ -4537,10 +4322,8 @@ export class SessionService {
       sourceSession?.branch ??
       resolvedChannel?.baseBranch ??
       undefined;
-    const sharedWorkdir =
-      input.restoreCheckpointId || input.forceNewGroup ? null : (resolvedGroup?.workdir ?? null);
-    const sharedConnection =
-      input.restoreCheckpointId || input.forceNewGroup ? null : (resolvedGroup?.connection ?? null);
+    const sharedWorkdir = input.forceNewGroup ? null : (resolvedGroup?.workdir ?? null);
+    const sharedConnection = input.forceNewGroup ? null : (resolvedGroup?.connection ?? null);
     const sharedRuntimeInstanceId =
       sharedConnection &&
       typeof sharedConnection === "object" &&
@@ -4548,16 +4331,6 @@ export class SessionService {
         ? ((sharedConnection as { runtimeInstanceId?: string | null }).runtimeInstanceId ?? null)
         : null;
 
-    // For checkpoint restores, inherit the runtime from the source group so the
-    // restored session is prepared on the same machine that owns the repo.
-    const restoreGroupRuntimeInstanceId = (() => {
-      if (!input.restoreCheckpointId || !restoreGroup) return null;
-      const conn = restoreGroup.connection;
-      if (conn && typeof conn === "object" && "runtimeInstanceId" in conn) {
-        return (conn as { runtimeInstanceId?: string | null }).runtimeInstanceId ?? null;
-      }
-      return null;
-    })();
     const sourceProjectIds =
       sourceSession?.projects.map((project: { projectId: string }) => project.projectId) ?? [];
     const sourceTicketLinks = sourceSessionId
@@ -4567,25 +4340,12 @@ export class SessionService {
         })
       : [];
 
-    if (input.restoreCheckpointId && !resolvedRepoId) {
-      throw new Error("Checkpoint is not associated with a repo");
-    }
-
     if (sharedRuntimeInstanceId) {
       await this.assertRuntimeAccess({
         userId: input.createdById,
         organizationId: input.organizationId,
         runtimeInstanceId: sharedRuntimeInstanceId,
         sessionGroupId: existingGroup?.id ?? resolvedGroup?.id ?? null,
-      });
-    }
-
-    if (restoreGroupRuntimeInstanceId) {
-      await this.assertRuntimeAccess({
-        userId: input.createdById,
-        organizationId: input.organizationId,
-        runtimeInstanceId: restoreGroupRuntimeInstanceId,
-        sessionGroupId: restoreGroup?.id ?? null,
       });
     }
 
@@ -4597,11 +4357,7 @@ export class SessionService {
           ? resolvedKind === "design"
             ? "Untitled Design"
             : "Untitled App"
-          : restoreCheckpoint
-            ? `Restore ${shortCommitSha(restoreCheckpoint.commitSha)} ${restoreCheckpoint.subject}`
-                .trim()
-                .slice(0, MAX_SESSION_NAME_LENGTH)
-            : `Session ${new Date().toLocaleString()}`;
+          : `Session ${new Date().toLocaleString()}`;
 
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise
     // default to local in TRACE_LOCAL_MODE and cloud everywhere else.
@@ -4627,11 +4383,7 @@ export class SessionService {
       !input.environmentId && !!existingGroup?.id && existingGroupHasRuntimeSelection;
     const deferRuntimeSelection =
       (input.deferRuntimeSelection === true && resolvedKind !== "app") ||
-      (resolvedKind !== "app" &&
-        !input.restoreCheckpointId &&
-        !requestedRuntimeSelection &&
-        !sharedRuntimeInstanceId &&
-        !restoreGroupRuntimeInstanceId);
+      (resolvedKind !== "app" && !requestedRuntimeSelection && !sharedRuntimeInstanceId);
     if (
       input.deferRuntimeSelection === true &&
       (input.environmentId || input.hosting || input.runtimeInstanceId)
@@ -4694,7 +4446,6 @@ export class SessionService {
       !!input.hosting ||
       !!input.runtimeInstanceId ||
       !!sharedRuntimeInstanceId ||
-      !!restoreGroupRuntimeInstanceId ||
       !!sourceSession?.hosting;
     if (!requestedEnvironment && !hasCompatibilityRuntimeFallback) {
       throw new ValidationError(
@@ -4775,16 +4526,10 @@ export class SessionService {
       throw new ValidationError("runtimeInstanceId does not match the selected local environment");
     }
     const shouldUseEnvironmentRuntime =
-      !input.runtimeInstanceId &&
-      !sharedRuntimeInstanceId &&
-      !restoreGroupRuntimeInstanceId &&
-      !!environmentRuntimeInstanceId;
+      !input.runtimeInstanceId && !sharedRuntimeInstanceId && !!environmentRuntimeInstanceId;
     let selectedRuntimeAccessAllowed = true;
     let requestedRuntimeInstanceId: string | null | undefined =
-      input.runtimeInstanceId ??
-      sharedRuntimeInstanceId ??
-      restoreGroupRuntimeInstanceId ??
-      environmentRuntimeInstanceId;
+      input.runtimeInstanceId ?? sharedRuntimeInstanceId ?? environmentRuntimeInstanceId;
     if (input.runtimeInstanceId || shouldUseEnvironmentRuntime) {
       const runtimeId = input.runtimeInstanceId ?? environmentRuntimeInstanceId;
       if (!runtimeId) {
@@ -4900,7 +4645,7 @@ export class SessionService {
     if (requestedRuntimeInstanceId && !runtimeLabel) {
       runtimeLabel =
         runtimeMetadata(requestedRuntimeInstanceId, input.organizationId)?.label ??
-        this.parseConnection(sharedConnection ?? restoreGroup?.connection ?? null).runtimeLabel;
+        this.parseConnection(sharedConnection).runtimeLabel;
     }
     if (isGeneratedProjectKind(resolvedKind) && hosting !== "cloud") {
       const label = resolvedKind === "design" ? "Design" : "App";
@@ -4943,9 +4688,7 @@ export class SessionService {
     assertCloudRepoRemoteAvailable(hosting, resolvedRepo);
 
     // Ask-mode sessions skip worktree creation (read-only against repo root).
-    // Checkpoint restores always need a worktree to reset to a specific SHA.
-    const readOnlyWorkspace =
-      input.interactionMode === "ask" && !input.restoreCheckpointId && !adoptWorktreePath;
+    const readOnlyWorkspace = input.interactionMode === "ask" && !adoptWorktreePath;
 
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId &&
@@ -4977,8 +4720,6 @@ export class SessionService {
     // Sessions stay idle until a command is actually delivered to the coding tool.
     const initialAgentStatus: AgentStatus = "not_started";
     const initialSessionStatus: SessionStatus = "in_progress";
-    const initialCheckpointContextId =
-      resolvedKind !== "design_system" && resolvedRepoId && input.prompt ? randomUUID() : null;
     const hasInitialUserContent = !!input.prompt || !!input.imageKeys?.length;
 
     let startEventToPublish: Awaited<ReturnType<typeof eventService.create>> | undefined;
@@ -5054,7 +4795,6 @@ export class SessionService {
                     prompt: input.prompt ?? null,
                     interactionMode: input.interactionMode ?? null,
                     clientSource: normalizeClientSource(input.clientSource),
-                    checkpointContext: null,
                     ...(input.imageKeys?.length ? { imageKeys: input.imageKeys } : {}),
                     ...(selectedDesignAttachment
                       ? {
@@ -5105,15 +4845,11 @@ export class SessionService {
           prompt: input.prompt ?? null,
           clientSource: normalizeClientSource(input.clientSource),
           sourceSessionId: input.sourceSessionId ?? null,
-          restoreCheckpointId: restoreCheckpoint?.id ?? null,
-          restoreCheckpointSha: restoreCheckpoint?.commitSha ?? null,
           ...(input.imageKeys?.length
             ? { attachmentKeys: input.imageKeys, imageKeys: input.imageKeys }
             : {}),
         } as Prisma.InputJsonValue;
-        const startEventMetadata = initialCheckpointContextId
-          ? ({ checkpointContextId: initialCheckpointContextId } as Prisma.InputJsonValue)
-          : undefined;
+        const startEventMetadata = undefined;
         const startEventOverride = input.buildStartEvent?.({
           session,
           sessionGroup,
@@ -5175,8 +4911,7 @@ export class SessionService {
       eventService.publishCreated(startEventToPublish);
     }
 
-    // Reuse the group's runtime binding when a shared workspace already exists,
-    // or inherit from the restore group so the session lands on the same machine.
+    // Reuse the group's runtime binding when a shared workspace already exists.
     const runtimeToBind = requestedRuntimeInstanceId;
     if (runtimeToBind) {
       const runtimeKeyToBind =
@@ -5186,14 +4921,10 @@ export class SessionService {
 
     // Only provision the runtime immediately when a prompt is provided.
     // Sessions created without a prompt (e.g. Cmd+N) defer provisioning
-    // until the user sends their first message. Checkpoint restores are the
-    // exception: they carry no prompt but must provision now so the workspace
-    // materializes at the pinned commit SHA — deferring to the first message
-    // loses the SHA (later provisioning paths clone HEAD) and strands the
-    // restored session with no runtime in the meantime.
+    // until the user sends their first message.
     if (
       needsRuntimeProvisioning &&
-      (input.prompt || input.provisionWithoutPrompt || input.restoreCheckpointId) &&
+      (input.prompt || input.provisionWithoutPrompt) &&
       selectedRuntimeAccessAllowed &&
       !deferRuntimeSelection &&
       input.deferInitialRun !== true
@@ -5210,7 +4941,7 @@ export class SessionService {
         reasoningEffort: session.reasoningEffort,
         repo: session.repo,
         branch: resolvedBranch,
-        checkpointSha: input.checkpointSha ?? restoreCheckpoint?.commitSha,
+        baseCommitSha: input.baseCommitSha,
         createdById: input.createdById,
         actorType: input.actorType,
         organizationId: input.organizationId,
@@ -5278,27 +5009,6 @@ export class SessionService {
       },
       orderBy: [{ timestamp: "asc" }, { id: "asc" }],
     });
-    const sourceCheckpointIds = sourceEvents
-      .map((event) => gitCheckpointIdFromPayload(event.payload))
-      .filter((id): id is string => !!id);
-
-    const latestCheckpoint = await prisma.gitCheckpoint.findFirst({
-      where: {
-        sessionGroupId: sourceSessionGroupId,
-        id: { in: sourceCheckpointIds },
-      },
-      orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
-      select: { commitSha: true },
-    });
-
-    const sourceCheckpoints =
-      (await prisma.gitCheckpoint.findMany({
-        where: {
-          sessionGroupId: sourceSessionGroupId,
-          id: { in: sourceCheckpointIds },
-        },
-        orderBy: [{ committedAt: "asc" }, { createdAt: "asc" }],
-      })) ?? [];
     const targetStartEventId = randomUUID();
     const targetEventIds = new Map<string, string>();
     const sourceStartEvent = sourceEvents.find((event) => event.eventType === "session_started");
@@ -5310,11 +5020,6 @@ export class SessionService {
         targetEventIds.set(sourceEvent.id, randomUUID());
       }
     }
-    const targetCheckpointIds = new Map<string, string>();
-    for (const checkpoint of sourceCheckpoints) {
-      targetCheckpointIds.set(checkpoint.id, randomUUID());
-    }
-
     const forkedSession = await this.start({
       tool: sourceSession.tool,
       model: sourceSession.model,
@@ -5332,7 +5037,7 @@ export class SessionService {
       forceNewGroup: true,
       allowVisibleSourceSession: true,
       forkedFromSessionGroupId: sourceSessionGroupId,
-      checkpointSha: latestCheckpoint?.commitSha ?? null,
+      baseCommitSha: null,
       provisionWithoutPrompt: true,
       name: sourceSession.name,
       startEventId: targetStartEventId,
@@ -5348,7 +5053,6 @@ export class SessionService {
           targetSessionId: session.id,
           targetSessionGroupId: session.sessionGroupId,
           targetEventIds,
-          targetCheckpointIds,
         });
         const sourceStartPayload = jsonRecord(
           rewriteForkPayloadReferences(sourceStartEvent.payload, replacements),
@@ -5361,8 +5065,6 @@ export class SessionService {
             sessionGroup: targetStartPayload.sessionGroup,
             clientSource: targetStartPayload.clientSource,
             sourceSessionId: sourceSession.id,
-            restoreCheckpointId: targetStartPayload.restoreCheckpointId,
-            restoreCheckpointSha: targetStartPayload.restoreCheckpointSha,
           } as Prisma.InputJsonValue,
           metadata: {
             forkedFromSessionId: sourceSession.id,
@@ -5387,9 +5089,7 @@ export class SessionService {
             organizationId: input.organizationId,
             startEventId,
             sourceEvents,
-            sourceCheckpoints,
             targetEventIds,
-            targetCheckpointIds,
           },
           tx,
         );
@@ -5408,7 +5108,6 @@ export class SessionService {
     targetSessionId: string;
     targetSessionGroupId: string;
     targetEventIds: ReadonlyMap<string, string>;
-    targetCheckpointIds: ReadonlyMap<string, string>;
   }): Map<string, string> {
     const replacements = new Map<string, string>([
       [input.sourceSessionId, input.targetSessionId],
@@ -5416,9 +5115,6 @@ export class SessionService {
     ]);
     for (const [sourceEventId, targetEventId] of input.targetEventIds) {
       replacements.set(sourceEventId, targetEventId);
-    }
-    for (const [sourceCheckpointId, targetCheckpointId] of input.targetCheckpointIds) {
-      replacements.set(sourceCheckpointId, targetCheckpointId);
     }
     return replacements;
   }
@@ -5432,22 +5128,7 @@ export class SessionService {
       organizationId: string;
       startEventId: string;
       sourceEvents: ForkSourceEvent[];
-      sourceCheckpoints: Array<{
-        id: string;
-        sessionId: string;
-        sessionGroupId: string;
-        repoId: string;
-        promptEventId: string;
-        commitSha: string;
-        parentShas: string[];
-        treeSha: string;
-        subject: string;
-        author: string;
-        committedAt: Date;
-        filesChanged: number;
-      }>;
       targetEventIds: ReadonlyMap<string, string>;
-      targetCheckpointIds: ReadonlyMap<string, string>;
     },
     tx: Prisma.TransactionClient,
   ): Promise<void> {
@@ -5457,43 +5138,9 @@ export class SessionService {
       targetSessionId: input.targetSessionId,
       targetSessionGroupId: input.targetSessionGroupId,
       targetEventIds: input.targetEventIds,
-      targetCheckpointIds: input.targetCheckpointIds,
     });
-    const checkpointsBySourcePromptEventId = new Map<string, typeof input.sourceCheckpoints>();
-    for (const checkpoint of input.sourceCheckpoints) {
-      const existing = checkpointsBySourcePromptEventId.get(checkpoint.promptEventId) ?? [];
-      existing.push(checkpoint);
-      checkpointsBySourcePromptEventId.set(checkpoint.promptEventId, existing);
-    }
-
-    const createCopiedCheckpoint = async (checkpoint: (typeof input.sourceCheckpoints)[number]) => {
-      const targetCheckpointId = input.targetCheckpointIds.get(checkpoint.id);
-      const targetPromptEventId = input.targetEventIds.get(checkpoint.promptEventId);
-      if (!targetCheckpointId || !targetPromptEventId) return;
-      await tx.gitCheckpoint.create({
-        data: {
-          id: targetCheckpointId,
-          sessionId: input.targetSessionId,
-          sessionGroupId: input.targetSessionGroupId,
-          repoId: checkpoint.repoId,
-          promptEventId: targetPromptEventId,
-          commitSha: checkpoint.commitSha,
-          parentShas: checkpoint.parentShas,
-          treeSha: checkpoint.treeSha,
-          subject: checkpoint.subject,
-          author: checkpoint.author,
-          committedAt: checkpoint.committedAt,
-          filesChanged: checkpoint.filesChanged,
-        },
-      });
-    };
-
     for (const sourceEvent of input.sourceEvents) {
-      const sourceCheckpointsForEvent = checkpointsBySourcePromptEventId.get(sourceEvent.id) ?? [];
       if (sourceEvent.eventType === "session_started") {
-        for (const checkpoint of sourceCheckpointsForEvent) {
-          await createCopiedCheckpoint(checkpoint);
-        }
         continue;
       }
 
@@ -5528,10 +5175,6 @@ export class SessionService {
         },
         tx,
       );
-
-      for (const checkpoint of sourceCheckpointsForEvent) {
-        await createCopiedCheckpoint(checkpoint);
-      }
     }
   }
 
@@ -5657,12 +5300,6 @@ export class SessionService {
         prompt: prompt ?? null,
         interactionMode: interactionMode ?? null,
         clientSource: normalizeClientSource(access?.clientSource),
-        checkpointContext: buildCheckpointContextFromStartMeta({
-          sessionId: id,
-          sessionGroupId: session.sessionGroupId,
-          repoId: session.repoId,
-          startMeta,
-        }),
         ...(imageKeys?.length ? { imageKeys } : {}),
       };
       await this.triggerWorkspaceUpgrade(id, session, pendingCommand);
@@ -5676,12 +5313,6 @@ export class SessionService {
         prompt: prompt ?? null,
         interactionMode: interactionMode ?? null,
         clientSource: normalizeClientSource(access?.clientSource),
-        checkpointContext: buildCheckpointContextFromStartMeta({
-          sessionId: id,
-          sessionGroupId: session.sessionGroupId,
-          repoId: session.repoId,
-          startMeta,
-        }),
         ...(imageKeys?.length ? { imageKeys } : {}),
       };
       const commands = this.parsePendingCommands(session.pendingRun);
@@ -5791,13 +5422,6 @@ export class SessionService {
       resolvedPrompt = appendArtifactSkillInstruction(resolvedPrompt, interactionMode);
     }
 
-    const checkpointContext = buildCheckpointContextFromStartMeta({
-      sessionId: id,
-      sessionGroupId: session.sessionGroupId,
-      repoId: session.repoId,
-      startMeta,
-    });
-
     const invocation = await this.prepareInvocation(
       id,
       session.organizationId,
@@ -5818,7 +5442,6 @@ export class SessionService {
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
-      checkpointContext,
       imageUrls: imageKeys?.length
         ? await Promise.all(imageKeys.map((key) => storage.getGetUrl(key)))
         : undefined,
@@ -5837,7 +5460,6 @@ export class SessionService {
         prompt: resolvedPrompt ?? null,
         interactionMode: interactionMode ?? null,
         clientSource: normalizeClientSource(access?.clientSource),
-        checkpointContext,
         ...(imageKeys?.length ? { imageKeys } : {}),
       });
       await this.persistConnectionFailure(id, session.organizationId, deliveryResult, "run");
@@ -6135,11 +5757,8 @@ export class SessionService {
     }
 
     if (isGeneratedProjectKind(group.kind) && group.repoId) {
-      // A restored app group shares the source group's managed repo, so this
-      // repo can be referenced by more than one group. Only delete the repo
-      // (and its bare storage + cascaded checkpoints) when no other group
-      // still points at it — otherwise deleting this group would destroy a
-      // live sibling's source and history.
+      // A managed repo can be referenced by more than one group. Only delete
+      // it when no other group still points at it.
       const otherReferences = await prisma.sessionGroup.count({
         where: { repoId: group.repoId, id: { not: groupId } },
       });
@@ -7188,7 +6807,6 @@ export class SessionService {
           prompt: text,
           interactionMode: interactionMode ?? null,
           clientSource: normalizeClientSource(clientSource),
-          checkpointContext: null,
           ...(imageKeys?.length ? { imageKeys } : {}),
           ...(designAttachments?.length ? { designAttachments } : {}),
         };
@@ -7271,7 +6889,6 @@ export class SessionService {
         prompt: text,
         interactionMode: interactionMode ?? null,
         clientSource: normalizeClientSource(clientSource),
-        checkpointContext: null,
         ...(imageKeys?.length ? { imageKeys } : {}),
       };
       await this.triggerWorkspaceUpgrade(sessionId, session, pendingCommand, {
@@ -7342,19 +6959,6 @@ export class SessionService {
     });
     prompt = appendArtifactSkillInstruction(prompt, interactionMode);
 
-    const checkpointContext =
-      session.sessionGroup?.kind !== "design_system" && session.repoId && session.sessionGroupId
-        ? createCheckpointContext({
-            checkpointContextId: randomUUID(),
-            sessionId,
-            sessionGroupId: session.sessionGroupId,
-            repoId: session.repoId,
-          })
-        : null;
-    const checkpointMetadata = checkpointContext
-      ? ({ checkpointContextId: checkpointContext.checkpointContextId } as Prisma.InputJsonValue)
-      : undefined;
-
     // Generate presigned GET URLs for attached files
     let imageUrls: string[] | undefined;
     if (imageKeys?.length) {
@@ -7386,7 +6990,6 @@ export class SessionService {
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
-      checkpointContext,
       imageUrls,
       runtimeEnv: invocation.runtimeEnv,
     };
@@ -7408,7 +7011,6 @@ export class SessionService {
           prompt,
           interactionMode: interactionMode ?? null,
           clientSource: normalizeClientSource(clientSource),
-          checkpointContext,
           ...(imageKeys?.length ? { imageKeys } : {}),
         },
         {
@@ -7438,7 +7040,6 @@ export class SessionService {
           deliveryFailed: true,
           ...(clientMutationId ? { clientMutationId } : {}),
         },
-        metadata: checkpointMetadata,
         actorType,
         actorId,
       });
@@ -7511,7 +7112,6 @@ export class SessionService {
         ...(imageKeys?.length ? { attachmentKeys: imageKeys, imageKeys } : {}),
         ...(clientMutationId ? { clientMutationId } : {}),
       },
-      metadata: checkpointMetadata,
       actorType,
       actorId,
     });
@@ -7574,7 +7174,6 @@ export class SessionService {
         prompt: input.text,
         interactionMode: null,
         clientSource: input.clientSource,
-        checkpointContext: null,
       },
       undefined,
       session.pendingRun,
@@ -8365,7 +7964,6 @@ export class SessionService {
             prompt: startMeta.prompt,
             interactionMode: null,
             clientSource: null,
-            checkpointContext: null,
           },
         ]) as Prisma.InputJsonValue;
         await prisma.session.update({
@@ -8865,7 +8463,6 @@ export class SessionService {
       toolSessionId: string;
       message?: string;
       interactionMode?: string;
-      checkpointContext?: GitCheckpointContext | null;
       imageUrls?: string[];
     },
   ) {
@@ -8912,26 +8509,6 @@ export class SessionService {
     });
     prompt = appendArtifactSkillInstruction(prompt, options.interactionMode);
 
-    const promptEvent = await prisma.event.findFirst({
-      where: {
-        scopeId: sessionId,
-        scopeType: "session",
-        eventType: { in: ["message_sent", "session_started"] },
-      },
-      orderBy: { timestamp: "desc" },
-      select: { id: true },
-    });
-    const checkpointContext =
-      options.checkpointContext ??
-      (session.sessionGroup?.kind !== "design_system" && session.repoId && session.sessionGroupId
-        ? createCheckpointContext({
-            checkpointContextId: randomUUID(),
-            promptEventId: promptEvent?.id ?? null,
-            sessionId,
-            sessionGroupId: session.sessionGroupId,
-            repoId: session.repoId,
-          })
-        : null);
     const conn = this.parseConnection(session.connection);
 
     await prisma.session.update({
@@ -8960,7 +8537,6 @@ export class SessionService {
         enableClaudeInChrome: this.claudeInChromeFlag(session.tool, session.createdBy),
         interactionMode: options.interactionMode,
         cwd: session.workdir ?? undefined,
-        checkpointContext,
         imageUrls: options.imageUrls,
         runtimeEnv: invocation.runtimeEnv,
       },
@@ -9003,268 +8579,6 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
-  }
-
-  async recordGitCheckpoint(sessionId: string, checkpoint: GitCheckpointBridgePayload) {
-    if (Number.isNaN(new Date(checkpoint.committedAt).getTime())) {
-      console.warn(
-        `[checkpoint] invalid committedAt for session ${sessionId}: ${checkpoint.committedAt}`,
-      );
-      return;
-    }
-
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      select: {
-        id: true,
-        organizationId: true,
-        sessionGroupId: true,
-        repoId: true,
-        sessionGroup: { select: { kind: true, ownerUserId: true } },
-      },
-    });
-    if (!session?.sessionGroupId || !session.repoId) return;
-    if (session.sessionGroup?.kind === "design_system") return;
-
-    const existing = await prisma.gitCheckpoint.findUnique({
-      where: {
-        sessionGroupId_commitSha: {
-          sessionGroupId: session.sessionGroupId,
-          commitSha: checkpoint.commitSha,
-        },
-      },
-    });
-    const rewrittenCommitSha =
-      typeof checkpoint.rewrittenFromCommitSha === "string"
-        ? checkpoint.rewrittenFromCommitSha.trim()
-        : "";
-    const rewrittenCheckpoint =
-      rewrittenCommitSha && rewrittenCommitSha !== checkpoint.commitSha
-        ? await prisma.gitCheckpoint.findUnique({
-            where: {
-              sessionGroupId_commitSha: {
-                sessionGroupId: session.sessionGroupId,
-                commitSha: rewrittenCommitSha,
-              },
-            },
-          })
-        : null;
-
-    let persisted = existing;
-    let didPersistCheckpoint = false;
-
-    if (!persisted) {
-      const promptEventId = await this.resolvePromptEventIdForCheckpoint(sessionId, checkpoint);
-      if (!promptEventId) return null;
-
-      if (rewrittenCheckpoint) {
-        persisted = await prisma.gitCheckpoint.update({
-          where: { id: rewrittenCheckpoint.id },
-          data: {
-            sessionId,
-            promptEventId,
-            commitSha: checkpoint.commitSha,
-            parentShas: checkpoint.parentShas,
-            treeSha: checkpoint.treeSha,
-            subject: checkpoint.subject,
-            author: checkpoint.author,
-            committedAt: new Date(checkpoint.committedAt),
-            filesChanged: checkpoint.filesChanged,
-          },
-        });
-      } else {
-        persisted = await prisma.gitCheckpoint.create({
-          data: {
-            sessionId,
-            sessionGroupId: session.sessionGroupId,
-            repoId: session.repoId,
-            promptEventId,
-            commitSha: checkpoint.commitSha,
-            parentShas: checkpoint.parentShas,
-            treeSha: checkpoint.treeSha,
-            subject: checkpoint.subject,
-            author: checkpoint.author,
-            committedAt: new Date(checkpoint.committedAt),
-            filesChanged: checkpoint.filesChanged,
-          },
-        });
-      }
-
-      didPersistCheckpoint = true;
-    }
-
-    if (!persisted) return null;
-
-    // App checkpoints get a preview screenshot, but the headless render must not
-    // block the per-session event queue (it would freeze the agent's live output
-    // for seconds per commit). Mark it pending, emit the checkpoint now, and run
-    // the capture off-queue — a follow-up git_checkpoint event (merged by id on
-    // the client) carries the thumbnail once it's ready.
-    const shouldCaptureAppCheckpoint =
-      didPersistCheckpoint &&
-      (session.sessionGroup?.kind === "app" || session.sessionGroup?.kind === "animation");
-    const shouldPublishDesignPreview =
-      didPersistCheckpoint && session.sessionGroup?.kind === "design";
-    if (shouldCaptureAppCheckpoint && persisted) {
-      persisted = await prisma.gitCheckpoint.update({
-        where: { id: persisted.id },
-        data: { captureStatus: "pending" },
-      });
-    }
-    if (shouldPublishDesignPreview && persisted) {
-      persisted = await prisma.gitCheckpoint.update({
-        where: { id: persisted.id },
-        data: { previewStatus: "pending" },
-      });
-    }
-
-    if (didPersistCheckpoint) {
-      await eventService.create({
-        organizationId: session.organizationId,
-        scopeType: "session",
-        scopeId: sessionId,
-        eventType: "session_output",
-        payload: {
-          type: "git_checkpoint",
-          checkpoint: serializeGitCheckpoint(persisted),
-        } as Prisma.InputJsonValue,
-        actorType: "system",
-        actorId: "system",
-      });
-    }
-
-    if (rewrittenCheckpoint && rewrittenCheckpoint.id !== persisted.id) {
-      await prisma.gitCheckpoint.delete({
-        where: { id: rewrittenCheckpoint.id },
-      });
-
-      await eventService.create({
-        organizationId: session.organizationId,
-        scopeType: "session",
-        scopeId: sessionId,
-        eventType: "session_output",
-        payload: {
-          type: "git_checkpoint_rewrite",
-          replacedCommitSha: rewrittenCheckpoint.commitSha,
-          replacedCheckpointId: rewrittenCheckpoint.id,
-          checkpoint: serializeGitCheckpoint(persisted),
-        } as Prisma.InputJsonValue,
-        actorType: "system",
-        actorId: "system",
-      });
-    }
-
-    if (shouldCaptureAppCheckpoint && persisted && session.sessionGroup) {
-      this.captureAppCheckpointAsync({
-        checkpointId: persisted.id,
-        sessionId,
-        organizationId: session.organizationId,
-        sessionGroupId: session.sessionGroupId,
-        userId: session.sessionGroup.ownerUserId,
-      });
-    }
-    if (shouldPublishDesignPreview && persisted && session.sessionGroup) {
-      this.publishDesignCheckpointPreviewAsync({
-        checkpointId: persisted.id,
-        sessionId,
-        organizationId: session.organizationId,
-        sessionGroupId: session.sessionGroupId,
-        commitSha: persisted.commitSha,
-        userId: session.sessionGroup.ownerUserId,
-      });
-    }
-
-    return persisted;
-  }
-
-  /**
-   * Render and store an app checkpoint preview off the per-session event queue,
-   * then emit a follow-up git_checkpoint event carrying the captured thumbnail
-   * (the client merges checkpoints by id). Fire-and-forget: capture latency must
-   * never block the live agent output stream.
-   */
-  private captureAppCheckpointAsync(input: {
-    checkpointId: string;
-    sessionId: string;
-    organizationId: string;
-    sessionGroupId: string;
-    userId: string;
-  }): void {
-    void (async () => {
-      try {
-        const capture = await appCheckpointCaptureService.capture({
-          organizationId: input.organizationId,
-          sessionGroupId: input.sessionGroupId,
-          checkpointId: input.checkpointId,
-          userId: input.userId,
-        });
-        const updated = await prisma.gitCheckpoint.update({
-          where: { id: input.checkpointId },
-          data: {
-            captureStatus: capture.captureStatus,
-            captureKey: capture.captureKey ?? null,
-            captureUrl: capture.captureUrl ?? null,
-            captureContentType: capture.captureContentType ?? null,
-            capturedAt: capture.capturedAt ?? null,
-          },
-        });
-        await eventService.create({
-          organizationId: input.organizationId,
-          scopeType: "session",
-          scopeId: input.sessionId,
-          eventType: "session_output",
-          payload: {
-            type: "git_checkpoint",
-            checkpoint: serializeGitCheckpoint(updated),
-          } as Prisma.InputJsonValue,
-          actorType: "system",
-          actorId: "system",
-        });
-      } catch (error) {
-        // A missing row (checkpoint rewritten away) or capture failure is
-        // non-fatal — the checkpoint simply keeps its pending/last status.
-        console.error("[app-checkpoint] async capture failed", error);
-      }
-    })();
-  }
-
-  private publishDesignCheckpointPreviewAsync(input: {
-    checkpointId: string;
-    sessionId: string;
-    organizationId: string;
-    sessionGroupId: string;
-    commitSha: string;
-    userId: string;
-  }): void {
-    void (async () => {
-      try {
-        const preview = await designCheckpointPreviewService.publish(input);
-        const updated = await prisma.gitCheckpoint.update({
-          where: { id: input.checkpointId },
-          data: {
-            previewStatus: preview.previewStatus,
-            previewKey: preview.previewKey ?? null,
-            previewUrl: preview.previewUrl ?? null,
-            previewContentType: preview.previewContentType ?? null,
-            previewCapturedAt: preview.previewCapturedAt ?? null,
-          },
-        });
-        await eventService.create({
-          organizationId: input.organizationId,
-          scopeType: "session",
-          scopeId: input.sessionId,
-          eventType: "session_output",
-          payload: {
-            type: "git_checkpoint",
-            checkpoint: serializeGitCheckpoint(updated),
-          } as Prisma.InputJsonValue,
-          actorType: "system",
-          actorId: "system",
-        });
-      } catch (error) {
-        console.error("[design-checkpoint] async preview publish failed", error);
-      }
-    })();
   }
 
   async retryConnection(
@@ -9505,7 +8819,6 @@ export class SessionService {
             sessionGroupId: session.sessionGroupId ?? undefined,
             sessionGroupKind: session.sessionGroup?.kind,
             slug: session.sessionGroup?.slug ?? undefined,
-            checkpointSha: startMeta.restoreCheckpointSha ?? undefined,
             ...(await this.createGeneratedProjectGitCredential({
               organizationId: session.organizationId,
               sessionId,
@@ -9532,7 +8845,6 @@ export class SessionService {
             repoRemoteUrl: session.repo.remoteUrl,
             defaultBranch: session.repo.defaultBranch,
             branch: session.branch ?? undefined,
-            checkpointSha: startMeta.restoreCheckpointSha ?? undefined,
             readOnly: session.readOnlyWorkspace,
           };
       // Re-run workspace preparation — pin delivery to the runtime we just
@@ -9934,7 +9246,7 @@ export class SessionService {
 
     const bootstrapPrompt =
       params.bootstrapPrompt ?? buildMigrationPrompt(sourceInspection.verified);
-    const checkpointSha =
+    const baseCommitSha =
       sourceGitStatus?.headCommitSha && (!sourceGitStatus.branch || !sourceGitStatus.remoteBranch)
         ? sourceGitStatus.headCommitSha
         : null;
@@ -9974,7 +9286,7 @@ export class SessionService {
       sessionsToMove,
       sourceRuntimeId,
       bootstrapPrompt,
-      checkpointSha,
+      baseCommitSha,
       sourceBranch,
       sourceConnection,
       shouldCleanupGeneralWorkspace,
@@ -10295,7 +9607,7 @@ export class SessionService {
         reasoningEffort: movedSession.reasoningEffort,
         repo: movedSession.repo,
         branch: movedSession.branch,
-        checkpointSha: prepared.checkpointSha,
+        baseCommitSha: prepared.baseCommitSha,
         createdById: params.actorId,
         organizationId: movedSession.organizationId,
         readOnly: movedSession.readOnlyWorkspace,
@@ -11310,7 +10622,6 @@ export class SessionService {
       prompt: text,
       interactionMode: null,
       clientSource: normalizeClientSource(clientSource),
-      checkpointContext: null,
       designAttachments,
     };
     await this.storePendingCommand(
@@ -11669,81 +10980,6 @@ export class SessionService {
   private parseConnection(raw: unknown): SessionConnectionData {
     if (!raw || typeof raw !== "object") return defaultConnection();
     return defaultConnection(raw as Partial<SessionConnectionData>);
-  }
-
-  private async resolvePromptEventIdForCheckpoint(
-    sessionId: string,
-    checkpoint: GitCheckpointBridgePayload,
-  ) {
-    if (typeof checkpoint.promptEventId === "string" && checkpoint.promptEventId.trim()) {
-      return checkpoint.promptEventId;
-    }
-
-    if (
-      typeof checkpoint.checkpointContextId === "string" &&
-      checkpoint.checkpointContextId.trim()
-    ) {
-      const promptEventId = await this.findPromptEventIdForCheckpointContext(
-        sessionId,
-        checkpoint.checkpointContextId,
-      );
-      if (promptEventId) return promptEventId;
-    }
-
-    return this.findPromptEventIdForCheckpoint(sessionId, checkpoint.observedAt);
-  }
-
-  private async findPromptEventIdForCheckpointContext(
-    sessionId: string,
-    checkpointContextId: string,
-  ) {
-    const promptEvent = await prisma.event.findFirst({
-      where: {
-        scopeId: sessionId,
-        scopeType: "session",
-        eventType: { in: ["session_started", "message_sent"] },
-        metadata: { path: ["checkpointContextId"], equals: checkpointContextId },
-      },
-      orderBy: { timestamp: "desc" },
-      select: { id: true },
-    });
-
-    if (!promptEvent) {
-      console.warn(
-        `[checkpoint] no prompt event found for checkpoint context ${checkpointContextId} in session ${sessionId}`,
-      );
-      return null;
-    }
-
-    return promptEvent.id;
-  }
-
-  private async findPromptEventIdForCheckpoint(sessionId: string, observedAt: string) {
-    const observedDate = new Date(observedAt);
-    if (Number.isNaN(observedDate.getTime())) {
-      console.warn(`[checkpoint] invalid observedAt for session ${sessionId}: ${observedAt}`);
-      return null;
-    }
-
-    const latestPrompt = await prisma.event.findFirst({
-      where: {
-        scopeId: sessionId,
-        scopeType: "session",
-        eventType: { in: ["session_started", "message_sent"] },
-        timestamp: { lte: observedDate },
-      },
-      orderBy: { timestamp: "desc" },
-      select: { id: true },
-    });
-
-    if (!latestPrompt) {
-      console.warn(
-        `[checkpoint] no prompt event found before ${observedAt} for session ${sessionId}`,
-      );
-      return null;
-    }
-
-    return latestPrompt.id;
   }
 
   private async writeGroupRuntimeBindingInTransaction(
@@ -12161,7 +11397,6 @@ export class SessionService {
         interactionMode:
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
         clientSource: typeof pending.clientSource === "string" ? pending.clientSource : null,
-        checkpointContext: parseCheckpointContext(pending.checkpointContext),
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
         workspaceUpgrade: pending.workspaceUpgrade === true,
         designAttachments: parseDesignAttachments(pending.designAttachments),
@@ -12174,7 +11409,6 @@ export class SessionService {
         interactionMode:
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
         clientSource: typeof pending.clientSource === "string" ? pending.clientSource : null,
-        checkpointContext: parseCheckpointContext(pending.checkpointContext),
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
         workspaceUpgrade: pending.workspaceUpgrade === true,
         designAttachments: parseDesignAttachments(pending.designAttachments),
@@ -12341,17 +11575,6 @@ export class SessionService {
       prompt = appendArtifactSkillInstruction(prompt, pending.interactionMode);
     }
 
-    const fallbackCheckpointContext =
-      pending.type === "run" && !pending.checkpointContext
-        ? buildCheckpointContextFromStartMeta({
-            sessionId,
-            sessionGroupId: session.sessionGroupId,
-            repoId: session.repoId,
-            startMeta: await getSessionStartMetadata(sessionId),
-          })
-        : null;
-    const checkpointContext = pending.checkpointContext ?? fallbackCheckpointContext;
-
     // Generate presigned GET URLs for any attached files in the pending command
     let imageUrls: string[] | undefined;
     if (pending.imageKeys?.length) {
@@ -12388,7 +11611,6 @@ export class SessionService {
       interactionMode: pending.interactionMode ?? undefined,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
-      checkpointContext: checkpointContext ?? undefined,
       imageUrls,
       runtimeEnv: invocation.runtimeEnv,
     } satisfies {
@@ -12403,7 +11625,6 @@ export class SessionService {
       interactionMode?: string;
       cwd?: string;
       toolSessionId?: string;
-      checkpointContext?: GitCheckpointContext;
       imageUrls?: string[];
       runtimeEnv?: Record<string, string>;
     };

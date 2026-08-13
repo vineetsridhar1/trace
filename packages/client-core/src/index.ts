@@ -74,8 +74,6 @@ export type {
 export { handleOrgEvent, handleSessionEvent } from "./events/handlers.js";
 export {
   extractMessagePreview,
-  mergeGitCheckpoints,
-  rewriteGitCheckpoints,
   routeSessionOutput,
   sessionPatchFromOutput,
   shouldBumpSortTimestampForOutput,

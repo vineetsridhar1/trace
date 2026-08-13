@@ -1,5 +1,5 @@
 import type { EntityState, SessionGroupEntity } from "@trace/client-core";
-import type { GitCheckpoint, SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
+import type { SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
 
 function timestamp(value: string | null | undefined): number {
   if (!value) return 0;
@@ -120,19 +120,8 @@ export function findReadyAppPreviewEndpointId(
 }
 
 /** A saved preview is usable after the container that produced it has stopped. */
-export function savedDesignPreviewUrl(
-  groupPreviewUrl: string | null | undefined,
-  checkpoints: GitCheckpoint[] | null | undefined,
-): string | null {
-  if (groupPreviewUrl) return groupPreviewUrl;
-
-  return (
-    (checkpoints ?? [])
-      .filter(
-        (checkpoint) => checkpoint.previewStatus === "captured" && Boolean(checkpoint.previewUrl),
-      )
-      .sort((a, b) => b.committedAt.localeCompare(a.committedAt))[0]?.previewUrl ?? null
-  );
+export function savedDesignPreviewUrl(groupPreviewUrl: string | null | undefined): string | null {
+  return groupPreviewUrl ?? null;
 }
 
 /** Tells the saved design renderer to omit controls intended for a live canvas. */

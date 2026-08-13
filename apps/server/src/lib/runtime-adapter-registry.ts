@@ -22,7 +22,7 @@ export type RuntimeStartInput = {
   reasoningEffort?: string;
   repo?: { id: string; name: string; remoteUrl: string | null; defaultBranch: string } | null;
   branch?: string;
-  checkpointSha?: string;
+  baseCommitSha?: string;
   readOnly?: boolean;
   runtimeInstanceId?: string;
   runtimeToken?: string;

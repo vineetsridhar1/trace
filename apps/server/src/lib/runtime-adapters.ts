@@ -755,7 +755,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
         ? {
             ...input.repo,
             branch: input.branch ?? null,
-            checkpointSha: input.checkpointSha ?? null,
+            baseCommitSha: input.baseCommitSha ?? null,
             readOnly: input.readOnly ?? false,
           }
         : null,

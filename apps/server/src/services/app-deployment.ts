@@ -3,6 +3,7 @@ import { Prisma, type AppDeployment, type AppDeploymentStatus } from "@prisma/cl
 import type { DeployAppSessionInput } from "@trace/gql";
 import type { AppDeploymentSpec } from "@trace/shared";
 import { prisma } from "../lib/db.js";
+import { gitStorage } from "../lib/git-storage/index.js";
 import { decryptSecret, encryptSecret } from "../lib/encryption.js";
 import { AuthorizationError, ValidationError } from "../lib/errors.js";
 import {
@@ -99,7 +100,6 @@ export function publicAppDeployment(deployment: AppDeployment) {
     id: deployment.id,
     sessionGroupId: deployment.sessionGroupId,
     repoId: deployment.repoId,
-    sourceCheckpointId: deployment.sourceCheckpointId,
     commitSha: deployment.commitSha,
     status: deployment.status,
     target: deployment.target,
@@ -242,17 +242,15 @@ export class AppDeploymentService {
     }
     const group = await prisma.sessionGroup.findFirstOrThrow({
       where: { id: sessionGroupId, organizationId },
-      select: { id: true, kind: true, ownerUserId: true, repoId: true, slug: true },
+      select: { id: true, kind: true, ownerUserId: true, repoId: true, slug: true, branch: true },
     });
     await assertCanManageSessionGroup(group, organizationId, userId, "publish apps");
     if (group.kind !== "app" || !group.repoId) {
       throw new ValidationError("Only managed app sessions can be published");
     }
-    const checkpoint = await prisma.gitCheckpoint.findFirst({
-      where: { sessionGroupId, repoId: group.repoId },
-      orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
-    });
-    if (!checkpoint) throw new ValidationError("Commit the app before publishing");
+    const refs = await gitStorage.listRefs(organizationId, group.repoId);
+    const commitSha = refs.get(`refs/heads/${group.branch ?? ""}`);
+    if (!commitSha) throw new ValidationError("Push the app branch before publishing");
 
     const callbackToken = randomBytes(32).toString("base64url");
     const encryptedToken = encryptSecret(callbackToken);
@@ -269,7 +267,7 @@ export class AppDeploymentService {
         orderBy: { createdAt: "desc" },
       });
       if (
-        existing?.sourceCheckpointId === checkpoint.id &&
+        existing?.commitSha === commitSha &&
         JSON.stringify(existing.spec) === JSON.stringify(spec)
       ) {
         return { deployment: existing, created: false, event: null };
@@ -284,8 +282,7 @@ export class AppDeploymentService {
           organizationId,
           sessionGroupId,
           repoId: group.repoId!,
-          sourceCheckpointId: checkpoint.id,
-          commitSha: checkpoint.commitSha,
+          commitSha,
           target: spec.target,
           spec: spec as Prisma.InputJsonValue,
           appSlug: deploymentSlug(group),
@@ -402,7 +399,6 @@ export class AppDeploymentService {
         organizationId: claimed.organizationId,
         sessionGroupId: claimed.sessionGroupId,
         repoId: claimed.repoId,
-        checkpointId: claimed.sourceCheckpointId,
         commitSha: claimed.commitSha,
         appSlug: claimed.appSlug,
         spec: claimed.spec as unknown as AppDeploymentSpec,

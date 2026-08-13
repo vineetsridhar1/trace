@@ -89,7 +89,6 @@ export type AppDeployment = {
   repoId: Scalars["ID"]["output"];
   serviceName?: Maybe<Scalars["String"]["output"]>;
   sessionGroupId: Scalars["ID"]["output"];
-  sourceCheckpointId: Scalars["ID"]["output"];
   spec: Scalars["JSON"]["output"];
   startedAt?: Maybe<Scalars["DateTime"]["output"]>;
   staticPrefix?: Maybe<Scalars["String"]["output"]>;
@@ -865,37 +864,6 @@ export type EventType =
   | "ticket_unassigned"
   | "ticket_unlinked"
   | "ticket_updated";
-
-export type GitCheckpoint = {
-  __typename?: "GitCheckpoint";
-  author: Scalars["String"]["output"];
-  captureContentType?: Maybe<Scalars["String"]["output"]>;
-  captureStatus?: Maybe<GitCheckpointCaptureStatus>;
-  captureUrl?: Maybe<Scalars["String"]["output"]>;
-  capturedAt?: Maybe<Scalars["DateTime"]["output"]>;
-  commitSha: Scalars["String"]["output"];
-  committedAt: Scalars["DateTime"]["output"];
-  createdAt: Scalars["DateTime"]["output"];
-  filesChanged: Scalars["Int"]["output"];
-  id: Scalars["ID"]["output"];
-  parentShas: Array<Scalars["String"]["output"]>;
-  previewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
-  previewContentType?: Maybe<Scalars["String"]["output"]>;
-  previewStatus?: Maybe<GitCheckpointCaptureStatus>;
-  previewUrl?: Maybe<Scalars["String"]["output"]>;
-  promptEvent?: Maybe<Event>;
-  promptEventId: Scalars["ID"]["output"];
-  repo?: Maybe<Repo>;
-  repoId: Scalars["ID"]["output"];
-  session?: Maybe<Session>;
-  sessionGroup?: Maybe<SessionGroup>;
-  sessionGroupId: Scalars["ID"]["output"];
-  sessionId: Scalars["ID"]["output"];
-  subject: Scalars["String"]["output"];
-  treeSha: Scalars["String"]["output"];
-};
-
-export type GitCheckpointCaptureStatus = "captured" | "failed" | "pending" | "unavailable";
 
 export type HostingMode = "cloud" | "local";
 
@@ -2539,7 +2507,6 @@ export type Session = {
   createdBy: User;
   createdById: Scalars["ID"]["output"];
   endpoints?: Maybe<SessionEndpoints>;
-  gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars["ID"]["output"];
   inputTokens: Scalars["Float"]["output"];
@@ -2698,13 +2665,12 @@ export type SessionGroup = {
   createdAt: Scalars["DateTime"]["output"];
   designPreviewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
   designPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
-  designPreviewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  designPreviewStatus?: Maybe<Scalars["String"]["output"]>;
   designPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   designSystemVersion?: Maybe<DesignSystemVersion>;
   designSystemVersionId?: Maybe<Scalars["ID"]["output"]>;
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
-  gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
   kind: SessionGroupKind;
   name: Scalars["String"]["output"];
@@ -2885,7 +2851,6 @@ export type StartSessionInput = {
   prompt?: InputMaybe<Scalars["String"]["input"]>;
   reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
-  restoreCheckpointId?: InputMaybe<Scalars["ID"]["input"]>;
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
   sourceSessionId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -3582,12 +3547,6 @@ export type DesignPickerGroupsQuery = {
     kind: SessionGroupKind;
     archivedAt?: string | null;
     designPreviewUrl?: string | null;
-    gitCheckpoints: Array<{
-      __typename?: "GitCheckpoint";
-      previewStatus?: GitCheckpointCaptureStatus | null;
-      previewUrl?: string | null;
-      committedAt: string;
-    }>;
   }>;
 };
 
@@ -3739,24 +3698,6 @@ export type SessionDetailQuery = {
       updatedAt: string;
       setupStatus: SetupStatus;
       setupError?: string | null;
-      gitCheckpoints: Array<{
-        __typename?: "GitCheckpoint";
-        id: string;
-        sessionId: string;
-        promptEventId: string;
-        commitSha: string;
-        subject: string;
-        author: string;
-        committedAt: string;
-        filesChanged: number;
-        captureStatus?: GitCheckpointCaptureStatus | null;
-        captureUrl?: string | null;
-        capturedAt?: string | null;
-        previewStatus?: GitCheckpointCaptureStatus | null;
-        previewUrl?: string | null;
-        previewCapturedAt?: string | null;
-        createdAt: string;
-      }>;
       channel?: { __typename?: "Channel"; id: string } | null;
       repo?: {
         __typename?: "Repo";
@@ -3810,24 +3751,6 @@ export type SessionDetailQuery = {
         autoRetryable?: boolean | null;
       } | null;
     } | null;
-    gitCheckpoints: Array<{
-      __typename?: "GitCheckpoint";
-      id: string;
-      sessionId: string;
-      promptEventId: string;
-      commitSha: string;
-      subject: string;
-      author: string;
-      committedAt: string;
-      filesChanged: number;
-      captureStatus?: GitCheckpointCaptureStatus | null;
-      captureUrl?: string | null;
-      capturedAt?: string | null;
-      previewStatus?: GitCheckpointCaptureStatus | null;
-      previewUrl?: string | null;
-      previewCapturedAt?: string | null;
-      createdAt: string;
-    }>;
     channel?: { __typename?: "Channel"; id: string } | null;
     queuedMessages: Array<{
       __typename?: "QueuedMessage";
@@ -3906,24 +3829,6 @@ export type SessionGroupDetailQuery = {
     createdAt: string;
     updatedAt: string;
     owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
-    gitCheckpoints: Array<{
-      __typename?: "GitCheckpoint";
-      id: string;
-      sessionId: string;
-      promptEventId: string;
-      commitSha: string;
-      subject: string;
-      author: string;
-      committedAt: string;
-      filesChanged: number;
-      captureStatus?: GitCheckpointCaptureStatus | null;
-      captureUrl?: string | null;
-      capturedAt?: string | null;
-      previewStatus?: GitCheckpointCaptureStatus | null;
-      previewUrl?: string | null;
-      previewCapturedAt?: string | null;
-      createdAt: string;
-    }>;
     repo?: {
       __typename?: "Repo";
       id: string;
@@ -4172,7 +4077,6 @@ export type SessionApplicationsStateQuery = {
     id: string;
     sessionGroupId: string;
     repoId: string;
-    sourceCheckpointId: string;
     commitSha: string;
     status: AppDeploymentStatus;
     target: string;
@@ -7261,18 +7165,6 @@ export const DesignPickerGroupsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "kind" } },
                 { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "gitCheckpoints" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
-                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
-                    ],
-                  },
-                },
               ],
             },
           },
@@ -7854,30 +7746,6 @@ export const SessionDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
                       {
                         kind: "Field",
-                        name: { kind: "Name", value: "gitCheckpoints" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            { kind: "Field", name: { kind: "Name", value: "id" } },
-                            { kind: "Field", name: { kind: "Name", value: "sessionId" } },
-                            { kind: "Field", name: { kind: "Name", value: "promptEventId" } },
-                            { kind: "Field", name: { kind: "Name", value: "commitSha" } },
-                            { kind: "Field", name: { kind: "Name", value: "subject" } },
-                            { kind: "Field", name: { kind: "Name", value: "author" } },
-                            { kind: "Field", name: { kind: "Name", value: "committedAt" } },
-                            { kind: "Field", name: { kind: "Name", value: "filesChanged" } },
-                            { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
-                            { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
-                            { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
-                            { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
-                            { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
-                            { kind: "Field", name: { kind: "Name", value: "previewCapturedAt" } },
-                            { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                          ],
-                        },
-                      },
-                      {
-                        kind: "Field",
                         name: { kind: "Name", value: "channel" },
                         selectionSet: {
                           kind: "SelectionSet",
@@ -8057,30 +7925,6 @@ export const SessionDetailDocument = {
                 },
                 {
                   kind: "Field",
-                  name: { kind: "Name", value: "gitCheckpoints" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "sessionId" } },
-                      { kind: "Field", name: { kind: "Name", value: "promptEventId" } },
-                      { kind: "Field", name: { kind: "Name", value: "commitSha" } },
-                      { kind: "Field", name: { kind: "Name", value: "subject" } },
-                      { kind: "Field", name: { kind: "Name", value: "author" } },
-                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "filesChanged" } },
-                      { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
-                      { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
-                      { kind: "Field", name: { kind: "Name", value: "previewCapturedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                    ],
-                  },
-                },
-                {
-                  kind: "Field",
                   name: { kind: "Name", value: "channel" },
                   selectionSet: {
                     kind: "SelectionSet",
@@ -8242,30 +8086,6 @@ export const SessionGroupDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "animationPreviewCommitSha" } },
                 { kind: "Field", name: { kind: "Name", value: "animationPreviewCapturedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "animationPreviewError" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "gitCheckpoints" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "sessionId" } },
-                      { kind: "Field", name: { kind: "Name", value: "promptEventId" } },
-                      { kind: "Field", name: { kind: "Name", value: "commitSha" } },
-                      { kind: "Field", name: { kind: "Name", value: "subject" } },
-                      { kind: "Field", name: { kind: "Name", value: "author" } },
-                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "filesChanged" } },
-                      { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
-                      { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
-                      { kind: "Field", name: { kind: "Name", value: "previewCapturedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                    ],
-                  },
-                },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "repo" },
@@ -8919,7 +8739,6 @@ export const SessionApplicationsStateDocument = {
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
                 { kind: "Field", name: { kind: "Name", value: "repoId" } },
-                { kind: "Field", name: { kind: "Name", value: "sourceCheckpointId" } },
                 { kind: "Field", name: { kind: "Name", value: "commitSha" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "target" } },

@@ -10,7 +10,6 @@ const QUEUEABLE_BRIDGE_MESSAGE_TYPES = new Set<BridgeMessage["type"]>([
   "workspace_failed",
   "tool_session_id",
   "tool_session_missing",
-  "git_checkpoint",
   "repo_linked",
 ]);
 

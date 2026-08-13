@@ -8,8 +8,6 @@
 export const HIDDEN_SESSION_PAYLOAD_TYPES = [
   "connection_lost",
   "connection_restored",
-  "git_checkpoint",
-  "git_checkpoint_rewrite",
   "title_generated",
   "config_changed",
   "branch_renamed",

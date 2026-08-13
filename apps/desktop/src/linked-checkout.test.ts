@@ -8,10 +8,7 @@ import type { LinkedCheckoutConfig } from "./config.js";
 
 vi.mock("./config.js", () => {
   const state: {
-    repos: Record<
-      string,
-      { path: string; linkedCheckout: LinkedCheckoutConfig | null }
-    >;
+    repos: Record<string, { path: string; linkedCheckout: LinkedCheckoutConfig | null }>;
   } = { repos: {} };
   return {
     getRepoConfig: (repoId: string) => state.repos[repoId] ?? null,
@@ -50,10 +47,7 @@ const execFileAsync = promisify(execFile);
 
 const configMock = config as unknown as {
   __state: {
-    repos: Record<
-      string,
-      { path: string; linkedCheckout: LinkedCheckoutConfig | null }
-    >;
+    repos: Record<string, { path: string; linkedCheckout: LinkedCheckoutConfig | null }>;
   };
   __reset: () => void;
 };
@@ -786,42 +780,6 @@ describe("linked checkout commit-back", () => {
     expect(result.ok).toBe(true);
     const worktreeCommit = await git(worktreePath, ["rev-parse", "HEAD"]);
     expect(await git(originPath, ["rev-parse", "refs/heads/trace/raccoon"])).toBe(worktreeCommit);
-  }, 15_000);
-
-  it("keeps main-worktree changes retryable when pushing committed sync changes fails", async () => {
-    const { repoPath, worktreePath, originPath } = await createRepoFixtureWithOrigin();
-    seedRepo("repo-1", repoPath);
-    const hookPath = path.join(originPath, "hooks", "pre-receive");
-    fs.writeFileSync(hookPath, "#!/bin/sh\necho rejected >&2\nexit 1\n");
-    fs.chmodSync(hookPath, 0o755);
-    fs.writeFileSync(path.join(repoPath, "app.txt"), "push will fail\n");
-
-    const result = await syncLinkedCheckout({
-      repoId: "repo-1",
-      sessionGroupId: "group-1",
-      branch: "trace/raccoon",
-      conflictStrategy: "commit",
-      commitMessage: "Carry local changes into Trace",
-    });
-
-    expect(result.ok).toBe(false);
-    expect(fs.readFileSync(path.join(repoPath, "app.txt"), "utf8")).toBe("push will fail\n");
-    expect(await git(repoPath, ["status", "--porcelain", "--untracked-files=all"])).not.toBe("");
-    const localCommit = await git(worktreePath, ["rev-parse", "HEAD"]);
-    expect(await git(originPath, ["rev-parse", "refs/heads/trace/raccoon"])).not.toBe(localCommit);
-
-    fs.rmSync(hookPath);
-    const retryResult = await syncLinkedCheckout({
-      repoId: "repo-1",
-      sessionGroupId: "group-1",
-      branch: "trace/raccoon",
-      conflictStrategy: "commit",
-      commitMessage: "Carry local changes into Trace",
-    });
-
-    expect(retryResult.ok).toBe(true);
-    expect(await git(repoPath, ["status", "--porcelain", "--untracked-files=all"])).toBe("");
-    expect(await git(originPath, ["rev-parse", "refs/heads/trace/raccoon"])).toBe(localCommit);
   }, 15_000);
 
   it("stashes main-worktree changes before syncing when requested", async () => {

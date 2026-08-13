@@ -1,5 +1,4 @@
 import { memo } from "react";
-import type { GitCheckpoint } from "@trace/gql";
 import type { AgentToolResult, SessionNode } from "./groupReadGlob";
 import { SessionMessage } from "./SessionMessage";
 import { ReadGlobGroup } from "./messages/ReadGlobGroup";
@@ -10,7 +9,6 @@ import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/mar
 
 export interface SessionNodeRendererProps {
   node: SessionNode;
-  gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
   completedAgentTools: Map<string, AgentToolResult>;
   toolResultByUseId: Map<string, unknown>;
   highlightEventId?: string | null;
@@ -26,7 +24,6 @@ export interface SessionNodeRendererProps {
 
 export const SessionNodeRenderer = memo(function SessionNodeRenderer({
   node,
-  gitCheckpointsByPromptEventId,
   completedAgentTools,
   toolResultByUseId,
   highlightEventId,
@@ -51,7 +48,6 @@ export const SessionNodeRenderer = memo(function SessionNodeRenderer({
       >
         <SessionMessage
           id={node.id}
-          gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
           completedAgentTools={completedAgentTools}
           toolResultByUseId={toolResultByUseId}
           onForkSession={onForkSession}

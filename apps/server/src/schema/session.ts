@@ -22,11 +22,7 @@ import {
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
 import { assertScopeAccess, canViewSessionGroup } from "../services/access.js";
-import { storage } from "../lib/storage/index.js";
-import {
-  designCheckpointPreviewUrl,
-  designCommitPreviewUrl,
-} from "../lib/design-checkpoint-preview-url.js";
+import { designCommitPreviewUrl } from "../lib/design-preview-url.js";
 import { animationCommitPreviewUrl } from "../lib/animation-preview-url.js";
 
 export const sessionQueries = {
@@ -1006,9 +1002,6 @@ export const sessionTypeResolvers = {
           ?.sessions ?? []
       );
     },
-    gitCheckpoints: async (group: { id: string }) => {
-      return sessionService.listGitCheckpointsForGroup(group.id);
-    },
     owner: async (
       group: { owner?: unknown; ownerUser?: unknown; ownerUserId?: string },
       _args: unknown,
@@ -1064,9 +1057,6 @@ export const sessionTypeResolvers = {
         : (session.cacheCreationTokens ?? 0),
     tickets: (session: { id: string }, _args: unknown, ctx: Context) =>
       ctx.sessionTicketsLoader.load(session.id),
-    gitCheckpoints: async (session: { id: string }) => {
-      return sessionService.listGitCheckpointsForSession(session.id);
-    },
     queuedMessages: async (session: { id: string }) => {
       return prisma.queuedMessage.findMany({
         where: { sessionId: session.id },
@@ -1082,32 +1072,6 @@ export const sessionTypeResolvers = {
   },
   QueuedMessage: {
     attachmentKeys: (message: { imageKeys: string[] }) => message.imageKeys,
-  },
-  GitCheckpoint: {
-    captureUrl: (checkpoint: { captureKey?: string | null; captureUrl?: string | null }) =>
-      checkpoint.captureKey
-        ? storage.getGetUrl(checkpoint.captureKey, { downloadFilename: "app-checkpoint.png" })
-        : (checkpoint.captureUrl ?? null),
-    previewUrl: (checkpoint: {
-      id: string;
-      previewKey?: string | null;
-      previewUrl?: string | null;
-    }) =>
-      checkpoint.previewKey
-        ? designCheckpointPreviewUrl(checkpoint.id)
-        : (checkpoint.previewUrl ?? null),
-    session: async (checkpoint: { sessionId: string }, _args: unknown, ctx: Context) => {
-      return ctx.sessionLoader.load(checkpoint.sessionId);
-    },
-    sessionGroup: async (checkpoint: { sessionGroupId: string }, _args: unknown, ctx: Context) => {
-      return ctx.sessionGroupLoader.load(checkpoint.sessionGroupId);
-    },
-    repo: async (checkpoint: { repoId: string }, _args: unknown, ctx: Context) => {
-      return ctx.repoLoader.load(checkpoint.repoId);
-    },
-    promptEvent: async (checkpoint: { promptEventId: string }, _args: unknown, ctx: Context) => {
-      return ctx.eventLoader.load(checkpoint.promptEventId);
-    },
   },
 };
 

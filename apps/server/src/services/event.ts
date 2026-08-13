@@ -72,7 +72,7 @@ export function excludeSessionOutputPayloadTypesWhere(
 
 /**
  * session_output subtypes that carry metadata relevant to all clients
- * (sidebar status, session names, connection state, checkpoints).
+ * (sidebar status, session names, and connection state).
  * Only these are broadcast on the org-wide topic. Pure content events
  * (assistant, result, error) are only sent via the session-scoped topic.
  */
@@ -87,8 +87,6 @@ const ORG_RELEVANT_OUTPUT_SUBTYPES = new Set([
   "recovery_failed",
   "recovery_requested",
   "session_rehomed",
-  "git_checkpoint",
-  "git_checkpoint_rewrite",
   "config_changed",
   "branch_renamed",
   "worktree_imported",
@@ -209,7 +207,7 @@ export class EventService {
 
     // For session_output events, only broadcast to the org topic when the
     // subtype carries metadata that the sidebar/session list needs (status
-    // changes, titles, connection state, checkpoints). Pure content events
+    // changes, titles, and connection state). Pure content events
     // (assistant messages, tool output, results) are noise at the org level —
     // viewers of a specific session get full payloads via sessionEvents.
     if (event.eventType === "session_output") {
@@ -251,8 +249,8 @@ export class EventService {
   /**
    * Extract only the metadata fields from a session_output payload
    * that useOrgEvents needs for routing and patching (type, agentStatus,
-   * sessionStatus, name, workdir, connection, newSessionId, checkpoint id/sessionGroupId,
-   * replacedCommitSha). Omit the bulk content (message blocks, tool output).
+   * sessionStatus, name, workdir, connection, and newSessionId. Omit the bulk
+   * content (message blocks, tool output).
    */
   private trimSessionOutputPayload(payload: Prisma.InputJsonValue): Prisma.InputJsonValue {
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) return {};
@@ -270,12 +268,6 @@ export class EventService {
     if (p.workdir !== undefined) trimmed.workdir = p.workdir;
     if (p.connection !== undefined) trimmed.connection = p.connection;
     if (p.newSessionId !== undefined) trimmed.newSessionId = p.newSessionId;
-
-    // Git checkpoint metadata (keep id + sessionGroupId, drop file diffs)
-    if (p.checkpoint && typeof p.checkpoint === "object") {
-      trimmed.checkpoint = p.checkpoint;
-    }
-    if (p.replacedCommitSha !== undefined) trimmed.replacedCommitSha = p.replacedCommitSha;
 
     // Session group data for upsertSessionGroupFromPayload
     if (p.session !== undefined) trimmed.session = p.session;

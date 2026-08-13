@@ -116,9 +116,7 @@ describe("workspace repo setup", () => {
 
     await ensureRepo("repo-1", "git@github.com:acme/project.git", "main", "main");
 
-    expect(gitArgsAt(0)).toContain(
-      "https://x-access-token:gh-token@github.com/acme/project.git",
-    );
+    expect(gitArgsAt(0)).toContain("https://x-access-token:gh-token@github.com/acme/project.git");
   });
 
   it("adds a cache reference when the repo cache mirror exists", async () => {
@@ -320,14 +318,14 @@ describe("workspace repo setup", () => {
   it("recreates an app workspace from the latest managed remote branch", async () => {
     mocks.existsSync.mockReturnValue(false);
     mocks.readdirSync.mockReturnValue([]);
-    const checkpointSha = "a".repeat(40);
+    const baseCommitSha = "a".repeat(40);
 
     await createAppWorkspace({
       sessionId: "session-1",
       sessionGroupId: "restored-group",
       repoRemoteUrl: "https://trace:token@example.test/git/org/repo.git",
       defaultBranch: "main",
-      checkpointSha,
+      baseCommitSha,
     });
 
     expect(mocks.execFile).toHaveBeenCalledWith(
@@ -343,14 +341,14 @@ describe("workspace repo setup", () => {
     );
     expect(mocks.execFile).not.toHaveBeenCalledWith(
       "git",
-      ["checkout", "-B", "main", checkpointSha],
+      ["checkout", "-B", "main", baseCommitSha],
       expect.anything(),
       expect.any(Function),
     );
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
   });
 
-  it("recreates an expired app workspace from the remote without a checkpoint", async () => {
+  it("recreates an expired app workspace from the remote", async () => {
     mocks.existsSync.mockReturnValue(false);
     mocks.readdirSync.mockReturnValue([]);
     mocks.execFile.mockImplementation((...args: unknown[]) => {

@@ -79,7 +79,6 @@ vi.mock("../services/session.js", () => ({
     workspaceFailed: vi.fn(() => Promise.resolve()),
     storeToolSessionId: vi.fn(() => Promise.resolve()),
     recoverMissingToolSession: vi.fn(() => Promise.resolve()),
-    recordGitCheckpoint: vi.fn(() => Promise.resolve()),
     markConnectionLost: vi.fn(() => Promise.resolve()),
   },
 }));

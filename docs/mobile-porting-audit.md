@@ -6,7 +6,7 @@ This audit compares the newer web app surfaces against the current mobile app an
 
 - Highest priority gaps: session forking, header PR actions, the `Spotlight` naming/primary action, and Antigravity tool support.
 - Mobile already has partial support for merged/archived workspaces, PR timeline cards, Pi, linked checkout actions, and linked checkout conflict handling.
-- Several web-only workspace panels are larger mobile product decisions: files, branch changes, checkpoints, file command palette, and file-scoped AI input.
+- Several web-only workspace panels are larger mobile product decisions: files, branch changes, file command palette, and file-scoped AI input.
 
 ## P0: Port Before Feature Parity
 
@@ -168,25 +168,24 @@ Porting notes:
 
 ### 7. Port web workspace side panels or define mobile equivalents
 
-Web has a right-side workspace panel with files, checkpoints, and changes, plus file tabs and file-scoped AI input. Mobile currently has session, terminal, and browser panes, but no file/checkpoint/change panels.
+Web has a right-side workspace panel with files and changes, plus file tabs and file-scoped AI input. Mobile currently has session, terminal, and browser panes, but no file/change panels.
 
 Web source:
 
-- `apps/web/src/components/session/SidebarPanel.tsx:10` defines `files`, `git`, and `changes` tabs.
+- `apps/web/src/components/session/SidebarPanel.tsx` defines `files` and `changes` tabs.
 - `apps/web/src/components/session/SidebarPanel.tsx:92` renders `FileExplorer`.
 - `apps/web/src/components/session/SidebarPanel.tsx:101` renders `BranchChangesPanel`.
-- `apps/web/src/components/session/SidebarPanel.tsx:106` renders `CheckpointPanel`.
 - `apps/web/src/components/session/SessionGroupDetailView.tsx:668` renders the tab strip for sessions, terminals, and open files.
 - `apps/web/src/components/session/SessionGroupDetailView.tsx:752` renders `FileCommandPalette`.
 - `apps/web/src/components/session/SessionGroupContentArea.tsx:109` and `136` render file-scoped AI input.
 
 Mobile gap:
 
-- No `FileExplorer`, `BranchChangesPanel`, `CheckpointPanel`, `FileCommandPalette`, or `FileScopedAiInput` equivalent exists under `apps/mobile/src`.
+- No `FileExplorer`, `BranchChangesPanel`, `FileCommandPalette`, or `FileScopedAiInput` equivalent exists under `apps/mobile/src`.
 
 Porting notes:
 
-- This is larger than a label port. Recommended mobile shape: add `Files`, `Changes`, and `Checkpoints` as title-panel actions or as additional panes alongside `session`, `terminal`, and `browser`.
+- This is larger than a label port. Recommended mobile shape: add `Files` and `Changes` as title-panel actions or as additional panes alongside `session`, `terminal`, and `browser`.
 - If implementing incrementally, start with read-only files and changed-file list before adding diff viewer/editor behavior.
 
 ### 8. Port auto-archive merged sessions setting to mobile defaults
@@ -270,5 +269,5 @@ Porting notes:
 3. Add mobile session forking from assistant messages.
 4. Add Antigravity to session picker, composer logo, and session defaults.
 5. Add auto-archive merged sessions to mobile session defaults.
-6. Decide the mobile IA for files, changes, checkpoints, and file-scoped AI.
+6. Decide the mobile IA for files, changes, and file-scoped AI.
 7. Add run scripts if mobile terminal workflows should match web.

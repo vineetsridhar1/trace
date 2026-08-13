@@ -14,7 +14,7 @@ import {
 } from "../lib/git-http.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
-import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
+import { designPreviewService } from "./design-preview.js";
 import { storage } from "../lib/storage/index.js";
 import { sessionRouter } from "../lib/session-router.js";
 import {
@@ -24,7 +24,7 @@ import {
 } from "../lib/pdf-format.js";
 import { designSystemService } from "./design-system.js";
 import { animationCommitPreviewUrl } from "../lib/animation-preview-url.js";
-import { designCommitPreviewUrl } from "../lib/design-checkpoint-preview-url.js";
+import { designCommitPreviewUrl } from "../lib/design-preview-url.js";
 
 async function sendSessionCommand(...args: Parameters<typeof sessionRouter.send>) {
   return sessionRouter.sendAsync(...args);
@@ -134,7 +134,7 @@ function managedGitBaseUrl(): string {
   const port = process.env.PORT ?? "4000";
   console.warn(
     `[managed-git] TRACE_SERVER_PUBLIC_URL is unset; managed git origins fall back to http://localhost:${port}. ` +
-      "Cloud runtimes cannot reach this and their checkpoint pushes will fail. Set TRACE_SERVER_PUBLIC_URL to a URL the runtime can reach back on.",
+      "Cloud runtimes cannot reach this and their pushes will fail. Set TRACE_SERVER_PUBLIC_URL to a URL the runtime can reach back on.",
   );
   return `http://localhost:${port}`;
 }
@@ -433,7 +433,7 @@ class ManagedGitService {
   /**
    * Post-receive hook: record that refs were pushed to a managed repo and emit
    * a `repo_updated` event so downstream services/clients can react. Consumers
-   * (design artifact, app checkpoint flows) layer their own event handling on
+   * Design and app services layer their own event handling on
    * top of the managed remote; this is the shared transport-level signal.
    */
   async recordPush(input: {
@@ -461,7 +461,7 @@ class ManagedGitService {
     });
 
     // A managed push is the durable source of truth for Design previews. This
-    // deliberately does not create or depend on a Trace checkpoint.
+    // directly from the pushed commit.
     for (const command of input.commands) {
       if (!command.ref.startsWith("refs/heads/") || /^0+$/.test(command.newSha)) continue;
       const branch = command.ref.slice("refs/heads/".length);
@@ -1632,9 +1632,9 @@ class ManagedGitService {
     });
     if (claimed.count === 0) return;
 
-    let preview: Awaited<ReturnType<typeof designCheckpointPreviewService.publishCommit>>;
+    let preview: Awaited<ReturnType<typeof designPreviewService.publish>>;
     try {
-      preview = await designCheckpointPreviewService.publishCommit(input);
+      preview = await designPreviewService.publish(input);
     } catch (error) {
       console.error("[managed-git] design commit preview export failed", error);
       preview = { previewStatus: "failed", previewCapturedAt: new Date() };

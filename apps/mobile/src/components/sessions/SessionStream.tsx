@@ -99,7 +99,6 @@ export function SessionStream({
     nodes,
     completedAgentTools,
     toolResultByUseId,
-    gitCheckpointsByPromptEventId,
     events: scopedEvents,
   } = useSessionNodes(sessionId, {
     enabled: renderEvents,
@@ -158,9 +157,8 @@ export function SessionStream({
       sessionId,
       completedAgentTools,
       toolResultByUseId,
-      gitCheckpointsByPromptEventId,
     }),
-    [sessionId, completedAgentTools, toolResultByUseId, gitCheckpointsByPromptEventId],
+    [sessionId, completedAgentTools, toolResultByUseId],
   );
   const streamItemCacheRef = useRef<SessionStreamItemCache | undefined>(undefined);
   const streamItems = useMemo(() => {

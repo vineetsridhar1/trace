@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { gql } from "@urql/core";
-import type { Artifact, GitCheckpoint, QueuedMessage } from "@trace/gql";
+import type { Artifact, QueuedMessage } from "@trace/gql";
 import { toast } from "sonner";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useSessionPromptIndex } from "../../hooks/useSessionPromptIndex";
@@ -121,23 +121,6 @@ const SESSION_DETAIL_QUERY = gql`
         workdir
         worktreeDeleted
         designPreviewUrl
-        gitCheckpoints {
-          id
-          sessionId
-          promptEventId
-          commitSha
-          subject
-          author
-          committedAt
-          filesChanged
-          captureStatus
-          captureUrl
-          capturedAt
-          previewStatus
-          previewUrl
-          previewCapturedAt
-          createdAt
-        }
         channel {
           id
         }
@@ -195,23 +178,6 @@ const SESSION_DETAIL_QUERY = gql`
         updatedAt
         setupStatus
         setupError
-      }
-      gitCheckpoints {
-        id
-        sessionId
-        promptEventId
-        commitSha
-        subject
-        author
-        committedAt
-        filesChanged
-        captureStatus
-        captureUrl
-        capturedAt
-        previewStatus
-        previewUrl
-        previewCapturedAt
-        createdAt
       }
       channel {
         id
@@ -323,9 +289,6 @@ export function SessionDetailView({
           : latestPlanArtifact;
   const { implementationContent: artifactPlanContent, error: artifactPlanError } =
     useVisualPlanDocument(visiblePlanArtifact?.id ?? null, visualPlanHtmlPath(visiblePlanArtifact));
-  const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
-    | GitCheckpoint[]
-    | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | Record<string, unknown>
     | null
@@ -742,7 +705,6 @@ export function SessionDetailView({
                   sessionId={sessionId}
                   nodes={listNodes}
                   promptIndexItems={promptIndexItems}
-                  gitCheckpoints={gitCheckpoints ?? []}
                   initialLoading={initialEventsLoading}
                   hasOlder={hasOlder}
                   loadingOlder={loadingOlder}
