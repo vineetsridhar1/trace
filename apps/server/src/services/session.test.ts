@@ -9725,9 +9725,80 @@ describe("SessionService", () => {
 
       expect(storageMock.deleteObject).toHaveBeenCalledWith("artifacts/org-1/artifact-1.tar.gz");
     });
+
+    it("cleans an authored design system when directly deleting its final session", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce(makeSession());
+      prismaMock.session.count.mockResolvedValueOnce(0);
+      prismaMock.designSystem.findUnique.mockResolvedValueOnce({
+        id: "design-system-1",
+        versions: [{ id: "version-1", storageKey: "design-systems/version-1.tar.gz" }],
+        commitArtifacts: [{ id: "artifact-1", storageKey: "design-systems/commit-1.tar.gz" }],
+      });
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([{ id: "pinned-group-1" }]);
+
+      await service.delete("session-1", "user", "user-1");
+
+      expect(prismaMock.designSystem.delete).toHaveBeenCalledWith({
+        where: { id: "design-system-1" },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            deletedDesignSystemId: "design-system-1",
+            deletedDesignSystemVersionIds: ["version-1"],
+            deletedDesignSystemCommitArtifactIds: ["artifact-1"],
+            unpinnedSessionGroupIds: ["pinned-group-1"],
+          }),
+        }),
+      );
+    });
+
+    it("does not remove a design system when runtime teardown fails", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce(makeSession());
+      prismaMock.session.count.mockResolvedValueOnce(0);
+      sessionRouterMock.destroyRuntime.mockRejectedValueOnce(new Error("runtime teardown failed"));
+
+      await expect(service.delete("session-1")).rejects.toThrow("runtime teardown failed");
+
+      expect(prismaMock.designSystem.findUnique).not.toHaveBeenCalled();
+      expect(prismaMock.session.delete).not.toHaveBeenCalled();
+    });
   });
 
   describe("deleteGroup", () => {
+    it("deletes the design system that owns an authoring group", async () => {
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
+        makeSessionGroup({ id: "design-system-group", kind: "design_system" }),
+      );
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "design-system-group",
+        visibility: "public",
+        ownerUserId: "user-1",
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([]);
+      prismaMock.designSystem.findUnique.mockResolvedValueOnce({
+        id: "design-system-1",
+        versions: [{ id: "version-1", storageKey: "design-systems/version-1.tar.gz" }],
+        commitArtifacts: [{ id: "artifact-1", storageKey: "design-systems/commit-1.tar.gz" }],
+      });
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([{ id: "pinned-group-1" }]);
+
+      await service.deleteGroup("design-system-group", "org-1", "user", "user-1");
+
+      expect(prismaMock.sessionGroup.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ["pinned-group-1"] } },
+        data: { designSystemVersionId: null },
+      });
+      expect(prismaMock.designSystemVersion.deleteMany).toHaveBeenCalledWith({
+        where: { designSystemId: "design-system-1" },
+      });
+      expect(prismaMock.designSystem.delete).toHaveBeenCalledWith({
+        where: { id: "design-system-1" },
+      });
+      expect(storageMock.deleteObject).toHaveBeenCalledWith("design-systems/version-1.tar.gz");
+      expect(storageMock.deleteObject).toHaveBeenCalledWith("design-systems/commit-1.tar.gz");
+    });
+
     it("deletes an app group's managed git repo", async () => {
       prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
         makeSessionGroup({

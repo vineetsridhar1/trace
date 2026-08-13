@@ -611,9 +611,34 @@ export function handleOrgEvent(event: Event): void {
       typeof payload.deletedSessionGroupId === "string" ? payload.deletedSessionGroupId : null;
     const sessionGroupId =
       typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
+    const deletedDesignSystemId =
+      typeof payload.deletedDesignSystemId === "string" ? payload.deletedDesignSystemId : null;
+    const deletedDesignSystemVersionIds = Array.isArray(payload.deletedDesignSystemVersionIds)
+      ? payload.deletedDesignSystemVersionIds
+      : [];
+    const deletedDesignSystemCommitArtifactIds = Array.isArray(
+      payload.deletedDesignSystemCommitArtifactIds,
+    )
+      ? payload.deletedDesignSystemCommitArtifactIds
+      : [];
+    const unpinnedSessionGroupIds = Array.isArray(payload.unpinnedSessionGroupIds)
+      ? payload.unpinnedSessionGroupIds
+      : [];
     batch.remove("sessions", deletedId);
     if (deletedSessionGroupId) {
       batch.remove("sessionGroups", deletedSessionGroupId);
+    }
+    if (deletedDesignSystemId) {
+      batch.remove("designSystems", deletedDesignSystemId);
+      for (const id of deletedDesignSystemVersionIds) {
+        if (typeof id === "string") batch.remove("designSystemVersions", id);
+      }
+      for (const id of deletedDesignSystemCommitArtifactIds) {
+        if (typeof id === "string") batch.remove("designSystemCommitArtifacts", id);
+      }
+      for (const id of unpinnedSessionGroupIds) {
+        if (typeof id === "string") batch.patch("sessionGroups", id, { designSystemVersionId: null });
+      }
     }
 
     if (deletedSessionGroupId && ui.getActiveSessionGroupId() === deletedSessionGroupId) {

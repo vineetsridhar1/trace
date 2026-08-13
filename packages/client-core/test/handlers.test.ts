@@ -280,6 +280,36 @@ describe("handleOrgEvent", () => {
     expect(useEntityStore.getState().sessionGroups["group-1"]).toBeUndefined();
   });
 
+  it("removes a deleted design system and clears its pinned creations", () => {
+    useEntityStore.setState({
+      designSystems: { "system-1": { id: "system-1" } as never },
+      designSystemVersions: { "version-1": { id: "version-1" } as never },
+      designSystemCommitArtifacts: { "artifact-1": { id: "artifact-1" } as never },
+      sessionGroups: {
+        "group-2": { id: "group-2", designSystemVersionId: "version-1" } as never,
+      },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_deleted",
+        scopeId: "session-1",
+        payload: {
+          deletedDesignSystemId: "system-1",
+          deletedDesignSystemVersionIds: ["version-1"],
+          deletedDesignSystemCommitArtifactIds: ["artifact-1"],
+          unpinnedSessionGroupIds: ["group-2"],
+        },
+      }),
+    );
+
+    const state = useEntityStore.getState();
+    expect(state.designSystems["system-1"]).toBeUndefined();
+    expect(state.designSystemVersions["version-1"]).toBeUndefined();
+    expect(state.designSystemCommitArtifacts["artifact-1"]).toBeUndefined();
+    expect(state.sessionGroups["group-2"]?.designSystemVersionId).toBeNull();
+  });
+
   it("keeps scoped event ids ordered by timestamp", () => {
     const newer = makeEvent({
       eventType: "session_output",
