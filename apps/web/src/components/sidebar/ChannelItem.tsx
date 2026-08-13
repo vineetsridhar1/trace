@@ -17,7 +17,7 @@ import {
   ContextMenuTrigger,
 } from "../ui/context-menu";
 import { DeleteChannelDialog } from "../channel/DeleteChannelDialog";
-import { ChannelMembersDialog } from "../channel/ChannelMembersDialog";
+import { AddPeopleDialog } from "../channel/AddPeopleDialog";
 import { RenameProjectDialog } from "./RenameProjectDialog";
 import { cn } from "../../lib/utils";
 import { createQuickSession } from "../../lib/create-quick-session";
@@ -247,7 +247,12 @@ export const ChannelItem = memo(function ChannelItem({
         open={renameOpen}
         onOpenChange={setRenameOpen}
       />
-      <ChannelMembersDialog channelId={id} open={membersOpen} onOpenChange={setMembersOpen} />
+      <AddPeopleDialog
+        channelId={id}
+        channelName={name ?? "this project"}
+        open={membersOpen}
+        onOpenChange={setMembersOpen}
+      />
     </>
   );
 });
