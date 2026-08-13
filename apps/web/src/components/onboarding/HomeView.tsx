@@ -196,7 +196,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--th-surface-mid)]">
       <HomeHeader people={people} title={isCreateMode ? "New session" : "Home"} />
-      <div ref={scrollViewportRef} className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+      <div key={mode} ref={scrollViewportRef} className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="pointer-events-none absolute left-1/2 top-[-70px] h-[420px] w-[min(900px,100vw)] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,color-mix(in_srgb,var(--th-accent)_8%,transparent),transparent_70%)]" />
         <main
           className={`relative mx-auto flex min-h-full w-full flex-col px-4 pb-7 sm:px-6 ${

@@ -25,10 +25,6 @@ const FILTERS: Array<{ label: string; value: CreationKindFilter }> = [
   { label: "Designs", value: "design" },
 ];
 
-// Creations hydrate after this screen mounts. The default is intended for
-// chat feeds and can preserve an arbitrary row as that data arrives.
-const disableMaintainVisibleContentPosition = { disabled: true };
-
 export default function CreationsScreen() {
   const theme = useTheme();
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
@@ -86,7 +82,6 @@ export default function CreationsScreen() {
         ListHeaderComponent={<CreationsListHeader filter={filter} error={error} onFilterChange={chooseFilter} onRetry={() => void refresh()} />}
         ListEmptyComponent={loading ? <CreationLoading /> : <CreationsEmpty error={error} archived={archived} onCreate={() => setCreating(true)} onRetry={() => void refresh()} />}
         contentInsetAdjustmentBehavior="automatic"
-        maintainVisibleContentPosition={disableMaintainVisibleContentPosition}
         style={{ flex: 1, backgroundColor: theme.colors.background }}
       />
       <CreateCreationSheet visible={creating} onClose={() => setCreating(false)} onCreateApp={() => void createApplication()} onCreateDesign={() => void chooseDesignSystemAndCreate(activeOrgId)} />
