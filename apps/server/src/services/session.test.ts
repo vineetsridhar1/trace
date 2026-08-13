@@ -1507,7 +1507,6 @@ describe("SessionService", () => {
         where: {
           channelId: "channel-1",
           organizationId: "org-1",
-          AND: [{ OR: [{ visibility: "public" }, { ownerUserId: "user-1" }] }],
           archivedAt: null,
         },
         include: expect.any(Object),
@@ -1602,7 +1601,6 @@ describe("SessionService", () => {
         where: {
           channelId: "channel-1",
           organizationId: "org-1",
-          AND: [{ OR: [{ visibility: "public" }, { ownerUserId: "user-1" }] }],
           archivedAt: { not: null },
         },
         include: expect.any(Object),

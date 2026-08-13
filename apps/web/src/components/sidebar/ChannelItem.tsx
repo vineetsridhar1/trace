@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
-import { ChevronRight, Mail, Plus, Trash2, Users } from "lucide-react";
+import { ChevronRight, Mail, Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -10,11 +10,15 @@ import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
 import {
   ContextMenu,
   ContextMenuContent,
+  ContextMenuGroup,
   ContextMenuItem,
+  ContextMenuLabel,
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "../ui/context-menu";
 import { DeleteChannelDialog } from "../channel/DeleteChannelDialog";
+import { AddPeopleDialog } from "../channel/AddPeopleDialog";
+import { RenameProjectDialog } from "./RenameProjectDialog";
 import { cn } from "../../lib/utils";
 import { createQuickSession } from "../../lib/create-quick-session";
 import type { SidebarSessionScope } from "./ChannelOwnedSessions";
@@ -48,6 +52,8 @@ export const ChannelItem = memo(function ChannelItem({
   );
   const markChannelDone = useUIStore((s) => s.markChannelDone);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
 
   const sortableData = useMemo(
     () => ({ type: "channel" as const, id, groupId: groupId ?? null }),
@@ -129,9 +135,23 @@ export const ChannelItem = memo(function ChannelItem({
               </SidebarMenuButton>
             </SidebarMenuItem>
           </ContextMenuTrigger>
-          <ContextMenuContent>
+          <ContextMenuContent className="w-60 p-1.5">
+            <ContextMenuGroup>
+              <ContextMenuLabel className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider">
+                Project actions
+              </ContextMenuLabel>
+              <ContextMenuItem onClick={() => setRenameOpen(true)}>
+                <Pencil size={15} />
+                Rename project
+              </ContextMenuItem>
+              <ContextMenuItem onClick={() => setMembersOpen(true)}>
+                <UserPlus size={15} />
+                Add people
+              </ContextMenuItem>
+            </ContextMenuGroup>
+            <ContextMenuSeparator className="my-1" />
             <ContextMenuItem onClick={() => markChannelDone(id)}>
-              <Mail size={14} className="mr-2" />
+              <Mail size={15} />
               Mark as unread
             </ContextMenuItem>
             {canStartSession && (
@@ -139,15 +159,15 @@ export const ChannelItem = memo(function ChannelItem({
                 <ContextMenuItem
                   onMouseDown={() => onToggleSessionScope?.()}
                 >
-                  <Users size={14} className="mr-2" />
+                  <Users size={15} />
                   {sessionScope === "mine" ? "Show all sessions" : "Show my sessions"}
                 </ContextMenuItem>
-                <ContextMenuSeparator />
+                <ContextMenuSeparator className="my-1" />
               </>
             )}
             <ContextMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-              <Trash2 size={14} className="mr-2" />
-              Delete channel
+              <Trash2 size={15} />
+              Delete project
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
@@ -220,6 +240,18 @@ export const ChannelItem = memo(function ChannelItem({
         channelName={name ?? ""}
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
+      />
+      <RenameProjectDialog
+        projectId={id}
+        projectName={name ?? ""}
+        open={renameOpen}
+        onOpenChange={setRenameOpen}
+      />
+      <AddPeopleDialog
+        channelId={id}
+        channelName={name ?? "this project"}
+        open={membersOpen}
+        onOpenChange={setMembersOpen}
       />
     </>
   );

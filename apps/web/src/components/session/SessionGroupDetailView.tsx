@@ -328,6 +328,7 @@ export function SessionGroupDetailView({
   const [forkDialogOpen, setForkDialogOpen] = useState(false);
   const [forkEventId, setForkEventId] = useState<string | null>(null);
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
+  const [groupLoadError, setGroupLoadError] = useState<string | null>(null);
   const sidebarResizeCleanupRef = useRef<(() => void) | null>(null);
   const handleOpenForkDialog = useCallback((eventId: string) => {
     setForkEventId(eventId);
@@ -395,11 +396,15 @@ export function SessionGroupDetailView({
 
   // Fetch full group detail and merge into store
   useEffect(() => {
-    client
+    setGroupLoadError(null);
+    void client
       .query(SESSION_GROUP_DETAIL_QUERY, { id: sessionGroupId }, { requestPolicy: "network-only" })
       .toPromise()
-      .then((result: { data?: Record<string, unknown> }) => {
-        if (!result.data?.sessionGroup) return;
+      .then((result: { data?: Record<string, unknown>; error?: { message?: string } }) => {
+        if (!result.data?.sessionGroup) {
+          setGroupLoadError(result.error?.message ?? "This shared project could not be found.");
+          return;
+        }
         const fetchedGroup = result.data.sessionGroup as SessionGroupEntity & {
           sessions?: unknown[];
         };
@@ -422,7 +427,8 @@ export function SessionGroupDetailView({
             })) as Array<SessionEntity & { id: string }>,
           );
         }
-      });
+      })
+      .catch(() => setGroupLoadError("Unable to load this shared project. Please try again."));
   }, [sessionGroupId, upsert, upsertMany]);
 
   // Auto-select the most recent session if none is selected
@@ -1014,6 +1020,17 @@ export function SessionGroupDetailView({
     },
     [setActiveArtifactId, setActiveFilePath, setActiveTerminalId],
   );
+
+  if (groupLoadError) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <div className="max-w-md rounded-xl border border-border bg-surface-deep p-5 text-center">
+          <h1 className="text-base font-semibold text-foreground">Project unavailable</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{groupLoadError}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <CheckpointOpenContext.Provider value={handleOpenCheckpointPanel}>

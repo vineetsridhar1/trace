@@ -29,7 +29,7 @@ export const channelQueries = {
     args: { channelId: string; after?: string; before?: string; limit?: number },
     ctx: Context,
   ) => {
-    return channelService.getChannelMessages(args.channelId, ctx.userId, {
+    return channelService.getChannelMessages(args.channelId, ctx.userId, requireOrgContext(ctx), {
       after: args.after ? new Date(args.after) : undefined,
       before: args.before ? new Date(args.before) : undefined,
       limit: args.limit ?? undefined,
