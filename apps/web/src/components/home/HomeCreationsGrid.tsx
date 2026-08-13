@@ -127,6 +127,8 @@ function CreationCard({ group, sessionCount }: { group: SessionGroupEntity; sess
               <iframe
                 src={previewUrl}
                 title={`${title} preview`}
+                inert
+                loading="lazy"
                 tabIndex={-1}
                 sandbox={designPreviewUrl ? "allow-forms allow-modals allow-popups allow-scripts" : "allow-scripts"}
                 className="pointer-events-none size-full border-0"
