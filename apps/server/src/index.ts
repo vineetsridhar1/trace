@@ -75,8 +75,7 @@ const BRIDGE_WS_MAX_PAYLOAD_BYTES = 64 * 1024 * 1024;
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
 const SAFE_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS = 2 * 60 * 60 * 1000;
-const DEFAULT_CLOUD_SESSION_GROUP_ACTIVE_IDLE_CLEANUP_AFTER_MS = 60 * 60 * 1000;
+const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS = 60 * 60 * 1000;
 const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY = "trace:jobs:cloud-session-group-idle-cleanup";
 const DEPROVISION_RECONCILE_LOCK_KEY = "trace:jobs:deprovision-reconcile";
@@ -483,10 +482,6 @@ async function main() {
     "TRACE_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS",
     DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS,
   );
-  const cloudActiveIdleCleanupAfterMs = readDurationEnv(
-    "TRACE_CLOUD_SESSION_GROUP_ACTIVE_IDLE_CLEANUP_AFTER_MS",
-    DEFAULT_CLOUD_SESSION_GROUP_ACTIVE_IDLE_CLEANUP_AFTER_MS,
-  );
   const cloudIdleCleanupLockTtlMs = Math.max(cloudIdleCleanupIntervalMs * 2, 5 * 60 * 1000);
   let cloudIdleCleanupRunning = false;
   const cloudIdleCleanup =
@@ -509,7 +504,6 @@ async function main() {
             run: () =>
               sessionService.cleanupIdleCloudSessionGroups({
                 idleAfterMs: cloudIdleCleanupAfterMs,
-                activeIdleAfterMs: cloudActiveIdleCleanupAfterMs,
               }),
           })
             .then((result) => {
@@ -530,7 +524,6 @@ async function main() {
                 scannedCount: result.scanned,
                 cleanedCount: result.cleaned.length,
                 idleAfterMs: cloudIdleCleanupAfterMs,
-                activeIdleAfterMs: cloudActiveIdleCleanupAfterMs,
                 durationMs: Date.now() - startedAt,
               });
             })
