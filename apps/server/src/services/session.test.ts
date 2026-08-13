@@ -5006,6 +5006,36 @@ describe("SessionService", () => {
   });
 
   describe("recordOutput", () => {
+    it("does not attach a recovery artifact to assistant instructions", async () => {
+      const data = {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "text",
+              text: "Ensure Codex is ready:\n\n```bash\ncodex login\n```",
+            },
+          ],
+        },
+      };
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        organizationId: "org-1",
+        tool: "codex",
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        sessionGroupId: null,
+      });
+
+      await service.recordOutput("session-1", data as Record<string, unknown>);
+
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.not.objectContaining({ artifact: expect.anything() }),
+        }),
+      );
+    });
+
     it("preserves the full branch name when syncing a trace-branch tag", async () => {
       const branch = `feature/${"x".repeat(140)}`;
       const data = {
