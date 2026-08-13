@@ -14,6 +14,7 @@ export const TRACE_CLI_CAPABILITIES = [
   "session:run",
   "session:stop",
   "session:archive",
+  "session:link-pr",
   "terminal:control",
 ] as const;
 
@@ -387,6 +388,16 @@ export const traceCliOperations = {
     argumentPaths: ["id"],
     document: `mutation TraceCliArchiveSession($id: ID!) {
       archiveSessionGroup(id: $id) { id name status archivedAt }
+    }`,
+  }),
+  linkSessionPullRequest: operation({
+    name: "TraceCliLinkSessionPullRequest",
+    type: "mutation",
+    rootField: "linkSessionPullRequest",
+    capability: "session:link-pr",
+    argumentPaths: ["sessionId", "prUrl"],
+    document: `mutation TraceCliLinkSessionPullRequest($sessionId: ID!, $prUrl: String!) {
+      linkSessionPullRequest(sessionId: $sessionId, prUrl: $prUrl) { id name status prUrl }
     }`,
   }),
   sessionEvents: operation({

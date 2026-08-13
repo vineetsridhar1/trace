@@ -1114,6 +1114,7 @@ export type Mutation = {
   leaveChat: Chat;
   linkEntityToProject: Project;
   linkLinkedCheckoutRepo: LinkedCheckoutActionResult;
+  linkSessionPullRequest: SessionGroup;
   linkTicket: Ticket;
   moveChannel: Channel;
   moveSessionToCloud: Session;
@@ -1444,6 +1445,11 @@ export type MutationLinkLinkedCheckoutRepoArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationLinkSessionPullRequestArgs = {
+  prUrl: Scalars["String"]["input"];
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationLinkTicketArgs = {
@@ -4738,6 +4744,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationLinkLinkedCheckoutRepoArgs, "localPath" | "repoId" | "sessionGroupId">
+  >;
+  linkSessionPullRequest?: Resolver<
+    ResolversTypes["SessionGroup"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationLinkSessionPullRequestArgs, "prUrl" | "sessionId">
   >;
   linkTicket?: Resolver<
     ResolversTypes["Ticket"],

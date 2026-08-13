@@ -481,6 +481,20 @@ export const sessionMutations = {
   archiveSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.archiveGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);
   },
+  linkSessionPullRequest: async (
+    _: unknown,
+    args: { sessionId: string; prUrl: string },
+    ctx: Context,
+  ) => {
+    const organizationId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, organizationId);
+    return sessionService.linkPullRequest({
+      sessionId: args.sessionId,
+      prUrl: args.prUrl,
+      organizationId,
+      actorId: ctx.userId,
+    });
+  },
   renameSessionGroup: (_: unknown, args: { id: string; name: string }, ctx: Context) => {
     return sessionService.renameGroup(
       args.id,

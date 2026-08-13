@@ -2087,6 +2087,7 @@ type Mutation {
   dismissSession(id: ID!): Session!
   deleteSession(id: ID!): Session!
   archiveSessionGroup(id: ID!): SessionGroup
+  linkSessionPullRequest(sessionId: ID!, prUrl: String!): SessionGroup!
   renameSessionGroup(id: ID!, name: String!): SessionGroup!
   updateSessionGroupVisibility(id: ID!, visibility: SessionGroupVisibility!): SessionGroup!
   deleteSessionGroup(id: ID!): Boolean!
