@@ -43,7 +43,7 @@ describe("OrganizationService", () => {
         organizationId: "org-1",
         userId: "00000000-0000-4000-a000-000000000001",
         role: "member",
-      });
+    });
 
     const service = new OrganizationService();
     const member = await service.createOrganization({ name: " Acme " }, "user-1");
