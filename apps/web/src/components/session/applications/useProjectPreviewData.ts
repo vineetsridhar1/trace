@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
-import type { SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
+import type { AppDeployment, SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
 import { useEntityStore } from "@trace/client-core";
 import { client } from "../../../lib/urql";
-import { findReadyPreviewEndpoint, isLivePreviewRuntimeAvailable } from "./app-preview-readiness";
+import {
+  findPublishedAppUrl,
+  findReadyPreviewEndpoint,
+  isLivePreviewRuntimeAvailable,
+} from "./app-preview-readiness";
 import {
   getSavedDesignPreviewRecoveryState,
   SAVED_DESIGN_PREVIEW_RETRY_MS,
@@ -18,6 +22,12 @@ const PROJECT_PREVIEW_ENDPOINTS_QUERY = gql`
     sessionApplicationProcesses(sessionGroupId: $sessionGroupId) {
       id sessionGroupId appConfigId processConfigId label status runtimeInstanceId startedAt stoppedAt
       exitCode lastError
+    }
+    appDeployments(sessionGroupId: $sessionGroupId) {
+      id
+      status
+      url
+      updatedAt
     }
     pdfSessionPreviewUrl(sessionGroupId: $sessionGroupId) @include(if: $includePdf)
     pdfSessionDownloadUrl(sessionGroupId: $sessionGroupId) @include(if: $includePdf)
@@ -34,6 +44,7 @@ export function useProjectPreviewData(
 ) {
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
   const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
+  const deploymentTable = useEntityStore((s) => s.appDeployments);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const patch = useEntityStore((s) => s.patch);
   const pdfExportStatus = useEntityStore(
@@ -83,6 +94,10 @@ export function useProjectPreviewData(
       upsertMany(
         "sessionApplicationProcesses",
         (result.data?.sessionApplicationProcesses as SessionApplicationProcess[] | undefined) ?? [],
+      );
+      upsertMany(
+        "appDeployments",
+        (result.data?.appDeployments as AppDeployment[] | undefined) ?? [],
       );
       setSavedPdfUrl(
         typeof result.data?.pdfSessionPreviewUrl === "string"
@@ -151,5 +166,15 @@ export function useProjectPreviewData(
     void refresh();
   }, [refresh]);
 
-  return { endpoint, error, refresh: retry, savedPdfDownloadUrl, savedPdfUrl };
+  const publishedUrl = useMemo(
+    () =>
+      findPublishedAppUrl(
+        Object.values(deploymentTable).filter(
+          (deployment) => deployment.sessionGroupId === sessionGroupId,
+        ),
+      ),
+    [deploymentTable, sessionGroupId],
+  );
+
+  return { endpoint, error, publishedUrl, refresh: retry, savedPdfDownloadUrl, savedPdfUrl };
 }
