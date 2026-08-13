@@ -17,6 +17,7 @@ import { codexCredentialService } from "../services/codex-credential.js";
 import { resolveJwtSecret } from "./jwt-secret.js";
 import { isLocalMode } from "./mode.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
+import { ActionRequiredError } from "./errors.js";
 import { CODING_TOOL_IDS } from "@trace/shared";
 import {
   runtimeHardDeadlineAt,
@@ -79,14 +80,21 @@ async function resolveUserApiTokenEnv(userId: string): Promise<Record<string, st
 
 function assertToolCredentialAvailable(tool: string, env: Record<string, string>): void {
   if (tool === "claude_code" && !env.ANTHROPIC_API_KEY) {
-    throw new Error(
-      "Cannot start cloud runtime for claude_code: add an Anthropic API key in Settings → API Tokens.",
-    );
+    throw new ActionRequiredError({
+      kind: "credential_required",
+      provider: "anthropic",
+      title: "Connect Anthropic to start this cloud session",
+      description: "Cloud Claude Code sessions require an Anthropic API key.",
+    });
   }
   if (tool === "codex" && !env.CODEX_AUTH_METHOD) {
-    throw new Error(
-      "Cannot start cloud runtime for codex: add a ChatGPT session, Codex access token, or OpenAI API key in Settings → API Tokens.",
-    );
+    throw new ActionRequiredError({
+      kind: "credential_required",
+      provider: "openai",
+      title: "Connect Codex to start this cloud session",
+      description:
+        "Cloud Codex sessions require a ChatGPT session, Codex access token, or OpenAI API key.",
+    });
   }
 }
 

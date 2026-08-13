@@ -244,7 +244,42 @@ describe("ProvisionedRuntimeAdapter", () => {
         tool: "codex",
         bridgeUrl: "wss://trace.example/bridge",
       }),
-    ).rejects.toThrow("Cannot start cloud runtime for codex");
+    ).rejects.toMatchObject({
+      artifact: {
+        kind: "credential_required",
+        provider: "openai",
+        title: "Connect Codex to start this cloud session",
+      },
+    });
+
+    expect(fetchMock()).not.toHaveBeenCalled();
+  });
+
+  it("returns an Anthropic credential artifact before launching Claude Code", async () => {
+    vi.mocked(codexCredentialService.getDecryptedCredential).mockResolvedValue(null);
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await expect(
+      adapter.startSession({
+        sessionId: "session-without-anthropic-auth",
+        organizationId: "org-1",
+        actorId: "user-1",
+        environment: {
+          id: "env-1",
+          name: "Company Launcher",
+          adapterType: "provisioned",
+          config: provisionedConfig,
+        },
+        tool: "claude_code",
+        bridgeUrl: "wss://trace.example/bridge",
+      }),
+    ).rejects.toMatchObject({
+      artifact: {
+        kind: "credential_required",
+        provider: "anthropic",
+        title: "Connect Anthropic to start this cloud session",
+      },
+    });
 
     expect(fetchMock()).not.toHaveBeenCalled();
   });

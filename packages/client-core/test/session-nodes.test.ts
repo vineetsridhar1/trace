@@ -20,6 +20,109 @@ function makeEvent(overrides: Partial<Event> = {}): Event {
 }
 
 describe("buildSessionNodes", () => {
+  it("keeps runtime start failures that carry an actionable artifact", () => {
+    const event = makeEvent({
+      eventType: "session_runtime_start_failed",
+      payload: {
+        artifact: {
+          kind: "credential_required",
+          provider: "openai",
+          title: "Connect Codex",
+          description: "Add a credential.",
+        },
+      },
+    });
+
+    const result = buildSessionNodes([event.id], { [event.id]: event });
+
+    expect(result.nodes).toEqual([{ kind: "event", id: event.id }]);
+  });
+
+  it("coalesces repeated recovery artifacts until the user sends another message", () => {
+    const artifact = {
+      kind: "login_required" as const,
+      provider: "codex" as const,
+      title: "Sign in to Codex",
+      description: "This local runtime needs a Codex login to continue.",
+    };
+    const first = makeEvent({
+      id: "codex-login-1",
+      eventType: "session_output",
+      timestamp: "2026-01-01T00:00:01.000Z",
+      payload: { type: "error", artifact },
+    });
+    const retry = makeEvent({
+      id: "codex-login-2",
+      eventType: "session_output",
+      timestamp: "2026-01-01T00:00:02.000Z",
+      payload: { type: "error", artifact },
+    });
+    const userMessage = makeEvent({
+      id: "user-retry",
+      eventType: "message_sent",
+      timestamp: "2026-01-01T00:00:03.000Z",
+      payload: { text: "Try again" },
+    });
+    const retryAfterMessage = makeEvent({
+      id: "codex-login-3",
+      eventType: "session_output",
+      timestamp: "2026-01-01T00:00:04.000Z",
+      payload: { type: "error", artifact },
+    });
+    const events = {
+      [first.id]: first,
+      [retry.id]: retry,
+      [userMessage.id]: userMessage,
+      [retryAfterMessage.id]: retryAfterMessage,
+    };
+
+    const result = buildSessionNodes(
+      [first.id, retry.id, userMessage.id, retryAfterMessage.id],
+      events,
+    );
+
+    expect(result.nodes).toEqual([
+      { kind: "event", id: first.id, repeatCount: 2 },
+      { kind: "event", id: userMessage.id },
+      { kind: "event", id: retryAfterMessage.id, repeatCount: 1 },
+    ]);
+  });
+
+  it("hides the redundant workspace failure after an actionable runtime failure", () => {
+    const recovery = makeEvent({
+      id: "cloud-credential-error",
+      eventType: "session_runtime_start_failed",
+      payload: {
+        artifact: {
+          kind: "credential_required",
+          provider: "anthropic",
+          title: "Connect Anthropic",
+          description: "Add an API key.",
+        },
+      },
+    });
+    const workspaceFailure = makeEvent({
+      id: "workspace-failed",
+      eventType: "session_output",
+      payload: { type: "workspace_failed", error: "Cloud launcher failed" },
+    });
+
+    const result = buildSessionNodes(
+      [recovery.id, workspaceFailure.id],
+      { [recovery.id]: recovery, [workspaceFailure.id]: workspaceFailure },
+    );
+
+    expect(result.nodes).toEqual([{ kind: "event", id: recovery.id }]);
+  });
+
+  it("continues hiding ordinary runtime start failures", () => {
+    const event = makeEvent({ eventType: "session_runtime_start_failed", payload: {} });
+
+    const result = buildSessionNodes([event.id], { [event.id]: event });
+
+    expect(result.nodes).toEqual([]);
+  });
+
   it("keeps runtime move markers even without a prompt", () => {
     const event = makeEvent({
       payload: {

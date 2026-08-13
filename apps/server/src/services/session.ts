@@ -14,6 +14,8 @@ import {
   getDefaultReasoningEffort,
   hasQuestionBlock,
   hasPlanBlock,
+  actionRequiredArtifactForToolError,
+  actionRequiredArtifactForToolOutput,
   isSupportedModel,
   isSupportedReasoningEffort,
   MAX_WORKSPACE_NAME_LENGTH,
@@ -2118,6 +2120,7 @@ export class SessionService {
           providerDeadlineEnforcementId: update.providerDeadlineEnforcementId,
         }),
         ...(update.error && { error: update.error }),
+        ...(update.artifact && { artifact: update.artifact }),
         ...(update.abandoned && { abandoned: true }),
         ...(update.reconcileAttempts !== undefined && {
           reconcileAttempts: update.reconcileAttempts,
@@ -6268,6 +6271,7 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
+        tool: true,
         agentStatus: true,
         sessionStatus: true,
         sessionGroupId: true,
@@ -6277,13 +6281,20 @@ export class SessionService {
 
     const parentToolUseId =
       typeof data.parentToolUseId === "string" ? data.parentToolUseId : undefined;
+    const sourceTool = typeof data.sourceTool === "string" ? data.sourceTool : session.tool;
+    const artifact = actionRequiredArtifactForToolOutput(sourceTool, data);
+    const payload = {
+      ...data,
+      sourceTool,
+      ...(artifact ? { artifact } : {}),
+    };
 
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_output",
-      payload: data as unknown as Prisma.InputJsonValue,
+      payload: payload as Prisma.InputJsonValue,
       actorType: "system",
       actorId: "system",
       ...(parentToolUseId ? { parentId: parentToolUseId } : {}),
@@ -8034,9 +8045,10 @@ export class SessionService {
   async workspaceFailed(sessionId: string, error: string) {
     const prev = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
-      select: { connection: true },
+      select: { connection: true, tool: true },
     });
     const conn = this.parseConnection(prev.connection);
+    const artifact = actionRequiredArtifactForToolError(prev.tool, error);
     const now = new Date().toISOString();
     const failedState: SessionConnectionData["state"] =
       conn.state === "timed_out" ? "timed_out" : "failed";
@@ -8074,6 +8086,7 @@ export class SessionService {
         type: "workspace_failed",
         sessionId,
         error,
+        ...(artifact ? { artifact } : {}),
         agentStatus: session.agentStatus,
         sessionStatus: session.sessionStatus,
         connection: nextConnection,

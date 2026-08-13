@@ -33,12 +33,14 @@ import type {
   BridgePdfExportCommand,
   BridgeAnimationExportCommand,
   BridgeDesignSystemExportCommand,
+  type ActionRequiredArtifact,
 } from "@trace/shared";
 import { GENERAL_WORKSPACE_PROTOCOL_VERSION } from "@trace/shared";
 import { prisma } from "./db.js";
 import { isGeneratedProjectKind } from "./generated-project.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { ProvisionedLauncherError, runtimeAdapterRegistry } from "./runtime-adapters.js";
+import { ActionRequiredError } from "./errors.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
 import { realtimeBackplane, type BackplaneEnvelope } from "./realtime-backplane.js";
 import { runtimeDirectory, type RuntimeDescriptor } from "./runtime-directory.js";
@@ -230,6 +232,7 @@ export type RuntimeLifecycleUpdate = {
   runtimeHardDeadlineAt?: string;
   providerDeadlineEnforcementId?: string;
   error?: string;
+  artifact?: ActionRequiredArtifact;
   /**
    * Set on `session_runtime_deprovision_failed` to mark the runtime
    * permanently abandoned (cap exhausted). Suppresses retry flags so the
@@ -2443,7 +2446,10 @@ export class SessionRouter {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[runtime-adapter] failed to start ${options.sessionId}:`, message);
         if (adapterType === "provisioned") {
-          await options.onLifecycle?.("session_runtime_start_failed", { error: message });
+          await options.onLifecycle?.("session_runtime_start_failed", {
+            error: message,
+            ...(err instanceof ActionRequiredError ? { artifact: err.artifact } : {}),
+          });
         }
         options.onFailed(`${adapterType} runtime failed: ${message}`);
       }

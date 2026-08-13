@@ -31,6 +31,7 @@ import {
   inspectSessionGitSyncStatus,
   BridgeOutbox,
   BRIDGE_PROTOCOL_VERSION,
+  actionRequiredArtifactForToolError,
 } from "@trace/shared";
 import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
@@ -297,6 +298,16 @@ function getPendingInputToolUseId(output: ToolOutput): string | null {
     }
   }
   return null;
+}
+
+function actionableErrorMessage(output: ToolOutput): string | undefined {
+  if (output.type === "error") return output.message;
+  if (output.type !== "assistant") return undefined;
+  const text = output.message.content
+    .map((block) => (block.type === "text" ? block.text : ""))
+    .join("\n")
+    .trim();
+  return text || undefined;
 }
 
 export type BridgeConnectionStatus = "connecting" | "connected" | "disconnected";
@@ -993,7 +1004,18 @@ export class BridgeClient implements IBridgeClient {
         }
 
         hasForwardedOutput = true;
-        this.send({ type: "session_output", sessionId, data: output });
+        const message = actionableErrorMessage(output);
+        const sourceTool = tool ?? this.sessionTools.get(sessionId);
+        const artifact = message ? actionRequiredArtifactForToolError(sourceTool, message) : undefined;
+        const data =
+          output.type === "error" || output.type === "assistant"
+            ? {
+                ...output,
+                ...(sourceTool ? { sourceTool } : {}),
+                ...(artifact ? { artifact } : {}),
+              }
+            : output;
+        this.send({ type: "session_output", sessionId, data });
 
         maybeReportToolSessionId();
 

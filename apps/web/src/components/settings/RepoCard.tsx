@@ -11,6 +11,7 @@ import { RepoDesktopSection } from "./RepoDesktopSection";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { WEBHOOK_REPO_REMOTE_REQUIRED, hasRepoRemote } from "../../lib/repo-capabilities";
 import { isLocalMode } from "../../lib/runtime-mode";
+import { useUIStore } from "../../stores/ui";
 import { RepoApplicationsSection } from "./repo-applications/RepoApplicationsSection";
 import { SettingsStatusPill } from "./SettingsStatusPill";
 import { EditRepoDialog } from "./EditRepoDialog";
@@ -35,6 +36,8 @@ export function RepoCard({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [webhookPending, setWebhookPending] = useState(false);
   const [webhookError, setWebhookError] = useState<string | null>(null);
+  const setActivePage = useUIStore((state) => state.setActivePage);
+  const setSettingsInitialTab = useUIStore((state) => state.setSettingsInitialTab);
   const webhookDisabledReason = isLocalMode
     ? LOCAL_MODE_WEBHOOK_DISABLED
     : hasRepoRemote({ remoteUrl })
@@ -62,6 +65,13 @@ export function RepoCard({
       setWebhookPending(false);
     }
   };
+
+  const openGitHubApiKeySettings = () => {
+    setSettingsInitialTab("api-keys");
+    setActivePage("settings");
+  };
+  const isMissingGitHubToken = /no github token configured/i.test(webhookError ?? "");
+  const webhookErrorMessage = webhookError?.replace(/^\[GraphQL\]\s*/i, "");
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -142,7 +152,14 @@ export function RepoCard({
         </div>
       ) : null}
       {webhookError && (
-        <p className="border-t border-border px-4 py-2 text-xs text-destructive">{webhookError}</p>
+        <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2">
+          <p className="text-xs text-destructive">{webhookErrorMessage}</p>
+          {isMissingGitHubToken && (
+            <Button variant="outline" size="sm" onClick={openGitHubApiKeySettings}>
+              Add GitHub API token
+            </Button>
+          )}
+        </div>
       )}
 
       <RepoApplicationsSection repoId={id} />

@@ -53,6 +53,7 @@ export const SessionNodeRenderer = memo(function SessionNodeRenderer({
           onForkSession={onForkSession}
           canForkSession={canForkSession}
           showActions={messageActionsEventIds?.has(node.id) ?? false}
+          repeatCount={node.repeatCount}
         />
       </div>
     );

@@ -1,14 +1,29 @@
 import { GraphQLError } from "graphql";
 import { describe, expect, it } from "vitest";
 import {
+  ActionRequiredError,
   AuthenticationError,
   AuthorizationError,
   NotFoundError,
+  ToolNotInstalledError,
   ValidationError,
   toGraphQLError,
 } from "./errors.js";
 
 describe("errors", () => {
+  it("preserves actionable artifacts in GraphQL errors", () => {
+    const artifact = {
+      kind: "credential_required" as const,
+      provider: "openai" as const,
+      title: "Connect Codex",
+      description: "Add a credential.",
+    };
+    const error = toGraphQLError(new ActionRequiredError(artifact));
+
+    expect(error.extensions.code).toBe("ACTION_REQUIRED");
+    expect(error.extensions.artifact).toEqual(artifact);
+  });
+
   it("maps authentication errors to GraphQL unauthenticated errors", () => {
     const error = toGraphQLError(new AuthenticationError("bad token"));
 
@@ -36,6 +51,15 @@ describe("errors", () => {
 
     expect(error.message).toBe("broken");
     expect(error.extensions.code).toBe("BAD_USER_INPUT");
+  });
+
+  it("attaches an install artifact to missing local tools", () => {
+    const error = toGraphQLError(new ToolNotInstalledError("codex", "MacBook"));
+
+    expect(error.extensions).toMatchObject({
+      code: "TOOL_NOT_INSTALLED",
+      artifact: { kind: "tool_not_installed", tool: "codex", runtimeLabel: "MacBook" },
+    });
   });
 
   it("maps generic errors to internal server errors", () => {

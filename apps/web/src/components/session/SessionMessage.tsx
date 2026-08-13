@@ -1,6 +1,12 @@
 import { memo } from "react";
-import { attachmentKeysFromPayload, asJsonObject, type JsonObject } from "@trace/shared";
-import { useScopedEventField } from "@trace/client-core";
+import {
+  attachmentKeysFromPayload,
+  actionRequiredArtifactForToolError,
+  asJsonObject,
+  isActionRequiredArtifact,
+  type JsonObject,
+} from "@trace/shared";
+import { useEntityField, useScopedEventField } from "@trace/client-core";
 import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
 import { AssistantText } from "./messages/AssistantText";
@@ -9,6 +15,7 @@ import { SubagentRow } from "./messages/SubagentRow";
 import { CompletionRow } from "./messages/CompletionRow";
 import { SystemBadge } from "./messages/SystemBadge";
 import { ArtifactUploadedCard } from "./messages/ArtifactUploadedCard";
+import { ActionRequiredArtifactCard } from "./messages/ActionRequiredArtifactCard";
 import { serializeUnknown } from "./messages/utils";
 import type { AgentToolResult } from "./groupReadGlob";
 import { structuredResponseSummary } from "./structuredResponseSummary";
@@ -23,6 +30,21 @@ function optionalAttachmentKeys(payload: JsonObject | null | undefined): string[
 /** Safely read a string from an unknown value, returning fallback if not a string */
 function str(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
+}
+
+function assistantText(payload: JsonObject | null | undefined): string | undefined {
+  if (payload?.type !== "assistant") return undefined;
+  const message = asJsonObject(payload.message);
+  const content = message?.content;
+  if (!Array.isArray(content)) return undefined;
+  const text = content
+    .map((block) => {
+      const value = asJsonObject(block);
+      return value?.type === "text" && typeof value.text === "string" ? value.text : "";
+    })
+    .join("\n")
+    .trim();
+  return text || undefined;
 }
 
 /** Narrow and unwrap tool result content for display in ToolCallRow */
@@ -134,6 +156,7 @@ function renderAssistantContent(
 
 function renderSessionOutput(
   payload: JsonObject,
+  sessionId: string | undefined,
   ts: string,
   scopeKey: string,
   completedAgentTools: Map<string, AgentToolResult>,
@@ -145,6 +168,11 @@ function renderSessionOutput(
 ) {
   const type = payload.type;
   if (typeof type !== "string") return null;
+
+  const artifact = asJsonObject(payload.artifact);
+  if (sessionId && isActionRequiredArtifact(artifact)) {
+    return <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />;
+  }
 
   if (type === "assistant" || type === "user") {
     return renderAssistantContent(
@@ -221,6 +249,7 @@ export const SessionMessage = memo(function SessionMessage({
   onForkSession,
   canForkSession = false,
   showActions = false,
+  repeatCount = 1,
 }: {
   id: string;
   completedAgentTools: Map<string, AgentToolResult>;
@@ -228,6 +257,7 @@ export const SessionMessage = memo(function SessionMessage({
   onForkSession?: (eventId: string) => void;
   canForkSession?: boolean;
   showActions?: boolean;
+  repeatCount?: number;
 }) {
   const scopeKey = useEventScopeKey();
   const eventType = useScopedEventField(scopeKey, id, "eventType");
@@ -236,7 +266,8 @@ export const SessionMessage = memo(function SessionMessage({
   const actor = useScopedEventField(scopeKey, id, "actor") as
     | { type: string; id: string; name?: string | null }
     | undefined;
-
+  const sessionId = useScopedEventField(scopeKey, id, "scopeId") as string | undefined;
+  const tool = useEntityField("sessions", sessionId ?? "", "tool") as string | undefined;
   if (!eventType || !timestamp) return null;
 
   switch (eventType) {
@@ -258,9 +289,25 @@ export const SessionMessage = memo(function SessionMessage({
     }
 
     case "session_output":
-      return payload
-        ? renderSessionOutput(
+      if (payload) {
+        const artifact =
+          asJsonObject(payload.artifact) ??
+          (() => {
+            const text = assistantText(payload);
+            return text ? actionRequiredArtifactForToolError(tool, text) : undefined;
+          })();
+        if (sessionId && isActionRequiredArtifact(artifact)) {
+          return (
+            <ActionRequiredArtifactCard
+              artifact={artifact}
+              sessionId={sessionId}
+              repeatCount={repeatCount}
+            />
+          );
+        }
+        return renderSessionOutput(
             payload,
+            sessionId,
             timestamp,
             scopeKey,
             completedAgentTools,
@@ -269,8 +316,16 @@ export const SessionMessage = memo(function SessionMessage({
             onForkSession,
             canForkSession,
             showActions,
-          )
-        : null;
+          );
+      }
+      return null;
+
+    case "session_runtime_start_failed": {
+      const artifact = asJsonObject(payload?.artifact);
+      return sessionId && isActionRequiredArtifact(artifact) ? (
+        <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />
+      ) : null;
+    }
 
     case "message_sent":
       return (

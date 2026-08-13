@@ -1,7 +1,9 @@
 import type { Event } from "@trace/gql";
 import {
   asJsonObject,
+  actionRequiredArtifactKey,
   hasVisibleUserSessionContent,
+  isActionRequiredArtifact,
   parseQuestion,
   parseTraceRequestInputs,
   type JsonObject,
@@ -60,7 +62,7 @@ function isEmptySessionOutput(payload: JsonObject | undefined): boolean {
 }
 
 export type SessionNode =
-  | { kind: "event"; id: string }
+  | { kind: "event"; id: string; repeatCount?: number }
   | {
       kind: "command-execution";
       id: string;
@@ -208,6 +210,11 @@ export function buildSessionNodes(
   events: Record<string, Event>,
 ): BuildSessionNodesResult {
   const result: SessionNode[] = [];
+  const visibleActionableArtifacts = new Map<
+    string,
+    Extract<SessionNode, { kind: "event" }>
+  >();
+  let hasActionableFailure = false;
   const completedAgentTools = new Map<string, AgentToolResult>();
   const toolResultByUseId = new Map<string, unknown>();
   let bucket: ReadGlobItem[] = [];
@@ -260,6 +267,10 @@ export function buildSessionNodes(
     if (HIDDEN_SESSION_PAYLOAD_TYPE_SET.has(event.eventType)) {
       continue;
     }
+    if (event.eventType === "session_runtime_start_failed") {
+      const payload = asJsonObject(event.payload);
+      if (!isActionRequiredArtifact(asJsonObject(payload?.artifact))) continue;
+    }
     if (event.eventType === "session_started") {
       const payload = asJsonObject(event.payload);
       if (
@@ -270,13 +281,49 @@ export function buildSessionNodes(
       }
     }
 
+    if (event.eventType === "message_sent") {
+      visibleActionableArtifacts.clear();
+      hasActionableFailure = false;
+    }
+
+    const eventPayload = asJsonObject(event.payload);
+    const eventArtifact = asJsonObject(eventPayload?.artifact);
+    if (isActionRequiredArtifact(eventArtifact)) hasActionableFailure = true;
+
+    if (
+      hasActionableFailure &&
+      ((event.eventType === "session_terminated" && eventPayload?.reason === "workspace_failed") ||
+        (event.eventType === "session_output" && eventPayload?.type === "workspace_failed"))
+    ) {
+      continue;
+    }
+
     // Subagent child events render nested inside their parent's SubagentRow — never as top-level nodes.
     if (event.parentId) {
       continue;
     }
 
     if (event.eventType === "session_output") {
-      const payload = asJsonObject(event.payload);
+      const payload = eventPayload;
+
+      const artifact = asJsonObject(payload?.artifact);
+      if (isActionRequiredArtifact(artifact)) {
+        const key = actionRequiredArtifactKey(artifact);
+        const priorNode = visibleActionableArtifacts.get(key);
+        if (priorNode) {
+          priorNode.repeatCount = (priorNode.repeatCount ?? 1) + 1;
+          continue;
+        }
+        const artifactNode: Extract<SessionNode, { kind: "event" }> = {
+          kind: "event",
+          id,
+          repeatCount: 1,
+        };
+        visibleActionableArtifacts.set(key, artifactNode);
+        flushBucket();
+        result.push(artifactNode);
+        continue;
+      }
 
       if (isEmptySessionOutput(payload)) {
         continue;
