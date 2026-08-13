@@ -3375,7 +3375,6 @@ export class SessionService {
     const where: Prisma.SessionGroupWhereInput = {
       channelId,
       organizationId,
-      AND: [visibleSessionGroupWhere(userId)],
     };
 
     const shouldIncludeArchived = options?.archived === true || options?.status === "archived";
@@ -3429,7 +3428,7 @@ export class SessionService {
 
   async getGroup(id: string, organizationId: string, userId: string) {
     const group = await prisma.sessionGroup.findFirst({
-      where: { id, organizationId, AND: [visibleSessionGroupWhere(userId)] },
+      where: { id, organizationId },
       include: SESSION_GROUP_INCLUDE,
     });
 
@@ -4128,7 +4127,6 @@ export class SessionService {
       where: {
         id,
         organizationId,
-        AND: [visibleSessionWhere(userId)],
       },
       include: SESSION_INCLUDE,
     });

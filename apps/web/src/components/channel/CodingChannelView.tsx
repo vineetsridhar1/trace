@@ -19,6 +19,7 @@ import { ConnectionStatus } from "../ConnectionStatus";
 import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
 import { ChannelMembersDialog } from "./ChannelMembersDialog";
+import { JoinProjectButton } from "./JoinProjectButton";
 
 const SESSION_GROUPS_QUERY = gql`
   query SessionGroups($channelId: ID!, $archived: Boolean) {
@@ -163,19 +164,20 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
           </span>
         )}
         <ConnectionStatus />
+        <JoinProjectButton channelId={channelId} />
         {canAddChannelMembers && <ChannelMembersDialog channelId={channelId} />}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-          onClick={() =>
-            setChannelSubPage(mergedArchivedOpen ? null : "merged-archived")
-          }
-          title="Merged & Archived"
-        >
-          <Archive size={15} />
-        </Button>
-        <StartSessionDialog channelId={channelId} />
+        {viewerIsMember && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            onClick={() => setChannelSubPage(mergedArchivedOpen ? null : "merged-archived")}
+            title="Merged & Archived"
+          >
+            <Archive size={15} />
+          </Button>
+        )}
+        {viewerIsMember && <StartSessionDialog channelId={channelId} />}
       </div>
 
       <div className="flex-1 overflow-hidden">

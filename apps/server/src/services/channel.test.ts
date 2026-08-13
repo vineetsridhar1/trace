@@ -87,7 +87,7 @@ describe("ChannelService", () => {
     );
   });
 
-  it("gets channels only through the active organization and viewer visibility", async () => {
+  it("gets a shared channel through the active organization", async () => {
     prismaMock.channel.findFirstOrThrow.mockResolvedValueOnce({ id: "channel-1" });
     prismaMock.channel.findFirst.mockResolvedValueOnce({
       id: "channel-1",
@@ -104,11 +104,6 @@ describe("ChannelService", () => {
       where: {
         id: "channel-1",
         organizationId: "org-1",
-        OR: [
-          { visibility: "public" },
-          { ownerId: "user-1" },
-          { members: { some: { userId: "user-1", leftAt: null } } },
-        ],
       },
       select: { id: true },
     });
@@ -394,7 +389,7 @@ describe("ChannelService", () => {
     );
   });
 
-  it("rejects self-join for private channels unless the actor owns the channel", async () => {
+  it("lets organization members join a private channel shared with them", async () => {
     prismaMock.channel.findUniqueOrThrow.mockResolvedValueOnce({
       id: "channel-1",
       name: "private-room",
@@ -414,12 +409,16 @@ describe("ChannelService", () => {
     });
     prismaMock.channelMember.findUnique.mockResolvedValueOnce(null);
 
-    const service = new ChannelService();
-    await expect(service.join("channel-1", "user", "user-2")).rejects.toThrow(
-      "You must be added to join this private channel",
-    );
+    prismaMock.channelMember.create.mockResolvedValueOnce({});
+    prismaMock.channelMember.findMany.mockResolvedValueOnce([]);
+    prismaMock.channel.findUniqueOrThrow.mockResolvedValueOnce({ id: "channel-1" });
 
-    expect(prismaMock.channelMember.create).not.toHaveBeenCalled();
+    const service = new ChannelService();
+    await expect(service.join("channel-1", "user", "user-2")).resolves.toEqual({ id: "channel-1" });
+
+    expect(prismaMock.channelMember.create).toHaveBeenCalledWith({
+      data: { channelId: "channel-1", userId: "user-2" },
+    });
   });
 
   it("lets private channel owners rejoin after leaving", async () => {

@@ -9,6 +9,7 @@ import { ChannelComposer } from "./ChannelComposer";
 import { ThreadPanel } from "../chat/ThreadPanel";
 import { ConnectionStatus } from "../ConnectionStatus";
 import { ChannelMembersDialog } from "./ChannelMembersDialog";
+import { JoinProjectButton } from "./JoinProjectButton";
 
 const THREAD_WIDTH_KEY = "trace_channel_thread_width";
 
@@ -36,6 +37,7 @@ export function TextChannelView({ channelId }: { channelId: string }) {
       <div className="app-region-drag flex h-12 shrink-0 items-center gap-2 border-b border-border py-0 pl-[var(--trace-header-title-offset)] pr-4 transition-[padding-left] duration-200 ease-in-out">
         <h2 className="text-sm font-semibold text-foreground">{channelName ?? "Channel"}</h2>
         <ConnectionStatus />
+        <JoinProjectButton channelId={channelId} />
         {canAddChannelMembers && <ChannelMembersDialog channelId={channelId} />}
       </div>
 
@@ -50,7 +52,7 @@ export function TextChannelView({ channelId }: { channelId: string }) {
             hasOlder={hasOlder}
             onLoadOlder={fetchOlderMessages}
           />
-          <ChannelComposer channelId={channelId} />
+          {viewerIsMember && <ChannelComposer channelId={channelId} />}
         </div>
 
         {isMobile ? (

@@ -50,7 +50,9 @@ export class ChannelService {
 
   async getChannel(channelId: string, organizationId: string, userId: string) {
     await prisma.channel.findFirstOrThrow({
-      where: { id: channelId, organizationId, ...visibleChannelWhere(userId) },
+      // Membership controls participation and sidebar discovery. Organization
+      // members can still open a project URL a teammate shared with them.
+      where: { id: channelId, organizationId },
       select: { id: true },
     });
 
@@ -272,10 +274,6 @@ export class ChannelService {
       const existingMembership = await tx.channelMember.findUnique({
         where: { channelId_userId: { channelId, userId: actorId } },
       });
-
-      if (channel.visibility === "private" && channel.ownerId !== actorId) {
-        throw new AuthorizationError("You must be added to join this private channel");
-      }
 
       if (existingMembership?.leftAt === null) return;
 
@@ -751,10 +749,11 @@ export class ChannelService {
   async getChannelMessages(
     channelId: string,
     userId: string,
+    organizationId: string,
     opts?: { after?: Date; before?: Date; limit?: number },
   ) {
     await prisma.channel.findFirstOrThrow({
-      where: { id: channelId, type: "text", members: { some: { userId, leftAt: null } } },
+      where: { id: channelId, organizationId, type: "text" },
       select: { id: true },
     });
 
