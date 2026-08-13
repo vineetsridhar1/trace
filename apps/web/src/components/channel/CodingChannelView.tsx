@@ -115,6 +115,8 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
   const refreshTick = useUIStore((s: UIState) => s.refreshTick);
   const channelSubPage = useUIStore((s: UIState) => s.channelSubPage);
   const setChannelSubPage = useUIStore((s: UIState) => s.setChannelSubPage);
+  const mergedArchivedOpen =
+    channelSubPage === "merged-archived" || channelSubPage === "merged-archived-archived";
 
   const fetchSessionGroups = useCallback(async () => {
     const result = await client
@@ -167,7 +169,7 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
           size="icon"
           className="h-7 w-7 text-muted-foreground hover:text-foreground"
           onClick={() =>
-            setChannelSubPage(channelSubPage === "merged-archived" ? null : "merged-archived")
+            setChannelSubPage(mergedArchivedOpen ? null : "merged-archived")
           }
           title="Merged & Archived"
         >
@@ -177,8 +179,15 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {channelSubPage === "merged-archived" ? (
-          <MergedArchivedPage channelId={channelId} onBack={() => history.back()} />
+        {mergedArchivedOpen ? (
+          <MergedArchivedPage
+            activeTab={channelSubPage === "merged-archived-archived" ? "archived" : "merged"}
+            channelId={channelId}
+            onBack={() => history.back()}
+            onTabChange={(tab) =>
+              setChannelSubPage(tab === "archived" ? "merged-archived-archived" : "merged-archived")
+            }
+          />
         ) : loading ? (
           <div className="space-y-1 px-4 pt-2">
             {Array.from({ length: 8 }).map((_, index) => (

@@ -250,14 +250,16 @@ function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; act
 }
 
 export function MergedArchivedPage({
+  activeTab,
   channelId,
   onBack,
+  onTabChange,
 }: {
+  activeTab: Tab;
   channelId: string;
   onBack: () => void;
+  onTabChange: (tab: Tab) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<Tab>("merged");
-
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-border px-4 py-2">
@@ -274,7 +276,7 @@ export function MergedArchivedPage({
               ? "border-b-2 border-foreground text-foreground"
               : "text-muted-foreground hover:text-foreground",
           )}
-          onClick={() => setActiveTab("merged")}
+          onClick={() => onTabChange("merged")}
         >
           Merged
         </button>
@@ -285,7 +287,7 @@ export function MergedArchivedPage({
               ? "border-b-2 border-foreground text-foreground"
               : "text-muted-foreground hover:text-foreground",
           )}
-          onClick={() => setActiveTab("archived")}
+          onClick={() => onTabChange("archived")}
         >
           Archived
         </button>
