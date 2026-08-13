@@ -14,7 +14,6 @@ import {
   setRepoLinkedCheckout,
   type LinkedCheckoutConfig,
 } from "./config.js";
-import { installOrRepairRepoHooksBestEffort } from "./repo-hooks.js";
 import {
   assertSafeGitRef,
   execFileAsync,
@@ -1188,9 +1187,6 @@ export function linkLinkedCheckoutRepo(
   return withRepoLock(repoId, async () => {
     try {
       const repoConfig = await saveRepoPath(repoId, localPath);
-      if (repoConfig.gitHooksEnabled) {
-        await installOrRepairRepoHooksBestEffort(localPath, "linked checkout repo link");
-      }
       triggerAutoSyncReconcile(repoId);
       return actionResult(repoId, true);
     } catch (error) {

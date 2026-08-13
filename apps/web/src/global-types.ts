@@ -15,16 +15,8 @@ declare global {
   }
 
   type DesktopBridgeConnectionStatus = "connecting" | "connected" | "disconnected";
-  type DesktopGitHookState =
-    | "not_installed"
-    | "trace_managed"
-    | "custom_present"
-    | "chained"
-    | "error";
-
   type DesktopRepoConfig = {
     path: string;
-    gitHooksEnabled: boolean;
     linkedCheckout?: {
       sessionGroupId: string;
       targetBranch: string;
@@ -105,20 +97,6 @@ declare global {
     commitMessage?: string | null;
   };
 
-  type DesktopRepoGitHookStatus = {
-    hooksDir: string;
-    state: DesktopGitHookState;
-    hooks: Array<{
-      hookName: string;
-      hookPath: string;
-      state: DesktopGitHookState;
-      isExecutable: boolean;
-      runnerPath: string | null;
-      chainedHookPath: string | null;
-      error?: string | null;
-    }>;
-  };
-
   type GitInfoResult =
     | {
         name: string;
@@ -164,12 +142,6 @@ declare global {
     loginCodexWithChatgpt: () => Promise<string>;
     getCodingToolStatuses: () => Promise<DesktopCodingToolStatus[]>;
     installOrUpdateCodingTool: (toolId: string) => Promise<DesktopCodingToolStatus>;
-    setRepoGitHooksEnabled: (
-      repoId: string,
-      enabled: boolean,
-    ) => Promise<{ config: DesktopRepoConfig | null; status: DesktopRepoGitHookStatus | null }>;
-    getRepoGitHookStatus: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
-    repairRepoGitHooks: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
     getBridgeStatus: () => Promise<DesktopBridgeConnectionStatus>;
     getBridgeInfo: () => Promise<DesktopBridgeInfo>;
     setBridgeLabel: (label: string) => Promise<DesktopBridgeInfo>;

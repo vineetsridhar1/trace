@@ -27,15 +27,7 @@ import {
   getRepoPath,
   saveRepoPath,
   setBridgeLabel,
-  setRepoGitHooksEnabled,
 } from "./config.js";
-import {
-  disableRepoHooks,
-  getRepoHookStatus,
-  installOrRepairRepoHooks,
-  installOrRepairRepoHooksBestEffort,
-} from "./repo-hooks.js";
-import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
 import { getGitInfo } from "./git-info.js";
 import { createLocalProjectOnDisk } from "./local-project.js";
 import { hydrateLoginShellPath } from "./shell-path.js";
@@ -325,9 +317,6 @@ ipcMain.handle(
 
 ipcMain.handle("save-repo-path", async (_event, repoId: string, localPath: string) => {
   const repoConfig = await saveRepoPath(repoId, localPath);
-  if (repoConfig.gitHooksEnabled) {
-    await installOrRepairRepoHooksBestEffort(localPath, "repo path save");
-  }
   // Notify the server that this bridge now has this repo registered
   bridge.send({ type: "repo_linked", repoId });
   return repoConfig;
@@ -339,34 +328,6 @@ ipcMain.handle("get-repo-path", (_event, repoId: string) => {
 
 ipcMain.handle("get-repo-config", (_event, repoId: string) => {
   return getRepoConfig(repoId);
-});
-
-ipcMain.handle("set-repo-git-hooks-enabled", async (_event, repoId: string, enabled: boolean) => {
-  const repoConfig = await setRepoGitHooksEnabled(repoId, enabled);
-  if (!repoConfig) {
-    return { config: null, status: null };
-  }
-
-  const status = enabled
-    ? await installOrRepairRepoHooks(repoConfig.path)
-    : await disableRepoHooks(repoConfig.path);
-
-  return {
-    config: repoConfig,
-    status,
-  };
-});
-
-ipcMain.handle("get-repo-git-hook-status", async (_event, repoId: string) => {
-  const repoConfig = getRepoConfig(repoId);
-  if (!repoConfig) return null;
-  return getRepoHookStatus(repoConfig.path);
-});
-
-ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
-  const repoConfig = getRepoConfig(repoId);
-  if (!repoConfig) return null;
-  return installOrRepairRepoHooks(repoConfig.path);
 });
 
 ipcMain.handle("get-github-cli-status", async () => {
@@ -439,10 +400,6 @@ app.whenReady().then(() => {
   configureApplicationIdentity();
   configureMacAutoUpdates();
 
-  ensureHookRunnerEntrypoint({
-    electronBinaryPath: process.execPath,
-    runnerScriptPath: path.join(__dirname, "hook-runner.js"),
-  });
   bridge.onStatusChange((status) => {
     publishBridgeStatus(status);
   });

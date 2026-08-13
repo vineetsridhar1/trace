@@ -5,7 +5,6 @@ const mkdirSyncMock = vi.fn();
 const execFileMock = vi.fn();
 const getUsedSlugsMock = vi.fn();
 const generateAnimalSlugMock = vi.fn();
-const installOrRepairRepoHooksBestEffortMock = vi.fn();
 
 vi.mock("fs", () => ({
   default: {
@@ -23,9 +22,6 @@ vi.mock("@trace/shared/animal-names", () => ({
   generateAnimalSlug: generateAnimalSlugMock,
 }));
 
-vi.mock("./repo-hooks.js", () => ({
-  installOrRepairRepoHooksBestEffort: installOrRepairRepoHooksBestEffortMock,
-}));
 
 describe("createWorktree", () => {
   beforeEach(() => {
@@ -34,7 +30,6 @@ describe("createWorktree", () => {
     execFileMock.mockReset();
     getUsedSlugsMock.mockReset();
     generateAnimalSlugMock.mockReset();
-    installOrRepairRepoHooksBestEffortMock.mockReset();
   });
 
   afterEach(() => {
@@ -608,11 +603,10 @@ describe("createWorktree", () => {
     );
   });
 
-  it("repairs Trace hooks best-effort after creating a worktree when hooks are enabled", async () => {
+  it("creates a worktree from the resolved branch", async () => {
     existsSyncMock.mockReturnValue(false);
     generateAnimalSlugMock.mockReturnValue("otter");
     getUsedSlugsMock.mockResolvedValue(new Set());
-    installOrRepairRepoHooksBestEffortMock.mockResolvedValue(undefined);
 
     execFileMock.mockImplementation(
       (
@@ -654,14 +648,9 @@ describe("createWorktree", () => {
       sessionId: "session-1",
       slug: "otter",
       defaultBranch: "main",
-      gitHooksEnabled: true,
     });
 
     expect(result.branch).toBe("trace-otter");
-    expect(installOrRepairRepoHooksBestEffortMock).toHaveBeenCalledWith(
-      expect.stringContaining("/trace/sessions/repo-1/otter"),
-      "session worktree creation",
-    );
   });
 
   it("keeps a pre-assigned slug authoritative when the bridge reports it in use", async () => {

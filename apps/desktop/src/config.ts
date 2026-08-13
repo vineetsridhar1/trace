@@ -5,7 +5,6 @@ import { app } from "electron";
 
 export interface LocalRepoConfig {
   path: string;
-  gitHooksEnabled: boolean;
   linkedCheckout: LinkedCheckoutConfig | null;
 }
 
@@ -31,7 +30,6 @@ function normalizeRepoConfigEntry(entry: unknown): LocalRepoConfig | null {
   if (typeof entry === "string" && entry.trim()) {
     return {
       path: entry,
-      gitHooksEnabled: false,
       linkedCheckout: null,
     };
   }
@@ -42,7 +40,6 @@ function normalizeRepoConfigEntry(entry: unknown): LocalRepoConfig | null {
 
   const raw = entry as {
     path?: unknown;
-    gitHooksEnabled?: unknown;
     linkedCheckout?: unknown;
   };
 
@@ -52,7 +49,6 @@ function normalizeRepoConfigEntry(entry: unknown): LocalRepoConfig | null {
 
   return {
     path: raw.path,
-    gitHooksEnabled: raw.gitHooksEnabled === true,
     linkedCheckout: normalizeLinkedCheckoutEntry(raw.linkedCheckout),
   };
 }
@@ -178,23 +174,8 @@ export function saveRepoPath(repoId: string, localPath: string): Promise<LocalRe
 
     const next: LocalRepoConfig = {
       path: localPath,
-      gitHooksEnabled: current?.gitHooksEnabled ?? false,
       linkedCheckout: preserveLinkedCheckout ?? null,
     };
-    config.repos[repoId] = next;
-    return next;
-  });
-}
-
-export function setRepoGitHooksEnabled(
-  repoId: string,
-  gitHooksEnabled: boolean,
-): Promise<LocalRepoConfig | null> {
-  return mutate((config) => {
-    const current = config.repos[repoId];
-    if (!current) return null;
-
-    const next: LocalRepoConfig = { ...current, gitHooksEnabled };
     config.repos[repoId] = next;
     return next;
   });
