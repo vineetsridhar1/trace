@@ -1,5 +1,4 @@
 import { useEntityStore } from "@trace/client-core";
-import type { GitCheckpoint } from "@trace/gql";
 import { AppPreview } from "./AppPreview";
 import { AppPreviewCanvasSkeleton } from "./AppPreviewCanvasSkeleton";
 import { SavedDesignPreview } from "./SavedDesignPreview";
@@ -18,15 +17,12 @@ export function GeneratedProjectPreviewPanel({
   const groupPreviewUrl = useEntityStore(
     (s) => s.sessionGroups[sessionGroupId]?.designPreviewUrl as string | null | undefined,
   );
-  const checkpoints = useEntityStore(
-    (s) => s.sessionGroups[sessionGroupId]?.gitCheckpoints as GitCheckpoint[] | undefined,
-  );
   const runtimeState = useEntityStore((s) => {
     const connection = s.sessionGroups[sessionGroupId]?.connection;
     if (!connection || typeof connection !== "object" || Array.isArray(connection)) return null;
     return "state" in connection ? connection.state : null;
   });
-  const previewUrl = savedDesignPreviewUrl(groupPreviewUrl, checkpoints);
+  const previewUrl = savedDesignPreviewUrl(groupPreviewUrl);
   const { endpoint, error, refresh, savedPdfDownloadUrl, savedPdfUrl } = useProjectPreviewData(
     sessionGroupId,
     projectKind,

@@ -1,5 +1,4 @@
 import { memo } from "react";
-import type { GitCheckpoint } from "@trace/gql";
 import { attachmentKeysFromPayload, asJsonObject, type JsonObject } from "@trace/shared";
 import { useScopedEventField } from "@trace/client-core";
 import { useEventScopeKey } from "./EventScopeContext";
@@ -9,7 +8,6 @@ import { ToolCallRow } from "./messages/ToolCallRow";
 import { SubagentRow } from "./messages/SubagentRow";
 import { CompletionRow } from "./messages/CompletionRow";
 import { SystemBadge } from "./messages/SystemBadge";
-import { GitCheckpointChips } from "./messages/GitCheckpointChips";
 import { ArtifactUploadedCard } from "./messages/ArtifactUploadedCard";
 import { serializeUnknown } from "./messages/utils";
 import type { AgentToolResult } from "./groupReadGlob";
@@ -60,7 +58,6 @@ function renderAssistantContent(
   scopeKey: string,
   completedAgentTools: Map<string, AgentToolResult>,
   toolResultByUseId: Map<string, unknown>,
-  gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
   sourceEventId: string,
   onForkSession: ((eventId: string) => void) | undefined,
   canForkSession: boolean,
@@ -113,7 +110,6 @@ function renderAssistantContent(
             scopeKey={scopeKey}
             completedAgentTools={completedAgentTools}
             toolResultByUseId={toolResultByUseId}
-            gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
           />,
         );
       } else {
@@ -142,7 +138,6 @@ function renderSessionOutput(
   scopeKey: string,
   completedAgentTools: Map<string, AgentToolResult>,
   toolResultByUseId: Map<string, unknown>,
-  gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
   sourceEventId: string,
   onForkSession: ((eventId: string) => void) | undefined,
   canForkSession: boolean,
@@ -158,7 +153,6 @@ function renderSessionOutput(
       scopeKey,
       completedAgentTools,
       toolResultByUseId,
-      gitCheckpointsByPromptEventId,
       sourceEventId,
       onForkSession,
       canForkSession,
@@ -193,7 +187,7 @@ function renderSessionOutput(
     const warningMinutes = Math.max(1, Math.round(warningBeforeMs / 60_000));
     return (
       <SystemBadge
-        text={`Cloud workspace reaches its safety deadline in about ${warningMinutes} minutes. Save or checkpoint work before Trace stops it.`}
+        text={`Cloud workspace reaches its safety deadline in about ${warningMinutes} minutes. Save your work before Trace stops it.`}
       />
     );
   }
@@ -222,7 +216,6 @@ function runtimeMoveText(payload: JsonObject): string {
 
 export const SessionMessage = memo(function SessionMessage({
   id,
-  gitCheckpointsByPromptEventId,
   completedAgentTools,
   toolResultByUseId,
   onForkSession,
@@ -230,7 +223,6 @@ export const SessionMessage = memo(function SessionMessage({
   showActions = false,
 }: {
   id: string;
-  gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
   completedAgentTools: Map<string, AgentToolResult>;
   toolResultByUseId: Map<string, unknown>;
   onForkSession?: (eventId: string) => void;
@@ -244,7 +236,6 @@ export const SessionMessage = memo(function SessionMessage({
   const actor = useScopedEventField(scopeKey, id, "actor") as
     | { type: string; id: string; name?: string | null }
     | undefined;
-  const promptGitCheckpoints = gitCheckpointsByPromptEventId.get(id) ?? [];
 
   if (!eventType || !timestamp) return null;
 
@@ -258,7 +249,6 @@ export const SessionMessage = memo(function SessionMessage({
           actorId={actor?.id}
           actorName={actor?.name}
           imageKeys={imageKeys}
-          footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       ) : payload?.type === "runtime_move" ? (
         <SystemBadge text={runtimeMoveText(payload)} />
@@ -275,7 +265,6 @@ export const SessionMessage = memo(function SessionMessage({
             scopeKey,
             completedAgentTools,
             toolResultByUseId,
-            gitCheckpointsByPromptEventId,
             id,
             onForkSession,
             canForkSession,
@@ -291,7 +280,6 @@ export const SessionMessage = memo(function SessionMessage({
           actorId={actor?.id}
           actorName={actor?.name}
           imageKeys={optionalAttachmentKeys(payload)}
-          footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       );
 

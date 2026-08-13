@@ -788,7 +788,7 @@
         <div class="phase" data-step="2">
           <h3>2. Trace saves an exact version</h3>
           <p>
-            Trace publishes a Git checkpoint: a permanent snapshot of the project at one exact
+            Trace records a pushed Git commit: a permanent version of the project at one exact
             moment. Unfinished edits made later cannot secretly change that deployment.
           </p>
           <details>
@@ -796,7 +796,7 @@
             <div class="detail-body">
               <p>
                 The temporary session can disappear during publishing. Building again from the saved
-                checkpoint makes the result repeatable, reviewable, and safe to roll back.
+                commit makes the result repeatable, reviewable, and safe to roll back.
               </p>
             </div>
           </details>
@@ -805,7 +805,7 @@
           <h3>3. AWS builds the permanent version</h3>
           <p>
             AWS means Amazon Web Services, the cloud provider already used by Trace. Its background
-            workflow rebuilds the saved checkpoint so production does not depend on the temporary
+            workflow rebuilds the saved commit so production does not depend on the temporary
             workshop.
           </p>
           <details>
@@ -865,7 +865,7 @@
             <path class="edge" marker-end="url(#simple-arrow)" d="M595 265 V295 H490" />
             <rect class="box" x="40" y="40" width="150" height="60" rx="8" />
             <text x="115" y="67">Saved project</text>
-            <text class="edge-label" x="115" y="84">exact checkpoint</text>
+            <text class="edge-label" x="115" y="84">exact commit</text>
             <rect class="box is-new" x="315" y="40" width="150" height="60" rx="8" />
             <text x="390" y="67">Choose path</text>
             <text class="edge-label" x="390" y="84">verified needs</text>
@@ -1205,7 +1205,7 @@
           <div class="card">
             <h3>Already built</h3>
             <ul>
-              <li>Trace can choose a saved checkpoint and create a deployment record.</li>
+              <li>Trace can choose a saved commit and create a deployment record.</li>
               <li>Trace can upload source and queue a deployment job.</li>
               <li>The UI can show basic deployment status.</li>
               <li>

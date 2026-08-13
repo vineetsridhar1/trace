@@ -11,14 +11,14 @@ Integrate approved ticket work into a project run integration branch/session gro
   - project run/session group integration branch
   - per-ticket worker branch/workdir
 - Integrate approved ticket branches into the integration branch.
-- Record integration checkpoints.
+- Record integration commits.
 - Report conflicts as human gates.
 - Add final QA gate.
 - Add telemetry for planning, controller runs, workers, gates, and integration.
 - Polish error states across project run UI.
 - Define integration event payloads:
   - `ticket_execution_integrated`: `{ ticketExecution, projectRun, ticket }`
-  - conflict gate events include branch/checkpoint IDs needed for review.
+  - conflict gate events include branch/commit IDs needed for review.
 
 ## Deliverable
 
@@ -28,7 +28,7 @@ A sequential project run can produce one final testable branch with clear confli
 
 - [ ] Worker branches do not directly mutate the integration branch.
 - [ ] Integration is service-owned.
-- [ ] Successful integration records checkpoint metadata.
+- [ ] Successful integration records commit metadata.
 - [ ] Conflict creates a human gate.
 - [ ] Final QA gate can be requested.
 - [ ] Project UI shows integration status.

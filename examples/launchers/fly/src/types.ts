@@ -4,7 +4,7 @@ export type TraceRepo = {
   remoteUrl: string | null;
   defaultBranch: string;
   branch: string | null;
-  checkpointSha: string | null;
+  baseCommitSha: string | null;
   readOnly: boolean;
 };
 

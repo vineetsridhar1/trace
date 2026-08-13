@@ -6,16 +6,9 @@ import { promisify } from "util";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LinkedCheckoutConfig } from "./config.js";
 
-const { installOrRepairRepoHooksBestEffortMock } = vi.hoisted(() => ({
-  installOrRepairRepoHooksBestEffortMock: vi.fn(async () => undefined),
-}));
-
 vi.mock("./config.js", () => {
   const state: {
-    repos: Record<
-      string,
-      { path: string; gitHooksEnabled: boolean; linkedCheckout: LinkedCheckoutConfig | null }
-    >;
+    repos: Record<string, { path: string; linkedCheckout: LinkedCheckoutConfig | null }>;
   } = { repos: {} };
   return {
     getRepoConfig: (repoId: string) => state.repos[repoId] ?? null,
@@ -23,7 +16,6 @@ vi.mock("./config.js", () => {
       const current = state.repos[repoId];
       const next = {
         path: localPath,
-        gitHooksEnabled: current?.gitHooksEnabled ?? false,
         linkedCheckout: current?.linkedCheckout ?? null,
       };
       state.repos[repoId] = next;
@@ -42,11 +34,6 @@ vi.mock("./config.js", () => {
   };
 });
 
-vi.mock("./repo-hooks.js", () => ({
-  installOrRepairRepoHooks: vi.fn(async () => undefined),
-  installOrRepairRepoHooksBestEffort: installOrRepairRepoHooksBestEffortMock,
-}));
-
 import * as config from "./config.js";
 import {
   commitLinkedCheckoutChanges,
@@ -60,10 +47,7 @@ const execFileAsync = promisify(execFile);
 
 const configMock = config as unknown as {
   __state: {
-    repos: Record<
-      string,
-      { path: string; gitHooksEnabled: boolean; linkedCheckout: LinkedCheckoutConfig | null }
-    >;
+    repos: Record<string, { path: string; linkedCheckout: LinkedCheckoutConfig | null }>;
   };
   __reset: () => void;
 };
@@ -253,33 +237,12 @@ async function gitRefExists(cwd: string, ref: string): Promise<boolean> {
 function seedRepo(repoId: string, repoPath: string): void {
   configMock.__state.repos[repoId] = {
     path: repoPath,
-    gitHooksEnabled: false,
     linkedCheckout: null,
   };
 }
 
 beforeEach(() => {
   configMock.__reset();
-  installOrRepairRepoHooksBestEffortMock.mockClear();
-});
-
-describe("linked checkout repo link", () => {
-  it("links the repo through best-effort hook repair when hooks are enabled", async () => {
-    configMock.__state.repos["repo-1"] = {
-      path: "/tmp/previous",
-      gitHooksEnabled: true,
-      linkedCheckout: null,
-    };
-
-    const result = await linkLinkedCheckoutRepo("repo-1", "/tmp/repo");
-
-    expect(result.ok).toBe(true);
-    expect(configMock.__state.repos["repo-1"].path).toBe("/tmp/repo");
-    expect(installOrRepairRepoHooksBestEffortMock).toHaveBeenCalledWith(
-      "/tmp/repo",
-      "linked checkout repo link",
-    );
-  });
 });
 
 describe("linked checkout commit-back", () => {
@@ -822,9 +785,7 @@ describe("linked checkout commit-back", () => {
   it("keeps main-worktree changes retryable when pushing committed sync changes fails", async () => {
     const { repoPath, worktreePath, originPath } = await createRepoFixtureWithOrigin();
     seedRepo("repo-1", repoPath);
-    const hookPath = path.join(originPath, "hooks", "pre-receive");
-    fs.writeFileSync(hookPath, "#!/bin/sh\necho rejected >&2\nexit 1\n");
-    fs.chmodSync(hookPath, 0o755);
+    await git(repoPath, ["config", "remote.origin.receivepack", "false"]);
     fs.writeFileSync(path.join(repoPath, "app.txt"), "push will fail\n");
 
     const result = await syncLinkedCheckout({
@@ -841,7 +802,7 @@ describe("linked checkout commit-back", () => {
     const localCommit = await git(worktreePath, ["rev-parse", "HEAD"]);
     expect(await git(originPath, ["rev-parse", "refs/heads/trace/raccoon"])).not.toBe(localCommit);
 
-    fs.rmSync(hookPath);
+    await git(repoPath, ["config", "--unset", "remote.origin.receivepack"]);
     const retryResult = await syncLinkedCheckout({
       repoId: "repo-1",
       sessionGroupId: "group-1",

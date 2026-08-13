@@ -21,10 +21,6 @@ contextBridge.exposeInMainWorld("trace", {
   getCodingToolStatuses: () => ipcRenderer.invoke("get-coding-tool-statuses"),
   installOrUpdateCodingTool: (toolId: string) =>
     ipcRenderer.invoke("install-or-update-coding-tool", toolId),
-  setRepoGitHooksEnabled: (repoId: string, enabled: boolean) =>
-    ipcRenderer.invoke("set-repo-git-hooks-enabled", repoId, enabled),
-  getRepoGitHookStatus: (repoId: string) => ipcRenderer.invoke("get-repo-git-hook-status", repoId),
-  repairRepoGitHooks: (repoId: string) => ipcRenderer.invoke("repair-repo-git-hooks", repoId),
   getBridgeStatus: () => ipcRenderer.invoke("get-bridge-status"),
   getBridgeInfo: () => ipcRenderer.invoke("get-bridge-info"),
   setBridgeLabel: (label: string) => ipcRenderer.invoke("set-bridge-label", label),

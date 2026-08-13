@@ -38,7 +38,7 @@ export async function buildSelfContainedHtml(root: string, commitSha?: string): 
   if (!commitSha) return buildSelfContainedHtmlFromRoot(root);
   if (!COMMIT_SHA.test(commitSha)) throw new Error("Invalid design export commit");
 
-  const exportRoot = await mkdtemp(join(tmpdir(), "trace-design-checkpoint-"));
+  const exportRoot = await mkdtemp(join(tmpdir(), "trace-design-export-"));
   const worktree = join(exportRoot, "repository");
   try {
     const { stdout: repositoryRootOutput } = await execFileAsync(

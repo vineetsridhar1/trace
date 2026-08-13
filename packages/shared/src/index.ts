@@ -60,7 +60,6 @@ export type {
   BridgeWorkspaceFailed,
   BridgeToolSessionId,
   BridgeToolSessionMissing,
-  BridgeGitCheckpoint,
   BridgeRepoLinked,
   BridgeBranchesResult,
   BridgeWorkspaceSlugsResult,
@@ -157,27 +156,7 @@ export {
 } from "./session-git-sync-status.js";
 export type { BuiltinSlashCommand } from "./slash-commands.js";
 export { BUILTIN_SLASH_COMMANDS } from "./slash-commands.js";
-export type {
-  GitCheckpointBridgePayload,
-  GitCheckpointContext,
-  GitCheckpointTrigger,
-} from "./git-checkpoint.js";
-export {
-  addTraceCheckpointTrailer,
-  assertValidCommitSha,
-  buildGitDiffTreeArgs,
-  buildGitShowArgs,
-  extractGitCheckpointTrigger,
-  extractGitToolUsePending,
-  extractGitToolResultTrigger,
-  GIT_SHOW_ARGS,
-  GIT_DIFF_TREE_ARGS,
-  isValidCommitSha,
-  parseGitShowOutput,
-  parseTraceCheckpointContextId,
-  shortSha,
-  TRACE_CHECKPOINT_TRAILER,
-} from "./git-checkpoint.js";
+export { assertValidCommitSha, isValidCommitSha, shortSha } from "./git.js";
 export type {
   LLMRole,
   LLMProvider,

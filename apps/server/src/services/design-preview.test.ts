@@ -19,9 +19,9 @@ vi.mock("./endpoint-preview-auth.js", () => ({
   ENDPOINT_PREVIEW_COOKIE: "__trace_endpoint_preview",
 }));
 
-import { designCheckpointPreviewService, designExportRequest } from "./design-checkpoint-preview.js";
+import { designPreviewService, designExportRequest } from "./design-preview.js";
 
-describe("design checkpoint previews", () => {
+describe("design previews", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal("fetch", mocks.fetch);
@@ -34,17 +34,16 @@ describe("design checkpoint previews", () => {
     mocks.putObject.mockResolvedValue(undefined);
   });
 
-  it("requests the exact checkpoint commit before storing the preview", async () => {
+  it("requests the exact commit before storing the preview", async () => {
     mocks.fetch.mockResolvedValue(
       new Response("<!doctype html><title>Saved</title>", {
         headers: { "content-length": "36" },
       }),
     );
 
-    const result = await designCheckpointPreviewService.publish({
+    const result = await designPreviewService.publish({
       organizationId: "org-1",
       sessionGroupId: "group-1",
-      checkpointId: "checkpoint-1",
       commitSha: "a".repeat(40),
       userId: "user-1",
     });
@@ -59,13 +58,13 @@ describe("design checkpoint previews", () => {
       }),
     );
     expect(mocks.putObject).toHaveBeenCalledWith(
-      expect.stringContaining("design-previews/org-1/group-1/checkpoint-1-"),
+      expect.stringContaining(`design-previews/org-1/group-1/${"a".repeat(40)}-`),
       expect.any(Buffer),
       "text/html; charset=utf-8",
     );
     expect(result).toMatchObject({
       previewStatus: "captured",
-      previewUrl: expect.stringContaining("/design-previews/checkpoint-1"),
+      previewUrl: expect.stringContaining("/design-previews/groups/group-1"),
     });
   });
 
@@ -97,36 +96,13 @@ describe("design checkpoint previews", () => {
     expect(headers.cookie).toBeUndefined();
   });
 
-  it("stores a managed commit export without requiring a Trace checkpoint", async () => {
-    mocks.fetch.mockResolvedValue(
-      new Response("<!doctype html><title>Saved</title>", {
-        headers: { "content-length": "36" },
-      }),
-    );
-
-    const result = await designCheckpointPreviewService.publishCommit({
-      organizationId: "org-1",
-      sessionGroupId: "group-1",
-      commitSha: "c".repeat(40),
-      userId: "user-1",
-    });
-
-    expect(mocks.putObject).toHaveBeenCalledWith(
-      expect.stringContaining(`design-previews/org-1/group-1/commit-${"c".repeat(40)}-`),
-      expect.any(Buffer),
-      "text/html; charset=utf-8",
-    );
-    expect(result.previewStatus).toBe("captured");
-  });
-
   it("records an unavailable preview when no live design endpoint exists", async () => {
     mocks.endpointFindFirst.mockResolvedValue(null);
 
     await expect(
-      designCheckpointPreviewService.publish({
+      designPreviewService.publish({
         organizationId: "org-1",
         sessionGroupId: "group-1",
-        checkpointId: "checkpoint-1",
         commitSha: "c".repeat(40),
         userId: "user-1",
       }),
@@ -141,23 +117,22 @@ describe("design checkpoint previews", () => {
       }),
     );
 
-    const result = await designCheckpointPreviewService.publish({
+    const result = await designPreviewService.publish({
       organizationId: "org-1",
       sessionGroupId: "group-1",
-      checkpointId: "checkpoint-1",
       commitSha: "a".repeat(40),
       userId: "user-1",
     });
 
     expect(result.previewStatus).toBe("failed");
     expect(warn).toHaveBeenCalledWith(
-      "[design-checkpoint] preview export failed",
+      "[design-preview] export failed",
       expect.objectContaining({
         error: expect.stringContaining("Design export returned 422: "),
       }),
     );
     expect(warn).toHaveBeenCalledWith(
-      "[design-checkpoint] preview export failed",
+      "[design-preview] export failed",
       expect.objectContaining({ error: expect.stringContaining("Missing declared screen") }),
     );
     warn.mockRestore();

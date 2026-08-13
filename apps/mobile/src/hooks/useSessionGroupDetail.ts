@@ -27,19 +27,6 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       workdir
       worktreeDeleted
       designPreviewUrl
-      gitCheckpoints {
-        id
-        sessionId
-        promptEventId
-        commitSha
-        subject
-        author
-        committedAt
-        filesChanged
-        previewStatus
-        previewUrl
-        createdAt
-      }
       repo {
         id
         name
@@ -227,14 +214,8 @@ export function useEnsureSessionGroupDetail(groupId: string | undefined): {
     // `SessionSurface`'s spinner branch fires for one frame and remounts
     // the whole tree mid-animation.
     //
-    // Checking `gitCheckpoints !== undefined` is the precise signal —
-    // list-level queries populate `sessionGroups[id]` with `name`, `status`,
-    // etc. but don't select `gitCheckpoints`. Only the detail query sets
-    // that field (as at minimum an empty array). A truthy store entry
-    // alone isn't enough — a partial list-level record would pass and
-    // leave downstream reads (tab strip, checkpoint markers) empty.
     const group = useEntityStore.getState().sessionGroups[groupId];
-    const alreadyHydrated = group?._optimistic === true || group?.gitCheckpoints !== undefined;
+    const alreadyHydrated = group?._optimistic === true;
     let cancelled = false;
     if (group?._optimistic === true) {
       setLoading(false);

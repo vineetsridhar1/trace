@@ -43,7 +43,7 @@ const SESSION_FIELDS = `
 const EVENT_FIELDS = `id eventType scopeType scopeId timestamp payload`;
 const TERMINAL_FIELDS = `id sessionId status cols rows connected`;
 const APP_DEPLOYMENT_FIELDS = `
-  id sessionGroupId repoId sourceCheckpointId commitSha status target spec appSlug
+  id sessionGroupId repoId commitSha status target spec appSlug
   externalJobId imageDigest staticPrefix serviceName url errorMessage
   queuedAt startedAt completedAt createdAt updatedAt
 `;

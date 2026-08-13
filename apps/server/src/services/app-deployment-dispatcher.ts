@@ -49,7 +49,7 @@ export function createSourceBundleLimiter(maxBytes = MAX_SOURCE_BUNDLE_BYTES): T
   });
 }
 
-async function uploadCheckpoint(
+async function uploadCommit(
   client: S3Client,
   bucket: string,
   key: string,
@@ -90,7 +90,7 @@ async function uploadCheckpoint(
         limiter.end();
         resolve();
       } else {
-        const error = new Error(stderr.trim() || "Unable to archive checkpoint");
+        const error = new Error(stderr.trim() || "Unable to archive commit");
         limiter.destroy(error);
         reject(error);
       }
@@ -155,7 +155,7 @@ export class AwsAppDeploymentDispatcher implements AppDeploymentDispatcher {
     const repoPath = gitStorage.resolveRepoPath(input.organizationId, input.repoId);
     const sourceKey = `app-deployments/${input.organizationId}/${input.deploymentId}/${input.commitSha}.tar.gz`;
     const clients = await deploymentClients(region, roleArn);
-    await uploadCheckpoint(
+    await uploadCommit(
       clients.s3,
       bucket,
       sourceKey,

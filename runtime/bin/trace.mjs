@@ -19,7 +19,7 @@ var SESSION_FIELDS = `
 var EVENT_FIELDS = `id eventType scopeType scopeId timestamp payload`;
 var TERMINAL_FIELDS = `id sessionId status cols rows connected`;
 var APP_DEPLOYMENT_FIELDS = `
-  id sessionGroupId repoId sourceCheckpointId commitSha status target spec appSlug
+  id sessionGroupId repoId commitSha status target spec appSlug
   externalJobId imageDigest staticPrefix serviceName url errorMessage
   queuedAt startedAt completedAt createdAt updatedAt
 `;
@@ -1061,7 +1061,7 @@ var deployCommand = defineCommand({
   ],
   effects: [
     "Commits no files and performs no project analysis.",
-    "Queues a durable production deployment of the latest saved app checkpoint.",
+    "Queues a durable production deployment of the latest pushed app commit.",
     "May create or update AWS runtime resources and a persistent app database."
   ],
   output: "The queued deployment, immutable commit, selected target, status, and eventual URL.",
@@ -1163,7 +1163,7 @@ var statusCommand = defineCommand({
   description: "List durable deployments for the current app",
   examples: ['"$TRACE_CLI" app status --json'],
   effects: ["Read-only; does not build, deploy, promote, or stop anything."],
-  output: "Recent deployments with target, checkpoint, status, URL, and safe failure details.",
+  output: "Recent deployments with target, commit, status, URL, and safe failure details.",
   nextSteps: [
     "If the deployment is still active, wait and run this command again; if it failed, inspect the returned error before retrying."
   ],
@@ -2585,7 +2585,7 @@ var commandGroups = [
     ],
     notes: [
       "The CLI never analyzes code or chooses infrastructure.",
-      "The latest saved checkpoint is the immutable deployment source."
+      "The latest pushed app commit is the immutable deployment source."
     ]
   },
   {

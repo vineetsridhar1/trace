@@ -6,6 +6,7 @@ import { UPDATE_REPO_MUTATION } from "@trace/client-core";
 import { client } from "../../../lib/urql";
 import { withRepoApplicationConfigDefaults } from "../../../lib/repo-application-config";
 import { Button } from "../../ui/button";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../../ui/accordion";
 import { ORG_SECRETS_QUERY } from "../agent-environment-queries";
 import { ApplicationConfigDialog } from "./ApplicationConfigDialog";
 
@@ -63,57 +64,74 @@ export function RepoApplicationsSection({ repoId }: { repoId: string }) {
   };
 
   return (
-    <div className="border-t border-border bg-background/30 px-4 py-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 max-w-2xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Session automation
-          </p>
-          <p className="mt-1 text-xs leading-4 text-muted-foreground">
-            The setup script runs once when a session workspace starts; terminals wait until it
-            completes. Run scripts open as named terminals from the Run button.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-          <Settings2 size={14} />
-          Edit automation
-        </Button>
-      </div>
-      <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <div>
-          <p className="mb-1.5 text-xs font-medium text-muted-foreground">Setup script</p>
-          <pre className="min-h-10 overflow-x-auto whitespace-pre-wrap rounded-lg border border-border bg-background px-3 py-2.5 font-mono text-xs leading-5 text-foreground">
-            {setupScript || "No setup script configured."}
-          </pre>
-        </div>
-        <div>
-          <p className="mb-1.5 text-xs font-medium text-muted-foreground">
-            Run scripts · {runScripts.length} of 10
-          </p>
-          {runScripts.length ? (
-            <div className="space-y-1.5">
-              {runScripts.map((script) => (
-                <div
-                  key={script.id}
-                  className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5"
-                >
-                  <span className="w-24 shrink-0 truncate text-xs font-medium text-foreground">
-                    {script.name}
-                  </span>
-                  <code className="truncate font-mono text-[11px] text-muted-foreground">
-                    {script.command}
-                  </code>
-                </div>
-              ))}
+    <div className="border-t border-border bg-background/30">
+      <Accordion>
+        <AccordionItem value="session-automation" className="border-0">
+          <AccordionTrigger className="rounded-none px-4 py-3 hover:no-underline">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Session automation
+              </span>
+              <span className="truncate text-xs font-normal text-muted-foreground/70">
+                {setupScript ? "Setup configured" : "No setup"} · {runScripts.length} run
+                {runScripts.length === 1 ? " script" : " scripts"}
+              </span>
             </div>
-          ) : (
-            <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
-              No run scripts configured.
-            </p>
-          )}
-        </div>
-      </div>
-      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pb-4">
+            <div className="flex items-start justify-between gap-4 border-t border-border/70 pt-3">
+              <p className="min-w-0 max-w-2xl text-xs leading-4 text-muted-foreground">
+                The setup script runs once when a session workspace starts; terminals wait until it
+                completes. Run scripts open as named terminals from the Run button.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setOpen(true)}
+              >
+                <Settings2 size={14} />
+                Edit automation
+              </Button>
+            </div>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">Setup script</p>
+                <pre className="min-h-10 overflow-x-auto whitespace-pre-wrap rounded-lg border border-border bg-background px-3 py-2.5 font-mono text-xs leading-5 text-foreground">
+                  {setupScript || "No setup script configured."}
+                </pre>
+              </div>
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                  Run scripts · {runScripts.length} of 10
+                </p>
+                {runScripts.length ? (
+                  <div className="space-y-1.5">
+                    {runScripts.map((script) => (
+                      <div
+                        key={script.id}
+                        className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5"
+                      >
+                        <span className="w-24 shrink-0 truncate text-xs font-medium text-foreground">
+                          {script.name}
+                        </span>
+                        <code className="truncate font-mono text-[11px] text-muted-foreground">
+                          {script.command}
+                        </code>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+                    No run scripts configured.
+                  </p>
+                )}
+              </div>
+            </div>
+            {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
       <ApplicationConfigDialog
         open={open}
         repoName={repoName}

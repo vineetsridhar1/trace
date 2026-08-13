@@ -6,11 +6,8 @@ import { getClient } from "@/lib/urql";
 import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 
 /**
- * Loads per-session hydration that the list-level queries don't provide:
- * `queuedMessages` and per-session `gitCheckpoints`. Mirrors web's
- * SESSION_DETAIL_QUERY. Resolves the ticket-20 follow-up about per-session
- * hydration — `CheckpointMarker` reads `sessions[sessionId].gitCheckpoints`
- * and ticket 23 will read `queuedMessages` for the queued-messages strip.
+ * Loads per-session hydration that the list-level queries don't provide,
+ * including queued messages and artifacts. Mirrors web's session detail query.
  *
  * The query intentionally stays in the mobile hook for now. Extracting it
  * into `@trace/client-core` (so web's `SessionDetailView` also consumes it)
@@ -56,17 +53,6 @@ const SESSION_DETAIL_QUERY = gql`
           status
         }
       }
-      gitCheckpoints {
-        id
-        sessionId
-        promptEventId
-        commitSha
-        subject
-        author
-        committedAt
-        filesChanged
-        createdAt
-      }
       queuedMessages {
         id
         sessionId
@@ -103,19 +89,6 @@ const SESSION_DETAIL_QUERY = gql`
       sessionGroup {
         id
         designPreviewUrl
-        gitCheckpoints {
-          id
-          sessionId
-          promptEventId
-          commitSha
-          subject
-          author
-          committedAt
-          filesChanged
-          previewStatus
-          previewUrl
-          createdAt
-        }
       }
       channel {
         id

@@ -229,7 +229,7 @@ export async function createWorktree({
   defaultBranch,
   branch,
   preserveBranchName,
-  checkpointSha,
+  baseCommitSha,
   sessionGroupId: _sessionGroupId,
   slug,
 }: {
@@ -239,7 +239,7 @@ export async function createWorktree({
   branch?: string;
   /** Reuse the persisted branch name instead of generating trace-{slug}. */
   preserveBranchName?: boolean;
-  checkpointSha?: string;
+  baseCommitSha?: string;
   /** When set, the worktree and branch are keyed by this ID so all sessions in the group share the same workspace. */
   sessionGroupId?: string;
   /** Pre-assigned animal slug. If absent, one is generated. */
@@ -251,9 +251,9 @@ export async function createWorktree({
 
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
 
-  if (checkpointSha) assertValidCommitSha(checkpointSha);
+  if (baseCommitSha) assertValidCommitSha(baseCommitSha);
 
-  const baseRef = checkpointSha ?? (await resolveBaseRef(repoPath, branch, defaultBranch));
+  const baseRef = baseCommitSha ?? (await resolveBaseRef(repoPath, branch, defaultBranch));
   const branchName = await resolveWorktreeBranch(
     repoPath,
     worktreeSlug,
@@ -261,19 +261,19 @@ export async function createWorktree({
     preserveBranchName,
   );
 
-  // When restoring a checkpoint, verify the SHA is locally reachable; fetch if not
-  if (checkpointSha) {
-    const reachable = await execFileAsync("git", ["cat-file", "-t", checkpointSha], {
+  // When starting from a commit, verify the SHA is locally reachable; fetch if not.
+  if (baseCommitSha) {
+    const reachable = await execFileAsync("git", ["cat-file", "-t", baseCommitSha], {
       cwd: repoPath,
     })
       .then(() => true)
       .catch(() => false);
     if (!reachable) {
       try {
-        await fetchRef(repoPath, checkpointSha);
+        await fetchRef(repoPath, baseCommitSha);
       } catch (error) {
         console.warn(
-          `[workspace] checkpoint fetch failed for ${checkpointSha}, falling back to fetch --all: ${getErrorMessage(error)}`,
+          `[workspace] commit fetch failed for ${baseCommitSha}, falling back to fetch --all: ${getErrorMessage(error)}`,
         );
         await execFileAsync("git", ["fetch", "--all"], { cwd: repoPath });
       }
@@ -370,7 +370,7 @@ async function resolveWorktreeBranch(
 
 async function resetWorktreeToRef(worktreePath: string, ref: string): Promise<void> {
   // Provisioned containers are treated as recoverable from Trace state plus
-  // origin/checkpoint state. Do not trust stale disk contents when a runtime is
+  // origin/commit state. Do not trust stale disk contents when a runtime is
   // reprovisioned or a container is reused.
   await execFileAsync("git", ["reset", "--hard", ref], { cwd: worktreePath });
   await execFileAsync("git", ["clean", "-ffdx"], { cwd: worktreePath });

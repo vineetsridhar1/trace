@@ -925,34 +925,6 @@ describe("handleOrgEvent", () => {
     expect(useEntityStore.getState().sessions["session-1"].name).toBe("Refactor auth middleware");
   });
 
-  it("routes session_output git_checkpoint into gitCheckpoints", () => {
-    useEntityStore.setState({
-      sessions: { "session-1": { id: "session-1", sessionGroupId: "group-1" } as never },
-      sessionGroups: { "group-1": { id: "group-1" } as never },
-      _sessionIdsByGroup: { "group-1": ["session-1"] },
-    });
-
-    const checkpoint = {
-      id: "ckpt-1",
-      sessionGroupId: "group-1",
-      commitSha: "abc",
-      committedAt: "2026-01-01T00:00:00.000Z",
-    };
-    handleOrgEvent(
-      makeEvent({
-        eventType: "session_output",
-        scopeId: "session-1",
-        payload: { type: "git_checkpoint", checkpoint },
-      }),
-    );
-
-    const session = useEntityStore.getState().sessions["session-1"] as never as {
-      gitCheckpoints: Array<{ id: string }>;
-    };
-    expect(session.gitCheckpoints).toHaveLength(1);
-    expect(session.gitCheckpoints[0].id).toBe("ckpt-1");
-  });
-
   it("upserts app deployment lifecycle events", () => {
     handleOrgEvent(
       makeEvent({

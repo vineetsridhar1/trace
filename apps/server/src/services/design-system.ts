@@ -21,7 +21,7 @@ import {
   createDesignSystemStaticPreview,
   designSystemStaticPreviewStorageKey,
 } from "../lib/design-system-static-preview.js";
-import { designCommitPreviewUrl } from "../lib/design-checkpoint-preview-url.js";
+import { designCommitPreviewUrl } from "../lib/design-preview-url.js";
 import { assertActorOrgAccess, assertActorOrgAdmin } from "./actor-auth.js";
 import { eventService } from "./event.js";
 import { sessionService } from "./session.js";

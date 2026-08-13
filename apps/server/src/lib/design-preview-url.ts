@@ -4,10 +4,6 @@ function serverPublicUrl(): string {
   return `http://localhost:${process.env.PORT ?? "4000"}`;
 }
 
-export function designCheckpointPreviewUrl(checkpointId: string): string {
-  return `${serverPublicUrl()}/design-previews/${encodeURIComponent(checkpointId)}`;
-}
-
 export function designCommitPreviewUrl(sessionGroupId: string): string {
   return `${serverPublicUrl()}/design-previews/groups/${encodeURIComponent(sessionGroupId)}`;
 }

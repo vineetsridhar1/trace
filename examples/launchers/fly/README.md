@@ -129,7 +129,7 @@ curl -sS http://localhost:8787/trace/start-session \
       "remoteUrl": "https://github.com/example/trace.git",
       "defaultBranch": "main",
       "branch": null,
-      "checkpointSha": null,
+      "baseCommitSha": null,
       "readOnly": false
     },
     "tool": "codex",

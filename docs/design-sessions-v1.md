@@ -155,7 +155,7 @@ fixes the source.
 
 Reloading Trace should reopen the same design session and preview. The current workspace
 continues running when available. If the provisioned workspace is recreated, it restores
-from the managed repo using the existing session provisioning and checkpoint paths.
+from the managed repo using commit-addressed session provisioning.
 
 The user should never need to understand or select the hidden repo.
 
@@ -318,7 +318,7 @@ Design sessions receive a design-specific instruction overlay. It must tell the 
 - make narrow edits for follow-up requests
 - let the existing dev server hot-reload changes; never start a second server
 - ask blocking product questions through the existing chat question mechanism
-- commit and push meaningful checkpoints to the managed repo
+- commit and push meaningful changes to the managed repo
 - keep exported designs self-contained by using local or embeddable assets
 
 The agent may decide how many screens are needed unless the user specifies an exact count.
@@ -341,7 +341,7 @@ The implementation should reuse:
 - process supervision and port detection
 - private endpoint creation and preview authorization
 - App preview loading and error states
-- checkpoint, restore, and workspace recovery paths
+- commit-addressed forking and workspace recovery paths
 - private endpoint authorization for the same-origin export download
 
 ### Design-Specific Behavior
@@ -363,11 +363,11 @@ to `app | design` and keep truly app-specific behavior guarded separately.
 ## Events and State
 
 V1 does not need events for every screen or artboard. Existing session, message, process,
-endpoint, and checkpoint events remain the source of truth for Trace state. Vite HMR is
+endpoint and session events remain the source of truth for Trace state. Vite HMR is
 the transport for changes inside the live design preview.
 
 Mutations remain fire-and-forget for shared state. Resolvers remain thin and all session
-creation, provisioning, and checkpoint behavior remains in services.
+creation, provisioning, and commit behavior remains in services.
 
 Later versions may ingest the manifest into event-backed screen entities when Trace needs
 cross-session search, screen-level publishing, comments, or screen-level collaboration.
@@ -442,7 +442,7 @@ Server:
   - do not expose app-only publish behavior as design publishing
 - `apps/server/src/services/session-application-workflow.ts`
   - allow the same default dev-server workflow for Design
-  - keep app-specific checkpoint capture or publishing behavior explicitly guarded
+  - keep app-specific preview or publishing behavior explicitly guarded
 
 Bridge and runtime image:
 
@@ -556,7 +556,7 @@ V1 is complete when all of the following are demonstrated:
 - A runtime exception in one artboard is contained by that artboard's error boundary.
 - An agent question appears and resolves through the existing chat question flow.
 - Refreshing Trace returns to the same design session and live preview.
-- A checkpoint can restore the design workspace and reproduce the canvas.
+- A saved commit can reproduce the design workspace and canvas.
 - Export HTML downloads one `design.html` file that opens offline and retains pan, zoom,
   fit, focus, labels, and screen interactions.
 - The export contains no dependency on the private preview URL or Trace authentication.

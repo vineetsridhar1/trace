@@ -3,9 +3,7 @@
  * Defines the wire protocol between bridge clients and the server's /bridge WebSocket.
  */
 
-import type { GitCheckpointBridgePayload, GitCheckpointContext } from "./git-checkpoint.js";
-
-export const BRIDGE_PROTOCOL_VERSION = 4;
+export const BRIDGE_PROTOCOL_VERSION = 5;
 export const GENERAL_WORKSPACE_PROTOCOL_VERSION = 3;
 
 // --- Server → Bridge commands ---
@@ -22,7 +20,6 @@ export interface BridgeRunCommand {
   enableClaudeInChrome?: boolean;
   interactionMode?: string;
   toolSessionId?: string;
-  checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];
   runtimeEnv?: Record<string, string>;
 }
@@ -39,7 +36,6 @@ export interface BridgeSendCommand {
   enableClaudeInChrome?: boolean;
   interactionMode?: string;
   toolSessionId?: string;
-  checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];
   runtimeEnv?: Record<string, string>;
 }
@@ -57,7 +53,7 @@ export interface BridgePrepareCommand {
   defaultBranch: string;
   branch?: string;
   preserveBranchName?: boolean;
-  checkpointSha?: string;
+  baseCommitSha?: string;
   readOnly?: boolean;
   /**
    * Absolute path to an existing on-disk worktree of this repo to adopt as the
@@ -97,7 +93,7 @@ export interface BridgePrepareAppCommand {
   repoId: string;
   repoRemoteUrl: string;
   defaultBranch: string;
-  checkpointSha?: string;
+  baseCommitSha?: string;
   designSystemPackage?: {
     versionId: string;
     downloadUrl: string;
@@ -622,14 +618,7 @@ export interface BridgeToolSessionMissing {
   toolSessionId: string;
   message?: string;
   interactionMode?: string;
-  checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];
-}
-
-export interface BridgeGitCheckpoint {
-  type: "git_checkpoint";
-  sessionId: string;
-  checkpoint: GitCheckpointBridgePayload;
 }
 
 /** Sent when a device bridge links a new repo (e.g. via saveRepoPath). Updates server-side registeredRepoIds. */
@@ -999,7 +988,6 @@ export type BridgeMessage =
   | BridgeCleanupGeneralWorkspaceResult
   | BridgeToolSessionId
   | BridgeToolSessionMissing
-  | BridgeGitCheckpoint
   | BridgeRepoLinked
   | BridgeLinkedCheckoutStatusResult
   | BridgeLinkedCheckoutChangedFileResult

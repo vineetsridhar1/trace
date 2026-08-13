@@ -90,7 +90,6 @@ export type AppDeployment = {
   repoId: Scalars["ID"]["output"];
   serviceName?: Maybe<Scalars["String"]["output"]>;
   sessionGroupId: Scalars["ID"]["output"];
-  sourceCheckpointId: Scalars["ID"]["output"];
   spec: Scalars["JSON"]["output"];
   startedAt?: Maybe<Scalars["DateTime"]["output"]>;
   staticPrefix?: Maybe<Scalars["String"]["output"]>;
@@ -627,6 +626,8 @@ export type DesignElementTextSource = {
   text: Scalars["String"]["output"];
 };
 
+export type DesignPreviewStatus = "captured" | "failed" | "pending" | "publishing" | "unavailable";
+
 export type DesignSystem = {
   __typename?: "DesignSystem";
   activeVersion?: Maybe<DesignSystemVersion>;
@@ -866,37 +867,6 @@ export type EventType =
   | "ticket_unassigned"
   | "ticket_unlinked"
   | "ticket_updated";
-
-export type GitCheckpoint = {
-  __typename?: "GitCheckpoint";
-  author: Scalars["String"]["output"];
-  captureContentType?: Maybe<Scalars["String"]["output"]>;
-  captureStatus?: Maybe<GitCheckpointCaptureStatus>;
-  captureUrl?: Maybe<Scalars["String"]["output"]>;
-  capturedAt?: Maybe<Scalars["DateTime"]["output"]>;
-  commitSha: Scalars["String"]["output"];
-  committedAt: Scalars["DateTime"]["output"];
-  createdAt: Scalars["DateTime"]["output"];
-  filesChanged: Scalars["Int"]["output"];
-  id: Scalars["ID"]["output"];
-  parentShas: Array<Scalars["String"]["output"]>;
-  previewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
-  previewContentType?: Maybe<Scalars["String"]["output"]>;
-  previewStatus?: Maybe<GitCheckpointCaptureStatus>;
-  previewUrl?: Maybe<Scalars["String"]["output"]>;
-  promptEvent?: Maybe<Event>;
-  promptEventId: Scalars["ID"]["output"];
-  repo?: Maybe<Repo>;
-  repoId: Scalars["ID"]["output"];
-  session?: Maybe<Session>;
-  sessionGroup?: Maybe<SessionGroup>;
-  sessionGroupId: Scalars["ID"]["output"];
-  sessionId: Scalars["ID"]["output"];
-  subject: Scalars["String"]["output"];
-  treeSha: Scalars["String"]["output"];
-};
-
-export type GitCheckpointCaptureStatus = "captured" | "failed" | "pending" | "unavailable";
 
 export type HostingMode = "cloud" | "local";
 
@@ -2540,7 +2510,6 @@ export type Session = {
   createdBy: User;
   createdById: Scalars["ID"]["output"];
   endpoints?: Maybe<SessionEndpoints>;
-  gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars["ID"]["output"];
   inputTokens: Scalars["Float"]["output"];
@@ -2699,13 +2668,12 @@ export type SessionGroup = {
   createdAt: Scalars["DateTime"]["output"];
   designPreviewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
   designPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
-  designPreviewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  designPreviewStatus?: Maybe<DesignPreviewStatus>;
   designPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   designSystemVersion?: Maybe<DesignSystemVersion>;
   designSystemVersionId?: Maybe<Scalars["ID"]["output"]>;
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
-  gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
   kind: SessionGroupKind;
   name: Scalars["String"]["output"];
@@ -2886,7 +2854,6 @@ export type StartSessionInput = {
   prompt?: InputMaybe<Scalars["String"]["input"]>;
   reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
-  restoreCheckpointId?: InputMaybe<Scalars["ID"]["input"]>;
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
   sourceSessionId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -3270,6 +3237,7 @@ export type ResolversTypes = ResolversObject<{
   DesignElementStylesInput: DesignElementStylesInput;
   DesignElementTextEditResult: ResolverTypeWrapper<DesignElementTextEditResult>;
   DesignElementTextSource: ResolverTypeWrapper<DesignElementTextSource>;
+  DesignPreviewStatus: DesignPreviewStatus;
   DesignSystem: ResolverTypeWrapper<DesignSystem>;
   DesignSystemCommitArtifact: ResolverTypeWrapper<DesignSystemCommitArtifact>;
   DesignSystemCommitArtifactConnection: ResolverTypeWrapper<DesignSystemCommitArtifactConnection>;
@@ -3284,8 +3252,6 @@ export type ResolversTypes = ResolversObject<{
   Event: ResolverTypeWrapper<Event>;
   EventType: EventType;
   Float: ResolverTypeWrapper<Scalars["Float"]["output"]>;
-  GitCheckpoint: ResolverTypeWrapper<GitCheckpoint>;
-  GitCheckpointCaptureStatus: GitCheckpointCaptureStatus;
   HostingMode: HostingMode;
   ID: ResolverTypeWrapper<Scalars["ID"]["output"]>;
   InboxItem: ResolverTypeWrapper<InboxItem>;
@@ -3457,7 +3423,6 @@ export type ResolversParentTypes = ResolversObject<{
   EndpointTrafficEntry: EndpointTrafficEntry;
   Event: Event;
   Float: Scalars["Float"]["output"];
-  GitCheckpoint: GitCheckpoint;
   ID: Scalars["ID"]["output"];
   InboxItem: InboxItem;
   Int: Scalars["Int"]["output"];
@@ -3611,7 +3576,6 @@ export type AppDeploymentResolvers<
   repoId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   serviceName?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
-  sourceCheckpointId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   spec?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
   startedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   staticPrefix?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
@@ -4205,46 +4169,6 @@ export type EventResolvers<
   scopeId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   scopeType?: Resolver<ResolversTypes["ScopeType"], ParentType, ContextType>;
   timestamp?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
-  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
-}>;
-
-export type GitCheckpointResolvers<
-  ContextType = Context,
-  ParentType extends ResolversParentTypes["GitCheckpoint"] = ResolversParentTypes["GitCheckpoint"],
-> = ResolversObject<{
-  author?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  captureContentType?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  captureStatus?: Resolver<
-    Maybe<ResolversTypes["GitCheckpointCaptureStatus"]>,
-    ParentType,
-    ContextType
-  >;
-  captureUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  capturedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
-  commitSha?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  committedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
-  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
-  filesChanged?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
-  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
-  parentShas?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;
-  previewCapturedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
-  previewContentType?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  previewStatus?: Resolver<
-    Maybe<ResolversTypes["GitCheckpointCaptureStatus"]>,
-    ParentType,
-    ContextType
-  >;
-  previewUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  promptEvent?: Resolver<Maybe<ResolversTypes["Event"]>, ParentType, ContextType>;
-  promptEventId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
-  repo?: Resolver<Maybe<ResolversTypes["Repo"]>, ParentType, ContextType>;
-  repoId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
-  session?: Resolver<Maybe<ResolversTypes["Session"]>, ParentType, ContextType>;
-  sessionGroup?: Resolver<Maybe<ResolversTypes["SessionGroup"]>, ParentType, ContextType>;
-  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
-  sessionId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
-  subject?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  treeSha?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -5903,7 +5827,6 @@ export type SessionResolvers<
   createdBy?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
   createdById?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   endpoints?: Resolver<Maybe<ResolversTypes["SessionEndpoints"]>, ParentType, ContextType>;
-  gitCheckpoints?: Resolver<Array<ResolversTypes["GitCheckpoint"]>, ParentType, ContextType>;
   hosting?: Resolver<ResolversTypes["HostingMode"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   inputTokens?: Resolver<ResolversTypes["Float"], ParentType, ContextType>;
@@ -6059,7 +5982,7 @@ export type SessionGroupResolvers<
   designPreviewCapturedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   designPreviewCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   designPreviewStatus?: Resolver<
-    Maybe<ResolversTypes["GitCheckpointCaptureStatus"]>,
+    Maybe<ResolversTypes["DesignPreviewStatus"]>,
     ParentType,
     ContextType
   >;
@@ -6072,7 +5995,6 @@ export type SessionGroupResolvers<
   designSystemVersionId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   forkedFromSessionGroup?: Resolver<Maybe<ResolversTypes["SessionGroup"]>, ParentType, ContextType>;
   forkedFromSessionGroupId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
-  gitCheckpoints?: Resolver<Array<ResolversTypes["GitCheckpoint"]>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   kind?: Resolver<ResolversTypes["SessionGroupKind"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
@@ -6475,7 +6397,6 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   DesignSystemVersion?: DesignSystemVersionResolvers<ContextType>;
   EndpointTrafficEntry?: EndpointTrafficEntryResolvers<ContextType>;
   Event?: EventResolvers<ContextType>;
-  GitCheckpoint?: GitCheckpointResolvers<ContextType>;
   InboxItem?: InboxItemResolvers<ContextType>;
   IntegrationConnection?: IntegrationConnectionResolvers<ContextType>;
   JSON?: GraphQLScalarType;

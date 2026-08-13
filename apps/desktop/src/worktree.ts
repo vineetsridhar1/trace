@@ -12,7 +12,6 @@ import {
   parseWorktreeListPorcelain,
   type BridgeRepoWorktree,
 } from "@trace/shared";
-import { installOrRepairRepoHooksBestEffort } from "./repo-hooks.js";
 import { formatGitError, gitEnv } from "./git-utils.js";
 
 type ExecErrorWithOutput = Error & {
@@ -225,8 +224,7 @@ export async function createWorktree({
   defaultBranch,
   startBranch,
   preserveBranchName,
-  checkpointSha,
-  gitHooksEnabled,
+  baseCommitSha,
 }: {
   repoPath: string;
   repoId: string;
@@ -241,9 +239,7 @@ export async function createWorktree({
   /** Reuse the persisted branch name instead of generating trace-{slug}. */
   preserveBranchName?: boolean;
   /** Commit SHA to restore from instead of branching from origin/{startBranch|defaultBranch}. */
-  checkpointSha?: string;
-  /** When enabled for the linked repo, install or repair Trace-managed hooks. */
-  gitHooksEnabled?: boolean;
+  baseCommitSha?: string;
 }): Promise<{ workdir: string; branch: string; slug: string }> {
   const sessionsDir = path.join(os.homedir(), "trace", "sessions", repoId);
   const worktreeSlug = await resolveAvailableWorktreeSlug(sessionsDir, repoPath, slug);
@@ -252,16 +248,16 @@ export async function createWorktree({
   // Ensure parent directory exists
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
 
-  if (checkpointSha) assertValidCommitSha(checkpointSha);
+  if (baseCommitSha) assertValidCommitSha(baseCommitSha);
 
   const hasOrigin = await hasRemoteOrigin(repoPath);
 
   // Fetch latest so origin refs are up to date when a remote exists.
-  if (!checkpointSha) {
+  if (!baseCommitSha) {
     if (hasOrigin) await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
   } else {
-    // Verify the checkpoint SHA is reachable locally; fetch if not
-    const reachable = await execFileAsync("git", ["cat-file", "-t", checkpointSha], {
+    // Verify the base commit SHA is reachable locally; fetch if not
+    const reachable = await execFileAsync("git", ["cat-file", "-t", baseCommitSha], {
       cwd: repoPath,
     })
       .then(() => true)
@@ -273,7 +269,7 @@ export async function createWorktree({
 
   // Resolve base branch with fallback chain (remote → local → default)
   const resolvedBaseRef =
-    checkpointSha ?? (await resolveBaseBranch(repoPath, startBranch, defaultBranch));
+    baseCommitSha ?? (await resolveBaseBranch(repoPath, startBranch, defaultBranch));
   const baseRef =
     resolvedBaseRef === "HEAD" && !(await refExists(repoPath, "HEAD")) ? null : resolvedBaseRef;
   const branch = await resolveWorktreeBranch(
@@ -284,7 +280,7 @@ export async function createWorktree({
   );
 
   // If the worktree directory already exists, reuse the stable slug path.
-  // Trace-owned branches can still be reset to the requested remote/checkpoint
+  // Trace-owned branches can still be reset to the requested remote commit
   // state; non-matching user branches are reported back as the actual workspace
   // branch so the server can reconcile instead of blocking the UI.
   if (fs.existsSync(targetPath)) {
@@ -301,9 +297,6 @@ export async function createWorktree({
           console.warn(
             `[worktree] reconciling existing Trace worktree ${targetPath}: expected ${branch}, found ${currentBranch}`,
           );
-          if (gitHooksEnabled) {
-            await installOrRepairRepoHooksBestEffort(targetPath, "session worktree reuse");
-          }
           return { workdir: targetPath, branch: currentBranch, slug: worktreeSlug };
         }
         throw new Error(
@@ -337,10 +330,6 @@ export async function createWorktree({
   if (baseRef) {
     await resetWorktreeToRef(targetPath, baseRef);
     await setUpstreamIfRemote(repoPath, branch, baseRef);
-  }
-
-  if (gitHooksEnabled) {
-    await installOrRepairRepoHooksBestEffort(targetPath, "session worktree creation");
   }
 
   return { workdir: targetPath, branch, slug: worktreeSlug };
@@ -406,14 +395,12 @@ export async function adoptWorktree({
   repoId: _repoId,
   worktreePath,
   slug,
-  gitHooksEnabled,
 }: {
   repoPath: string;
   repoId: string;
   worktreePath: string;
   /** Pre-assigned group slug to preserve; falls back to the directory name. */
   slug?: string;
-  gitHooksEnabled?: boolean;
 }): Promise<{ workdir: string; branch: string; slug: string }> {
   const resolved = path.resolve(worktreePath);
   if (!fs.existsSync(resolved)) {
@@ -459,10 +446,6 @@ export async function adoptWorktree({
     throw new Error(
       `${resolved} is in a detached HEAD state. Check out a branch before importing it.`,
     );
-  }
-
-  if (gitHooksEnabled) {
-    await installOrRepairRepoHooksBestEffort(resolved, "adopted worktree");
   }
 
   return { workdir: resolved, branch, slug: slug ?? path.basename(resolved) };

@@ -3,7 +3,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { getAuthHeaders, useEntityField } from "@trace/client-core";
-import type { GitCheckpoint, Repo } from "@trace/gql";
+import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import PagerView from "react-native-pager-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -84,10 +84,6 @@ export default function SessionStreamScreen() {
     | string
     | null
     | undefined;
-  const gitCheckpoints = useEntityField("sessionGroups", hydratedGroupId, "gitCheckpoints") as
-    | GitCheckpoint[]
-    | null
-    | undefined;
   const runtimeState = useEntityField("sessionGroups", hydratedGroupId, "connection") as
     | { state?: string | null }
     | null
@@ -97,9 +93,9 @@ export default function SessionStreamScreen() {
   const generatedProjectLabel = groupKind === "design" ? "design" : "app";
   const savedPreviewUrl = useMemo(() => {
     if (!isDesignGroup) return null;
-    const url = savedDesignPreviewUrl(designPreviewUrl, gitCheckpoints);
+    const url = savedDesignPreviewUrl(designPreviewUrl);
     return url ? designPreviewModeUrl(url) : null;
-  }, [designPreviewUrl, gitCheckpoints, isDesignGroup]);
+  }, [designPreviewUrl, isDesignGroup]);
   const livePreviewAvailable = isLivePreviewRuntimeAvailable(runtimeState?.state);
   const {
     url: appPreviewUrl,

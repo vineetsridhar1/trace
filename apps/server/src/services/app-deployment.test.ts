@@ -15,6 +15,9 @@ vi.mock("../lib/encryption.js", () => ({
   decryptSecret: vi.fn(() => "callback-secret"),
 }));
 
+const gitStorageMock = vi.hoisted(() => ({ listRefs: vi.fn() }));
+vi.mock("../lib/git-storage/index.js", () => ({ gitStorage: gitStorageMock }));
+
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { AppDeploymentService, normalizeDeploymentSpec } from "./app-deployment.js";
@@ -43,7 +46,6 @@ function deployment(overrides: Record<string, unknown> = {}) {
     organizationId: "org-1",
     sessionGroupId: "group-1",
     repoId: "repo-1",
-    sourceCheckpointId: "checkpoint-1",
     commitSha: "a".repeat(40),
     status: "queued",
     target: "service",
@@ -88,15 +90,9 @@ describe("AppDeploymentService", () => {
       ownerUserId: "user-1",
       repoId: "repo-1",
       slug: "notes",
+      branch: "main",
     });
-    prismaMock.gitCheckpoint.findFirst.mockResolvedValue({
-      id: "checkpoint-1",
-      sessionGroupId: "group-1",
-      repoId: "repo-1",
-      commitSha: "a".repeat(40),
-      committedAt: now,
-      createdAt: now,
-    });
+    gitStorageMock.listRefs.mockResolvedValue(new Map([["refs/heads/main", "a".repeat(40)]]));
     prismaMock.appDeployment.create.mockResolvedValue(deployment());
     prismaMock.appDeployment.findFirst.mockResolvedValue(null);
     prismaMock.appDeployment.findMany.mockResolvedValue([]);
@@ -112,13 +108,12 @@ describe("AppDeploymentService", () => {
     vi.stubEnv("TRACE_APP_DATA_ENABLED", "true");
   });
 
-  it("queues the latest durable checkpoint without exposing the preview endpoint", async () => {
+  it("queues the latest pushed app commit without exposing the preview endpoint", async () => {
     const service = new AppDeploymentService({ enqueue });
     const result = await service.deploy(serviceInput, "org-1", "user-1");
 
     expect(enqueue).toHaveBeenCalledWith(
       expect.objectContaining({
-        checkpointId: "checkpoint-1",
         commitSha: "a".repeat(40),
         appSlug: "notes-group1",
       }),
@@ -162,12 +157,12 @@ describe("AppDeploymentService", () => {
     ).toThrow("requires database access");
   });
 
-  it("requires a committed checkpoint", async () => {
-    prismaMock.gitCheckpoint.findFirst.mockResolvedValueOnce(null);
+  it("requires a pushed app branch", async () => {
+    gitStorageMock.listRefs.mockResolvedValueOnce(new Map());
     const service = new AppDeploymentService({ enqueue });
 
     await expect(service.deploy(serviceInput, "org-1", "user-1")).rejects.toThrow(
-      "Commit the app before publishing",
+      "Push the app branch before publishing",
     );
     expect(enqueue).not.toHaveBeenCalled();
   });
@@ -182,7 +177,7 @@ describe("AppDeploymentService", () => {
     expect(enqueue).not.toHaveBeenCalled();
   });
 
-  it("reuses an active deployment for the same checkpoint", async () => {
+  it("reuses an active deployment for the same commit", async () => {
     prismaMock.appDeployment.findFirst.mockResolvedValueOnce(deployment());
     const service = new AppDeploymentService({ enqueue });
 
@@ -195,7 +190,7 @@ describe("AppDeploymentService", () => {
 
   it("refuses to race an older in-flight deployment", async () => {
     prismaMock.appDeployment.findFirst.mockResolvedValueOnce(
-      deployment({ id: "deployment-old", sourceCheckpointId: "checkpoint-old" }),
+      deployment({ id: "deployment-old", commitSha: "b".repeat(40) }),
     );
     const service = new AppDeploymentService({ enqueue });
 
@@ -274,7 +269,7 @@ describe("AppDeploymentService", () => {
 
     expect(reconciled).toBe(1);
     expect(enqueue).toHaveBeenCalledWith(
-      expect.objectContaining({ deploymentId: "deployment-1", checkpointId: "checkpoint-1" }),
+      expect.objectContaining({ deploymentId: "deployment-1", commitSha: "a".repeat(40) }),
     );
   });
 

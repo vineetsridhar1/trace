@@ -34,7 +34,7 @@ export function AppDeploymentCard({ deploymentId }: { deploymentId?: string }) {
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
             {commitSha
-              ? `${target === "static" ? "Static" : "Service"} · Checkpoint ${shortSha(commitSha)}`
+              ? `${target === "static" ? "Static" : "Service"} · Commit ${shortSha(commitSha)}`
               : "Ask Trace to publish; the AI will inspect and choose the deployment facts."}
           </p>
           {errorMessage ? (

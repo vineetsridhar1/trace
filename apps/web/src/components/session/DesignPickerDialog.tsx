@@ -28,11 +28,6 @@ const DESIGN_PICKER_QUERY = gql`
       kind
       archivedAt
       designPreviewUrl
-      gitCheckpoints {
-        previewStatus
-        previewUrl
-        committedAt
-      }
     }
   }
 `;
@@ -157,10 +152,7 @@ function DesignPickerCard({
   disabled: boolean;
   onSelect: () => void;
 }) {
-  const previewUrl = savedDesignPreviewUrl(
-    group.designPreviewUrl as string | null | undefined,
-    group.gitCheckpoints,
-  );
+  const previewUrl = savedDesignPreviewUrl(group.designPreviewUrl as string | null | undefined);
 
   return (
     <button

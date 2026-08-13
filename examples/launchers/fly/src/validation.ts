@@ -67,8 +67,8 @@ function validateRepo(value: unknown): StartSessionRequest["repo"] {
     remoteUrl: repo.remoteUrl === null ? null : requireString(repo.remoteUrl, "repo.remoteUrl"),
     defaultBranch: requireString(repo.defaultBranch, "repo.defaultBranch"),
     branch: repo.branch === null ? null : requireString(repo.branch, "repo.branch"),
-    checkpointSha:
-      repo.checkpointSha === null ? null : requireString(repo.checkpointSha, "repo.checkpointSha"),
+    baseCommitSha:
+      repo.baseCommitSha === null ? null : requireString(repo.baseCommitSha, "repo.baseCommitSha"),
     readOnly: requireBoolean(repo.readOnly, "repo.readOnly"),
   };
 }

@@ -99,7 +99,6 @@ export const APPLICATIONS_STATE_QUERY = gql`
       id
       sessionGroupId
       repoId
-      sourceCheckpointId
       commitSha
       status
       target

@@ -10,7 +10,6 @@ import {
   type BridgeWorkspaceWarning,
   type BridgeRepoWorktree,
   type BridgeRuntimeLeaseCommand,
-  type GitCheckpointContext,
 } from "@trace/shared";
 import { runtimeRouterKey, sessionRouter } from "./session-router.js";
 import { sessionService } from "../services/session.js";
@@ -1300,19 +1299,8 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             message: typeof msg.message === "string" ? msg.message : undefined,
             interactionMode:
               typeof msg.interactionMode === "string" ? msg.interactionMode : undefined,
-            checkpointContext:
-              msg.checkpointContext &&
-              typeof msg.checkpointContext === "object" &&
-              !Array.isArray(msg.checkpointContext)
-                ? (msg.checkpointContext as GitCheckpointContext)
-                : null,
             imageUrls,
           });
-        });
-      } else if (msg.type === "git_checkpoint" && msg.sessionId && msg.checkpoint) {
-        const checkpoint = msg.checkpoint;
-        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
-          await sessionService.recordGitCheckpoint(sessionId, checkpoint);
         });
       }
     } catch (err) {

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import type { GitCheckpoint } from "@trace/gql";
 import { Cpu, Check, ChevronRight } from "lucide-react";
 import { useScopedEventIdsByParentId } from "@trace/client-core";
 import { SessionMessage } from "../SessionMessage";
@@ -28,12 +27,10 @@ export interface SubagentRowProps {
   /** tool_use id of the Agent call — used to fetch nested child events. */
   toolUseId?: string;
   scopeKey?: string;
-  gitCheckpointsByPromptEventId?: Map<string, GitCheckpoint[]>;
   completedAgentTools?: Map<string, AgentToolResult>;
   toolResultByUseId?: Map<string, unknown>;
 }
 
-const EMPTY_CHECKPOINTS: Map<string, GitCheckpoint[]> = new Map();
 const EMPTY_AGENT_TOOLS: Map<string, AgentToolResult> = new Map();
 const EMPTY_TOOL_RESULTS: Map<string, unknown> = new Map();
 
@@ -46,7 +43,6 @@ export function SubagentRow({
   timestamp,
   toolUseId,
   scopeKey,
-  gitCheckpointsByPromptEventId,
   completedAgentTools,
   toolResultByUseId,
 }: SubagentRowProps) {
@@ -100,7 +96,6 @@ export function SubagentRow({
             <SessionMessage
               key={childId}
               id={childId}
-              gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId ?? EMPTY_CHECKPOINTS}
               completedAgentTools={completedAgentTools ?? EMPTY_AGENT_TOOLS}
               toolResultByUseId={toolResultByUseId ?? EMPTY_TOOL_RESULTS}
             />

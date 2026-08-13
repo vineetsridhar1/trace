@@ -8,8 +8,6 @@
 export const HIDDEN_SESSION_PAYLOAD_TYPES = [
   "connection_lost",
   "connection_restored",
-  "git_checkpoint",
-  "git_checkpoint_rewrite",
   "title_generated",
   "config_changed",
   "branch_renamed",
@@ -34,6 +32,10 @@ export const HIDDEN_SESSION_PAYLOAD_TYPES = [
   "workspace_ready",
   "session_resumed",
   "session_terminated",
+  // Historical entries remain in the immutable event log after the removed
+  // checkpoint feature. Keep them out of current session timelines.
+  "git_checkpoint",
+  "git_checkpoint_rewrite",
 ] as const;
 
 /** Set version for O(1) client-side lookups in buildSessionNodes */

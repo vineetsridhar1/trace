@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { FolderGit2, GitBranch } from "lucide-react";
-import type { GitCheckpoint } from "@trace/gql";
 import { useEntityField } from "@trace/client-core";
 import { useComposerStore } from "../../stores/composer";
 import { ImportWorktreeDialog } from "./ImportWorktreeDialog";
@@ -44,7 +43,6 @@ export interface SessionMessageListProps {
   sessionId: string;
   nodes: SessionListNode[];
   promptIndexItems: SessionPromptIndexItem[];
-  gitCheckpoints: GitCheckpoint[];
   initialLoading?: boolean;
   hasOlder?: boolean;
   loadingOlder?: boolean;
@@ -70,7 +68,6 @@ export function SessionMessageList({
   sessionId,
   nodes,
   promptIndexItems,
-  gitCheckpoints,
   initialLoading = false,
   hasOlder,
   loadingOlder,
@@ -106,19 +103,6 @@ export function SessionMessageList({
   const scrollToBottomRequest = useComposerStore(
     (state) => state.scrollToBottomBySession[sessionId] ?? 0,
   );
-
-  const gitCheckpointsByPromptEventId = useMemo(() => {
-    const byPromptEventId = new Map<string, GitCheckpoint[]>();
-    for (const checkpoint of gitCheckpoints) {
-      const existing = byPromptEventId.get(checkpoint.promptEventId) ?? [];
-      existing.push(checkpoint);
-      byPromptEventId.set(checkpoint.promptEventId, existing);
-    }
-    for (const checkpoints of byPromptEventId.values()) {
-      checkpoints.sort((a, b) => a.committedAt.localeCompare(b.committedAt));
-    }
-    return byPromptEventId;
-  }, [gitCheckpoints]);
 
   // Index of the node at the viewport anchor, for the prompt timeline.
   const [currentNodeIndex, setCurrentNodeIndex] = useState<number | null>(null);
@@ -300,7 +284,7 @@ export function SessionMessageList({
     return () => cancelAnimationFrame(frame);
   }, [scrollPaddingBottom]);
 
-  // Scroll to a specific event when requested (e.g. from checkpoint panel or prompt timeline)
+  // Scroll to a specific event when requested from the prompt timeline.
   const [highlightEventId, setHighlightEventId] = useState<string | null>(null);
   const [timelineScrollToEventId, setTimelineScrollToEventId] = useState<string | null>(null);
   const [scrollIntentVersion, setScrollIntentVersion] = useState(0);
@@ -592,7 +576,6 @@ export function SessionMessageList({
             rowsRef={rowsContainerRef}
             nodes={nodes}
             sessionId={sessionId}
-            gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
             completedAgentTools={completedAgentTools}
             toolResultByUseId={toolResultByUseId}
             highlightEventId={highlightEventId}
@@ -615,7 +598,6 @@ interface SessionMessageRowsProps {
   rowsRef: React.RefObject<HTMLDivElement | null>;
   nodes: SessionListNode[];
   sessionId: string;
-  gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
   completedAgentTools: Map<string, AgentToolResult>;
   toolResultByUseId: Map<string, unknown>;
   highlightEventId: string | null;
@@ -635,7 +617,6 @@ const SessionMessageRows = memo(function SessionMessageRows({
   rowsRef,
   nodes,
   sessionId,
-  gitCheckpointsByPromptEventId,
   completedAgentTools,
   toolResultByUseId,
   highlightEventId,
@@ -666,12 +647,10 @@ const SessionMessageRows = memo(function SessionMessageRows({
             <CollapsedSessionEventsRow
               sessionId={sessionId}
               collapsedRanges={node.collapsedRanges}
-              gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
             />
           ) : (
             <SessionNodeRenderer
               node={node}
-              gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
               completedAgentTools={completedAgentTools}
               toolResultByUseId={toolResultByUseId}
               highlightEventId={highlightEventId}

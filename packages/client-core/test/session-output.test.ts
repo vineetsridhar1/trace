@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   extractMessagePreview,
-  mergeGitCheckpoints,
-  rewriteGitCheckpoints,
   sessionPatchFromOutput,
   shouldBumpSortTimestampForOutput,
 } from "../src/events/session-output.js";
-import type { GitCheckpoint } from "@trace/gql";
 
 describe("sessionPatchFromOutput", () => {
   it("returns workdir + statuses for workspace_ready", () => {
@@ -107,33 +104,6 @@ describe("shouldBumpSortTimestampForOutput", () => {
   });
   it("returns false otherwise", () => {
     expect(shouldBumpSortTimestampForOutput({ type: "assistant" })).toBe(false);
-  });
-});
-
-describe("mergeGitCheckpoints", () => {
-  const ckpt = (id: string, time: string): GitCheckpoint =>
-    ({
-      id,
-      sessionGroupId: "g",
-      commitSha: id,
-      committedAt: time,
-    }) as GitCheckpoint;
-
-  it("merges by id and sorts newest first", () => {
-    const merged = mergeGitCheckpoints(
-      [ckpt("a", "2026-01-01T00:00:00.000Z")],
-      ckpt("b", "2026-01-02T00:00:00.000Z"),
-    );
-    expect(merged.map((c) => c.id)).toEqual(["b", "a"]);
-  });
-
-  it("rewrites a checkpoint by replaced sha", () => {
-    const result = rewriteGitCheckpoints(
-      [ckpt("old", "2026-01-01T00:00:00.000Z")],
-      "old",
-      ckpt("new", "2026-01-02T00:00:00.000Z"),
-    );
-    expect(result.map((c) => c.commitSha)).toEqual(["new"]);
   });
 });
 

@@ -85,9 +85,8 @@ export function SessionSurface({
     | null
     | undefined;
   const { loading, error } = useEnsureSessionGroupDetail(groupId ?? undefined);
-  // Loads queuedMessages + per-session gitCheckpoints that the group query
-  // doesn't surface — needed by CheckpointMarker (ticket 21) and the queued-
-  // messages strip (ticket 23).
+  // Loads per-session details such as queued messages that the group query
+  // doesn't surface.
   useSessionDetail(sessionId);
   const groupName = useEntityField("sessionGroups", groupId ?? "", "name") as
     | string

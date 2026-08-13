@@ -5,7 +5,7 @@ vi.mock("./config.js", () => {
   const state: {
     repos: Record<
       string,
-      { path: string; gitHooksEnabled: boolean; linkedCheckout: LinkedCheckoutConfig | null }
+      { path: string; linkedCheckout: LinkedCheckoutConfig | null }
     >;
   } = { repos: {} };
   return {
@@ -65,7 +65,7 @@ const configMock = config as unknown as {
   __state: {
     repos: Record<
       string,
-      { path: string; gitHooksEnabled: boolean; linkedCheckout: LinkedCheckoutConfig | null }
+      { path: string; linkedCheckout: LinkedCheckoutConfig | null }
     >;
   };
   __reset: () => void;
@@ -97,7 +97,6 @@ function seedAttachment(
   };
   configMock.__state.repos[repoId] = {
     path: `/tmp/repo-${repoId}`,
-    gitHooksEnabled: false,
     linkedCheckout: attachment,
   };
   return attachment;

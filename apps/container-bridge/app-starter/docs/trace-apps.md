@@ -8,8 +8,7 @@ while the app appears beside it as a live preview.
 - File changes appear in the preview automatically through hot reload.
 - The user can select parts of the preview to point you toward a specific interface element.
   Preserve existing `data-trace-source` attributes and add them to meaningful new sections.
-- Trace saves meaningful checkpoints to the configured managed repository. The user can restore,
-  publish, and share the app from Trace.
+- Trace stores the app in its configured managed repository so the user can publish and share it.
 - Describe results in user terms. Trace already exposes the code and runtime when technical detail
   is useful.
 
@@ -95,4 +94,4 @@ storage when the user's app needs to retain information.
   that the stylesheet loaded.
 - Check narrow and wide layouts and basic keyboard navigation.
 - Remove placeholder actions and make empty, loading, success, and error states understandable.
-- Commit and push a meaningful checkpoint once the app is working.
+- Commit and push the finished app once it is working.

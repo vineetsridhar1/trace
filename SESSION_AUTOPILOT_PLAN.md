@@ -48,7 +48,7 @@ Project
     SessionGroup
       integration branch/worktree
       worker sessions
-      runtime terminals/checkpoints
+      runtime terminals/commits
 ```
 
 The project is the durable workspace. The project run is the orchestration instance. Session groups are execution workspaces created by project runs when code needs to be run.
@@ -311,9 +311,9 @@ It links:
 - worker session
 - session group
 - ticket branch/worktree
-- base checkpoint
-- head checkpoint
-- integration checkpoint
+- base commit
+- head commit
+- integration commit
 - review state
 - artifacts
 

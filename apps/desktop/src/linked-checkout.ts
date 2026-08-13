@@ -14,7 +14,6 @@ import {
   setRepoLinkedCheckout,
   type LinkedCheckoutConfig,
 } from "./config.js";
-import { installOrRepairRepoHooksBestEffort } from "./repo-hooks.js";
 import {
   assertSafeGitRef,
   execFileAsync,
@@ -901,6 +900,50 @@ async function loadChangedPathStates(
   );
 }
 
+function readWorkingTreeEntry(repoPath: string, relativePath: string): CheckoutEntry {
+  const absolutePath = path.join(repoPath, relativePath);
+  let stat: fs.Stats;
+  try {
+    stat = fs.lstatSync(absolutePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+  if (stat.isSymbolicLink()) {
+    return { kind: "symlink", target: fs.readlinkSync(absolutePath) };
+  }
+  if (!stat.isFile()) throw new Error(`Unsupported working tree entry at ${relativePath}`);
+  return { kind: "file", content: fs.readFileSync(absolutePath), mode: stat.mode & 0o777 };
+}
+
+function checkoutEntriesEqual(left: CheckoutEntry, right: CheckoutEntry): boolean {
+  if (left === null || right === null) return left === right;
+  if (left.kind !== right.kind) return false;
+  if (left.kind === "symlink" && right.kind === "symlink") return left.target === right.target;
+  return (
+    left.kind === "file" &&
+    right.kind === "file" &&
+    left.mode === right.mode &&
+    left.content.equals(right.content)
+  );
+}
+
+async function changedPathsAlreadyCommitted(
+  repoPath: string,
+  worktreePath: string,
+  changedPaths: string[],
+): Promise<boolean> {
+  const targetEntries = await Promise.all(
+    changedPaths.map((relativePath) => readHeadEntry(worktreePath, relativePath)),
+  );
+  return changedPaths.every((relativePath, index) =>
+    checkoutEntriesEqual(
+      readWorkingTreeEntry(repoPath, relativePath),
+      targetEntries[index] ?? null,
+    ),
+  );
+}
+
 async function applyChangedPathsToWorktree(
   repoPath: string,
   worktreePath: string,
@@ -974,7 +1017,9 @@ async function commitChangedPathsToWorktree(
   }
 
   const changedPathStates = await loadChangedPathStates(repoPath, changedPaths);
-  await applyChangedPathsToWorktree(repoPath, worktreePath, changedPaths);
+  if (!(await changedPathsAlreadyCommitted(repoPath, worktreePath, changedPaths))) {
+    await applyChangedPathsToWorktree(repoPath, worktreePath, changedPaths);
+  }
 
   let targetCommitSha = await getCurrentCommitSha(worktreePath);
   const importedChangesDirty = await hasUncommittedChangesForPaths(worktreePath, changedPaths);
@@ -1188,9 +1233,6 @@ export function linkLinkedCheckoutRepo(
   return withRepoLock(repoId, async () => {
     try {
       const repoConfig = await saveRepoPath(repoId, localPath);
-      if (repoConfig.gitHooksEnabled) {
-        await installOrRepairRepoHooksBestEffort(localPath, "linked checkout repo link");
-      }
       triggerAutoSyncReconcile(repoId);
       return actionResult(repoId, true);
     } catch (error) {

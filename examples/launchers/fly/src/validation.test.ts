@@ -37,6 +37,23 @@ describe("validateStartSessionRequest", () => {
     expect(request.tool).toBe("pi");
   });
 
+  it("accepts the base commit field sent for repository sessions", () => {
+    const request = validateStartSessionRequest({
+      ...startRequest(),
+      repo: {
+        id: "repo-1",
+        name: "trace",
+        remoteUrl: "https://github.com/trace/trace.git",
+        defaultBranch: "main",
+        branch: "trace/test",
+        baseCommitSha: "a".repeat(40),
+        readOnly: false,
+      },
+    });
+
+    expect(request.repo?.baseCommitSha).toBe("a".repeat(40));
+  });
+
   it("rejects invalid runtime lease deadlines", () => {
     expect(() =>
       validateStartSessionRequest({

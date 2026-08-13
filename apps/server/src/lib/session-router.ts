@@ -202,7 +202,7 @@ export interface SessionAdapterCreateOptions {
   reasoningEffort?: string;
   repo?: { id: string; name: string; remoteUrl: string | null; defaultBranch: string } | null;
   branch?: string;
-  checkpointSha?: string;
+  baseCommitSha?: string;
   createdById: string;
   organizationId: string;
   readOnly?: boolean;
@@ -2265,7 +2265,7 @@ export class SessionRouter {
           reasoningEffort: options.reasoningEffort,
           repo: options.repo,
           branch: options.branch,
-          checkpointSha: options.checkpointSha,
+          baseCommitSha: options.baseCommitSha,
           readOnly: options.readOnly,
           runtimeInstanceId: provisionedRuntimeInstanceId,
           runtimeToken: options.runtimeToken,
@@ -2362,7 +2362,7 @@ export class SessionRouter {
               sessionGroupId: options.sessionGroupId,
               sessionGroupKind: options.sessionGroupKind,
               slug: options.slug,
-              checkpointSha: options.checkpointSha,
+              baseCommitSha: options.baseCommitSha,
               ...appGit,
               ...(designSystemPackage ? { designSystemPackage } : {}),
               ...(sourceRepository ? { sourceRepository } : {}),
@@ -2421,7 +2421,7 @@ export class SessionRouter {
               repoRemoteUrl: options.repo.remoteUrl,
               defaultBranch: options.repo.defaultBranch,
               branch: options.branch,
-              checkpointSha: options.checkpointSha,
+              baseCommitSha: options.baseCommitSha,
               readOnly: options.readOnly,
               adoptWorktreePath: options.adoptWorktreePath,
             },

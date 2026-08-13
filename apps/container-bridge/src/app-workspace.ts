@@ -104,7 +104,7 @@ export async function createAppWorkspace({
   slug,
   repoRemoteUrl,
   defaultBranch,
-  checkpointSha,
+  baseCommitSha,
   sessionGroupKind = "app",
 }: {
   sessionId: string;
@@ -112,7 +112,7 @@ export async function createAppWorkspace({
   slug?: string;
   repoRemoteUrl: string;
   defaultBranch: string;
-  checkpointSha?: string;
+  baseCommitSha?: string;
   sessionGroupKind?: GeneratedProjectKind;
 }): Promise<{ workdir: string; slug: string }> {
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
@@ -128,9 +128,9 @@ export async function createAppWorkspace({
   if (!fs.existsSync(workdir)) {
     // Cloud runtimes are disposable. Restore from the managed remote whenever
     // it has a default branch, including ordinary container expiry retries
-    // that have no checkpoint SHA. A new managed repo has no branch yet, so
+    // that have no base commit SHA. A new managed repo has no branch yet, so
     // seed it from the appropriate starter instead.
-    if (checkpointSha || (await remoteDefaultBranchExists(repoRemoteUrl, defaultBranch))) {
+    if (baseCommitSha || (await remoteDefaultBranchExists(repoRemoteUrl, defaultBranch))) {
       await execFileAsync("git", ["clone", "--branch", defaultBranch, repoRemoteUrl, workdir]);
     } else {
       fs.mkdirSync(workdir, { recursive: true });
@@ -180,7 +180,7 @@ export async function createAppWorkspace({
   // belongs in git. The commit-addressed preview export rebuilds from a git
   // worktree (committed files only); if design-system is untracked the export
   // can't resolve /design-system/tokens.css and fails. Seed it into an initial
-  // commit for a fresh workspace so the very first checkpoint's export finds
+  // commit for a fresh workspace so the first export finds
   // it. Restores clone from the remote (which already has it), so this only
   // runs when the repo has no commits yet.
   if (sessionGroupKind === "design") {

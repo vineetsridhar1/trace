@@ -35,7 +35,7 @@ session infrastructure: `design` sessions are serverless project-design canvases
 generate React canvas artifacts (rendered as HTML via in-browser transpilation) to
 review, export, publish, and promote into coding sessions, while
 `app` sessions are standalone cloud-run full-stack app builders with live preview,
-logs/terminal, managed git durability, checkpoints, restore, and publish/share. They may
+logs/terminal, managed git durability, commit-addressed previews, and publish/share. They may
 optionally export or hand off to coding, but that is not the default product outcome.
 
 ## Product Split
@@ -48,7 +48,7 @@ Trace should support three distinct session kinds:
   artifact itself: screens, mockups, decks, visual directions, PDFs, and reviewable
   design intent. Design sessions primarily promote into coding sessions.
 - **`app`**: standalone runnable software. The output is a live app the user can run,
-  inspect, checkpoint, restore, publish, and share. Many app sessions may be playful,
+  inspect, commit, publish, and share. Many app sessions may be playful,
   disposable, or shared as-is and never become coding sessions. App sessions do not start
   from the user's repo and should not be forced through the design artifact model.
 
@@ -63,7 +63,7 @@ different success criteria:
 
 - **Design sessions use a managed workspace too.** They should feel almost like coding
   sessions under the hood: a Trace-managed git remote, a materialized bridge working
-  directory, files written there, commits/checkpoints pushed back, and cleanup when
+  directory, files written there, commits pushed back, and cleanup when
   deleted. The difference is that design renders artifact files from the working
   directory (React canvas source transpiled in the browser, or plain HTML) instead of
   running a dev server.
@@ -85,7 +85,7 @@ different success criteria:
 - **Design sessions promote to coding sessions by default.** A selected artifact becomes
   project intent/reference for implementation in project code.
 - **App sessions use cloud runtimes.** A standalone app needs a filesystem, package
-  manager, dev server, logs, terminal, endpoints, checkpoints, and managed durability.
+  manager, dev server, logs, terminal, endpoints, commits, and managed durability.
 - **App sessions should default toward a full-stack starter.** The preferred v1 target is
   Next.js + Tailwind + shadcn, with a starter template in the runtime image. Keep the
   starter swappable internally, but do not expose stack selection in v1.
@@ -181,8 +181,6 @@ Required session-level concepts:
   table/entity or a structured field in design session metadata, but it must be
   event-backed and addressable.
 - `Repo.provider`: `github | managed`.
-- `GitCheckpoint`: existing checkpoint model, extended with capture metadata for app
-  sessions when available.
 
 ## Design Sessions
 
@@ -242,7 +240,7 @@ Service contract:
 
 - Add or finish a service method like
   `generateDesignArtifacts({ sessionGroupId, sessionId, prompt, baseArtifactIds?,
-  elementAnchors?, directionCount?, designSystemId?, skillIds? })`.
+elementAnchors?, directionCount?, designSystemId?, skillIds? })`.
 - The service loads harness settings, composes the Open Design prompt with Trace overlay,
   calls the configured `LLMAdapter`, streams deltas as session events, persists finished
   artifact source plus the `design.canvas.json` sidecar (or plain HTML for simple
@@ -412,11 +410,21 @@ https://<artifactId>.<TRACE_USER_CONTENT_DOMAIN>/_bootstrap
 Suggested message protocol:
 
 ```ts
-{ type: "trace:artifact:render", html, overlayEnabled, nonce }
-{ type: "trace:artifact:ready", nonce }
-{ type: "trace:artifact:element-selected", anchor, nonce }
-{ type: "trace:artifact:error", message, stack, nonce }
-{ type: "trace:artifact:pins-rendered", pinCount, nonce }
+{
+  type: ("trace:artifact:render", html, overlayEnabled, nonce);
+}
+{
+  type: ("trace:artifact:ready", nonce);
+}
+{
+  type: ("trace:artifact:element-selected", anchor, nonce);
+}
+{
+  type: ("trace:artifact:error", message, stack, nonce);
+}
+{
+  type: ("trace:artifact:pins-rendered", pinCount, nonce);
+}
 ```
 
 ### Canvas UI
@@ -646,9 +654,9 @@ A complete app session supports:
 - Port detection creates a `SessionEndpoint`.
 - Preview pane renders the live app.
 - Logs and terminal are visible.
-- Checkpoints persist as git commits pushed to a hidden managed repo.
-- Checkpoint capture thumbnails.
-- Restore by checkpoint.
+- Source persists as git commits pushed to a hidden managed repo.
+- Published builds and saved previews are addressed by pushed commit SHA.
+- Conversation forks start from the source workspace's current clean commit.
 - Publish/share through endpoint access mode.
 - Optional export or handoff actions, such as "open as coding session" or "push to
   GitHub", when the user explicitly wants to keep developing the app elsewhere.
@@ -685,7 +693,7 @@ Starter application:
 - The runtime image should contain the starter, for example `/opt/trace/app-starter`.
 - The bridge copies the starter into the app working directory.
 - If absent, install dependencies or use prewarmed dependencies.
-- Commit an initial starter checkpoint when appropriate.
+- Commit the initial starter when appropriate.
 - The agent then modifies a real project instead of scaffolding from zero.
 
 ### App Prompt Overlay
@@ -699,7 +707,7 @@ The overlay must tell the agent:
 - Preserve source-location stamps for the element picker.
 - Run the dev server.
 - Keep logs and terminal useful.
-- Commit meaningful checkpoints.
+- Commit meaningful changes.
 - Respect publish/share expectations.
 - Use project files as source of truth.
 
@@ -717,19 +725,14 @@ Requirements:
 - Endpoint authoring overlay reports `data-trace-source` selection and script errors to
   the app shell.
 
-### Checkpoints, Captures, and Restore
+### Commits, Previews, and Forking
 
 Requirements:
 
-- Checkpoints are backed by pushed git commits.
-- First checkpoint lazily creates the managed repo if none exists.
-- Later checkpoints reuse the managed remote.
-- On checkpoint, trigger capture of the live app endpoint with headless Chromium.
-- Store PNG capture metadata on `GitCheckpoint`.
-- Validate PNG signature before upload.
-- Rewritten checkpoints clear stale capture metadata when fresh capture is unavailable.
-- Restore by checkpoint provisions a fresh app session from the managed repo and SHA.
-- Restore preserves `kind: app` even if the UI does not explicitly pass kind.
+- App source is backed by pushed git commits in the managed repository.
+- Publishing resolves the current branch ref to an immutable commit SHA before dispatch.
+- Saved design previews are generated from and labeled with their source commit SHA.
+- Conversation forks verify a clean source workspace and provision from its exact current commit.
 
 ### Publish, Share, and Optional Handoff
 
@@ -775,7 +778,7 @@ enum RepoProvider {
 Rules:
 
 - Managed repos are hidden from normal repo lists and pickers.
-- Managed repos are visible to session/checkpoint services.
+- Managed repos are visible to session and publishing services.
 - Design managed repos are visible to artifact/export/publish/promotion services.
 - GitHub-specific webhook/PR logic gates on `provider === "github"`.
 - Types come from Prisma/GraphQL codegen. Do not duplicate enums locally.
@@ -808,8 +811,7 @@ Requirements:
 - Design and app managed repos use one main/default branch by default. Do not create
   per-session branches or git worktrees for v1 because each generated session group owns
   exactly one project.
-- Checkpoints are commits on that default branch, addressed by commit SHA. Restore can
-  clone/check out a commit into a fresh working directory when needed.
+- Saved previews and published artifacts are addressed by commit SHA so they can be reproduced.
 - v1 can use a durable mounted volume with one writer.
 - Add a small storage adapter seam for path/init/delete.
 - Periodic `git gc`.
@@ -853,9 +855,9 @@ Retry/idempotency:
   the same repo.
 - If the bridge folder was deleted, recreate it by cloning the managed repo.
 
-### Lazy App First Checkpoint
+### Managed App Repository Creation
 
-First checkpoint flow for an app session:
+Initial repository flow for an app session:
 
 1. Detect app session group has no repo.
 2. Create hidden `Repo { provider: managed }`.
@@ -863,17 +865,16 @@ First checkpoint flow for an app session:
 4. Mint/reuse runtime-scoped token.
 5. Ask bridge/runtime to add or update `origin` to the managed URL.
 6. Commit locally if needed.
-7. Push the default branch after the checkpoint commit.
+7. Push the default branch after the initial commit.
 8. Persist repo link on `SessionGroup`.
-9. Create `GitCheckpoint`.
-10. Append events and broadcast state.
+9. Append events and broadcast state.
 
 Retry/idempotency:
 
 - Do not create duplicate managed repos for the same app session group.
 - If repo creation succeeded but bridge push failed, retry against the same repo.
-- Later checkpoints skip repo creation.
-- Abandoned sessions with no checkpoint create no managed repo.
+- Later commits reuse the same managed repository.
+- Repository cleanup follows the generated-session lifecycle.
 
 ## Open Design Harness
 
@@ -940,7 +941,7 @@ composeTraceDesignPrompt({
   artifactContext,
   elementAnchors,
   appStarterContext,
-})
+});
 ```
 
 Design overlay:
@@ -971,7 +972,7 @@ App overlay:
 - Full-stack app, not static artifact.
 - Provided starter/project structure.
 - Routes, server/API behavior, persistence seam.
-- Run/publish/checkpoint expectations.
+- Run and publish expectations.
 - Source-location stamping for picker.
 
 Delivery:
@@ -999,13 +1000,13 @@ Rules:
 ## Frontend State and UI Rules
 
 - Events are the source of truth.
-- Add artifact/comment/export/process/endpoint/checkpoint reducers to Zustand.
+- Add artifact/comment/export/process/endpoint reducers to Zustand.
 - Mutations are fire-and-forget for shared state.
 - Components should take ids and use fine-grained selectors.
 - Virtualize long lists.
 - Reuse existing chat/session components instead of reinventing chat.
 - Design mode uses existing chat left rail plus canvas.
-- App mode uses preview/logs/terminal/checkpoint/application UI.
+- App mode uses preview/logs/terminal/application UI.
 - Keep generated artifacts and endpoint iframes isolated by origin/proxy rules.
 
 ## Current Implementation Status
@@ -1087,10 +1088,10 @@ work end to end.
 - Store/UI test: logs, process state, endpoints, publish state update from events.
 - Terminal test: command executes in app workdir.
 - Managed-git integration test: clone/push/fetch through smart HTTP.
-- Checkpoint test: first checkpoint creates exactly one managed repo and pushes.
+- Commit test: initial app setup creates exactly one managed repo and pushes.
 - Retry test: failed bridge delivery reuses existing managed repo.
-- Capture test: app checkpoint capture validates PNG bytes.
-- Restore test: restored app session checks out checkpoint SHA and renders.
+- Publish test: deployment archives the resolved branch commit SHA.
+- Fork test: a fork checks out the verified source workspace commit SHA.
 - Publish test: public endpoint renders without private auth.
 - Graduation test: GitHub provider flips only after mirror succeeds.
 
@@ -1121,10 +1122,9 @@ pnpm smoke:cloud-app-session
 ```
 
 The app smoke must start a fresh app session, wait for cloud runtime/starter/process
-logs/enabled endpoint/managed checkpoint/capture, verify terminal in the app workdir,
+logs/enabled endpoint/managed commit, verify terminal in the app workdir,
 open private preview in a browser, verify managed git remote/clone, publish public
-endpoint, open the public URL unauthenticated, restore checkpoint, and open restored
-preview.
+endpoint, and open the public URL unauthenticated.
 
 Debug-only flags such as `TRACE_SMOKE_SKIP_BROWSER=1` are not acceptable for final
 completion.
@@ -1143,11 +1143,11 @@ Do not call the full goal complete until:
 - Design canvas renders AI-authored section titles/descriptions and grouped canvases.
 - PDF export produces real downloadable PDF files.
 - App sessions run real standalone apps on cloud runtimes.
-- App sessions use managed git durability and lazy first-checkpoint repo creation.
+- App sessions use managed git durability and commit-addressed publishing.
 - Design sessions use managed git durability with one bridge working directory on the
   default branch, and deleting the bridge folder does not lose artifacts because the
   managed remote can recreate it.
-- Checkpoint restore and publish work for app sessions.
+- Commit-addressed forking and publishing work for app sessions.
 - Prompt harness composition is wired for both session kinds.
 - Existing coding-session behavior still works.
 - Focused tests pass.
