@@ -52,10 +52,10 @@ export function DeleteChannelDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>Delete channel</DialogTitle>
+          <DialogTitle>Delete project</DialogTitle>
           <DialogDescription>
             Are you sure you want to delete <strong>{channelName}</strong>? This will permanently
-            delete the channel and all its sessions, and cannot be undone.
+            delete the project and all its sessions, and cannot be undone.
           </DialogDescription>
         </DialogHeader>
         {error && <p className="text-sm text-destructive">{error}</p>}

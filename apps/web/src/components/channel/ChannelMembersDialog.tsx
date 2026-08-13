@@ -69,8 +69,18 @@ function MemberRow({ member, action }: { member: OrgMember; action?: ReactNode }
   );
 }
 
-export function ChannelMembersDialog({ channelId }: { channelId: string }) {
-  const [open, setOpen] = useState(false);
+export function ChannelMembersDialog({
+  channelId,
+  open: controlledOpen,
+  onOpenChange: onControlledOpenChange,
+}: {
+  channelId: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = onControlledOpenChange ?? setUncontrolledOpen;
   const [inviteOpen, setInviteOpen] = useState(false);
   const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
   const [channelMembers, setChannelMembers] = useState<OrgMember[]>([]);
@@ -133,18 +143,20 @@ export function ChannelMembersDialog({ channelId }: { channelId: string }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            title="View members"
-          />
-        }
-      >
-        <Users size={15} />
-      </DialogTrigger>
+      {controlledOpen === undefined && (
+        <DialogTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+              title="View members"
+            />
+          }
+        >
+          <Users size={15} />
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <div className="flex items-center justify-between gap-3 pr-10">
