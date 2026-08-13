@@ -259,6 +259,14 @@ enum RepoProvider {
   managed
 }
 
+enum DesignPreviewStatus {
+  pending
+  publishing
+  captured
+  unavailable
+  failed
+}
+
 enum InboxItemType {
   plan
   question
@@ -585,7 +593,7 @@ type SessionGroup {
   designSystemVersionId: ID
   designSystemVersion: DesignSystemVersion
   branch: String
-  designPreviewStatus: String
+  designPreviewStatus: DesignPreviewStatus
   designPreviewUrl: String
   designPreviewCommitSha: String
   designPreviewCapturedAt: DateTime

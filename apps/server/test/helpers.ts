@@ -122,6 +122,11 @@ export function createPrismaMock() {
       groupBy: vi.fn(),
       update: vi.fn(),
     },
+    pendingStorageObjectDeletion: {
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+      updateMany: vi.fn(),
+    },
     ticket: {
       create: vi.fn(),
       update: vi.fn(),

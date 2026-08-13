@@ -829,7 +829,7 @@ describe("SessionService", () => {
         organizationId: "org-1",
         ownerUserId: "user-1",
         supportedTools: ["codex"],
-        protocolVersion: 4,
+        protocolVersion: 5,
         registeredRepoIds: [],
         boundSessions: new Set([sourceSession.id]),
         ws: { readyState: 1, OPEN: 1 },
@@ -3758,6 +3758,8 @@ describe("SessionService", () => {
         sessionGroupId: "source-group",
         sessionGroup: sourceGroup,
         branch: "feature/source",
+        workdir: "/tmp/trace/source",
+        connection: { state: "connected", runtimeInstanceId: "runtime-1" },
       });
       const forkedGroup = makeSessionGroup({
         id: "forked-group",
@@ -3886,7 +3888,7 @@ describe("SessionService", () => {
         expect.objectContaining({
           sessionId: "forked-session",
           sessionGroupId: "forked-group",
-          baseCommitSha: undefined,
+          baseCommitSha: "abc123",
           branch: "feature/source",
         }),
       );

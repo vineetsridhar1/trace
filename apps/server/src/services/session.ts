@@ -4994,6 +4994,8 @@ export class SessionService {
       throw new AuthorizationError("Not authorized for this session");
     }
 
+    const forkBaseCommitSha = await this.resolveForkBaseCommitSha(sourceSession);
+
     const sourceEvents = await prisma.event.findMany({
       where: {
         organizationId: input.organizationId,
@@ -5037,7 +5039,7 @@ export class SessionService {
       forceNewGroup: true,
       allowVisibleSourceSession: true,
       forkedFromSessionGroupId: sourceSessionGroupId,
-      baseCommitSha: null,
+      baseCommitSha: forkBaseCommitSha,
       provisionWithoutPrompt: true,
       name: sourceSession.name,
       startEventId: targetStartEventId,
@@ -5100,6 +5102,44 @@ export class SessionService {
       where: { id: forkedSession.id },
       include: SESSION_INCLUDE,
     });
+  }
+
+  private async resolveForkBaseCommitSha(
+    sourceSession: SessionWithInclude,
+  ): Promise<string | null> {
+    if (!sourceSession.repoId) return null;
+
+    const workdir = sourceSession.workdir ?? sourceSession.sessionGroup?.workdir;
+    const runtimeId =
+      sessionRouter.getRuntimeForSession(sourceSession.id)?.id ??
+      this.getConnectionRuntimeInstanceId(sourceSession.connection) ??
+      this.getConnectionRuntimeInstanceId(sourceSession.sessionGroup?.connection);
+    if (!workdir || !runtimeId) {
+      throw new ValidationError(
+        "Cannot fork this repository session because its exact workspace commit is unavailable.",
+      );
+    }
+
+    let status: BridgeSessionGitSyncStatus;
+    try {
+      status = await sessionRouter.inspectSessionGitSyncStatus(
+        runtimeId,
+        { sessionId: sourceSession.id, workdirHint: workdir },
+        SESSION_MOVE_GIT_SYNC_STATUS_TIMEOUT_MS,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new ValidationError(`Cannot fork this repository session: ${message}`);
+    }
+    if (status.hasUncommittedChanges) {
+      throw new ValidationError("Commit or discard workspace changes before forking this session.");
+    }
+    if (!status.headCommitSha) {
+      throw new ValidationError(
+        "Cannot fork this repository session because its current commit could not be resolved.",
+      );
+    }
+    return status.headCommitSha;
   }
 
   private buildForkReplacementMap(input: {

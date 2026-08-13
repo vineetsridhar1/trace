@@ -623,6 +623,8 @@ export type DesignElementTextSource = {
   text: Scalars["String"]["output"];
 };
 
+export type DesignPreviewStatus = "captured" | "failed" | "pending" | "publishing" | "unavailable";
+
 export type DesignSystem = {
   __typename?: "DesignSystem";
   activeVersion?: Maybe<DesignSystemVersion>;
@@ -2663,7 +2665,7 @@ export type SessionGroup = {
   createdAt: Scalars["DateTime"]["output"];
   designPreviewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
   designPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
-  designPreviewStatus?: Maybe<Scalars["String"]["output"]>;
+  designPreviewStatus?: Maybe<DesignPreviewStatus>;
   designPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   designSystemVersion?: Maybe<DesignSystemVersion>;
   designSystemVersionId?: Maybe<Scalars["ID"]["output"]>;

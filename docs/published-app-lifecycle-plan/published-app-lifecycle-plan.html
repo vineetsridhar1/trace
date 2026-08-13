@@ -1,0 +1,1410 @@
+<!doctype html>
+<!--
+  Trace visual plan canvas.
+
+  Copy this file into the change-specific folder under docs/ with a descriptive
+  filename, then replace the sample content. This file is the agent's authoring canvas. Keep the <style> block;
+  it is the component vocabulary. Every class below is demonstrated once in the
+  body so you can see what it renders as.
+
+  Rules that are enforced on upload:
+    - Exactly one HTML document per plan folder.
+    - No external references. Images must be inline data: URLs or CSS shapes.
+    - Scripts must be inline and may modify only this document's DOM.
+    - No network, storage, parent-frame access, navigation, popups, downloads,
+      external assets, frames, or forms.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How Trace keeps published work online — beginner-friendly plan</title>
+    <style>
+      :root {
+        --bg: #171717;
+        --surface: #1f1f1f;
+        --raised: #262626;
+        --fg: #e4e4e7;
+        --muted: #a1a1aa;
+        --faint: #71717a;
+        --border: #2e2e2e;
+        --accent: #3b82f6;
+        --add: #22c55e;
+        --change: #eab308;
+        --remove: #ef4444;
+        --radius: 8px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 40px 32px 72px;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          15px/1.65 ui-sans-serif,
+          -apple-system,
+          "Segoe UI",
+          system-ui,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .plan {
+        max-width: 860px;
+        margin: 0 auto;
+      }
+
+      /* ── Title block ── */
+      .plan-title {
+        margin: 0 0 8px;
+        font-size: 28px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      .plan-summary {
+        margin: 0 0 20px;
+        color: var(--muted);
+        font-size: 16px;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 36px;
+      }
+      .chip {
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .chip strong {
+        color: var(--fg);
+        font-weight: 550;
+      }
+
+      /* ── Scan-level metrics ── */
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin: -20px 0 36px;
+      }
+      .metric {
+        padding: 14px 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: linear-gradient(145deg, var(--surface), var(--raised));
+      }
+      .metric b {
+        display: block;
+        font-size: 20px;
+        line-height: 1.2;
+      }
+      .metric span {
+        color: var(--faint);
+        font-size: 12px;
+      }
+
+      /* ── Sections ── */
+      section {
+        margin-bottom: 40px;
+      }
+      h2 {
+        margin: 0 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      h3 {
+        margin: 0 0 6px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      p {
+        margin: 0 0 12px;
+      }
+      code {
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: var(--raised);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.9em;
+      }
+      button {
+        color: inherit;
+        font: inherit;
+      }
+      button:focus-visible,
+      summary:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+
+      /* ── Two-column split (scope vs non-goals, etc.) ── */
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .card {
+        padding: 16px 18px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .card h3 {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .card ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .card li {
+        margin-bottom: 4px;
+      }
+
+      /* ── Flow diagram: horizontal boxes joined by arrows ── */
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 0;
+        margin: 4px 0 8px;
+      }
+      .node {
+        flex: 1 1 0;
+        min-width: 120px;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .node b {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .node span {
+        color: var(--faint);
+        font-size: 12px;
+      }
+      .node.is-new {
+        border-color: var(--accent);
+      }
+      .arrow {
+        flex: 0 0 28px;
+        align-self: center;
+        text-align: center;
+        color: var(--faint);
+      }
+
+      /* ── Diagrams: use SVG for branches, HTML for ordered interactions ── */
+      .diagram {
+        overflow-x: auto;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .diagram-svg {
+        display: block;
+        width: 100%;
+        min-width: 620px;
+        height: auto;
+      }
+      .diagram-svg .edge {
+        fill: none;
+        stroke: var(--faint);
+        stroke-width: 1.5;
+      }
+      .diagram-svg .box {
+        fill: var(--raised);
+        stroke: var(--border);
+        stroke-width: 1.5;
+      }
+      .diagram-svg .box.is-new {
+        stroke: var(--accent);
+      }
+      .diagram-svg .decision {
+        fill: color-mix(in srgb, var(--change) 10%, var(--surface));
+        stroke: var(--change);
+        stroke-width: 1.5;
+      }
+      .diagram-svg text {
+        fill: var(--fg);
+        font-family: inherit;
+        font-size: 12px;
+        text-anchor: middle;
+      }
+      .diagram-svg .edge-label {
+        fill: var(--faint);
+        font-size: 10px;
+      }
+      .sequence {
+        display: grid;
+        gap: 8px;
+        min-width: 560px;
+      }
+      .sequence-row {
+        display: grid;
+        grid-template-columns: 110px 1fr 110px;
+        align-items: center;
+        gap: 12px;
+      }
+      .sequence-party {
+        padding: 7px 9px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--raised);
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
+      }
+      .sequence-message {
+        position: relative;
+        padding-bottom: 5px;
+        border-bottom: 1px solid var(--faint);
+        color: var(--muted);
+        font-size: 11px;
+        text-align: center;
+      }
+      .sequence-message::after {
+        content: "";
+        position: absolute;
+        right: -1px;
+        bottom: -4px;
+        width: 7px;
+        height: 7px;
+        border-top: 1px solid var(--faint);
+        border-right: 1px solid var(--faint);
+        transform: rotate(45deg);
+      }
+      .sequence-row.reverse .sequence-party:first-child {
+        grid-column: 3;
+      }
+      .sequence-row.reverse .sequence-message {
+        grid-column: 2;
+        grid-row: 1;
+        transform: scaleX(-1);
+      }
+      .sequence-row.reverse .sequence-message span {
+        display: inline-block;
+        transform: scaleX(-1);
+      }
+      .sequence-row.reverse .sequence-party:last-child {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      /* ── Switchable before/after or alternative views ── */
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .toolbar button {
+        cursor: pointer;
+        padding: 5px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .toolbar button:hover {
+        border-color: var(--faint);
+        color: var(--fg);
+      }
+      .toolbar button[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+        color: var(--fg);
+      }
+      .view-panel {
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+
+      /* ── Quantitative bars (only for real, sourced values) ── */
+      .bar-chart {
+        display: grid;
+        gap: 9px;
+      }
+      .bar-row {
+        display: grid;
+        grid-template-columns: minmax(100px, 0.8fr) 2fr 32px;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+      }
+      .bar-track {
+        height: 7px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--raised);
+      }
+      .bar-fill {
+        height: 100%;
+        border-radius: inherit;
+        background: var(--accent);
+      }
+      .bar-value {
+        color: var(--faint);
+        text-align: right;
+      }
+
+      /* ── Phases ── */
+      .phase {
+        position: relative;
+        padding: 0 0 20px 26px;
+        border-left: 1px solid var(--border);
+      }
+      .phase:last-child {
+        border-left-color: transparent;
+        padding-bottom: 0;
+      }
+      .phase::before {
+        content: attr(data-step);
+        position: absolute;
+        left: -11px;
+        top: 0;
+        width: 21px;
+        height: 21px;
+        border-radius: 50%;
+        background: var(--raised);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 21px;
+        text-align: center;
+      }
+
+      /* ── Progressive disclosure ── */
+      details {
+        margin-top: 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: color-mix(in srgb, var(--raised) 55%, transparent);
+      }
+      summary {
+        cursor: pointer;
+        padding: 10px 12px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 550;
+      }
+      summary::marker {
+        color: var(--accent);
+      }
+      .detail-body {
+        padding: 0 12px 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .detail-body p:last-child,
+      .detail-body ul:last-child {
+        margin-bottom: 0;
+      }
+
+      /* ── Tables: file maps, risks, verification ── */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th {
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        color: var(--faint);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-align: left;
+        text-transform: uppercase;
+      }
+      td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      td code {
+        background: none;
+        padding: 0;
+        color: var(--muted);
+      }
+      .tag {
+        display: inline-block;
+        padding: 1px 7px;
+        border-radius: 4px;
+        background: var(--raised);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .tag.add {
+        color: var(--add);
+      }
+      .tag.change {
+        color: var(--change);
+      }
+      .tag.remove {
+        color: var(--remove);
+      }
+
+      /* ── Callout ── */
+      .callout {
+        padding: 12px 16px;
+        border-left: 2px solid var(--accent);
+        border-radius: 0 var(--radius) var(--radius) 0;
+        background: var(--surface);
+        color: var(--muted);
+      }
+      .callout.risk {
+        border-left-color: var(--change);
+      }
+      .callout strong {
+        color: var(--fg);
+      }
+      .callout + .callout {
+        margin-top: 10px;
+      }
+      .eyebrow {
+        margin-bottom: 8px;
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 10px;
+        color: var(--faint);
+        font-size: 11px;
+      }
+      .legend i {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        margin-right: 5px;
+        border-radius: 50%;
+        background: var(--faint);
+      }
+      .legend .new i {
+        background: var(--accent);
+      }
+      .legend .durable i {
+        background: var(--add);
+      }
+      .legend .ephemeral i {
+        background: var(--change);
+      }
+      .status-line {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin: 10px 0;
+      }
+      .status-step {
+        padding: 4px 8px;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .status-step.live {
+        border-color: var(--add);
+        color: var(--add);
+      }
+      .status-step.fail {
+        border-color: var(--remove);
+        color: var(--remove);
+      }
+      .status-arrow {
+        color: var(--faint);
+        font-size: 11px;
+      }
+      .decision-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .decision-option {
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .decision-option.recommended {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+      }
+      .decision-option p {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .decision-option small {
+        color: var(--faint);
+      }
+      .compact-list {
+        margin: 6px 0 0;
+        padding-left: 18px;
+      }
+      .compact-list li {
+        margin-bottom: 5px;
+      }
+      .repo-label {
+        color: var(--faint);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      @media (max-width: 640px) {
+        .split {
+          grid-template-columns: 1fr;
+        }
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+        .bar-row {
+          grid-template-columns: 90px 1fr 28px;
+        }
+        .decision-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <article class="plan">
+      <p class="eyebrow">Plan for review · written for readers with no infrastructure background</p>
+      <h1 class="plan-title">Keep published apps and designs online</h1>
+      <p class="plan-summary">
+        A cloud building session is temporary. Publishing should copy the finished result into a
+        separate, permanent home so the public link keeps working after the building session turns
+        off.
+      </p>
+      <div class="meta">
+        <span class="chip"><strong>One</strong> Publish experience</span>
+        <span class="chip"><strong>Two</strong> automatic hosting paths</span>
+        <span class="chip"><strong>No</strong> infrastructure choices for the user</span>
+        <span class="chip">Plan only · no implementation yet</span>
+      </div>
+      <div class="metrics" aria-label="Plan outcome summary">
+        <div class="metric">
+          <b>Simple stays simple</b><span>plain pages use file hosting</span>
+        </div>
+        <div class="metric">
+          <b>Power when needed</b><span>full apps get a server and optional database</span>
+        </div>
+        <div class="metric">
+          <b>Always independent</b><span>published work survives session shutdown</span>
+        </div>
+      </div>
+
+      <section>
+        <h2>The idea in one minute</h2>
+        <div class="callout">
+          <strong>Think of the cloud session as a workshop.</strong> It is where the AI edits files,
+          runs previews, and tests ideas. Workshops can close when nobody is using them. Publishing
+          creates a separate storefront that stays open even after the workshop closes.
+        </div>
+        <div class="split" style="margin-top: 14px">
+          <div class="card">
+            <h3>Temporary workshop</h3>
+            <ul>
+              <li>The AI works here.</li>
+              <li>The live editing preview runs here.</li>
+              <li>It may shut down after inactivity.</li>
+              <li>Running processes stop when it shuts down.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Permanent storefront</h3>
+            <ul>
+              <li>Created only when Publish is requested.</li>
+              <li>Has a stable public web address.</li>
+              <li>Runs separately from the workshop.</li>
+              <li>Keeps its saved data until explicitly deleted.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="flow" style="margin-top: 14px">
+          <div class="node"><b>Build in Trace</b><span>temporary workshop</span></div>
+          <div class="arrow">→</div>
+          <div class="node is-new"><b>Publish</b><span>make a permanent copy</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><b>Session sleeps</b><span>workshop closes</span></div>
+          <div class="arrow">→</div>
+          <div class="node is-new"><b>Public link works</b><span>storefront stays open</span></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>What the user experiences</h2>
+        <div class="card">
+          <ol style="margin: 0; padding-left: 20px">
+            <li>The user asks the AI to make a page or app.</li>
+            <li>The user asks to publish it.</li>
+            <li>The AI checks what the project actually needs.</li>
+            <li>Trace chooses the simplest safe hosting path.</li>
+            <li>Trace shows progress such as “checking,” “building,” and “live.”</li>
+            <li>The user receives one permanent link.</li>
+          </ol>
+        </div>
+        <p style="margin-top: 12px">
+          The user never chooses “S3,” “ECS,” a container size, or a database plan. Those are
+          internal tools. The product remains one button and one understandable result.
+        </p>
+      </section>
+
+      <section>
+        <h2>The two automatic paths</h2>
+        <div
+          class="toolbar"
+          data-view-switcher="hosting-path"
+          aria-label="Hosting path explanation"
+        >
+          <button type="button" data-view="static" aria-pressed="true">Simple page</button>
+          <button type="button" data-view="service" aria-pressed="false">Full web app</button>
+        </div>
+        <div class="view-panel" data-view-group="hosting-path" data-view-panel="static">
+          <div class="card">
+            <h3>Path A · store finished files</h3>
+            <p>
+              A simple page is already complete when its HTML, styles, JavaScript, and images are
+              built. Trace stores those finished files and sends them to visitors when they open the
+              link.
+            </p>
+            <ul>
+              <li>
+                Good for landing pages, portfolios, mockups, calculators, and interactive pages
+                whose code runs entirely in the visitor's browser.
+              </li>
+              <li>No private server runs all day.</li>
+              <li>No database is created.</li>
+              <li>Faster and cheaper than running a full application server.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="view-panel" data-view-group="hosting-path" data-view-panel="service">
+          <div class="card">
+            <h3>Path B · keep an application running</h3>
+            <p>
+              A full app needs code to run whenever a visitor makes a request. Trace keeps that code
+              running separately from the development session and adds a database only if the app
+              needs to remember information.
+            </p>
+            <ul>
+              <li>
+                Needed for private API keys, sign-in callbacks, server routes, live connections, or
+                background work.
+              </li>
+              <li>
+                Needed for Trace integrations because provider credentials must remain on the
+                server.
+              </li>
+              <li>A database is optional, not automatic.</li>
+              <li>More capable, but costs more than finished-file hosting.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout" style="margin-top: 12px">
+          <strong>The AI understands the project; the CLI only carries instructions.</strong> The AI
+          inspects and tests the code, chooses the required production shape, and calls one explicit
+          CLI method. Trace validates the request's shape and permissions, then runs it durably.
+        </div>
+      </section>
+
+      <section>
+        <h2>How publishing works, step by step</h2>
+        <div class="flow">
+          <div class="node"><b>1 · Inspect</b><span>what does this project need?</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><b>2 · Save</b><span>freeze an exact version</span></div>
+          <div class="arrow">→</div>
+          <div class="node is-new"><b>3 · Build</b><span>create production output</span></div>
+          <div class="arrow">→</div>
+          <div class="node is-new"><b>4 · Verify</b><span>prove it works safely</span></div>
+          <div class="arrow">→</div>
+          <div class="node is-new">
+            <b>5 · Switch link</b><span>make the new version public</span>
+          </div>
+        </div>
+        <div class="phase" data-step="1">
+          <h3>1. The AI inspects the project</h3>
+          <p>
+            The AI reads the project itself, verifies its production build, and decides whether it
+            needs stored files or a running server and database. The CLI does not inspect or decide
+            anything.
+          </p>
+          <details>
+            <summary>Implementation detail: explicit CLI commands</summary>
+            <div class="detail-body">
+              <p><code>JSON</code> is structured text that an AI or program can read reliably.</p>
+              <ul>
+                <li>
+                  <code
+                    >"$TRACE_CLI" app deploy --target static --output-directory dist --build-command
+                    "pnpm build" --json</code
+                  >
+                  submits explicit static facts.
+                </li>
+                <li>
+                  <code
+                    >"$TRACE_CLI" app deploy --target service --start-command "pnpm start" --port
+                    3000 --json</code
+                  >
+                  submits explicit service facts.
+                </li>
+                <li>
+                  <code>"$TRACE_CLI" app status --json</code> reports progress and safe errors.
+                </li>
+              </ul>
+            </div>
+          </details>
+        </div>
+        <div class="phase" data-step="2">
+          <h3>2. Trace saves an exact version</h3>
+          <p>
+            Trace records a pushed Git commit: a permanent version of the project at one exact
+            moment. Unfinished edits made later cannot secretly change that deployment.
+          </p>
+          <details>
+            <summary>Why Trace does not publish loose files from the temporary session</summary>
+            <div class="detail-body">
+              <p>
+                The temporary session can disappear during publishing. Building again from the saved
+                commit makes the result repeatable, reviewable, and safe to roll back.
+              </p>
+            </div>
+          </details>
+        </div>
+        <div class="phase" data-step="3">
+          <h3>3. AWS builds the permanent version</h3>
+          <p>
+            AWS means Amazon Web Services, the cloud provider already used by Trace. Its background
+            workflow rebuilds the saved commit so production does not depend on the temporary
+            workshop.
+          </p>
+          <details>
+            <summary>Implementation detail: the background checklist</summary>
+            <div class="detail-body">
+              <p>
+                Trace uploads the source to S3 and places a versioned job in SQS, the durable
+                waiting line. CodeBuild creates either a static file bundle or a container image. A
+                second queued release job remembers and finishes the server, database, migration,
+                health, and promotion work.
+              </p>
+            </div>
+          </details>
+        </div>
+        <div class="phase" data-step="4">
+          <h3>4. Trace proves the new version works</h3>
+          <p>
+            Static files are checked for a valid home page, safe paths, correct file types, and size
+            limits. A full app must start successfully, pass its health check, and complete any
+            database update.
+          </p>
+        </div>
+        <div class="phase" data-step="5">
+          <h3>5. Trace moves the public link</h3>
+          <p>
+            The old version stays public during all earlier steps. Only after the new version passes
+            every check does Trace point the stable web address at it.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>What happens on each path</h2>
+        <div class="diagram" aria-label="Simple page and full application hosting branches">
+          <svg class="diagram-svg" viewBox="0 0 820 330" role="img">
+            <title>Two publishing paths</title>
+            <desc>
+              A saved project becomes either stored website files or a running application, then
+              both use the same stable URL.
+            </desc>
+            <defs>
+              <marker
+                id="simple-arrow"
+                markerWidth="8"
+                markerHeight="8"
+                refX="7"
+                refY="4"
+                orient="auto"
+              >
+                <path d="M0,0 L8,4 L0,8 Z" fill="var(--faint)" />
+              </marker>
+            </defs>
+            <path class="edge" marker-end="url(#simple-arrow)" d="M190 70 H315" />
+            <path class="edge" marker-end="url(#simple-arrow)" d="M390 100 V155 H255 V205" />
+            <path class="edge" marker-end="url(#simple-arrow)" d="M390 100 V155 H595 V205" />
+            <path class="edge" marker-end="url(#simple-arrow)" d="M255 265 V295 H330" />
+            <path class="edge" marker-end="url(#simple-arrow)" d="M595 265 V295 H490" />
+            <rect class="box" x="40" y="40" width="150" height="60" rx="8" />
+            <text x="115" y="67">Saved project</text>
+            <text class="edge-label" x="115" y="84">exact commit</text>
+            <rect class="box is-new" x="315" y="40" width="150" height="60" rx="8" />
+            <text x="390" y="67">Choose path</text>
+            <text class="edge-label" x="390" y="84">verified needs</text>
+            <rect class="box is-new" x="180" y="205" width="150" height="60" rx="8" />
+            <text x="255" y="232">Stored files</text>
+            <text class="edge-label" x="255" y="249">simple page</text>
+            <rect class="box is-new" x="520" y="205" width="150" height="60" rx="8" />
+            <text x="595" y="232">Running app</text>
+            <text class="edge-label" x="595" y="249">optional database</text>
+            <rect class="box" x="330" y="270" width="160" height="50" rx="8" />
+            <text x="410" y="299">One stable public URL</text>
+          </svg>
+        </div>
+        <p>
+          The same app can change paths later. A landing page can grow into a full app without
+          changing its public address. Returning to a simple page does not silently delete a
+          database created earlier.
+        </p>
+      </section>
+
+      <section>
+        <h2>Plain-language infrastructure glossary</h2>
+        <div class="split">
+          <div class="card">
+            <h3>S3 · a secure file cabinet</h3>
+            <p>
+              Amazon S3 stores files durably. For a simple page, Trace stores the finished HTML,
+              CSS, JavaScript, and images here. The storage stays private; visitors receive files
+              through Trace's public gateway.
+            </p>
+          </div>
+          <div class="card">
+            <h3>ECS and Fargate · an app keeper</h3>
+            <p>
+              ECS tells AWS which application should keep running. Fargate supplies the computer
+              power. If the app process crashes, ECS starts a replacement.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Container image · a sealed app package</h3>
+            <p>
+              A container image packages the full app and its dependencies. ECR is the private
+              library where Trace stores these packages.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Aurora PostgreSQL · durable memory</h3>
+            <p>
+              PostgreSQL is a database. Aurora is AWS's managed version. It stores information such
+              as accounts, notes, or counters separately from the running app.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Gateway · the receptionist</h3>
+            <p>
+              The gateway receives a public web address, finds its approved deployment, and sends
+              the visitor either stored files or the running app.
+            </p>
+          </div>
+          <div class="card">
+            <h3>API route · a private service window</h3>
+            <p>
+              An API route lets the page ask its server to do work, such as reading saved data or
+              using a secret key. Because that work happens when visitors make requests, it needs
+              the full-app path.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Health check · “are you ready?”</h3>
+            <p>
+              A small automated request proves a running app started and can answer traffic before
+              real visitors are sent to it.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Migration · update the filing system</h3>
+            <p>
+              When an app changes how database information is organized, a migration updates that
+              structure before the new app receives traffic.
+            </p>
+          </div>
+          <div class="card">
+            <h3>TLS · encrypted connection</h3>
+            <p>
+              TLS encrypts traffic between the running app and its database. Each app receives only
+              its own database login, never the master password.
+            </p>
+          </div>
+        </div>
+        <details>
+          <summary>More background services engineers will use</summary>
+          <div class="detail-body">
+            <ul>
+              <li><strong>SQS</strong> is a durable waiting line for deployment jobs.</li>
+              <li>
+                <strong>Step Functions</strong> remembers the ordered deployment checklist and
+                retries safe failures.
+              </li>
+              <li><strong>CodeBuild</strong> rebuilds production output from the saved source.</li>
+              <li>
+                <strong>Secrets Manager</strong> stores passwords without placing them in source
+                code.
+              </li>
+              <li><strong>CloudWatch</strong> collects logs, measurements, and alarms.</li>
+              <li>
+                <strong>CDK</strong> is the code engineers use to describe and test the AWS
+                resources Trace should create.
+              </li>
+            </ul>
+          </div>
+        </details>
+      </section>
+
+      <section>
+        <h2>How saved data behaves</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>What happens</th>
+              <th>Public app</th>
+              <th>Saved database information</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Development session sleeps</td>
+              <td>Keeps working</td>
+              <td>Unchanged</td>
+            </tr>
+            <tr>
+              <td>Running app crashes</td>
+              <td>AWS starts a replacement</td>
+              <td>Unchanged</td>
+            </tr>
+            <tr>
+              <td>User publishes an update</td>
+              <td>Old version stays until the new one works</td>
+              <td>Reused</td>
+            </tr>
+            <tr>
+              <td>New deployment fails</td>
+              <td>Previous version stays live</td>
+              <td>Kept</td>
+            </tr>
+            <tr>
+              <td>User rolls back</td>
+              <td>Earlier code becomes live again</td>
+              <td>Kept</td>
+            </tr>
+            <tr>
+              <td>User unpublishes</td>
+              <td>Public link is removed</td>
+              <td>Kept by default</td>
+            </tr>
+            <tr>
+              <td>User permanently deletes the app</td>
+              <td>Removed</td>
+              <td>Removed only through a separate confirmed process</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="callout risk" style="margin-top: 12px">
+          <strong>Important:</strong> unpublish and permanent delete are different actions. Hiding
+          an app must never silently erase its data.
+        </div>
+        <details>
+          <summary>Implementation detail: one isolated database identity per app</summary>
+          <div class="detail-body">
+            <p>
+              When PostgreSQL is requested, a private provisioner creates one database, one login,
+              and one secret for that app. Trace stores an <code>AppDataBinding</code>: a record
+              connecting the app to its database without storing the password. Direct encrypted
+              Aurora connections are recommended for the first version, with at most two reusable
+              connections per running app. RDS Proxy—an AWS database-connection middle layer—is
+              deferred because the current one only registers the cluster administrator secret.
+            </p>
+          </div>
+        </details>
+      </section>
+
+      <section>
+        <h2>What if publishing fails?</h2>
+        <div class="status-line" aria-label="Simple deployment progress">
+          <span class="status-step">checking</span><span class="status-arrow">→</span>
+          <span class="status-step">building</span><span class="status-arrow">→</span>
+          <span class="status-step">preparing</span><span class="status-arrow">→</span>
+          <span class="status-step">testing</span><span class="status-arrow">→</span>
+          <span class="status-step live">live</span>
+        </div>
+        <div class="split">
+          <div class="card">
+            <h3>First publication fails</h3>
+            <p>
+              No broken public app is created. Trace shows a useful error and keeps the saved source
+              so the AI can fix it.
+            </p>
+          </div>
+          <div class="card">
+            <h3>An update fails</h3>
+            <p>
+              The existing public version remains online. Trace never moves the public address to an
+              unverified replacement.
+            </p>
+          </div>
+        </div>
+        <details>
+          <summary>Implementation detail: safe retries and duplicate jobs</summary>
+          <div class="detail-body">
+            <p>
+              Every step uses stable deployment identifiers and “check before create” behavior. This
+              is called idempotency: repeating a CLI request, queue message, database request,
+              build, or route update reaches the same result instead of creating duplicates.
+            </p>
+          </div>
+        </details>
+      </section>
+
+      <section>
+        <h2>What about designs?</h2>
+        <div class="callout">
+          <strong>Designs use the lightweight path.</strong> A design is saved into Trace-managed
+          Git, packaged as a viewable artifact, and served from durable file storage. It does not
+          need a continuously running application server or database.
+        </div>
+        <div class="flow" style="margin-top: 14px">
+          <div class="node"><b>Design session</b><span>temporary editing workspace</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><b>Managed Git</b><span>saved source and canvas metadata</span></div>
+          <div class="arrow">→</div>
+          <div class="node is-new">
+            <b>Published artifact</b><span>durable viewable output</span>
+          </div>
+        </div>
+        <p>
+          The design session may shut down, but the committed design source and published artifact
+          remain available.
+        </p>
+      </section>
+
+      <section>
+        <h2>Implementation plan</h2>
+        <div class="phase" data-step="1">
+          <h3>Phase 1 · Let the AI submit explicit deployment facts</h3>
+          <p>
+            The AI analyzes and tests the code, then names the target, commands, paths, port, health
+            check, and database needs. Trace validates only the requested contract; it does not
+            classify the project.
+          </p>
+          <details>
+            <summary>Engineer checklist and proof</summary>
+            <div class="detail-body">
+              <p>
+                Add one versioned deployment specification with clear static and service validation.
+                Invalid or contradictory facts must explain exactly what blocked publication.
+              </p>
+            </div>
+          </details>
+        </div>
+        <div class="phase" data-step="2">
+          <h3>Phase 2 · Add simple app commands to the Trace CLI</h3>
+          <p>
+            Add deploy and status commands so the AI can submit its decision and monitor the durable
+            backend.
+          </p>
+          <details>
+            <summary>Engineer checklist and proof</summary>
+            <div class="detail-body">
+              <p>
+                Change <code>packages/cli/src/commands/app/*</code>,
+                <code>packages/cli-contract/src/index.ts</code>, and server agent authorization. Add
+                the narrow <code>app:deploy</code> permission. Exact-operation, current-app, help,
+                JSON output, permission, and repeat-safety tests must pass.
+              </p>
+            </div>
+          </details>
+        </div>
+        <div class="phase" data-step="3">
+          <h3>Phase 3 · Build both permanent homes</h3>
+          <p>
+            Add the private file path for simple pages and the running-service path for full apps.
+            Add an isolated database only when requested.
+          </p>
+          <details>
+            <summary>Engineer checklist and proof</summary>
+            <div class="detail-body">
+              <p>
+                In Trace, extend deployment state, events, GraphQL (Trace's API schema), and the
+                second version of the deployment job message. In trace-ops, rebase the existing
+                worker branch, then add the static builder, workflow branches, database creator,
+                migration task, ECS service manager, narrowly limited permissions, logs, and alarms.
+              </p>
+            </div>
+          </details>
+        </div>
+        <div class="phase" data-step="4">
+          <h3>Phase 4 · Give both paths one stable address</h3>
+          <p>
+            Build the shared gateway and switch an app's address only after its new target passes
+            verification.
+          </p>
+          <details>
+            <summary>Engineer checklist and proof</summary>
+            <div class="detail-body">
+              <p>
+                The gateway maps the unique name in the app's web address to either a private S3
+                bundle or an authenticated ECS runtime. Test that one app cannot claim another app's
+                address, the old version serves during deployment, and static → service → static
+                keeps the same URL and retained data.
+              </p>
+            </div>
+          </details>
+        </div>
+        <div class="phase" data-step="5">
+          <h3>Phase 5 · Finish the product and prove it in AWS</h3>
+          <p>
+            Show understandable progress and errors, add rollback/unpublish/delete controls, then
+            test real applications before enabling production broadly.
+          </p>
+          <details>
+            <summary>Engineer checklist and proof</summary>
+            <div class="detail-body">
+              <p>
+                Update the event-driven Zustand browser state store and rewrite
+                <code>scripts/smoke-cloud-app-session.mjs</code>. Test a literal HTML page, Vite
+                page, server app, and PostgreSQL app with a small internal group first. Put
+                development to sleep, replace a running ECS process, republish, roll back, change
+                between hosting paths, and intentionally fail a build and migration.
+              </p>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section>
+        <h2>What already exists and what is missing</h2>
+        <div class="split">
+          <div class="card">
+            <h3>Already built</h3>
+            <ul>
+              <li>Trace can choose a saved commit and create a deployment record.</li>
+              <li>Trace can upload source and queue a deployment job.</li>
+              <li>The UI can show basic deployment status.</li>
+              <li>
+                The managed CLI already has secure commands, machine-readable help, exact permission
+                checks, and safe retry patterns.
+              </li>
+              <li>
+                trace-ops already has the build queue, image builder, image library, ECS cluster,
+                and optional Aurora foundation.
+              </li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Still needed</h3>
+            <ul>
+              <li>The new app CLI commands and project classifier.</li>
+              <li>The permanent static-file path.</li>
+              <li>The database creator and migration runner.</li>
+              <li>The service creator and health verifier.</li>
+              <li>The shared gateway and safe route switch.</li>
+              <li>Complete lifecycle controls, monitoring, and real AWS tests.</li>
+            </ul>
+          </div>
+        </div>
+        <details>
+          <summary>Source-backed repository notes</summary>
+          <div class="detail-body">
+            <ul>
+              <li>
+                <code>apps/server/src/services/app-deployment.ts</code> owns current publish
+                requests and guarded callbacks.
+              </li>
+              <li>
+                <code>packages/cli</code> and <code>packages/cli-contract</code> provide the pattern
+                for agent-facing commands.
+              </li>
+              <li>
+                <code>apps/server/src/services/session.ts</code> currently tells App sessions to
+                build full-stack apps and always advertises local PostgreSQL plus Redis, a temporary
+                cache service; that guidance must become capability-based.
+              </li>
+              <li>
+                <code>infra/lib/app-deployment-stack.ts</code> on trace-ops main creates a queue,
+                CodeBuild, ECR, ECS, and security roles, but does not attach a worker to consume the
+                queue.
+              </li>
+              <li>
+                The unmerged <code>trace-moose-4-app-deployments</code> branch contains that worker
+                and must be updated with current trace-ops main before reuse.
+              </li>
+            </ul>
+          </div>
+        </details>
+      </section>
+
+      <section>
+        <h2>Main risks, in ordinary language</h2>
+        <div class="callout risk">
+          <strong>Trace chooses the wrong path.</strong> The AI states the intended behavior, the
+          CLI explains what it found, and the server checks the saved version again. Any verified
+          server-only need forces the full-app path.
+        </div>
+        <div class="callout risk">
+          <strong>One app sees another app's data.</strong> Every database app receives its own
+          login and database. Automated tests prove app A cannot connect to app B.
+        </div>
+        <div class="callout risk">
+          <strong>An update breaks the live app.</strong> The old version keeps serving until the
+          new build, database update, startup, and health checks all succeed.
+        </div>
+        <div class="callout risk">
+          <strong>A retry creates duplicates.</strong> Stable IDs and check-before-create behavior
+          make repeated requests return to the same deployment.
+        </div>
+        <div class="callout risk">
+          <strong>A simple page contains unsafe files.</strong> Trace rejects unsafe paths, links,
+          oversized bundles, and unexpected output; the storage remains private behind the gateway.
+        </div>
+      </section>
+
+      <section>
+        <h2>How we know the project is finished</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Test</th>
+              <th>What must be true</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Simple page</td>
+              <td>
+                Publish, shut down development, and confirm the same public link still works without
+                a per-app server or database.
+              </td>
+            </tr>
+            <tr>
+              <td>Full app</td>
+              <td>
+                Publish an API-backed app, shut down development, and confirm requests still work.
+              </td>
+            </tr>
+            <tr>
+              <td>Saved data</td>
+              <td>
+                Create a counter, replace the running app process, republish, and confirm the value
+                remains.
+              </td>
+            </tr>
+            <tr>
+              <td>Broken update</td>
+              <td>
+                Publish a broken build or database update and confirm the previous version remains
+                live.
+              </td>
+            </tr>
+            <tr>
+              <td>Path change</td>
+              <td>
+                Move static → service → static while keeping one URL and never silently deleting
+                retained data.
+              </td>
+            </tr>
+            <tr>
+              <td>Security</td>
+              <td>
+                Prove apps cannot read other apps' credentials, data, routes, or Trace control-plane
+                secrets.
+              </td>
+            </tr>
+            <tr>
+              <td>Quality</td>
+              <td>
+                Generated API types (GraphQL), the generated database client (Prisma), package
+                builds, CLI/server/client tests, AWS infrastructure-code tests, and real staging
+                tests all pass.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Approval means</h2>
+        <div class="callout">
+          <strong>Approve this product boundary:</strong> users get one Publish experience; the AI
+          describes what the project needs; Trace verifies it; simple pages become durable stored
+          files; full apps become private running services; PostgreSQL is added only when needed;
+          designs use the lightweight artifact path; and no public address moves until the
+          replacement is proven safe.
+        </div>
+        <p style="margin-top: 12px">
+          Implementation will proceed in the five phases above and stop at any phase whose proof
+          does not pass.
+        </p>
+      </section>
+    </article>
+    <script>
+      (() => {
+        document.querySelectorAll("[data-view-switcher]").forEach((switcher) => {
+          const group = switcher.dataset.viewSwitcher;
+          const buttons = [...switcher.querySelectorAll("[data-view]")];
+          const panels = [...document.querySelectorAll(`[data-view-group="${group}"]`)];
+
+          const selectView = (view) => {
+            buttons.forEach((button) => {
+              button.setAttribute("aria-pressed", String(button.dataset.view === view));
+            });
+            panels.forEach((panel) => {
+              panel.hidden = panel.dataset.viewPanel !== view;
+            });
+          };
+
+          buttons.forEach((button) => {
+            button.addEventListener("click", () => selectView(button.dataset.view));
+          });
+          selectView(
+            buttons.find((button) => button.getAttribute("aria-pressed") === "true")?.dataset.view,
+          );
+        });
+
+        document.querySelectorAll("[data-file-filters]").forEach((filters) => {
+          const buttons = [...filters.querySelectorAll("[data-filter]")];
+          const rows = [...document.querySelectorAll("[data-file-table] [data-change]")];
+
+          buttons.forEach((button) => {
+            button.addEventListener("click", () => {
+              const filter = button.dataset.filter;
+              buttons.forEach((candidate) => {
+                candidate.setAttribute("aria-pressed", String(candidate === button));
+              });
+              rows.forEach((row) => {
+                row.hidden = filter !== "all" && row.dataset.change !== filter;
+              });
+            });
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>

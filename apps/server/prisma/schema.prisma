@@ -1237,6 +1237,16 @@ model Event {
   @@index([parentId])
 }
 
+model PendingStorageObjectDeletion {
+  key           String   @id
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  lastError     String?
+  createdAt     DateTime @default(now())
+
+  @@index([nextAttemptAt])
+}
+
 model AppDeployment {
   id                     String              @id @default(uuid())
   organizationId         String

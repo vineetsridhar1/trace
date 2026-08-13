@@ -9,6 +9,7 @@ interface RepoDesktopSectionProps {
 export function RepoDesktopSection({ repoId, desktopRefreshKey }: RepoDesktopSectionProps) {
   const [desktopRepoConfig, setDesktopRepoConfig] = useState<DesktopRepoConfig | null>(null);
   const [desktopStateLoaded, setDesktopStateLoaded] = useState(false);
+  const [desktopError, setDesktopError] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
 
   const refreshDesktopState = useCallback(async () => {
@@ -16,6 +17,7 @@ export function RepoDesktopSection({ repoId, desktopRefreshKey }: RepoDesktopSec
 
     const repoConfig = await window.trace.getRepoConfig(repoId);
     setDesktopRepoConfig(repoConfig);
+    setDesktopError(null);
     setDesktopStateLoaded(true);
   }, [repoId]);
 
@@ -23,6 +25,8 @@ export function RepoDesktopSection({ repoId, desktopRefreshKey }: RepoDesktopSec
     refreshDesktopState().catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
       console.error("Failed to refresh desktop repository state:", message);
+      setDesktopError(message);
+      setDesktopStateLoaded(true);
     });
   }, [desktopRefreshKey, refreshDesktopState]);
 
@@ -40,6 +44,7 @@ export function RepoDesktopSection({ repoId, desktopRefreshKey }: RepoDesktopSec
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error("Failed to link desktop repository:", message);
+      setDesktopError(message);
     } finally {
       setLinking(false);
     }
@@ -53,7 +58,16 @@ export function RepoDesktopSection({ repoId, desktopRefreshKey }: RepoDesktopSec
       <span aria-hidden="true" className="shrink-0 text-muted-foreground/60">
         ·
       </span>
-      {linkedPath ? (
+      {desktopError ? (
+        <button
+          type="button"
+          className="shrink-0 text-amber-500 hover:text-amber-400"
+          title={desktopError}
+          onClick={() => void refreshDesktopState()}
+        >
+          Local path unavailable · Retry
+        </button>
+      ) : linkedPath ? (
         <span className="truncate" title={linkedPath}>
           {linkedPath}
         </span>

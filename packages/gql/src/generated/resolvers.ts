@@ -626,6 +626,8 @@ export type DesignElementTextSource = {
   text: Scalars["String"]["output"];
 };
 
+export type DesignPreviewStatus = "captured" | "failed" | "pending" | "publishing" | "unavailable";
+
 export type DesignSystem = {
   __typename?: "DesignSystem";
   activeVersion?: Maybe<DesignSystemVersion>;
@@ -2666,7 +2668,7 @@ export type SessionGroup = {
   createdAt: Scalars["DateTime"]["output"];
   designPreviewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
   designPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
-  designPreviewStatus?: Maybe<Scalars["String"]["output"]>;
+  designPreviewStatus?: Maybe<DesignPreviewStatus>;
   designPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   designSystemVersion?: Maybe<DesignSystemVersion>;
   designSystemVersionId?: Maybe<Scalars["ID"]["output"]>;
@@ -3235,6 +3237,7 @@ export type ResolversTypes = ResolversObject<{
   DesignElementStylesInput: DesignElementStylesInput;
   DesignElementTextEditResult: ResolverTypeWrapper<DesignElementTextEditResult>;
   DesignElementTextSource: ResolverTypeWrapper<DesignElementTextSource>;
+  DesignPreviewStatus: DesignPreviewStatus;
   DesignSystem: ResolverTypeWrapper<DesignSystem>;
   DesignSystemCommitArtifact: ResolverTypeWrapper<DesignSystemCommitArtifact>;
   DesignSystemCommitArtifactConnection: ResolverTypeWrapper<DesignSystemCommitArtifactConnection>;
@@ -5978,7 +5981,11 @@ export type SessionGroupResolvers<
   createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   designPreviewCapturedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   designPreviewCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  designPreviewStatus?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  designPreviewStatus?: Resolver<
+    Maybe<ResolversTypes["DesignPreviewStatus"]>,
+    ParentType,
+    ContextType
+  >;
   designPreviewUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   designSystemVersion?: Resolver<
     Maybe<ResolversTypes["DesignSystemVersion"]>,

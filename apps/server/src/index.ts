@@ -66,6 +66,7 @@ import { realtimeBackplane } from "./lib/realtime-backplane.js";
 import { runtimeDirectory } from "./lib/runtime-directory.js";
 import { publishedAppGateway } from "./services/published-app-gateway.js";
 import { appDeploymentService } from "./services/app-deployment.js";
+import { reconcilePendingStorageObjectDeletions } from "./services/storage-object-deletion.js";
 
 // A single proxied response is base64-framed over the bridge WS; bound a single
 // message so an untrusted runtime can't force an unbounded allocation.
@@ -91,6 +92,8 @@ const RUNTIME_PREVIEW_RECONCILE_LOCK_KEY = "trace:jobs:runtime-preview-reconcile
 const DESIGN_SYSTEM_ARTIFACT_RECONCILE_LOCK_KEY = "trace:jobs:design-system-artifact-reconcile";
 const APP_DEPLOYMENT_DISPATCH_INTERVAL_MS = 30 * 1000;
 const APP_DEPLOYMENT_DISPATCH_LOCK_KEY = "trace:jobs:app-deployment-dispatch";
+const STORAGE_OBJECT_DELETION_INTERVAL_MS = 30 * 1000;
+const STORAGE_OBJECT_DELETION_LOCK_KEY = "trace:jobs:storage-object-deletion";
 
 function readDurationEnv(name: string, fallbackMs: number): number {
   const raw = process.env[name]?.trim();
@@ -405,6 +408,21 @@ async function main() {
     reconcileDesignPreviews,
     DESIGN_PREVIEW_RECONCILE_INTERVAL_MS,
   );
+  const reconcileStorageObjectDeletions = () => {
+    void withRedisJobLock({
+      enabled: !localMode,
+      key: STORAGE_OBJECT_DELETION_LOCK_KEY,
+      ttlMs: STORAGE_OBJECT_DELETION_INTERVAL_MS * 2,
+      run: () => reconcilePendingStorageObjectDeletions(),
+    }).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[storage-object-deletion] iteration failed: ${message}`);
+    });
+  };
+  const storageObjectDeletionReconciler = setInterval(
+    reconcileStorageObjectDeletions,
+    STORAGE_OBJECT_DELETION_INTERVAL_MS,
+  );
   const reconcilePdfExports = () => {
     void withRedisJobLock({
       enabled: !localMode,
@@ -715,6 +733,7 @@ async function main() {
               clearInterval(runtimeHardDeadlineReconciler);
               clearInterval(endpointTrafficCleanup);
               clearInterval(appDeploymentDispatchReconciler);
+              clearInterval(storageObjectDeletionReconciler);
 
               // Code 1012 tells bridges to reconnect to the replacement task
               // immediately. The persisted generation/lastSeen fences make the
@@ -810,6 +829,7 @@ async function main() {
   reconcilePdfExports();
   reconcileRuntimePreviews();
   reconcileDesignSystemArtifacts();
+  reconcileStorageObjectDeletions();
 
   // Reattach Slack event bridges only when Slack is configured.
   if (isSlackConfigured()) {

@@ -422,7 +422,7 @@ type RuntimeStartInput = {
     defaultBranch: string;
   } | null;
   branch?: string;
-  checkpointSha?: string;
+  baseCommitSha?: string;
   runtimeToken: string;
   bridgeUrl: string;
 };

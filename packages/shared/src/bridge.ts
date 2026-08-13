@@ -3,7 +3,7 @@
  * Defines the wire protocol between bridge clients and the server's /bridge WebSocket.
  */
 
-export const BRIDGE_PROTOCOL_VERSION = 4;
+export const BRIDGE_PROTOCOL_VERSION = 5;
 export const GENERAL_WORKSPACE_PROTOCOL_VERSION = 3;
 
 // --- Server → Bridge commands ---

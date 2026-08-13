@@ -64,7 +64,7 @@ function startRequest(): StartSessionRequest {
       remoteUrl: "https://github.com/example/repo.git",
       defaultBranch: "main",
       branch: "feature/test",
-      checkpointSha: null,
+      baseCommitSha: null,
       readOnly: false,
     },
     tool: "codex",
