@@ -16,7 +16,11 @@ import {
 } from "./ui-navigation";
 
 export type ActivePage = "main" | "create" | "settings" | "inbox" | "tickets" | "search";
-export type ChannelSubPage = "sessions" | "merged-archived" | null;
+export type ChannelSubPage =
+  | "sessions"
+  | "merged-archived"
+  | "merged-archived-archived"
+  | null;
 export interface NavigationState {
   channelId: string | null;
   sessionGroupId: string | null;
@@ -132,7 +136,7 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
   setChannelSubPage: (subPage: ChannelSubPage) => {
     set({ channelSubPage: subPage });
     const state = get();
-    replaceNav(
+    pushNav(
       state.activeChannelId,
       state.activeSessionGroupId,
       state.activeSessionId,
