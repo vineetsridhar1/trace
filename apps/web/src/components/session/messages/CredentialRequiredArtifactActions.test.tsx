@@ -6,6 +6,20 @@ const mutation = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../lib/urql", () => ({ client: { mutation } }));
 vi.mock("@trace/client-core", () => ({ RETRY_SESSION_CONNECTION_MUTATION: "retry-session" }));
+vi.mock("../../settings/CodexAuthenticationDialog", () => ({
+  CodexAuthenticationDialog: ({
+    open,
+    onSave,
+  }: {
+    open: boolean;
+    onSave: (method: "access_token", credential: string) => Promise<void>;
+  }) =>
+    open ? (
+      <button type="button" onClick={() => onSave("access_token", "codex-access-token")}>
+        Save Codex access token
+      </button>
+    ) : null,
+}));
 
 function textContent(node: ReactTestInstance | string | number): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
@@ -88,5 +102,37 @@ describe("CredentialRequiredArtifactActions", () => {
 
     expect(mutation).toHaveBeenCalledTimes(2);
     expect(textContent(renderer.root)).toContain("Retry unavailable");
+  });
+
+  it("saves a Codex access token and retries the blocked session", async () => {
+    mutation
+      .mockReturnValueOnce({ toPromise: vi.fn().mockResolvedValue({}) })
+      .mockReturnValueOnce({ toPromise: vi.fn().mockResolvedValue({}) });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<CredentialRequiredArtifactActions provider="openai" sessionId="session-1" />);
+    });
+    const connectButton = renderer.root
+      .findAllByType("button")
+      .find((candidate) => textContent(candidate).includes("Connect Codex"));
+    if (!connectButton) throw new Error("Connect Codex button was not found");
+
+    await act(async () => {
+      connectButton.props.onClick();
+    });
+    const saveAccessTokenButton = renderer.root
+      .findAllByType("button")
+      .find((candidate) => textContent(candidate).includes("Save Codex access token"));
+    if (!saveAccessTokenButton) throw new Error("Save Codex access token button was not found");
+
+    await act(async () => {
+      await saveAccessTokenButton.props.onClick();
+    });
+
+    expect(mutation).toHaveBeenCalledTimes(2);
+    expect(mutation.mock.calls[0][1]).toEqual({
+      input: { method: "access_token", credential: "codex-access-token" },
+    });
+    expect(mutation.mock.calls[1][1]).toEqual({ sessionId: "session-1" });
   });
 });

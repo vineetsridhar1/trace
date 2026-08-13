@@ -291,9 +291,9 @@ export function buildSessionNodes(
     if (isActionRequiredArtifact(eventArtifact)) hasActionableFailure = true;
 
     if (
-      event.eventType === "session_terminated" &&
-      eventPayload?.reason === "workspace_failed" &&
-      hasActionableFailure
+      hasActionableFailure &&
+      ((event.eventType === "session_terminated" && eventPayload?.reason === "workspace_failed") ||
+        (event.eventType === "session_output" && eventPayload?.type === "workspace_failed"))
     ) {
       continue;
     }

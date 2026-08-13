@@ -88,7 +88,7 @@ describe("buildSessionNodes", () => {
     ]);
   });
 
-  it("hides the redundant workspace termination after an actionable failure", () => {
+  it("hides the redundant workspace failure after an actionable runtime failure", () => {
     const recovery = makeEvent({
       id: "cloud-credential-error",
       eventType: "session_runtime_start_failed",
@@ -101,15 +101,15 @@ describe("buildSessionNodes", () => {
         },
       },
     });
-    const termination = makeEvent({
-      id: "workspace-terminated",
-      eventType: "session_terminated",
-      payload: { reason: "workspace_failed" },
+    const workspaceFailure = makeEvent({
+      id: "workspace-failed",
+      eventType: "session_output",
+      payload: { type: "workspace_failed", error: "Cloud launcher failed" },
     });
 
     const result = buildSessionNodes(
-      [recovery.id, termination.id],
-      { [recovery.id]: recovery, [termination.id]: termination },
+      [recovery.id, workspaceFailure.id],
+      { [recovery.id]: recovery, [workspaceFailure.id]: workspaceFailure },
     );
 
     expect(result.nodes).toEqual([{ kind: "event", id: recovery.id }]);
