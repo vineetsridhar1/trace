@@ -119,6 +119,20 @@ then put its fields, rules, consumer, and focused proof in its own `<details>` b
 small accordions over one catch-all "implementation details" accordion. A reviewer should be able
 to scan the decisions and expand only the implementation slice they are reviewing.
 
+For a substantial plan, accordions are the default presentation for construction detail. Create one
+accordion per independently reviewable behavioral unit—such as persistence, input normalization,
+request creation, background handoff, callback acceptance, client reconciliation, or rollout gate.
+Its collapsed `<summary>` must state the concrete change and its outcome, for example: "Reuse the
+active request only when checkpoint and normalized spec match." Do not use summaries such as
+"Details", "Backend", a path name alone, or an unexplained task verb. Inside, include only the
+specific contract, conditions, consumer, and proof for that unit. Keep cross-cutting decisions,
+unresolved choices, behavior that changes for users, and major risks visible outside accordions.
+
+Use accordions to compress density, not to conceal uncertainty. If an implementer must expand every
+accordion to know what to build, the visible layer is too vague; if an accordion merely repeats its
+summary, delete it. The desired result is a scan path that answers "what is changing and why?" and
+an expansion path that answers "what exact symbol, contract, condition, consumer, and proof?".
+
 Name paths or symbols only where they anchor a claim, identify the owner of a change, or help an
 implementer start. Include an impact map when several components or consumers need coordination;
 do not list every touched file merely to look complete. State scope, non-goals, risks, assumptions,
@@ -201,6 +215,8 @@ Before publishing, verify:
   plan outline.
 - The construction layer lets an implementer identify each required owner, contract, condition,
   downstream consumer, and proof case without reopening discovery.
+- Each substantial construction unit has its own conclusion-bearing accordion; expanded content
+  adds exact contracts and proof rather than repeating the visible claim.
 - Facts, assumptions, open decisions, and non-goals are distinguishable.
 - Another agent could implement the plan without repeating repository discovery.
 
