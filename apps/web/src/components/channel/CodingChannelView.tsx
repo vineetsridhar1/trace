@@ -178,7 +178,7 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
 
       <div className="flex-1 overflow-hidden">
         {channelSubPage === "merged-archived" ? (
-          <MergedArchivedPage channelId={channelId} onBack={() => setChannelSubPage(null)} />
+          <MergedArchivedPage channelId={channelId} onBack={() => history.back()} />
         ) : loading ? (
           <div className="space-y-1 px-4 pt-2">
             {Array.from({ length: 8 }).map((_, index) => (

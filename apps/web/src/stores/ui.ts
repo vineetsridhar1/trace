@@ -132,7 +132,7 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
   setChannelSubPage: (subPage: ChannelSubPage) => {
     set({ channelSubPage: subPage });
     const state = get();
-    replaceNav(
+    pushNav(
       state.activeChannelId,
       state.activeSessionGroupId,
       state.activeSessionId,
