@@ -340,7 +340,13 @@ export function SessionInputOptions({
     if (hosting !== "cloud" || !isRecoverableCloudFailure(connection)) return;
     const rollback = applyOptimisticPatch("sessions", sessionId, {
       agentStatus: "active",
-      connection: { ...connection, state: "requested" },
+      connection: {
+        ...connection,
+        canMove: connection?.canMove ?? true,
+        canRetry: connection?.canRetry ?? true,
+        retryCount: connection?.retryCount ?? 0,
+        state: "requested",
+      },
     });
     const retry = await client
       .mutation(RETRY_SESSION_CONNECTION_MUTATION, { sessionId })
