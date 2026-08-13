@@ -6925,6 +6925,7 @@ describe("SessionService", () => {
       expect(prismaMock.session.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: {
+            lastUserMessageAt: expect.any(Date),
             lastMessageAt: expect.any(Date),
             connection: expect.objectContaining({
               state: "requested",
@@ -7037,6 +7038,7 @@ describe("SessionService", () => {
       expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
         where: { id: "session-1", connection: { path: ["version"], equals: 3 } },
         data: {
+          lastUserMessageAt: expect.any(Date),
           lastMessageAt: expect.any(Date),
           connection: expect.objectContaining({
             state: "requested",
@@ -7086,6 +7088,7 @@ describe("SessionService", () => {
       expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
         where: { id: "session-1", connection: { path: ["version"], equals: 3 } },
         data: {
+          lastUserMessageAt: expect.any(Date),
           lastMessageAt: expect.any(Date),
           connection: expect.objectContaining({
             state: "requested",
@@ -10325,6 +10328,7 @@ describe("SessionService", () => {
                     lastUserMessageAt: null,
                     createdAt: { gt: new Date("2026-05-12T11:35:00.000Z") },
                   },
+                  { lastUserMessageAt: { gt: new Date("2026-05-12T10:45:00.000Z") } },
                   {
                     agentStatus: "active",
                     OR: [
@@ -10512,6 +10516,44 @@ describe("SessionService", () => {
 
       const result = await service.cleanupIdleCloudSessionGroups({
         idleAfterMs: 10 * 60 * 1000,
+        now: Date.parse("2026-05-12T11:45:00.000Z"),
+      });
+
+      expect(result).toEqual({ scanned: 1, cleaned: [] });
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
+    });
+
+    it("keeps a completed user-restarted cloud session on the active-idle lease", async () => {
+      // Restarting reserves a new runtime generation and renews
+      // lastUserMessageAt. The run may finish immediately, but that explicit
+      // user action must still receive the full active-idle lease rather than
+      // being reaped by the shorter ordinary idle timeout.
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        {
+          id: "group-1",
+          organizationId: "org-1",
+          updatedAt: new Date("2026-05-12T11:21:00.000Z"),
+          workdir: "/workspace/group-1",
+          connection: { runtimeInstanceId: "runtime-1" },
+          sessions: [
+            {
+              id: "session-1",
+              hosting: "cloud",
+              agentStatus: "done",
+              sessionStatus: "in_progress",
+              createdAt: new Date("2026-05-12T10:00:00.000Z"),
+              lastUserMessageAt: new Date("2026-05-12T11:20:00.000Z"),
+              lastMessageAt: new Date("2026-05-12T11:20:00.000Z"),
+              updatedAt: new Date("2026-05-12T11:21:00.000Z"),
+            },
+          ],
+        },
+      ]);
+
+      const result = await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 10 * 60 * 1000,
+        activeIdleAfterMs: 60 * 60 * 1000,
         now: Date.parse("2026-05-12T11:45:00.000Z"),
       });
 

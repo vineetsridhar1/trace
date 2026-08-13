@@ -2025,6 +2025,7 @@ export class SessionService {
     }
 
     const isNewRuntimeRequest = eventType === "session_runtime_start_requested";
+    const restartActivityAt = isNewRuntimeRequest ? new Date() : undefined;
     const result = await this.updateConnectionConditional(
       sessionId,
       (conn) => {
@@ -2076,11 +2077,19 @@ export class SessionService {
 
         return { ...conn, ...this.lifecycleConnectionPatch(eventType, conn, update, adapterType) };
       },
-      // A restart can intentionally create a fresh runtime without a new user
-      // message. Refresh activity in the same optimistic write that claims the
-      // new generation, so idle cleanup cannot select the group as stale while
-      // that runtime is provisioning.
-      isNewRuntimeRequest ? { sessionData: { lastMessageAt: new Date() } } : undefined,
+      // A restart is an explicit user action, even when it provisions a fresh
+      // runtime without sending a new prompt. Renew both activity timestamps in
+      // the same optimistic write that claims the new generation. This gives a
+      // completed restart the same active-idle lease as a newly sent message and
+      // prevents cleanup from selecting it while it is provisioning.
+      isNewRuntimeRequest
+        ? {
+            sessionData: {
+              lastUserMessageAt: restartActivityAt,
+              lastMessageAt: restartActivityAt,
+            },
+          }
+        : undefined,
     );
 
     if (!result) {
@@ -12153,6 +12162,11 @@ export class SessionService {
                 lastUserMessageAt: null,
                 createdAt: { gt: cutoff },
               },
+              // A user-triggered restart renews lastUserMessageAt even if the
+              // agent finishes before this sweep. Keep that explicit activity
+              // on the longer lease; otherwise a completed restart is reaped
+              // after the ordinary (often 10-minute) idle timeout.
+              { lastUserMessageAt: { gt: activeCutoff } },
               // A cloud agent that is still actively producing output gets a
               // longer lease than an idle session. Once that lease expires,
               // it is treated as abandoned so a crashed bridge cannot keep a
@@ -12217,11 +12231,16 @@ export class SessionService {
         !!groupConnection.providerRuntimeId;
       const cloudSessions = group.sessions.filter((session) => session.hosting === "cloud");
       const activeSessions = group.sessions.filter((session) => session.agentStatus === "active");
+      const hasRecentUserActivity = group.sessions.some(
+        (session) =>
+          session.lastUserMessageAt !== null && session.lastUserMessageAt > activeCutoff,
+      );
       const activeSessionHasRecentActivity = activeSessions.some((session) => {
         const activity = session.lastMessageAt ?? session.lastUserMessageAt ?? session.createdAt;
         return activity > activeCutoff;
       });
       if (
+        hasRecentUserActivity ||
         activeSessionHasRecentActivity ||
         activeSessions.some((session) => session.hosting !== "cloud")
       ) {
