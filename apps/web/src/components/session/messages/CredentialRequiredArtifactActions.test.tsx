@@ -15,7 +15,7 @@ function textContent(node: ReactTestInstance | string | number): string {
 function saveButton(root: ReactTestInstance): ReactTestInstance {
   const button = root
     .findAllByType("button")
-    .find((candidate) => textContent(candidate).includes("Save key and retry"));
+    .find((candidate) => textContent(candidate).includes("Connect"));
   if (!button) throw new Error("Save button was not found");
   return button;
 }

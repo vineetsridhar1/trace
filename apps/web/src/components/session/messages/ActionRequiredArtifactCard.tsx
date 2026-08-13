@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { TerminalSquare, Wrench } from "lucide-react";
+import { KeyRound, TerminalSquare, Wrench } from "lucide-react";
 import { getCodingToolCli, type ActionRequiredArtifact } from "@trace/shared";
 import {
   CREATE_TERMINAL_MUTATION,
@@ -92,19 +92,34 @@ export function ActionRequiredArtifactCard({
     );
 
   return (
-    <div className="my-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
-      <p className="text-sm font-medium text-foreground">{artifact.title}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{artifact.description}</p>
-      {repeatCount > 1 && (
-        <p className="mt-1 text-xs text-muted-foreground">
-          This failure repeated {repeatCount} times while the tool retried.
-        </p>
-      )}
-      {artifact.kind === "credential_required" ? (
-        <CredentialRequiredArtifactActions provider={artifact.provider} sessionId={sessionId} />
-      ) : (
-        <div className="mt-3 flex flex-wrap gap-2">{action}</div>
-      )}
+    <div className="my-2 rounded-2xl bg-muted/50 px-6 py-5">
+      <div className="flex items-center gap-5 max-sm:items-start">
+        {artifact.kind === "credential_required" && (
+          <KeyRound className="h-5 w-5 shrink-0 text-amber-400" />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-semibold text-foreground">
+            {artifact.kind === "credential_required"
+              ? `${artifact.provider === "anthropic" ? "Anthropic" : "OpenAI"} key required`
+              : artifact.title}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {artifact.kind === "credential_required"
+              ? "Connect once to start this cloud session."
+              : artifact.description}
+          </p>
+          {repeatCount > 1 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              This failure repeated {repeatCount} times while the tool retried.
+            </p>
+          )}
+        </div>
+        {artifact.kind === "credential_required" ? (
+          <CredentialRequiredArtifactActions provider={artifact.provider} sessionId={sessionId} />
+        ) : (
+          <div className="flex shrink-0 flex-wrap gap-2">{action}</div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { RETRY_SESSION_CONNECTION_MUTATION } from "@trace/client-core";
 import { gql } from "@urql/core";
 import type { ApiTokenProvider } from "@trace/gql";
@@ -52,22 +52,28 @@ export function CredentialRequiredArtifactActions({
   };
 
   return (
-    <div className="mt-3 space-y-2">
+    <div className="flex min-w-0 flex-1 items-center gap-3 max-sm:w-full max-sm:flex-wrap">
       <Input
         type="password"
         autoComplete="off"
-        placeholder={`${providerName} API key`}
+        placeholder="Paste API key"
         value={apiKey}
         onChange={(event) => setApiKey(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter") void saveAndRetry();
         }}
+        aria-label={`${providerName} API key`}
+        className="h-11 min-w-0 flex-1 bg-background"
       />
-      {error && <p className="text-xs text-destructive">{error}</p>}
-      <Button size="sm" disabled={!apiKey.trim() || saving} onClick={() => void saveAndRetry()}>
-        <RefreshCw />
-        {saving ? "Saving…" : sessionId ? "Save key and retry" : "Save API key"}
+      <Button
+        className="h-11 px-5"
+        disabled={!apiKey.trim() || saving}
+        onClick={() => void saveAndRetry()}
+      >
+        {saving ? "Connecting…" : "Connect"}
+        <ArrowRight />
       </Button>
+      {error && <p className="w-full text-xs text-destructive">{error}</p>}
     </div>
   );
 }
