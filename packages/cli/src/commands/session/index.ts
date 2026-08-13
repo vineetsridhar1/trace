@@ -1,5 +1,6 @@
 import type { CommandDefinition } from "../../runtime.js";
 import { sessionArchiveCommand } from "./archive.js";
+import { sessionLinkPrCommand } from "./link-pr.js";
 import { sessionEventsCommand } from "./events.js";
 import { sessionGetCommand } from "./get.js";
 import { sessionListCommand } from "./list.js";
@@ -18,5 +19,6 @@ export const sessionCommands: readonly CommandDefinition[] = [
   sessionRunCommand,
   sessionStopCommand,
   sessionArchiveCommand,
+  sessionLinkPrCommand,
   sessionEventsCommand,
 ];

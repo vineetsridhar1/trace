@@ -112,6 +112,45 @@ describe("Trace CLI", () => {
     });
   });
 
+  it("links a pull request to the current session", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_SESSION_ID", "session-1");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: URL, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as {
+          operationName: string;
+          variables: Record<string, unknown>;
+        };
+        expect(request.operationName).toBe("TraceCliLinkSessionPullRequest");
+        expect(request.variables).toEqual({
+          sessionId: "session-1",
+          prUrl: "https://github.com/acme/app/pull/42",
+        });
+        return new Response(
+          JSON.stringify({
+            data: {
+              linkSessionPullRequest: {
+                id: "group-1",
+                name: "Feature work",
+                status: "in_review",
+                prUrl: "https://github.com/acme/app/pull/42",
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    await expect(
+      run(["session", "link-pr", "https://github.com/acme/app/pull/42", "--self", "--json"]),
+    ).resolves.toBe(0);
+    expect(stdout.mock.calls.flat().join("")).toContain('"prUrl":"https://github.com/acme/app/pull/42"');
+  });
+
   it("documents every command and group with actionable help metadata", () => {
     for (const command of commands) {
       expect(command.examples?.length, `${command.path.join(" ")} examples`).toBeGreaterThan(0);

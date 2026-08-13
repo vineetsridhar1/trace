@@ -365,6 +365,16 @@ var traceCliOperations = {
       archiveSessionGroup(id: $id) { id name status archivedAt }
     }`
   }),
+  linkSessionPullRequest: operation({
+    name: "TraceCliLinkSessionPullRequest",
+    type: "mutation",
+    rootField: "linkSessionPullRequest",
+    capability: "session:link-pr",
+    argumentPaths: ["sessionId", "prUrl"],
+    document: `mutation TraceCliLinkSessionPullRequest($sessionId: ID!, $prUrl: String!) {
+      linkSessionPullRequest(sessionId: $sessionId, prUrl: $prUrl) { id name status prUrl }
+    }`
+  }),
   sessionEvents: operation({
     name: "TraceCliSessionEvents",
     type: "query",
@@ -1692,6 +1702,30 @@ var sessionArchiveCommand = defineCommand({
   }
 });
 
+// src/commands/session/link-pr.ts
+var sessionLinkPrCommand = defineCommand({
+  path: ["session", "link-pr"],
+  description: "Link a pull request to a session",
+  examples: [
+    '"$TRACE_CLI" session link-pr https://github.com/acme/app/pull/42 --self --json',
+    '"$TRACE_CLI" session link-pr <pr-url> <session-id> --json'
+  ],
+  effects: ["Marks the session group as in review and emits the pull-request-opened event."],
+  output: "The linked session group and its pull request URL.",
+  nextSteps: ["Report the PR URL after Trace confirms the link."],
+  positionals: [{ name: "pr-url", required: true }, { name: "session-id" }],
+  options: [
+    { name: "self", flag: "--self", kind: "boolean", description: "Link the current session" }
+  ],
+  async run(ctx, input) {
+    const prUrl = input.positionals[0]?.trim();
+    if (!prUrl) usage("A pull request URL is required");
+    const sessionId = optionBoolean(input, "self") ? resolveSessionId(ctx) : resolveSessionId(ctx, input.positionals[1]);
+    const result = await (await ctx.client()).graphql(traceCliOperations.linkSessionPullRequest, { sessionId, prUrl });
+    ctx.output({ sessionGroup: result.linkSessionPullRequest }, `Linked pull request to ${sessionId}`);
+  }
+});
+
 // src/commands/session/events.ts
 var sessionEventsCommand = defineCommand({
   path: ["session", "events"],
@@ -2367,6 +2401,7 @@ var sessionCommands = [
   sessionRunCommand,
   sessionStopCommand,
   sessionArchiveCommand,
+  sessionLinkPrCommand,
   sessionEventsCommand
 ];
 

@@ -1222,6 +1222,11 @@ Do this silently — do not mention it to the user unless they ask or it fails.
 If the user asks you to stop auto-saving or disable auto-save, stop doing this for the rest of the session.
 </system-instruction>`;
 
+/** Require coding agents to explicitly link newly-created pull requests. */
+const PULL_REQUEST_LINK_INSTRUCTION = `\n\n<system-instruction>
+When you create a pull request for this session, link it immediately with the Trace CLI so the session stays current even if its branch name changed or repository webhooks are unavailable. First inspect \`"$TRACE_CLI" session link-pr --help --json\`, then run \`"$TRACE_CLI" session link-pr <pr-url> --self --json\` using the URL of the PR you created. Do this before reporting the PR to the user.
+</system-instruction>`;
+
 const DESIGN_CRAFT_SKILL_INSTRUCTION = `\n\n<system-instruction>
 Before substantial interface work, read $TRACE_SKILLS_DIR/design-craft/SKILL.md completely and use the references it routes for the task. Apply its shared design guidance inside the active session's own artifact, runtime, and review contract.
 </system-instruction>`;
@@ -1346,7 +1351,7 @@ function appendPromptInstructions(
   const hasWritableUserRepo =
     hasRepo && sessionGroupKind !== "general" && !isGeneratedProjectKind(sessionGroupKind);
   if (sessionGroupKind === "general") result += GENERAL_SESSION_INSTRUCTION;
-  if (hasWritableUserRepo) result += BRANCH_INSTRUCTION;
+  if (hasWritableUserRepo) result += BRANCH_INSTRUCTION + PULL_REQUEST_LINK_INSTRUCTION;
   result = appendAutoSave(result, hasWritableUserRepo);
   return result;
 }
@@ -13292,6 +13297,45 @@ export class SessionService {
       actorType: "system",
       actorId,
     });
+  }
+
+  /** Explicitly link a PR when a webhook cannot identify the session's current branch. */
+  async linkPullRequest(params: {
+    sessionId: string;
+    prUrl: string;
+    organizationId: string;
+    actorId?: string;
+  }) {
+    let url: URL;
+    try {
+      url = new URL(params.prUrl);
+    } catch {
+      throw new ValidationError("A valid pull request URL is required");
+    }
+    if (url.protocol !== "https:") {
+      throw new ValidationError("The pull request URL must use HTTPS");
+    }
+
+    const session = await prisma.session.findFirst({
+      where: { id: params.sessionId, organizationId: params.organizationId },
+      select: { id: true, sessionGroupId: true },
+    });
+    if (!session) throw new ValidationError("Session not found");
+    if (!session.sessionGroupId) {
+      throw new ValidationError("Session is not part of a session group");
+    }
+
+    await this.markPrOpened({
+      sessionGroupId: session.sessionGroupId,
+      eventSessionId: session.id,
+      prUrl: url.toString(),
+      organizationId: params.organizationId,
+      actorId: params.actorId ?? "trace-cli",
+    });
+
+    const group = await prisma.sessionGroup.findUnique({ where: { id: session.sessionGroupId } });
+    if (!group) throw new ValidationError("Session group not found");
+    return group;
   }
 
   async syncPrObservation(params: {
