@@ -89,6 +89,21 @@ function assertAgentRequest(
   }
   assertAllowedArguments(definition, operation, field, args);
 
+  if (definition.sessionGroupArgumentPath) {
+    const requestedSessionGroupId = definition.sessionGroupArgumentPath
+      .split(".")
+      .reduce<unknown>((value, segment) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+        return (value as Record<string, unknown>)[segment];
+      }, args);
+    if (
+      typeof requestedSessionGroupId !== "string" ||
+      requestedSessionGroupId !== ctx.agentSessionGroupId
+    ) {
+      forbidden("The session credential may only access its current session group");
+    }
+  }
+
   const requestedOrganizationId =
     typeof args.organizationId === "string" ? args.organizationId : null;
   if (requestedOrganizationId && requestedOrganizationId !== ctx.organizationId) {

@@ -41,6 +41,35 @@ function runtimeDescriptor(...args: Parameters<typeof sessionRouter.getRuntimeDe
   return sessionRouter.getRuntimeDescriptor(...args);
 }
 
+async function endpointRuntimeInstanceId(endpoint: {
+  source: "application" | "manual";
+  sessionGroupId: string;
+  appConfigId: string | null;
+  processConfigId: string | null;
+  currentRuntimeInstanceId: string | null;
+}): Promise<string | null> {
+  if (endpoint.source === "manual") return endpoint.currentRuntimeInstanceId;
+  if (!endpoint.appConfigId || !endpoint.processConfigId) return null;
+  const process = await prisma.sessionApplicationProcess.findUnique({
+    where: {
+      sessionGroupId_appConfigId_processConfigId: {
+        sessionGroupId: endpoint.sessionGroupId,
+        appConfigId: endpoint.appConfigId,
+        processConfigId: endpoint.processConfigId,
+      },
+    },
+    select: { status: true, runtimeInstanceId: true },
+  });
+  if (
+    process?.status !== "running" ||
+    !process.runtimeInstanceId ||
+    process.runtimeInstanceId !== endpoint.currentRuntimeInstanceId
+  ) {
+    return null;
+  }
+  return process.runtimeInstanceId;
+}
+
 async function sendRuntimeCommand(...args: Parameters<typeof sessionRouter.sendToRuntime>) {
   return sessionRouter.sendToRuntimeAsync(...args);
 }
@@ -598,20 +627,12 @@ export class EndpointProxyService {
       res.writeHead(410).end("Endpoint expired");
       return;
     }
-    const process = await prisma.sessionApplicationProcess.findUnique({
-      where: {
-        sessionGroupId_appConfigId_processConfigId: {
-          sessionGroupId: endpoint.sessionGroupId,
-          appConfigId: endpoint.appConfigId,
-          processConfigId: endpoint.processConfigId,
-        },
-      },
-    });
-    if (!process || process.status !== "running" || !process.runtimeInstanceId) {
-      res.writeHead(503).end("Process is not running");
+    const runtimeInstanceId = await endpointRuntimeInstanceId(endpoint);
+    if (!runtimeInstanceId) {
+      res.writeHead(503).end("Endpoint runtime is not available");
       return;
     }
-    const runtime = runtimeDescriptor(process.runtimeInstanceId, endpoint.organizationId);
+    const runtime = runtimeDescriptor(runtimeInstanceId, endpoint.organizationId);
     if (!runtime) {
       res.writeHead(503).end("Runtime disconnected");
       return;
@@ -707,7 +728,6 @@ export class EndpointProxyService {
         type: "endpoint_http_request",
         requestId,
         endpointId: endpoint.id,
-        processInstanceId: process.id,
         port: endpoint.targetPort,
         method: req.method ?? "GET",
         path: `${path}${query ? `?${query}` : ""}`,
@@ -846,20 +866,12 @@ export class EndpointProxyService {
         return;
       }
     }
-    const process = await prisma.sessionApplicationProcess.findUnique({
-      where: {
-        sessionGroupId_appConfigId_processConfigId: {
-          sessionGroupId: endpoint.sessionGroupId,
-          appConfigId: endpoint.appConfigId,
-          processConfigId: endpoint.processConfigId,
-        },
-      },
-    });
-    if (!process?.runtimeInstanceId || process.status !== "running") {
+    const runtimeInstanceId = await endpointRuntimeInstanceId(endpoint);
+    if (!runtimeInstanceId) {
       client.close();
       return;
     }
-    const runtime = runtimeDescriptor(process.runtimeInstanceId, endpoint.organizationId);
+    const runtime = runtimeDescriptor(runtimeInstanceId, endpoint.organizationId);
     if (!runtime) {
       client.close();
       return;

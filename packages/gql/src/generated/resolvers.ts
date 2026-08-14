@@ -1077,6 +1077,7 @@ export type Mutation = {
   editChatMessage: Message;
   enableSessionEndpointForwarding: SessionEndpoint;
   forkSession: Session;
+  forwardSessionPort: SessionEndpoint;
   /** Adopt an existing local worktree into a not-yet-started session's group (local hosting only). */
   importWorktree: SessionGroup;
   joinChannel: Channel;
@@ -1357,6 +1358,7 @@ export type MutationDestroyTerminalArgs = {
 
 export type MutationDisableSessionEndpointForwardingArgs = {
   endpointId: Scalars["ID"]["input"];
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type MutationDismissInboxItemArgs = {
@@ -1380,10 +1382,18 @@ export type MutationEditChatMessageArgs = {
 export type MutationEnableSessionEndpointForwardingArgs = {
   accessMode?: InputMaybe<SessionEndpointAccessMode>;
   endpointId: Scalars["ID"]["input"];
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type MutationForkSessionArgs = {
   eventId: Scalars["ID"]["input"];
+};
+
+export type MutationForwardSessionPortArgs = {
+  accessMode?: InputMaybe<SessionEndpointAccessMode>;
+  label?: InputMaybe<Scalars["String"]["input"]>;
+  port: Scalars["Int"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationImportWorktreeArgs = {
@@ -1951,6 +1961,7 @@ export type Query = {
   session?: Maybe<Session>;
   sessionApplicationLogs: Array<SessionApplicationLogEntry>;
   sessionApplicationProcesses: Array<SessionApplicationProcess>;
+  sessionApplicationState: SessionApplicationState;
   sessionEndpoints: Array<SessionEndpoint>;
   sessionEventsAroundEvent: Array<Event>;
   sessionGroup?: Maybe<SessionGroup>;
@@ -2211,9 +2222,14 @@ export type QuerySessionApplicationLogsArgs = {
   beforeSequence?: InputMaybe<Scalars["Int"]["input"]>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
   processId: Scalars["ID"]["input"];
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type QuerySessionApplicationProcessesArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionApplicationStateArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -2560,6 +2576,12 @@ export type SessionApplicationProcess = {
   stoppedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
+export type SessionApplicationState = {
+  __typename?: "SessionApplicationState";
+  applications: Array<RepoApplicationDefinition>;
+  processes: Array<SessionApplicationProcess>;
+};
+
 export type SessionConnection = {
   __typename?: "SessionConnection";
   adapterType?: Maybe<Scalars["String"]["output"]>;
@@ -2612,16 +2634,17 @@ export type SessionConnectionState =
 export type SessionEndpoint = {
   __typename?: "SessionEndpoint";
   accessMode: SessionEndpointAccessMode;
-  appConfigId: Scalars["String"]["output"];
+  appConfigId?: Maybe<Scalars["String"]["output"]>;
   disabledAt?: Maybe<Scalars["DateTime"]["output"]>;
   enabledAt?: Maybe<Scalars["DateTime"]["output"]>;
   id: Scalars["ID"]["output"];
   key: Scalars["String"]["output"];
   label: Scalars["String"]["output"];
-  portConfigId: Scalars["String"]["output"];
-  processConfigId: Scalars["String"]["output"];
+  portConfigId?: Maybe<Scalars["String"]["output"]>;
+  processConfigId?: Maybe<Scalars["String"]["output"]>;
   revokedAt?: Maybe<Scalars["DateTime"]["output"]>;
   sessionGroupId: Scalars["ID"]["output"];
+  source: SessionEndpointSource;
   status: SessionEndpointStatus;
   targetPort: Scalars["Int"]["output"];
   trafficCaptureMode: EndpointTrafficCaptureMode;
@@ -2635,6 +2658,8 @@ export type SessionEndpointPreview = {
   expiresAt: Scalars["DateTime"]["output"];
   url: Scalars["String"]["output"];
 };
+
+export type SessionEndpointSource = "application" | "manual";
 
 export type SessionEndpointStatus = "disabled" | "enabled" | "revoked" | "unavailable";
 
@@ -3310,11 +3335,13 @@ export type ResolversTypes = ResolversObject<{
   Session: ResolverTypeWrapper<Session>;
   SessionApplicationLogEntry: ResolverTypeWrapper<SessionApplicationLogEntry>;
   SessionApplicationProcess: ResolverTypeWrapper<SessionApplicationProcess>;
+  SessionApplicationState: ResolverTypeWrapper<SessionApplicationState>;
   SessionConnection: ResolverTypeWrapper<SessionConnection>;
   SessionConnectionState: SessionConnectionState;
   SessionEndpoint: ResolverTypeWrapper<SessionEndpoint>;
   SessionEndpointAccessMode: SessionEndpointAccessMode;
   SessionEndpointPreview: ResolverTypeWrapper<SessionEndpointPreview>;
+  SessionEndpointSource: SessionEndpointSource;
   SessionEndpointStatus: SessionEndpointStatus;
   SessionEndpoints: ResolverTypeWrapper<SessionEndpoints>;
   SessionFilters: SessionFilters;
@@ -3469,6 +3496,7 @@ export type ResolversParentTypes = ResolversObject<{
   Session: Session;
   SessionApplicationLogEntry: SessionApplicationLogEntry;
   SessionApplicationProcess: SessionApplicationProcess;
+  SessionApplicationState: SessionApplicationState;
   SessionConnection: SessionConnection;
   SessionEndpoint: SessionEndpoint;
   SessionEndpointPreview: SessionEndpointPreview;
@@ -4633,6 +4661,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationForkSessionArgs, "eventId">
   >;
+  forwardSessionPort?: Resolver<
+    ResolversTypes["SessionEndpoint"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationForwardSessionPortArgs, "port" | "sessionGroupId">
+  >;
   importWorktree?: Resolver<
     ResolversTypes["SessionGroup"],
     ParentType,
@@ -5536,6 +5570,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QuerySessionApplicationProcessesArgs, "sessionGroupId">
   >;
+  sessionApplicationState?: Resolver<
+    ResolversTypes["SessionApplicationState"],
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionApplicationStateArgs, "sessionGroupId">
+  >;
   sessionEndpoints?: Resolver<
     Array<ResolversTypes["SessionEndpoint"]>,
     ParentType,
@@ -5886,6 +5926,20 @@ export type SessionApplicationProcessResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type SessionApplicationStateResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionApplicationState"] =
+    ResolversParentTypes["SessionApplicationState"],
+> = ResolversObject<{
+  applications?: Resolver<
+    Array<ResolversTypes["RepoApplicationDefinition"]>,
+    ParentType,
+    ContextType
+  >;
+  processes?: Resolver<Array<ResolversTypes["SessionApplicationProcess"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type SessionConnectionResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["SessionConnection"] =
@@ -5924,16 +5978,17 @@ export type SessionEndpointResolvers<
     ResolversParentTypes["SessionEndpoint"],
 > = ResolversObject<{
   accessMode?: Resolver<ResolversTypes["SessionEndpointAccessMode"], ParentType, ContextType>;
-  appConfigId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  appConfigId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   disabledAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   enabledAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   key?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   label?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  portConfigId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  processConfigId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  portConfigId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  processConfigId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   revokedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  source?: Resolver<ResolversTypes["SessionEndpointSource"], ParentType, ContextType>;
   status?: Resolver<ResolversTypes["SessionEndpointStatus"], ParentType, ContextType>;
   targetPort?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
   trafficCaptureMode?: Resolver<
@@ -6429,6 +6484,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Session?: SessionResolvers<ContextType>;
   SessionApplicationLogEntry?: SessionApplicationLogEntryResolvers<ContextType>;
   SessionApplicationProcess?: SessionApplicationProcessResolvers<ContextType>;
+  SessionApplicationState?: SessionApplicationStateResolvers<ContextType>;
   SessionConnection?: SessionConnectionResolvers<ContextType>;
   SessionEndpoint?: SessionEndpointResolvers<ContextType>;
   SessionEndpointPreview?: SessionEndpointPreviewResolvers<ContextType>;
