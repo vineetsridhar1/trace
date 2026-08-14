@@ -213,7 +213,11 @@ export class SessionApplicationService {
   }
 
   async getApplicationState(sessionGroupId: string, organizationId: string, userId: string) {
-    const { group } = await this.resolveCloudRuntime(sessionGroupId, organizationId, userId);
+    const { group } = await this.resolveApplicationCloudRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
     const config = isGeneratedProjectKind(group.kind)
       ? generatedProjectConfig(group.kind)
       : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
@@ -307,7 +311,7 @@ export class SessionApplicationService {
     organizationId: string,
     userId: string,
   ) {
-    const { group, sessionId, runtimeId } = await this.resolveCloudRuntime(
+    const { group, sessionId, runtimeId } = await this.resolveApplicationCloudRuntime(
       sessionGroupId,
       organizationId,
       userId,
@@ -383,7 +387,7 @@ export class SessionApplicationService {
     userId: string,
     options?: { asSystem?: boolean },
   ) {
-    const { group } = await this.resolveCloudRuntime(
+    const { group } = await this.resolveApplicationCloudRuntime(
       sessionGroupId,
       organizationId,
       userId,
@@ -412,7 +416,11 @@ export class SessionApplicationService {
     organizationId: string,
     userId: string,
   ) {
-    const { group } = await this.resolveCloudRuntime(sessionGroupId, organizationId, userId);
+    const { group } = await this.resolveApplicationCloudRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
     const app = this.getApplication(group, appConfigId);
     return Promise.all(
       app.processes.map((process) =>
@@ -429,7 +437,7 @@ export class SessionApplicationService {
     userId: string,
     options?: { asSystem?: boolean },
   ) {
-    const { group, sessionId, runtimeId } = await this.resolveCloudRuntime(
+    const { group, sessionId, runtimeId } = await this.resolveApplicationCloudRuntime(
       sessionGroupId,
       organizationId,
       userId,
@@ -555,7 +563,7 @@ export class SessionApplicationService {
     organizationId: string,
     userId: string,
   ) {
-    const { sessionId, runtimeId } = await this.resolveCloudRuntime(
+    const { sessionId, runtimeId } = await this.resolveApplicationCloudRuntime(
       sessionGroupId,
       organizationId,
       userId,
@@ -1369,9 +1377,6 @@ export class SessionApplicationService {
         "Application forwarding is currently only available for cloud sessions",
       );
     }
-    if (!isGeneratedProjectKind(group.kind) && (!group.repoId || !group.repo)) {
-      throw new ValidationError("Session group does not have a repo");
-    }
     const session = group.sessions.find((candidate) =>
       connectionRuntimeInstanceId(candidate.connection),
     );
@@ -1388,6 +1393,22 @@ export class SessionApplicationService {
       );
     }
     return { group: group as ManagedSessionGroup, sessionId: session.id, runtimeId: runtime.key };
+  }
+
+  private async resolveApplicationCloudRuntime(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string | null | undefined,
+    options?: { asSystem?: boolean },
+  ) {
+    const runtime = await this.resolveCloudRuntime(sessionGroupId, organizationId, userId, options);
+    if (
+      !isGeneratedProjectKind(runtime.group.kind) &&
+      (!runtime.group.repoId || !runtime.group.repo)
+    ) {
+      throw new ValidationError("Session group does not have a repo");
+    }
+    return runtime;
   }
 
   private async assertCloudSessionGroup(

@@ -232,6 +232,46 @@ describe("SessionApplicationService", () => {
     );
   });
 
+  it("forwards an arbitrary port for a repo-less general cloud session", async () => {
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
+      id: "group-1",
+      kind: "general",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+      visibility: "public",
+      repoId: null,
+      repo: null,
+      workdir: "/workspace",
+      sessions: [
+        {
+          id: "session-1",
+          hosting: "cloud",
+          workdir: "/workspace",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ],
+    });
+    prismaMock.sessionEndpoint.upsert.mockImplementationOnce(async ({ create }) => ({
+      id: "endpoint-manual",
+      ...create,
+      repoId: create.repoId ?? null,
+      trafficCaptureMode: "metadata",
+      disabledAt: null,
+      revokedAt: null,
+    }));
+
+    await expect(
+      new SessionApplicationService().forwardPort("group-1", 4321, "org-1", "user-1"),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        source: "manual",
+        repoId: null,
+        targetPort: 4321,
+        currentRuntimeInstanceId: "runtime-1",
+      }),
+    );
+  });
+
   it("starts a process and creates missing endpoint records for configured ports", async () => {
     const process = await new SessionApplicationService().startProcess(
       "group-1",

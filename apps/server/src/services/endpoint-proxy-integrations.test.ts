@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { Readable } from "stream";
+import type { WebSocket } from "ws";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../lib/db.js", async () => {
@@ -197,6 +198,50 @@ describe("EndpointProxyService application integrations", () => {
     expect(sessionRouterMock.sendToRuntimeAsync).toHaveBeenCalledWith(
       "runtime-key",
       expect.objectContaining({ type: "endpoint_http_request", port: 4321 }),
+      "org-1",
+    );
+  });
+
+  it("opens a WebSocket for a manual endpoint without requiring an application process", async () => {
+    prismaMock.sessionEndpoint.findUnique.mockResolvedValueOnce({
+      id: "endpoint-manual",
+      key: "manual-key",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      source: "manual",
+      appConfigId: null,
+      processConfigId: null,
+      status: "enabled",
+      accessMode: "public",
+      targetPort: 4321,
+      currentRuntimeInstanceId: "runtime-1",
+    });
+    sessionRouterMock.getRuntimeDescriptor.mockReturnValue({ key: "runtime-key" });
+    sessionRouterMock.sendToRuntimeAsync.mockResolvedValue("delivered");
+    const client = {
+      on: vi.fn(),
+      close: vi.fn(),
+      OPEN: 1,
+      readyState: 1,
+    } as unknown as WebSocket;
+    const request = {
+      url: "/socket?transport=websocket",
+      headers: {},
+    } as IncomingMessage;
+    const service = new EndpointProxyService() as unknown as {
+      openWebSocket(endpointKey: string, req: IncomingMessage, client: WebSocket): Promise<void>;
+    };
+
+    await service.openWebSocket("manual-key", request, client);
+
+    expect(prismaMock.sessionApplicationProcess.findUnique).not.toHaveBeenCalled();
+    expect(sessionRouterMock.sendToRuntimeAsync).toHaveBeenCalledWith(
+      "runtime-key",
+      expect.objectContaining({
+        type: "endpoint_ws_open",
+        port: 4321,
+        path: "/socket?transport=websocket",
+      }),
       "org-1",
     );
   });
