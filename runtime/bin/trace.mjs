@@ -29,7 +29,7 @@ var SESSION_APPLICATION_PROCESS_FIELDS = `
   endpoints { id url label targetPort status accessMode }
 `;
 var SESSION_ENDPOINT_FIELDS = `
-  id key url sessionGroupId appConfigId processConfigId portConfigId label targetPort
+  id key url sessionGroupId source appConfigId processConfigId portConfigId label targetPort
   status accessMode trafficCaptureMode enabledAt disabledAt revokedAt
 `;
 var REPO_APPLICATION_FIELDS = `
@@ -45,11 +45,11 @@ var traceCliOperations = {
     rootField: "sessionApplicationState",
     capability: "app:control",
     argumentPaths: ["sessionGroupId"],
+    sessionGroupArgumentPath: "sessionGroupId",
     document: `query TraceCliSessionApplicationState($sessionGroupId: ID!) {
       sessionApplicationState(sessionGroupId: $sessionGroupId) {
         applications { ${REPO_APPLICATION_FIELDS} }
         processes { ${SESSION_APPLICATION_PROCESS_FIELDS} }
-        endpoints { ${SESSION_ENDPOINT_FIELDS} }
       }
     }`
   }),
@@ -58,9 +58,10 @@ var traceCliOperations = {
     type: "query",
     rootField: "sessionApplicationLogs",
     capability: "app:control",
-    argumentPaths: ["processId", "limit"],
-    document: `query TraceCliSessionApplicationLogs($processId: ID!, $limit: Int) {
-      sessionApplicationLogs(processId: $processId, limit: $limit) {
+    argumentPaths: ["sessionGroupId", "processId", "limit"],
+    sessionGroupArgumentPath: "sessionGroupId",
+    document: `query TraceCliSessionApplicationLogs($sessionGroupId: ID!, $processId: ID!, $limit: Int) {
+      sessionApplicationLogs(sessionGroupId: $sessionGroupId, processId: $processId, limit: $limit) {
         id processId stream data sequence timestamp
       }
     }`
@@ -71,6 +72,7 @@ var traceCliOperations = {
     rootField: "startSessionApplication",
     capability: "app:control",
     argumentPaths: ["sessionGroupId", "appConfigId"],
+    sessionGroupArgumentPath: "sessionGroupId",
     document: `mutation TraceCliStartSessionApplication($sessionGroupId: ID!, $appConfigId: ID!) {
       startSessionApplication(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId) { ${SESSION_APPLICATION_PROCESS_FIELDS} }
     }`
@@ -81,6 +83,7 @@ var traceCliOperations = {
     rootField: "stopSessionApplication",
     capability: "app:control",
     argumentPaths: ["sessionGroupId", "appConfigId"],
+    sessionGroupArgumentPath: "sessionGroupId",
     document: `mutation TraceCliStopSessionApplication($sessionGroupId: ID!, $appConfigId: ID!) {
       stopSessionApplication(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId) { ${SESSION_APPLICATION_PROCESS_FIELDS} }
     }`
@@ -91,6 +94,7 @@ var traceCliOperations = {
     rootField: "startSessionProcess",
     capability: "app:control",
     argumentPaths: ["sessionGroupId", "appConfigId", "processConfigId"],
+    sessionGroupArgumentPath: "sessionGroupId",
     document: `mutation TraceCliStartSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {
       startSessionProcess(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId, processConfigId: $processConfigId) { ${SESSION_APPLICATION_PROCESS_FIELDS} }
     }`
@@ -101,6 +105,7 @@ var traceCliOperations = {
     rootField: "stopSessionProcess",
     capability: "app:control",
     argumentPaths: ["sessionGroupId", "appConfigId", "processConfigId"],
+    sessionGroupArgumentPath: "sessionGroupId",
     document: `mutation TraceCliStopSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {
       stopSessionProcess(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId, processConfigId: $processConfigId) { ${SESSION_APPLICATION_PROCESS_FIELDS} }
     }`
@@ -111,6 +116,7 @@ var traceCliOperations = {
     rootField: "restartSessionProcess",
     capability: "app:control",
     argumentPaths: ["sessionGroupId", "appConfigId", "processConfigId"],
+    sessionGroupArgumentPath: "sessionGroupId",
     document: `mutation TraceCliRestartSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {
       restartSessionProcess(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId, processConfigId: $processConfigId) { ${SESSION_APPLICATION_PROCESS_FIELDS} }
     }`
@@ -121,8 +127,20 @@ var traceCliOperations = {
     rootField: "forwardSessionPort",
     capability: "port:control",
     argumentPaths: ["sessionGroupId", "port", "label", "accessMode"],
+    sessionGroupArgumentPath: "sessionGroupId",
     document: `mutation TraceCliForwardSessionPort($sessionGroupId: ID!, $port: Int!, $label: String, $accessMode: SessionEndpointAccessMode) {
       forwardSessionPort(sessionGroupId: $sessionGroupId, port: $port, label: $label, accessMode: $accessMode) { ${SESSION_ENDPOINT_FIELDS} }
+    }`
+  }),
+  sessionEndpoints: operation({
+    name: "TraceCliSessionEndpoints",
+    type: "query",
+    rootField: "sessionEndpoints",
+    capability: "port:control",
+    argumentPaths: ["sessionGroupId"],
+    sessionGroupArgumentPath: "sessionGroupId",
+    document: `query TraceCliSessionEndpoints($sessionGroupId: ID!) {
+      sessionEndpoints(sessionGroupId: $sessionGroupId) { ${SESSION_ENDPOINT_FIELDS} }
     }`
   }),
   enableSessionEndpointForwarding: operation({
@@ -130,9 +148,10 @@ var traceCliOperations = {
     type: "mutation",
     rootField: "enableSessionEndpointForwarding",
     capability: "port:control",
-    argumentPaths: ["endpointId", "accessMode"],
-    document: `mutation TraceCliEnableSessionEndpointForwarding($endpointId: ID!, $accessMode: SessionEndpointAccessMode) {
-      enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: $accessMode) { ${SESSION_ENDPOINT_FIELDS} }
+    argumentPaths: ["sessionGroupId", "endpointId", "accessMode"],
+    sessionGroupArgumentPath: "sessionGroupId",
+    document: `mutation TraceCliEnableSessionEndpointForwarding($sessionGroupId: ID!, $endpointId: ID!, $accessMode: SessionEndpointAccessMode) {
+      enableSessionEndpointForwarding(sessionGroupId: $sessionGroupId, endpointId: $endpointId, accessMode: $accessMode) { ${SESSION_ENDPOINT_FIELDS} }
     }`
   }),
   disableSessionEndpointForwarding: operation({
@@ -140,9 +159,10 @@ var traceCliOperations = {
     type: "mutation",
     rootField: "disableSessionEndpointForwarding",
     capability: "port:control",
-    argumentPaths: ["endpointId"],
-    document: `mutation TraceCliDisableSessionEndpointForwarding($endpointId: ID!) {
-      disableSessionEndpointForwarding(endpointId: $endpointId) { ${SESSION_ENDPOINT_FIELDS} }
+    argumentPaths: ["sessionGroupId", "endpointId"],
+    sessionGroupArgumentPath: "sessionGroupId",
+    document: `mutation TraceCliDisableSessionEndpointForwarding($sessionGroupId: ID!, $endpointId: ID!) {
+      disableSessionEndpointForwarding(sessionGroupId: $sessionGroupId, endpointId: $endpointId) { ${SESSION_ENDPOINT_FIELDS} }
     }`
   }),
   appDeployments: operation({
@@ -1316,16 +1336,15 @@ var appRuntimeCommands = [
       }
     ],
     async run(ctx, input) {
-      const sessionGroupId = requireCurrentAppGroup(ctx);
-      await (await ctx.client()).graphql(
-        traceCliOperations.sessionApplicationState,
-        { sessionGroupId }
-      );
       const variables = {
+        sessionGroupId: requireCurrentAppGroup(ctx),
         processId: input.positionals[0],
         limit: optionInteger(input, "limit") ?? 200
       };
-      const result = await (await ctx.client()).graphql(traceCliOperations.sessionApplicationLogs, variables);
+      const result = await (await ctx.client()).graphql(
+        traceCliOperations.sessionApplicationLogs,
+        variables
+      );
       const logs = [...result.sessionApplicationLogs].reverse();
       ctx.output(
         { logs },
@@ -1816,16 +1835,16 @@ var portCommands = [
     path: ["port", "list"],
     description: "List independently managed and application-owned ports in the cloud session",
     examples: ['"$TRACE_CLI" port list --json'],
-    effects: ["Read-only; validates that the current session has a connected cloud runtime."],
+    effects: ["Read-only; validates that the current session is cloud-hosted."],
     output: "Endpoint IDs, target ports, states, access modes, labels, and public URLs.",
     nextSteps: ['Use "$TRACE_CLI" port forward <port> --json to expose an arbitrary HTTP port.'],
     async run(ctx) {
       const variables = { sessionGroupId: requireCurrentAppGroup(ctx) };
       const result = await (await ctx.client()).graphql(
-        traceCliOperations.sessionApplicationState,
+        traceCliOperations.sessionEndpoints,
         variables
       );
-      const endpoints = result.sessionApplicationState.endpoints;
+      const endpoints = result.sessionEndpoints;
       ctx.output(
         { endpoints },
         endpoints.length ? endpoints.map(endpointLine).join("\n") : "No forwarded ports found"
@@ -1886,6 +1905,7 @@ var portCommands = [
     options: [accessOption],
     async run(ctx, input) {
       const variables = {
+        sessionGroupId: requireCurrentAppGroup(ctx),
         endpointId: input.positionals[0],
         accessMode: optionString(input, "access")
       };
@@ -1910,7 +1930,10 @@ var portCommands = [
     nextSteps: ['Use "$TRACE_CLI" port enable <endpoint-id> --json to re-enable it later.'],
     positionals: [{ name: "endpoint-id", required: true }],
     async run(ctx, input) {
-      const variables = { endpointId: input.positionals[0] };
+      const variables = {
+        sessionGroupId: requireCurrentAppGroup(ctx),
+        endpointId: input.positionals[0]
+      };
       const result = await (await ctx.client()).graphql(
         traceCliOperations.disableSessionEndpointForwarding,
         variables
@@ -3023,7 +3046,7 @@ var commandGroups = [
     notes: [
       "Port forwarding is independent of repo application commands and configured application ports.",
       "Public is the default for newly forwarded arbitrary ports; use --access private when required.",
-      "All port controls require a connected cloud session and fail for local sessions."
+      "Port controls fail for local sessions; forwarding and enabling require a connected cloud runtime."
     ]
   },
   {

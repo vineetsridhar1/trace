@@ -1,18 +1,7 @@
 import { traceCliOperations } from "@trace/cli-contract";
 import { usage } from "../../errors.js";
 import { defineCommand, optionString, type CommandDefinition } from "../../runtime.js";
-import { requireCurrentAppGroup } from "../app/shared.js";
-
-type EndpointView = {
-  id: string;
-  url: string;
-  label: string;
-  targetPort: number;
-  status: string;
-  accessMode: string;
-  appConfigId: string;
-  processConfigId: string;
-};
+import { requireCurrentAppGroup, type EndpointView } from "../app/shared.js";
 
 function endpointLine(endpoint: EndpointView): string {
   return `${endpoint.id}\t${endpoint.targetPort}\t${endpoint.status}\t${endpoint.accessMode}\t${endpoint.url}\t${endpoint.label}`;
@@ -32,18 +21,18 @@ export const portCommands: readonly CommandDefinition[] = [
     path: ["port", "list"],
     description: "List independently managed and application-owned ports in the cloud session",
     examples: ['"$TRACE_CLI" port list --json'],
-    effects: ["Read-only; validates that the current session has a connected cloud runtime."],
+    effects: ["Read-only; validates that the current session is cloud-hosted."],
     output: "Endpoint IDs, target ports, states, access modes, labels, and public URLs.",
     nextSteps: ['Use "$TRACE_CLI" port forward <port> --json to expose an arbitrary HTTP port.'],
     async run(ctx) {
       const variables = { sessionGroupId: requireCurrentAppGroup(ctx) };
       const result = await (
         await ctx.client()
-      ).graphql<{ sessionApplicationState: { endpoints: EndpointView[] } }, typeof variables>(
-        traceCliOperations.sessionApplicationState,
+      ).graphql<{ sessionEndpoints: EndpointView[] }, typeof variables>(
+        traceCliOperations.sessionEndpoints,
         variables,
       );
-      const endpoints = result.sessionApplicationState.endpoints;
+      const endpoints = result.sessionEndpoints;
       ctx.output(
         { endpoints },
         endpoints.length ? endpoints.map(endpointLine).join("\n") : "No forwarded ports found",
@@ -106,6 +95,7 @@ export const portCommands: readonly CommandDefinition[] = [
     options: [accessOption],
     async run(ctx, input) {
       const variables = {
+        sessionGroupId: requireCurrentAppGroup(ctx),
         endpointId: input.positionals[0]!,
         accessMode: optionString(input, "access"),
       };
@@ -132,7 +122,10 @@ export const portCommands: readonly CommandDefinition[] = [
     nextSteps: ['Use "$TRACE_CLI" port enable <endpoint-id> --json to re-enable it later.'],
     positionals: [{ name: "endpoint-id", required: true }],
     async run(ctx, input) {
-      const variables = { endpointId: input.positionals[0]! };
+      const variables = {
+        sessionGroupId: requireCurrentAppGroup(ctx),
+        endpointId: input.positionals[0]!,
+      };
       const result = await (
         await ctx.client()
       ).graphql<{ disableSessionEndpointForwarding: EndpointView }, typeof variables>(

@@ -35,10 +35,16 @@ export const sessionApplicationQueries = {
     ),
   sessionApplicationLogs: (
     _parent: unknown,
-    args: { processId: string; limit?: number | null; beforeSequence?: number | null },
+    args: {
+      sessionGroupId?: string | null;
+      processId: string;
+      limit?: number | null;
+      beforeSequence?: number | null;
+    },
     ctx: Context,
   ) =>
     sessionApplicationService.listLogs(args.processId, requireOrgContext(ctx), requireUser(ctx), {
+      sessionGroupId: args.sessionGroupId,
       limit: args.limit,
       beforeSequence: args.beforeSequence,
     }),
@@ -136,7 +142,11 @@ export const sessionApplicationMutations = {
     ),
   enableSessionEndpointForwarding: (
     _parent: unknown,
-    args: { endpointId: string; accessMode?: SessionEndpointAccessMode | null },
+    args: {
+      sessionGroupId?: string | null;
+      endpointId: string;
+      accessMode?: SessionEndpointAccessMode | null;
+    },
     ctx: Context,
   ) =>
     sessionApplicationService.enableEndpoint(
@@ -144,16 +154,18 @@ export const sessionApplicationMutations = {
       requireOrgContext(ctx),
       requireUser(ctx),
       args.accessMode,
+      args.sessionGroupId,
     ),
   disableSessionEndpointForwarding: (
     _parent: unknown,
-    args: { endpointId: string },
+    args: { sessionGroupId?: string | null; endpointId: string },
     ctx: Context,
   ) =>
     sessionApplicationService.disableEndpoint(
       args.endpointId,
       requireOrgContext(ctx),
       requireUser(ctx),
+      args.sessionGroupId,
     ),
   forwardSessionPort: (
     _parent: unknown,

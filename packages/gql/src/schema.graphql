@@ -176,6 +176,11 @@ enum SessionEndpointAccessMode {
   public
 }
 
+enum SessionEndpointSource {
+  application
+  manual
+}
+
 enum EndpointTrafficCaptureMode {
   metadata
   headers
@@ -1034,7 +1039,6 @@ type SessionApplicationLogEntry {
 type SessionApplicationState {
   applications: [RepoApplicationDefinition!]!
   processes: [SessionApplicationProcess!]!
-  endpoints: [SessionEndpoint!]!
 }
 
 type SessionEndpoint {
@@ -1042,9 +1046,10 @@ type SessionEndpoint {
   key: String!
   url: String!
   sessionGroupId: ID!
-  appConfigId: String!
-  processConfigId: String!
-  portConfigId: String!
+  source: SessionEndpointSource!
+  appConfigId: String
+  processConfigId: String
+  portConfigId: String
   label: String!
   targetPort: Int!
   status: SessionEndpointStatus!
@@ -1941,6 +1946,7 @@ type Query {
   sessionApplicationProcesses(sessionGroupId: ID!): [SessionApplicationProcess!]!
   sessionApplicationState(sessionGroupId: ID!): SessionApplicationState!
   sessionApplicationLogs(
+    sessionGroupId: ID
     processId: ID!
     limit: Int
     beforeSequence: Int
@@ -2241,10 +2247,11 @@ type Mutation {
     processConfigId: ID!
   ): SessionApplicationProcess!
   enableSessionEndpointForwarding(
+    sessionGroupId: ID
     endpointId: ID!
     accessMode: SessionEndpointAccessMode
   ): SessionEndpoint!
-  disableSessionEndpointForwarding(endpointId: ID!): SessionEndpoint!
+  disableSessionEndpointForwarding(sessionGroupId: ID, endpointId: ID!): SessionEndpoint!
   forwardSessionPort(
     sessionGroupId: ID!
     port: Int!

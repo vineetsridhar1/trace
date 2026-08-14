@@ -87,6 +87,7 @@ function mockGroup() {
     sessions: [
       {
         id: "session-1",
+        hosting: "cloud",
         workdir: "/workspace",
         connection: { runtimeInstanceId: "runtime-1" },
       },
@@ -184,31 +185,13 @@ describe("SessionApplicationService", () => {
   });
 
   it("forwards an arbitrary port without an application process", async () => {
-    prismaMock.sessionEndpoint.create.mockImplementationOnce(async ({ data }) => ({
+    prismaMock.sessionEndpoint.upsert.mockImplementationOnce(async ({ create }) => ({
       id: "endpoint-manual",
-      ...data,
-      repoId: data.repoId ?? null,
-      status: "disabled",
-      accessMode: "private",
+      ...create,
+      repoId: create.repoId ?? null,
       trafficCaptureMode: "metadata",
-      enabledAt: null,
       disabledAt: null,
       revokedAt: null,
-    }));
-    prismaMock.sessionEndpoint.update.mockImplementationOnce(async ({ data }) => ({
-      id: "endpoint-manual",
-      key: "endpointkey1",
-      organizationId: "org-1",
-      sessionGroupId: "group-1",
-      repoId: "repo-1",
-      appConfigId: "__trace_manual_port__",
-      processConfigId: "__trace_manual_port__",
-      portConfigId: "4321",
-      targetPort: 4321,
-      protocol: "http",
-      trafficCaptureMode: "metadata",
-      revokedAt: null,
-      ...data,
     }));
 
     const endpoint = await new SessionApplicationService().forwardPort(
@@ -229,19 +212,23 @@ describe("SessionApplicationService", () => {
       }),
     );
     expect(prismaMock.sessionApplicationProcess.findUnique).not.toHaveBeenCalled();
-    expect(prismaMock.sessionEndpoint.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        appConfigId: "__trace_manual_port__",
-        processConfigId: "__trace_manual_port__",
-        portConfigId: "4321",
-        targetPort: 4321,
+    expect(prismaMock.sessionEndpoint.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { sessionGroupId_manualPort: { sessionGroupId: "group-1", manualPort: 4321 } },
+        create: expect.objectContaining({
+          source: "manual",
+          manualPort: 4321,
+          targetPort: 4321,
+        }),
+        update: expect.objectContaining({
+          status: "enabled",
+          currentRuntimeInstanceId: "runtime-1",
+        }),
       }),
-    });
-    expect(eventServiceMock.create).toHaveBeenCalledWith(
-      expect.objectContaining({ eventType: "session_endpoint_created" }),
     );
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: "session_endpoint_forwarding_enabled" }),
+      expect.anything(),
     );
   });
 
@@ -321,6 +308,7 @@ describe("SessionApplicationService", () => {
       sessions: [
         {
           id: "session-1",
+          hosting: "cloud",
           workdir: "/workspace",
           connection: { runtimeInstanceId: "runtime-1" },
         },
@@ -353,6 +341,7 @@ describe("SessionApplicationService", () => {
       sessions: [
         {
           id: "session-1",
+          hosting: "cloud",
           workdir: "/workspace",
           connection: { runtimeInstanceId: "runtime-1" },
         },
@@ -385,6 +374,7 @@ describe("SessionApplicationService", () => {
       sessions: [
         {
           id: "session-1",
+          hosting: "cloud",
           workdir: "/workspace",
           connection: { runtimeInstanceId: "runtime-1" },
         },
@@ -422,6 +412,63 @@ describe("SessionApplicationService", () => {
     await expect(
       new SessionApplicationService().enableEndpoint("endpoint-1", "org-1", "user-1"),
     ).rejects.toThrow("Start the process first (current status: stopped)");
+  });
+
+  it("disables forwarding while the cloud runtime is disconnected", async () => {
+    const endpoint = {
+      id: "endpoint-manual",
+      key: "endpointkey1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: null,
+      source: "manual" as const,
+      appConfigId: null,
+      processConfigId: null,
+      portConfigId: null,
+      manualPort: 4321,
+      label: "Port 4321",
+      targetPort: 4321,
+      protocol: "http",
+      status: "enabled" as const,
+      accessMode: "public" as const,
+      trafficCaptureMode: "metadata" as const,
+      currentRuntimeInstanceId: "runtime-1",
+      enabledByUserId: "user-1",
+      enabledAt: new Date("2026-06-07T00:00:00.000Z"),
+      disabledAt: null,
+      revokedAt: null,
+      expiresAt: null,
+      createdAt: new Date("2026-06-07T00:00:00.000Z"),
+      updatedAt: new Date("2026-06-07T00:00:00.000Z"),
+    };
+    prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce(endpoint);
+    prismaMock.sessionEndpoint.update.mockResolvedValueOnce({
+      ...endpoint,
+      status: "disabled",
+      currentRuntimeInstanceId: null,
+      disabledAt: new Date("2026-06-07T00:01:00.000Z"),
+    });
+    sessionRouterMock.isRuntimeAvailable.mockReturnValue(false);
+
+    await expect(
+      new SessionApplicationService().disableEndpoint(
+        "endpoint-manual",
+        "org-1",
+        "user-1",
+        "group-1",
+      ),
+    ).resolves.toEqual(expect.objectContaining({ status: "disabled" }));
+    expect(sessionRouterMock.getRuntimeMetadata).not.toHaveBeenCalled();
+  });
+
+  it("lists ports without parsing application configuration or requiring a live runtime", async () => {
+    prismaMock.sessionEndpoint.findMany.mockResolvedValueOnce([]);
+    sessionRouterMock.isRuntimeAvailable.mockReturnValue(false);
+
+    await expect(
+      new SessionApplicationService().listEndpoints("group-1", "org-1", "user-1"),
+    ).resolves.toEqual([]);
+    expect(sessionRouterMock.getRuntimeMetadata).not.toHaveBeenCalled();
   });
 
   it("creates a clean generated preview redirect", async () => {

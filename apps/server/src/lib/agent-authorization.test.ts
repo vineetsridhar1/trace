@@ -62,6 +62,9 @@ describe("agent GraphQL authorization", () => {
         [definition.rootField]: resolver,
       });
       const args = (() => {
+        if (definition.sessionGroupArgumentPath === "sessionGroupId") {
+          return { sessionGroupId: "group-a" };
+        }
         if (definition.rootField === "events") {
           return { organizationId: "org-1", scope: { type: "session", id: "session-a" } };
         }
@@ -85,6 +88,20 @@ describe("agent GraphQL authorization", () => {
         ),
       ).toBe("ok");
     }
+  });
+
+  it("limits scoped CLI operations to the agent's current session group", () => {
+    const restricted = restrictAgentRootResolvers("Mutation", {
+      forwardSessionPort: () => ({}),
+    });
+    expect(() =>
+      restricted.forwardSessionPort(
+        null,
+        { sessionGroupId: "group-b", port: 3000 },
+        context("session-a"),
+        infoFor(traceCliOperations.forwardSessionPort.document),
+      ),
+    ).toThrow("only access its current session group");
   });
 
   it("limits app integration configuration to the agent's current group", () => {

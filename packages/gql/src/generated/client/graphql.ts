@@ -1357,6 +1357,7 @@ export type MutationDestroyTerminalArgs = {
 
 export type MutationDisableSessionEndpointForwardingArgs = {
   endpointId: Scalars["ID"]["input"];
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type MutationDismissInboxItemArgs = {
@@ -1380,6 +1381,7 @@ export type MutationEditChatMessageArgs = {
 export type MutationEnableSessionEndpointForwardingArgs = {
   accessMode?: InputMaybe<SessionEndpointAccessMode>;
   endpointId: Scalars["ID"]["input"];
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type MutationForkSessionArgs = {
@@ -2219,6 +2221,7 @@ export type QuerySessionApplicationLogsArgs = {
   beforeSequence?: InputMaybe<Scalars["Int"]["input"]>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
   processId: Scalars["ID"]["input"];
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type QuerySessionApplicationProcessesArgs = {
@@ -2575,7 +2578,6 @@ export type SessionApplicationProcess = {
 export type SessionApplicationState = {
   __typename?: "SessionApplicationState";
   applications: Array<RepoApplicationDefinition>;
-  endpoints: Array<SessionEndpoint>;
   processes: Array<SessionApplicationProcess>;
 };
 
@@ -2631,16 +2633,17 @@ export type SessionConnectionState =
 export type SessionEndpoint = {
   __typename?: "SessionEndpoint";
   accessMode: SessionEndpointAccessMode;
-  appConfigId: Scalars["String"]["output"];
+  appConfigId?: Maybe<Scalars["String"]["output"]>;
   disabledAt?: Maybe<Scalars["DateTime"]["output"]>;
   enabledAt?: Maybe<Scalars["DateTime"]["output"]>;
   id: Scalars["ID"]["output"];
   key: Scalars["String"]["output"];
   label: Scalars["String"]["output"];
-  portConfigId: Scalars["String"]["output"];
-  processConfigId: Scalars["String"]["output"];
+  portConfigId?: Maybe<Scalars["String"]["output"]>;
+  processConfigId?: Maybe<Scalars["String"]["output"]>;
   revokedAt?: Maybe<Scalars["DateTime"]["output"]>;
   sessionGroupId: Scalars["ID"]["output"];
+  source: SessionEndpointSource;
   status: SessionEndpointStatus;
   targetPort: Scalars["Int"]["output"];
   trafficCaptureMode: EndpointTrafficCaptureMode;
@@ -2654,6 +2657,8 @@ export type SessionEndpointPreview = {
   expiresAt: Scalars["DateTime"]["output"];
   url: Scalars["String"]["output"];
 };
+
+export type SessionEndpointSource = "application" | "manual";
 
 export type SessionEndpointStatus = "disabled" | "enabled" | "revoked" | "unavailable";
 
@@ -3949,9 +3954,9 @@ export type SessionEndpointTrafficEndpointsQuery = {
     key: string;
     url: string;
     sessionGroupId: string;
-    appConfigId: string;
-    processConfigId: string;
-    portConfigId: string;
+    appConfigId?: string | null;
+    processConfigId?: string | null;
+    portConfigId?: string | null;
     label: string;
     targetPort: number;
     status: SessionEndpointStatus;
@@ -4082,9 +4087,9 @@ export type SessionApplicationsStateQuery = {
     key: string;
     url: string;
     sessionGroupId: string;
-    appConfigId: string;
-    processConfigId: string;
-    portConfigId: string;
+    appConfigId?: string | null;
+    processConfigId?: string | null;
+    portConfigId?: string | null;
     label: string;
     targetPort: number;
     status: SessionEndpointStatus;
@@ -4324,9 +4329,9 @@ export type AppPreviewStateQuery = {
     __typename?: "SessionEndpoint";
     id: string;
     sessionGroupId: string;
-    appConfigId: string;
-    processConfigId: string;
-    portConfigId: string;
+    appConfigId?: string | null;
+    processConfigId?: string | null;
+    portConfigId?: string | null;
     label: string;
     targetPort: number;
     url: string;

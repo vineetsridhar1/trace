@@ -57,7 +57,7 @@ export const commandGroups: readonly CommandGroupDefinition[] = [
     notes: [
       "Port forwarding is independent of repo application commands and configured application ports.",
       "Public is the default for newly forwarded arbitrary ports; use --access private when required.",
-      "All port controls require a connected cloud session and fail for local sessions.",
+      "Port controls fail for local sessions; forwarding and enabling require a connected cloud runtime.",
     ],
   },
   {

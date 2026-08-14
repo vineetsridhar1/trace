@@ -31,6 +31,7 @@ export type TraceCliOperation = {
   readonly rootField: string;
   readonly capability: TraceCliCapability;
   readonly argumentPaths: readonly string[];
+  readonly sessionGroupArgumentPath?: string;
   readonly document: string;
 };
 
@@ -55,7 +56,7 @@ const SESSION_APPLICATION_PROCESS_FIELDS = `
   endpoints { id url label targetPort status accessMode }
 `;
 const SESSION_ENDPOINT_FIELDS = `
-  id key url sessionGroupId appConfigId processConfigId portConfigId label targetPort
+  id key url sessionGroupId source appConfigId processConfigId portConfigId label targetPort
   status accessMode trafficCaptureMode enabledAt disabledAt revokedAt
 `;
 const REPO_APPLICATION_FIELDS = `
@@ -72,11 +73,11 @@ export const traceCliOperations = {
     rootField: "sessionApplicationState",
     capability: "app:control",
     argumentPaths: ["sessionGroupId"],
+    sessionGroupArgumentPath: "sessionGroupId",
     document: `query TraceCliSessionApplicationState($sessionGroupId: ID!) {
       sessionApplicationState(sessionGroupId: $sessionGroupId) {
         applications { ${REPO_APPLICATION_FIELDS} }
         processes { ${SESSION_APPLICATION_PROCESS_FIELDS} }
-        endpoints { ${SESSION_ENDPOINT_FIELDS} }
       }
     }`,
   }),
@@ -85,9 +86,10 @@ export const traceCliOperations = {
     type: "query",
     rootField: "sessionApplicationLogs",
     capability: "app:control",
-    argumentPaths: ["processId", "limit"],
-    document: `query TraceCliSessionApplicationLogs($processId: ID!, $limit: Int) {
-      sessionApplicationLogs(processId: $processId, limit: $limit) {
+    argumentPaths: ["sessionGroupId", "processId", "limit"],
+    sessionGroupArgumentPath: "sessionGroupId",
+    document: `query TraceCliSessionApplicationLogs($sessionGroupId: ID!, $processId: ID!, $limit: Int) {
+      sessionApplicationLogs(sessionGroupId: $sessionGroupId, processId: $processId, limit: $limit) {
         id processId stream data sequence timestamp
       }
     }`,
@@ -98,6 +100,7 @@ export const traceCliOperations = {
     rootField: "startSessionApplication",
     capability: "app:control",
     argumentPaths: ["sessionGroupId", "appConfigId"],
+    sessionGroupArgumentPath: "sessionGroupId",
     document: `mutation TraceCliStartSessionApplication($sessionGroupId: ID!, $appConfigId: ID!) {
       startSessionApplication(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId) { ${SESSION_APPLICATION_PROCESS_FIELDS} }
     }`,
@@ -108,6 +111,7 @@ export const traceCliOperations = {
     rootField: "stopSessionApplication",
     capability: "app:control",
     argumentPaths: ["sessionGroupId", "appConfigId"],
+    sessionGroupArgumentPath: "sessionGroupId",
     document: `mutation TraceCliStopSessionApplication($sessionGroupId: ID!, $appConfigId: ID!) {
       stopSessionApplication(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId) { ${SESSION_APPLICATION_PROCESS_FIELDS} }
     }`,
@@ -118,6 +122,7 @@ export const traceCliOperations = {
     rootField: "startSessionProcess",
     capability: "app:control",
     argumentPaths: ["sessionGroupId", "appConfigId", "processConfigId"],
+    sessionGroupArgumentPath: "sessionGroupId",
     document: `mutation TraceCliStartSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {
       startSessionProcess(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId, processConfigId: $processConfigId) { ${SESSION_APPLICATION_PROCESS_FIELDS} }
     }`,
@@ -128,6 +133,7 @@ export const traceCliOperations = {
     rootField: "stopSessionProcess",
     capability: "app:control",
     argumentPaths: ["sessionGroupId", "appConfigId", "processConfigId"],
+    sessionGroupArgumentPath: "sessionGroupId",
     document: `mutation TraceCliStopSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {
       stopSessionProcess(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId, processConfigId: $processConfigId) { ${SESSION_APPLICATION_PROCESS_FIELDS} }
     }`,
@@ -138,6 +144,7 @@ export const traceCliOperations = {
     rootField: "restartSessionProcess",
     capability: "app:control",
     argumentPaths: ["sessionGroupId", "appConfigId", "processConfigId"],
+    sessionGroupArgumentPath: "sessionGroupId",
     document: `mutation TraceCliRestartSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {
       restartSessionProcess(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId, processConfigId: $processConfigId) { ${SESSION_APPLICATION_PROCESS_FIELDS} }
     }`,
@@ -148,8 +155,20 @@ export const traceCliOperations = {
     rootField: "forwardSessionPort",
     capability: "port:control",
     argumentPaths: ["sessionGroupId", "port", "label", "accessMode"],
+    sessionGroupArgumentPath: "sessionGroupId",
     document: `mutation TraceCliForwardSessionPort($sessionGroupId: ID!, $port: Int!, $label: String, $accessMode: SessionEndpointAccessMode) {
       forwardSessionPort(sessionGroupId: $sessionGroupId, port: $port, label: $label, accessMode: $accessMode) { ${SESSION_ENDPOINT_FIELDS} }
+    }`,
+  }),
+  sessionEndpoints: operation({
+    name: "TraceCliSessionEndpoints",
+    type: "query",
+    rootField: "sessionEndpoints",
+    capability: "port:control",
+    argumentPaths: ["sessionGroupId"],
+    sessionGroupArgumentPath: "sessionGroupId",
+    document: `query TraceCliSessionEndpoints($sessionGroupId: ID!) {
+      sessionEndpoints(sessionGroupId: $sessionGroupId) { ${SESSION_ENDPOINT_FIELDS} }
     }`,
   }),
   enableSessionEndpointForwarding: operation({
@@ -157,9 +176,10 @@ export const traceCliOperations = {
     type: "mutation",
     rootField: "enableSessionEndpointForwarding",
     capability: "port:control",
-    argumentPaths: ["endpointId", "accessMode"],
-    document: `mutation TraceCliEnableSessionEndpointForwarding($endpointId: ID!, $accessMode: SessionEndpointAccessMode) {
-      enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: $accessMode) { ${SESSION_ENDPOINT_FIELDS} }
+    argumentPaths: ["sessionGroupId", "endpointId", "accessMode"],
+    sessionGroupArgumentPath: "sessionGroupId",
+    document: `mutation TraceCliEnableSessionEndpointForwarding($sessionGroupId: ID!, $endpointId: ID!, $accessMode: SessionEndpointAccessMode) {
+      enableSessionEndpointForwarding(sessionGroupId: $sessionGroupId, endpointId: $endpointId, accessMode: $accessMode) { ${SESSION_ENDPOINT_FIELDS} }
     }`,
   }),
   disableSessionEndpointForwarding: operation({
@@ -167,9 +187,10 @@ export const traceCliOperations = {
     type: "mutation",
     rootField: "disableSessionEndpointForwarding",
     capability: "port:control",
-    argumentPaths: ["endpointId"],
-    document: `mutation TraceCliDisableSessionEndpointForwarding($endpointId: ID!) {
-      disableSessionEndpointForwarding(endpointId: $endpointId) { ${SESSION_ENDPOINT_FIELDS} }
+    argumentPaths: ["sessionGroupId", "endpointId"],
+    sessionGroupArgumentPath: "sessionGroupId",
+    document: `mutation TraceCliDisableSessionEndpointForwarding($sessionGroupId: ID!, $endpointId: ID!) {
+      disableSessionEndpointForwarding(sessionGroupId: $sessionGroupId, endpointId: $endpointId) { ${SESSION_ENDPOINT_FIELDS} }
     }`,
   }),
   appDeployments: operation({

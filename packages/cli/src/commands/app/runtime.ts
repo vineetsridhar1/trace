@@ -1,43 +1,15 @@
 import { traceCliOperations } from "@trace/cli-contract";
 import { defineCommand, optionInteger, type CommandDefinition } from "../../runtime.js";
-import { requireCurrentAppGroup } from "./shared.js";
-
-type EndpointView = {
-  id: string;
-  url: string;
-  label: string;
-  targetPort: number;
-  status: string;
-  accessMode: string;
-};
-
-type ProcessView = {
-  id: string;
-  appConfigId: string;
-  processConfigId: string;
-  label: string;
-  status: string;
-  exitCode?: number | null;
-  lastError?: string | null;
-  endpoints: EndpointView[];
-};
-
-type ApplicationView = {
-  id: string;
-  name: string;
-  processes: Array<{
-    id: string;
-    name: string;
-    command: string;
-    required: boolean;
-    ports: Array<{ id: string; label: string; port: number; defaultForwardingEnabled: boolean }>;
-  }>;
-};
+import {
+  requireCurrentAppGroup,
+  type ApplicationView,
+  type LogEntryView,
+  type ProcessView,
+} from "./shared.js";
 
 type ApplicationStateView = {
   applications: ApplicationView[];
   processes: ProcessView[];
-  endpoints: EndpointView[];
 };
 
 function processLine(process: ProcessView): string {
@@ -217,32 +189,17 @@ export const appRuntimeCommands: readonly CommandDefinition[] = [
       },
     ],
     async run(ctx, input) {
-      const sessionGroupId = requireCurrentAppGroup(ctx);
-      await (
-        await ctx.client()
-      ).graphql<{ sessionApplicationState: ApplicationStateView }, { sessionGroupId: string }>(
-        traceCliOperations.sessionApplicationState,
-        { sessionGroupId },
-      );
       const variables = {
+        sessionGroupId: requireCurrentAppGroup(ctx),
         processId: input.positionals[0]!,
         limit: optionInteger(input, "limit") ?? 200,
       };
       const result = await (
         await ctx.client()
-      ).graphql<
-        {
-          sessionApplicationLogs: Array<{
-            id: string;
-            processId: string;
-            stream: string;
-            data: string;
-            sequence: number;
-            timestamp: string;
-          }>;
-        },
-        typeof variables
-      >(traceCliOperations.sessionApplicationLogs, variables);
+      ).graphql<{ sessionApplicationLogs: LogEntryView[] }, typeof variables>(
+        traceCliOperations.sessionApplicationLogs,
+        variables,
+      );
       const logs = [...result.sessionApplicationLogs].reverse();
       ctx.output(
         { logs },

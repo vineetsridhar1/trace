@@ -39,6 +39,9 @@ describe("EndpointProxyService application integrations", () => {
       key: "endpoint-key",
       organizationId: "org-1",
       sessionGroupId: "app-1",
+      source: "application",
+      appConfigId: "web",
+      processConfigId: "dev",
       status: "enabled",
       accessMode: "public",
       expiresAt: null,
@@ -116,6 +119,10 @@ describe("EndpointProxyService application integrations", () => {
       visibility: "public",
     });
     prismaMock.endpointTrafficEntry.create.mockResolvedValue({ id: "traffic-1" });
+    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValue({
+      status: "running",
+      runtimeInstanceId: "runtime-1",
+    });
     sessionRouterMock.getRuntimeDescriptor.mockReturnValue({
       key: "runtime-key",
     });
@@ -150,6 +157,47 @@ describe("EndpointProxyService application integrations", () => {
       }),
     );
     expect(message.headers.cookie).toBeUndefined();
+    expect(prismaMock.sessionApplicationProcess.findUnique).toHaveBeenCalled();
+  });
+
+  it("proxies a manual endpoint without requiring an application process", async () => {
+    prismaMock.sessionEndpoint.findUnique.mockResolvedValueOnce({
+      id: "endpoint-manual",
+      key: "manual-key",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      source: "manual",
+      appConfigId: null,
+      processConfigId: null,
+      status: "enabled",
+      accessMode: "public",
+      trafficCaptureMode: "metadata",
+      targetPort: 4321,
+      expiresAt: null,
+      currentRuntimeInstanceId: "runtime-1",
+    });
+    prismaMock.endpointTrafficEntry.create.mockResolvedValue({ id: "traffic-1" });
+    sessionRouterMock.getRuntimeDescriptor.mockReturnValue({ key: "runtime-key" });
+    sessionRouterMock.sendToRuntimeAsync.mockResolvedValue("unavailable");
+    const request = Object.assign(Readable.from([]), {
+      url: "/health",
+      method: "GET",
+      headers: {},
+    }) as IncomingMessage;
+    const response = { writeHead: vi.fn(), end: vi.fn() };
+    response.writeHead.mockReturnValue(response as unknown as ServerResponse);
+
+    await new EndpointProxyService().handleHttpRequest(
+      request,
+      response as unknown as ServerResponse,
+      "manual-key",
+    );
+
     expect(prismaMock.sessionApplicationProcess.findUnique).not.toHaveBeenCalled();
+    expect(sessionRouterMock.sendToRuntimeAsync).toHaveBeenCalledWith(
+      "runtime-key",
+      expect.objectContaining({ type: "endpoint_http_request", port: 4321 }),
+      "org-1",
+    );
   });
 });
