@@ -88,6 +88,26 @@ describe("buildSessionNodes", () => {
     ]);
   });
 
+  it("renders legacy assistant events with a recovery marker as normal assistant output", () => {
+    const event = makeEvent({
+      eventType: "session_output",
+      payload: {
+        type: "assistant",
+        artifact: {
+          kind: "login_required",
+          provider: "codex",
+          title: "Sign in to Codex",
+          description: "This local runtime needs a Codex login to continue.",
+        },
+        message: { content: [{ type: "text", text: "Run `codex login`." }] },
+      },
+    });
+
+    const result = buildSessionNodes([event.id], { [event.id]: event });
+
+    expect(result.nodes).toEqual([{ kind: "event", id: event.id }]);
+  });
+
   it("hides the redundant workspace failure after an actionable runtime failure", () => {
     const recovery = makeEvent({
       id: "cloud-credential-error",

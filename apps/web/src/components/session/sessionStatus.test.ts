@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canSendMessage,
   getDisplayAgentStatus,
   getDisplaySessionStatus,
   getSessionGroupAgentStatus,
@@ -53,5 +54,19 @@ describe("getSessionGroupDisplayStatus", () => {
     expect(getDisplayAgentStatus("not_started", "in_progress", null, preparation)).toBe(
       "preparing",
     );
+  });
+});
+
+describe("canSendMessage", () => {
+  it("allows a disconnected idle session to trigger runtime recovery", () => {
+    expect(canSendMessage("done", { state: "disconnected" }, false)).toBe(true);
+  });
+
+  it("allows an older session whose cached agent status is missing", () => {
+    expect(canSendMessage(undefined, { state: "connected" }, false)).toBe(true);
+  });
+
+  it("keeps a deleted worktree read-only", () => {
+    expect(canSendMessage("done", { state: "connected" }, true)).toBe(false);
   });
 });

@@ -40,6 +40,13 @@ describe("container runtime dependencies", () => {
     expect(dockerfile).toContain("ENV TRACE_SKILLS_DIR=/trace/runtime/skills/");
   });
 
+  it("installs and smoke-tests the Codex platform package", async () => {
+    const dockerfile = await readFile(new URL("../Dockerfile", import.meta.url), "utf8");
+
+    expect(dockerfile).toContain("npm install -g --include=optional @openai/codex");
+    expect(dockerfile).toContain("codex --version");
+  });
+
   it("pins and smoke-tests the browser video runtime without session-time downloads", async () => {
     const [dockerfile, dockerignore, config, smokeConfig] = await Promise.all([
       readFile(new URL("../Dockerfile", import.meta.url), "utf8"),

@@ -28,7 +28,7 @@ import { useUIStore, type UIState } from "../../stores/ui";
 import { AlertCircle, Cloud, RefreshCw, ArrowRightLeft } from "lucide-react";
 import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
 import { buildSessionNodes } from "./groupReadGlob";
-import { isDisconnected, isTerminalStatus } from "./sessionStatus";
+import { isTerminalStatus } from "./sessionStatus";
 import { QueuedMessagesList } from "./QueuedMessagesList";
 import { Skeleton } from "../ui/skeleton";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
@@ -562,16 +562,14 @@ export function SessionDetailView({
   // Mirror the conditions under which the composer (with its attachment bar) is
   // actually shown and can accept input. Otherwise dropped files would land in a
   // draft with no visible attachment bar (recovery panel) or no way to send
-  // (read-only worktree). The recovery/notice cases match SessionInput's own
-  // early returns: disconnected with access -> recovery panel; no access -> notice.
-  const isNotStarted = agentStatus === "not_started";
+  // (read-only worktree). Bridge access notices still take precedence over the
+  // composer, while a stale disconnected state remains messageable.
   const composerActive =
     !runtimeLifecycleState &&
     bridgeInteractionAllowed &&
     !showQuestion &&
     !activePlan &&
-    !worktreeDeleted &&
-    !(isDisconnected(connection) && !isNotStarted);
+    !worktreeDeleted;
 
   // The bottom bar (composer / plan / question / notice) floats over the message
   // list so content scrolls behind it. Measure its height to pad the scroll area

@@ -37,13 +37,20 @@ describe("actionRequiredArtifactForToolError", () => {
     expect(actionRequiredArtifactForToolError("codex", "authentication failed")).toBeUndefined();
   });
 
-  it("classifies assistant text at the time the tool output is recorded", () => {
+  it("does not classify assistant instructions as tool failures", () => {
     expect(
-      actionRequiredArtifactForToolOutput("claude_code", {
+      actionRequiredArtifactForToolOutput("codex", {
         type: "assistant",
-        message: { content: [{ type: "text", text: "Not logged in · Please run /login" }] },
+        message: {
+          content: [
+            {
+              type: "text",
+              text: "Ensure Codex is ready:\n\n```bash\ncodex login\n```",
+            },
+          ],
+        },
       }),
-    ).toMatchObject({ kind: "login_required", provider: "claude_code" });
+    ).toBeUndefined();
   });
 
   it("classifies Codex's Responses API authentication failure", () => {

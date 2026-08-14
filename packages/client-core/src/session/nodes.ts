@@ -285,7 +285,9 @@ export function buildSessionNodes(
 
     const eventPayload = asJsonObject(event.payload);
     const eventArtifact = asJsonObject(eventPayload?.artifact);
-    if (isActionRequiredArtifact(eventArtifact)) hasActionableFailure = true;
+    const hasEventArtifact =
+      eventPayload?.type !== "assistant" && isActionRequiredArtifact(eventArtifact);
+    if (hasEventArtifact) hasActionableFailure = true;
 
     if (
       hasActionableFailure &&
@@ -304,7 +306,7 @@ export function buildSessionNodes(
       const payload = eventPayload;
 
       const artifact = asJsonObject(payload?.artifact);
-      if (isActionRequiredArtifact(artifact)) {
+      if (payload?.type !== "assistant" && isActionRequiredArtifact(artifact)) {
         const key = actionRequiredArtifactKey(artifact);
         const priorNode = visibleActionableArtifacts.get(key);
         if (priorNode) {

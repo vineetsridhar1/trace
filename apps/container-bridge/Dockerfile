@@ -26,12 +26,17 @@ RUN apt-get update && \
 # the image smoke below. Browser downloads stay disabled: Trace uses Debian's
 # system Chromium and installs only Playwright's matching FFmpeg build.
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
-RUN npm install -g pnpm@11.10.0 @anthropic-ai/claude-code @openai/codex \
+RUN npm install -g pnpm@11.10.0 @anthropic-ai/claude-code \
     @earendil-works/pi-coding-agent @playwright/cli@0.1.18 \
     playwright@1.63.0-alpha-2026-08-05 && \
     playwright install ffmpeg && \
     chmod -R a+rX /opt/ms-playwright && \
     mv /usr/local/bin/playwright-cli /usr/local/bin/playwright-cli-raw
+
+# Codex ships its native executable as a platform-specific optional dependency.
+# Install it explicitly with optional dependencies enabled, then exercise the
+# launcher so an incomplete architecture package cannot reach a cloud session.
+RUN npm install -g --include=optional @openai/codex && codex --version
 
 WORKDIR /app
 
