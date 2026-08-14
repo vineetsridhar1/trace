@@ -6,12 +6,7 @@ import { realtimeBackplane, type BackplaneEnvelope } from "./realtime-backplane.
 const DIRECTORY_KEY_PREFIX = "trace:runtime:v1";
 const DIRECTORY_EPOCH_KEY = "trace:runtime-epoch:v1";
 const PRESENCE_CHANGED = "runtime_presence_changed";
-
-// Redis Lua's cjson encoder treats empty Lua tables as JSON objects by
-// default. Runtime descriptors contain empty arrays during cloud startup
-// (notably supportedTools and registeredRepoIds), so preserve array shape
-// before storing any descriptor mutated inside Lua.
-const PRESERVE_JSON_ARRAYS_IN_LUA = "cjson.encode_empty_table_as_object(false); ";
+const OWNERSHIP_EPOCH_PLACEHOLDER = "__TRACE_RUNTIME_DIRECTORY_OWNERSHIP_EPOCH__";
 
 export type RuntimeDescriptor = {
   key: string;
@@ -33,13 +28,16 @@ export type RuntimeDescriptor = {
   expiresAt: number;
 };
 
-export const RUNTIME_DIRECTORY_REGISTER_SCRIPT = `${PRESERVE_JSON_ARRAYS_IN_LUA}local epoch=redis.call('incr',KEYS[2]); local descriptor=cjson.decode(ARGV[1]); descriptor.ownershipEpoch=epoch; local encoded=cjson.encode(descriptor); redis.call('set',KEYS[1],encoded,'PX',ARGV[2]); return encoded`;
+export const RUNTIME_DIRECTORY_REGISTER_SCRIPT = `local epoch=redis.call('incr',KEYS[2]); local encoded,replacements=string.gsub(ARGV[1],'"${OWNERSHIP_EPOCH_PLACEHOLDER}"',tostring(epoch)); if replacements ~= 1 then return redis.error_reply('invalid ownership epoch placeholder') end; redis.call('set',KEYS[1],encoded,'PX',ARGV[2]); return encoded`;
+const RUNTIME_DIRECTORY_REPLACE_IF_OWNER_SCRIPT =
+  "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; redis.call('set',KEYS[1],ARGV[2],'PX',ARGV[3]); return ARGV[2]";
 
 type PresenceMessage =
   | { action: "upsert"; descriptor: RuntimeDescriptor }
   | { action: "remove"; runtimeKey: string; connectionGeneration: string };
 
 type DescriptorUpdate = "installed" | "current" | "stale";
+type RuntimeDescriptorMutation = (current: RuntimeDescriptor, now: number) => RuntimeDescriptor;
 
 function descriptorFrom(value: unknown): RuntimeDescriptor | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -73,9 +71,17 @@ function descriptorFrom(value: unknown): RuntimeDescriptor | null {
   } as unknown as RuntimeDescriptor;
 }
 
+function descriptorJsonWithEpochPlaceholder(descriptor: RuntimeDescriptor): string {
+  return JSON.stringify({
+    ...descriptor,
+    ownershipEpoch: OWNERSHIP_EPOCH_PLACEHOLDER,
+  });
+}
+
 export class RuntimeDirectory {
   private descriptors = new Map<string, RuntimeDescriptor>();
   private listeners = new Set<(message: PresenceMessage) => void>();
+  private mutationQueues = new Map<string, Promise<void>>();
   private unsubscribe: (() => void) | null = null;
 
   async start(): Promise<void> {
@@ -141,32 +147,34 @@ export class RuntimeDirectory {
   }
 
   async register(descriptor: RuntimeDescriptor, ttlMs: number): Promise<RuntimeDescriptor> {
-    if (!realtimeBackplane.enabled) return this.registerLocal(descriptor);
-    const result = await redis.eval(
-      RUNTIME_DIRECTORY_REGISTER_SCRIPT,
-      2,
-      this.redisKey(descriptor.key),
-      DIRECTORY_EPOCH_KEY,
-      JSON.stringify(descriptor),
-      String(ttlMs),
-    );
-    if (typeof result !== "string") throw new Error("Failed to claim runtime ownership");
-    const stored = descriptorFrom(JSON.parse(result));
-    if (!stored) throw new Error("Redis returned an invalid runtime ownership descriptor");
-    const claimed = stored;
-    const update = this.applyDescriptor(claimed);
-    if (update === "stale") return claimed;
-    try {
-      await realtimeBackplane.broadcast(PRESENCE_CHANGED, {
-        action: "upsert",
-        descriptor: claimed,
-      });
-    } catch (error) {
-      // The Redis lease is already authoritative. Keep the connection alive;
-      // its next heartbeat will retry the presence broadcast.
-      console.error("[runtime-directory] ownership presence broadcast failed:", error);
-    }
-    return claimed;
+    return this.withMutationQueue(descriptor.key, async () => {
+      if (!realtimeBackplane.enabled) return this.registerLocal(descriptor);
+      const result = await redis.eval(
+        RUNTIME_DIRECTORY_REGISTER_SCRIPT,
+        2,
+        this.redisKey(descriptor.key),
+        DIRECTORY_EPOCH_KEY,
+        descriptorJsonWithEpochPlaceholder(descriptor),
+        String(ttlMs),
+      );
+      if (typeof result !== "string") throw new Error("Failed to claim runtime ownership");
+      const stored = descriptorFrom(JSON.parse(result));
+      if (!stored) throw new Error("Redis returned an invalid runtime ownership descriptor");
+      const claimed = stored;
+      const update = this.applyDescriptor(claimed);
+      if (update === "stale") return claimed;
+      try {
+        await realtimeBackplane.broadcast(PRESENCE_CHANGED, {
+          action: "upsert",
+          descriptor: claimed,
+        });
+      } catch (error) {
+        // The Redis lease is already authoritative. Keep the connection alive;
+        // its next heartbeat will retry the presence broadcast.
+        console.error("[runtime-directory] ownership presence broadcast failed:", error);
+      }
+      return claimed;
+    });
   }
 
   /**
@@ -227,32 +235,16 @@ export class RuntimeDirectory {
   }
 
   async renew(runtimeKey: string, connectionGeneration: string, ttlMs: number): Promise<boolean> {
-    const current = this.descriptors.get(runtimeKey);
-    if (!current || current.connectionGeneration !== connectionGeneration) return false;
-    const now = Date.now();
-    let descriptor = { ...current, lastHeartbeat: now, expiresAt: now + ttlMs };
-
-    if (realtimeBackplane.enabled) {
-      const result = await redis.eval(
-        `${PRESERVE_JSON_ARRAYS_IN_LUA}local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; current.lastHeartbeat=math.max(tonumber(ARGV[2]),(tonumber(current.lastHeartbeat) or 0)+1); current.expiresAt=tonumber(ARGV[3]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[4]); return encoded`,
-        1,
-        this.redisKey(runtimeKey),
-        connectionGeneration,
-        String(now),
-        String(now + ttlMs),
-        String(ttlMs),
-      );
-      if (typeof result !== "string") return false;
-      const stored = descriptorFrom(JSON.parse(result));
-      if (!stored) return false;
-      descriptor = stored;
-    }
-
-    const update = this.applyDescriptor(descriptor);
-    if (update === "stale") return false;
-    if (update === "current") return true;
-    await realtimeBackplane.broadcast(PRESENCE_CHANGED, { action: "upsert", descriptor });
-    return true;
+    return this.mutateCurrentDescriptor(
+      runtimeKey,
+      connectionGeneration,
+      ttlMs,
+      (current, now) => ({
+        ...current,
+        lastHeartbeat: now,
+        expiresAt: now + ttlMs,
+      }),
+    );
   }
 
   async updateRegisteredRepoIds(
@@ -261,36 +253,17 @@ export class RuntimeDirectory {
     registeredRepoIds: string[],
     ttlMs: number,
   ): Promise<boolean> {
-    const current = this.descriptors.get(runtimeKey);
-    if (!current || current.connectionGeneration !== connectionGeneration) return false;
-    const now = Date.now();
-    let descriptor = {
-      ...current,
-      registeredRepoIds: [...registeredRepoIds],
-      lastHeartbeat: now,
-      expiresAt: now + ttlMs,
-    };
-    if (realtimeBackplane.enabled) {
-      const result = await redis.eval(
-        `${PRESERVE_JSON_ARRAYS_IN_LUA}local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; current.registeredRepoIds=cjson.decode(ARGV[2]); current.lastHeartbeat=math.max(tonumber(ARGV[3]),(tonumber(current.lastHeartbeat) or 0)+1); current.expiresAt=tonumber(ARGV[4]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[5]); return encoded`,
-        1,
-        this.redisKey(runtimeKey),
-        connectionGeneration,
-        JSON.stringify(registeredRepoIds),
-        String(now),
-        String(now + ttlMs),
-        String(ttlMs),
-      );
-      if (typeof result !== "string") return false;
-      const stored = descriptorFrom(JSON.parse(result));
-      if (!stored) return false;
-      descriptor = stored;
-    }
-    const update = this.applyDescriptor(descriptor);
-    if (update === "stale") return false;
-    if (update === "current") return true;
-    await realtimeBackplane.broadcast(PRESENCE_CHANGED, { action: "upsert", descriptor });
-    return true;
+    return this.mutateCurrentDescriptor(
+      runtimeKey,
+      connectionGeneration,
+      ttlMs,
+      (current, now) => ({
+        ...current,
+        registeredRepoIds: [...registeredRepoIds],
+        lastHeartbeat: now,
+        expiresAt: now + ttlMs,
+      }),
+    );
   }
 
   async updateLinkedCheckoutStatus(
@@ -299,43 +272,24 @@ export class RuntimeDirectory {
     status: BridgeLinkedCheckoutStatus,
     ttlMs: number,
   ): Promise<boolean> {
-    const current = this.descriptors.get(runtimeKey);
-    if (!current || current.connectionGeneration !== connectionGeneration) return false;
-    const now = Date.now();
-    let descriptor = {
-      ...current,
-      linkedCheckoutStatuses: [
-        ...current.linkedCheckoutStatuses.filter((item) => item.repoId !== status.repoId),
-        status,
-      ],
-      linkedCheckoutStatusObservedAt: {
-        ...current.linkedCheckoutStatusObservedAt,
-        [status.repoId]: now,
-      },
-      lastHeartbeat: now,
-      expiresAt: now + ttlMs,
-    };
-    if (realtimeBackplane.enabled) {
-      const result = await redis.eval(
-        `${PRESERVE_JSON_ARRAYS_IN_LUA}local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; local status=cjson.decode(ARGV[2]); local statuses=current.linkedCheckoutStatuses or {}; local updated={}; for i=1,#statuses do if statuses[i].repoId ~= status.repoId then table.insert(updated,statuses[i]) end end; table.insert(updated,status); current.linkedCheckoutStatuses=updated; current.linkedCheckoutStatusObservedAt=current.linkedCheckoutStatusObservedAt or {}; current.linkedCheckoutStatusObservedAt[status.repoId]=tonumber(ARGV[3]); current.lastHeartbeat=math.max(tonumber(ARGV[3]),(tonumber(current.lastHeartbeat) or 0)+1); current.expiresAt=tonumber(ARGV[4]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[5]); return encoded`,
-        1,
-        this.redisKey(runtimeKey),
-        connectionGeneration,
-        JSON.stringify(status),
-        String(now),
-        String(now + ttlMs),
-        String(ttlMs),
-      );
-      if (typeof result !== "string") return false;
-      const stored = descriptorFrom(JSON.parse(result));
-      if (!stored) return false;
-      descriptor = stored;
-    }
-    const update = this.applyDescriptor(descriptor);
-    if (update === "stale") return false;
-    if (update === "current") return true;
-    await realtimeBackplane.broadcast(PRESENCE_CHANGED, { action: "upsert", descriptor });
-    return true;
+    return this.mutateCurrentDescriptor(
+      runtimeKey,
+      connectionGeneration,
+      ttlMs,
+      (current, now) => ({
+        ...current,
+        linkedCheckoutStatuses: [
+          ...current.linkedCheckoutStatuses.filter((item) => item.repoId !== status.repoId),
+          status,
+        ],
+        linkedCheckoutStatusObservedAt: {
+          ...current.linkedCheckoutStatusObservedAt,
+          [status.repoId]: now,
+        },
+        lastHeartbeat: now,
+        expiresAt: now + ttlMs,
+      }),
+    );
   }
 
   async remove(runtimeKey: string, connectionGeneration: string): Promise<boolean> {
@@ -392,6 +346,60 @@ export class RuntimeDirectory {
 
   private redisKey(runtimeKey: string): string {
     return `${DIRECTORY_KEY_PREFIX}:${Buffer.from(runtimeKey).toString("base64url")}`;
+  }
+
+  private async mutateCurrentDescriptor(
+    runtimeKey: string,
+    connectionGeneration: string,
+    ttlMs: number,
+    mutation: RuntimeDescriptorMutation,
+  ): Promise<boolean> {
+    return this.withMutationQueue(runtimeKey, async () => {
+      const current = this.descriptors.get(runtimeKey);
+      if (!current || current.connectionGeneration !== connectionGeneration) return false;
+      let descriptor = mutation(current, Date.now());
+
+      if (realtimeBackplane.enabled) {
+        const result = await redis.eval(
+          RUNTIME_DIRECTORY_REPLACE_IF_OWNER_SCRIPT,
+          1,
+          this.redisKey(runtimeKey),
+          connectionGeneration,
+          JSON.stringify(descriptor),
+          String(ttlMs),
+        );
+        if (typeof result !== "string") return false;
+        const stored = descriptorFrom(JSON.parse(result));
+        if (!stored) return false;
+        descriptor = stored;
+      }
+
+      const update = this.applyDescriptor(descriptor);
+      if (update === "stale") return false;
+      if (update === "current") return true;
+      await realtimeBackplane.broadcast(PRESENCE_CHANGED, { action: "upsert", descriptor });
+      return true;
+    });
+  }
+
+  private async withMutationQueue<T>(runtimeKey: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.mutationQueues.get(runtimeKey) ?? Promise.resolve();
+    let release: () => void = () => {};
+    const next = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const tail = previous.catch(() => undefined).then(() => next);
+    this.mutationQueues.set(runtimeKey, tail);
+
+    await previous.catch(() => undefined);
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (this.mutationQueues.get(runtimeKey) === tail) {
+        this.mutationQueues.delete(runtimeKey);
+      }
+    }
   }
 
   /**
