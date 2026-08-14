@@ -125,20 +125,20 @@ export function TraceLoader({
         <g className="trace-loader-cursor">
           <rect
             className="trace-loader-trail-far"
-            x={GRID_ORIGIN + DOT_SPACING - 17}
-            y={GRID_ORIGIN + DOT_SPACING - 2.5}
-            width="9"
-            height="5"
-            rx="2.5"
+            x={GRID_ORIGIN + DOT_SPACING - 26}
+            y={GRID_ORIGIN + DOT_SPACING - 3}
+            width="14"
+            height="6"
+            rx="3"
             fill="currentColor"
           />
           <rect
             className="trace-loader-trail-near"
-            x={GRID_ORIGIN + DOT_SPACING - 10}
-            y={GRID_ORIGIN + DOT_SPACING - 3.5}
-            width="10"
-            height="7"
-            rx="3.5"
+            x={GRID_ORIGIN + DOT_SPACING - 15}
+            y={GRID_ORIGIN + DOT_SPACING - 4}
+            width="15"
+            height="8"
+            rx="4"
             fill="currentColor"
           />
           <circle
