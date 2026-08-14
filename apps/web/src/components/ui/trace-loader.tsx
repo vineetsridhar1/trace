@@ -61,41 +61,35 @@ export function TraceLoader({
             }
 
             .trace-loader-cursor {
+              opacity: .9;
               animation: trace-loader-cursor 1.6s linear infinite;
               transform-box: view-box;
               transform-origin: center;
             }
 
-            .trace-loader-trail-far {
-              opacity: .16;
-            }
-
-            .trace-loader-trail-near {
-              opacity: .38;
-            }
-
-            .trace-loader-head {
-              opacity: .92;
+            .trace-loader-cursor-reverse {
+              animation-delay: -.8s;
+              animation-direction: reverse;
             }
 
             @keyframes trace-loader-cursor {
-              0% { transform: translate(-18.333%, -18.333%) rotate(0deg); }
-              6.25% { transform: translate(0, -18.333%) rotate(0deg); }
-              12.5% { transform: translate(18.333%, -18.333%) rotate(90deg); }
-              18.75% { transform: translate(18.333%, 0) rotate(180deg); }
-              25% { transform: translate(0, 0) rotate(180deg); }
-              31.25% { transform: translate(-18.333%, 0) rotate(90deg); }
-              37.5% { transform: translate(-18.333%, 18.333%) rotate(0deg); }
-              43.75% { transform: translate(0, 18.333%) rotate(0deg); }
-              50% { transform: translate(18.333%, 18.333%) rotate(-90deg); }
-              56.25% { transform: translate(18.333%, 0) rotate(-90deg); }
-              62.5% { transform: translate(18.333%, -18.333%) rotate(-180deg); }
-              68.75% { transform: translate(0, -18.333%) rotate(-270deg); }
-              75% { transform: translate(0, 0) rotate(-270deg); }
-              81.25% { transform: translate(0, 18.333%) rotate(-180deg); }
-              87.5% { transform: translate(-18.333%, 18.333%) rotate(-90deg); }
-              93.75% { transform: translate(-18.333%, 0) rotate(-90deg); }
-              100% { transform: translate(-18.333%, -18.333%) rotate(0deg); }
+              0% { transform: translate(-18.333%, -18.333%); }
+              6.25% { transform: translate(0, -18.333%); }
+              12.5% { transform: translate(18.333%, -18.333%); }
+              18.75% { transform: translate(18.333%, 0); }
+              25% { transform: translate(0, 0); }
+              31.25% { transform: translate(-18.333%, 0); }
+              37.5% { transform: translate(-18.333%, 18.333%); }
+              43.75% { transform: translate(0, 18.333%); }
+              50% { transform: translate(18.333%, 18.333%); }
+              56.25% { transform: translate(18.333%, 0); }
+              62.5% { transform: translate(18.333%, -18.333%); }
+              68.75% { transform: translate(0, -18.333%); }
+              75% { transform: translate(0, 0); }
+              81.25% { transform: translate(0, 18.333%); }
+              87.5% { transform: translate(-18.333%, 18.333%); }
+              93.75% { transform: translate(-18.333%, 0); }
+              100% { transform: translate(-18.333%, -18.333%); }
             }
 
             @media (prefers-reduced-motion: reduce) {
@@ -122,33 +116,20 @@ export function TraceLoader({
           );
         })}
 
-        <g className="trace-loader-cursor">
-          <rect
-            className="trace-loader-trail-far"
-            x={GRID_ORIGIN + DOT_SPACING - 26}
-            y={GRID_ORIGIN + DOT_SPACING - 3}
-            width="14"
-            height="6"
-            rx="3"
-            fill="currentColor"
-          />
-          <rect
-            className="trace-loader-trail-near"
-            x={GRID_ORIGIN + DOT_SPACING - 15}
-            y={GRID_ORIGIN + DOT_SPACING - 4}
-            width="15"
-            height="8"
-            rx="4"
-            fill="currentColor"
-          />
-          <circle
-            className="trace-loader-head"
-            cx={GRID_ORIGIN + DOT_SPACING}
-            cy={GRID_ORIGIN + DOT_SPACING}
-            r="6"
-            fill="currentColor"
-          />
-        </g>
+        <circle
+          className="trace-loader-cursor"
+          cx={GRID_ORIGIN + DOT_SPACING}
+          cy={GRID_ORIGIN + DOT_SPACING}
+          r="6"
+          fill="currentColor"
+        />
+        <circle
+          className="trace-loader-cursor trace-loader-cursor-reverse"
+          cx={GRID_ORIGIN + DOT_SPACING}
+          cy={GRID_ORIGIN + DOT_SPACING}
+          r="6"
+          fill="currentColor"
+        />
       </svg>
 
       {showLabel ? (
