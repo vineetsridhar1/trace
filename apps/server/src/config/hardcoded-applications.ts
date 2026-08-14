@@ -21,7 +21,10 @@ export type AppSetupScript = Omit<RepoSetupScript, "env"> & { env: AppEnvVar[] }
 // Hardcoded ports may set internalHostTemplate for host-routed containers (one
 // edge listener serving many hostnames): requests to `<sub>--<key>` preview
 // hosts are forwarded with Host rewritten to the template's `{sub}` expansion.
-export type AppPortDefinition = RepoPortDefinition & { internalHostTemplate?: string };
+export type AppPortDefinition = RepoPortDefinition & {
+  internalHostTemplate?: string;
+  sharedCookieDomain?: boolean;
+};
 export type AppProcessDefinition = Omit<RepoProcessDefinition, "env" | "ports"> & {
   env: AppEnvVar[];
   ports: AppPortDefinition[];
@@ -325,6 +328,7 @@ const CODE_APPLICATION_CONFIG: HardcodedApplicationConfig = {
               defaultForwardingEnabled: true,
               healthPath: "/",
               internalHostTemplate: "{sub}.5000.localhost",
+              sharedCookieDomain: true,
             },
           ],
         },

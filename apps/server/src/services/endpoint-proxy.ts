@@ -7,6 +7,7 @@ import { sessionRouter } from "../lib/session-router.js";
 import type { RuntimeDescriptor } from "../lib/runtime-directory.js";
 import { parseCookieToken, verifyToken } from "../lib/auth.js";
 import { canViewSessionGroup } from "./access.js";
+import { getHardcodedApplicationConfig } from "../config/hardcoded-applications.js";
 import {
   endpointPreviewCookieHeader,
   endpointPreviewTokenFromCookie,
@@ -18,6 +19,7 @@ import {
   endpointProxyMaxRequestBodyBytes,
   endpointProxyMaxResponseBodyBytes,
   endpointProxyRequestTimeoutMs,
+  endpointPreviewCookieDomain,
   extractEndpointHost,
   extractEndpointKey,
   forwardableRequestHeaders,
@@ -85,6 +87,7 @@ type PendingHttp = {
   timer: ReturnType<typeof setTimeout>;
   disableCache: boolean;
   injectAuthoringOverlay: boolean;
+  allowedCookieDomain?: string;
 };
 
 type PendingWs = {
@@ -117,6 +120,22 @@ function endpointPreviewUserId(
   return payload?.endpointId === endpoint.id && payload.organizationId === endpoint.organizationId
     ? payload.userId
     : null;
+}
+
+function endpointAllowedCookieDomain(endpoint: {
+  internalHostTemplate: string | null;
+  appConfigId: string | null;
+  processConfigId: string | null;
+  portConfigId: string | null;
+  repo?: { remoteUrl: string | null } | null;
+}): string | undefined {
+  if (!endpoint.internalHostTemplate || !endpoint.repo) return undefined;
+  const config = getHardcodedApplicationConfig(endpoint.repo);
+  const port = config?.applications
+    .find((app) => app.id === endpoint.appConfigId)
+    ?.processes.find((process) => process.id === endpoint.processConfigId)
+    ?.ports.find((candidate) => candidate.id === endpoint.portConfigId);
+  return port?.sharedCookieDomain ? endpointPreviewCookieDomain() : undefined;
 }
 
 // Private preview access requires the caller to (1) resolve to a user via a
@@ -275,6 +294,7 @@ export class EndpointProxyService {
   async handleHttpRequest(req: IncomingMessage, res: ServerResponse, endpointKey: string) {
     const endpoint = await prisma.sessionEndpoint.findUnique({
       where: { key: endpointKey },
+      include: { repo: { select: { remoteUrl: true } } },
     });
     if (!endpoint) {
       res.writeHead(404).end("Endpoint not found");
@@ -396,6 +416,7 @@ export class EndpointProxyService {
       timer,
       disableCache: authenticatedPreview,
       injectAuthoringOverlay: endpoint.accessMode === "private",
+      allowedCookieDomain: endpointAllowedCookieDomain(endpoint),
     };
     this.pendingHttp.set(requestId, pending);
     const delivery = await sendRuntimeCommand(
@@ -469,6 +490,7 @@ export class EndpointProxyService {
     }
     let headers = forwardableResponseHeaders(response.headers, {
       disableCache: pending.disableCache,
+      allowedCookieDomain: pending.allowedCookieDomain,
     });
     if (pending.injectAuthoringOverlay) {
       const injected = injectAuthoringOverlay(headers, body);

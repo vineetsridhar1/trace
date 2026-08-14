@@ -128,6 +128,7 @@ function mockHostModeConfig() {
                 defaultForwardingEnabled: true,
                 healthPath: "/",
                 internalHostTemplate: "{sub}.5000.localhost",
+                sharedCookieDomain: true,
               },
             ],
           },
@@ -224,9 +225,7 @@ describe("SessionApplicationService", () => {
                     command: "pnpm dev",
                     workingDirectory: ".",
                     required: true,
-                    ports: [
-                      { id: "web", label: "Web", port: 3000, protocol: "http" },
-                    ],
+                    ports: [{ id: "web", label: "Web", port: 3000, protocol: "http" }],
                   },
                 ],
               },
@@ -453,6 +452,8 @@ describe("SessionApplicationService", () => {
         env: expect.objectContaining({
           TRACE_ENDPOINT_URL_WEB: "http://www--endpointkey1.preview.localhost",
           TRACE_ENDPOINT_HOST_PATTERN_WEB: "http://{sub}--endpointkey1.preview.localhost",
+          TRACE_COOKIE_SUFFIX: "--endpointkey1",
+          TRACE_COOKIE_DOMAIN: ".preview.localhost",
         }),
         ports: [
           {

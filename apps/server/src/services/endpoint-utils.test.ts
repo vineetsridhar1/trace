@@ -6,6 +6,7 @@ import {
   buildEndpointPublicUrl,
   buildEndpointUrl,
   endpointPreviewBaseHost,
+  endpointPreviewCookieDomain,
   extractEndpointHost,
   extractEndpointKey,
   forwardableRequestHeaders,
@@ -35,9 +36,7 @@ describe("endpoint utils", () => {
     vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "preview.trace.infra.opendoor.com");
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
-    expect(() =>
-      warnIfPreviewHostNotIsolated("https://trace.infra.opendoor.com"),
-    ).not.toThrow();
+    expect(() => warnIfPreviewHostNotIsolated("https://trace.infra.opendoor.com")).not.toThrow();
     expect(warn).toHaveBeenCalledOnce();
   });
 
@@ -47,6 +46,12 @@ describe("endpoint utils", () => {
 
     expect(buildEndpointUrl("abc123")).toBe("http://abc123.preview.localhost:4000");
     expect(extractEndpointKey("abc123.preview.localhost:4000")).toBe("abc123");
+  });
+
+  it("builds a cookie domain without a preview host port", () => {
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "preview.localhost:4000");
+
+    expect(endpointPreviewCookieDomain()).toBe(".preview.localhost");
   });
 
   it("extracts opaque endpoint keys from wildcard hosts", () => {
@@ -103,9 +108,7 @@ describe("endpoint utils", () => {
     vi.stubEnv("TRACE_ENDPOINT_PREVIEW_PUBLIC_SCHEME", "https");
 
     expect(buildEndpointUrl("abcdef", "www")).toBe("https://www--abcdef.preview.example.test");
-    expect(buildEndpointHostPattern("abcdef")).toBe(
-      "https://{sub}--abcdef.preview.example.test",
-    );
+    expect(buildEndpointHostPattern("abcdef")).toBe("https://{sub}--abcdef.preview.example.test");
     expect(buildEndpointPublicUrl({ key: "abcdef", internalHostTemplate: null })).toBe(
       "https://abcdef.preview.example.test",
     );
@@ -151,6 +154,27 @@ describe("endpoint utils", () => {
     });
   });
 
+  it("preserves only the configured preview cookie domain", () => {
+    expect(
+      forwardableResponseHeaders(
+        {
+          "set-cookie": [
+            "sid=1; Path=/; Domain=.preview.localhost; HttpOnly",
+            "other=2; Domain=attacker.test",
+            "host-only=3; Path=/",
+          ],
+        },
+        { allowedCookieDomain: ".preview.localhost" },
+      ),
+    ).toEqual({
+      "set-cookie": [
+        "sid=1; Path=/; Domain=.preview.localhost; HttpOnly",
+        "other=2",
+        "host-only=3; Path=/",
+      ],
+    });
+  });
+
   it("allows same-endpoint and Trace origins but rejects cross-site preview requests", () => {
     vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "preview.localhost");
     vi.stubEnv("TRACE_WEB_URL", "https://app.trace.test");
@@ -167,12 +191,12 @@ describe("endpoint utils", () => {
     expect(isAllowedPreviewRequestOrigin("http://other.preview.localhost", "abc123")).toBe(false);
     expect(isAllowedPreviewRequestOrigin("https://evil.test", "abc123")).toBe(false);
     // Any sub of the same key is a same-endpoint origin; other keys' subs are not.
-    expect(isAllowedPreviewRequestOrigin("http://consumer--abcdef.preview.localhost", "abcdef")).toBe(
-      true,
-    );
-    expect(isAllowedPreviewRequestOrigin("http://consumer--other.preview.localhost", "abcdef")).toBe(
-      false,
-    );
+    expect(
+      isAllowedPreviewRequestOrigin("http://consumer--abcdef.preview.localhost", "abcdef"),
+    ).toBe(true);
+    expect(
+      isAllowedPreviewRequestOrigin("http://consumer--other.preview.localhost", "abcdef"),
+    ).toBe(false);
   });
 
   it("generates DNS-safe random keys", () => {

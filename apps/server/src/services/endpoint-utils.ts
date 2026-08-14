@@ -11,6 +11,10 @@ export function endpointPreviewScheme(): string {
   return process.env.TRACE_ENDPOINT_PREVIEW_PUBLIC_SCHEME?.trim() || "http";
 }
 
+export function endpointPreviewCookieDomain(): string {
+  return `.${endpointPreviewBaseHost().split(":")[0]}`;
+}
+
 export function endpointProxyRequestTimeoutMs(): number {
   const parsed = Number(process.env.TRACE_ENDPOINT_PROXY_REQUEST_TIMEOUT_MS);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 60_000;
@@ -288,20 +292,28 @@ export function webSocketProtocols(
 // host-only. Endpoints are siblings under one base host; a `Domain=<baseHost>`
 // cookie from one untrusted app would otherwise be sent to every other
 // endpoint (cross-tenant cookie tossing / fixation).
-function stripSetCookieDomain(setCookie: string): string {
+function filterSetCookieDomain(setCookie: string, allowedDomain?: string): string {
+  const normalizedAllowedDomain = allowedDomain?.toLowerCase();
   return setCookie
     .split(";")
     .map((part) => part.trim())
-    .filter((part) => part.length > 0 && !part.toLowerCase().startsWith("domain="))
+    .filter((part) => {
+      return (
+        part.length > 0 &&
+        (!part.toLowerCase().startsWith("domain=") ||
+          part.slice("domain=".length).trim().toLowerCase() === normalizedAllowedDomain)
+      );
+    })
     .join("; ");
 }
 
 // Strip hop-by-hop headers from the application's response before relaying it
 // back to the caller; the proxy manages framing itself. Set-Cookie is forwarded
-// but forced host-only so untrusted apps can't inject cookies onto siblings.
+// host-only unless the caller supplies the one domain explicitly allowed for a
+// trusted endpoint.
 export function forwardableResponseHeaders(
   headers: Record<string, string | string[]>,
-  options?: { disableCache?: boolean },
+  options?: { disableCache?: boolean; allowedCookieDomain?: string },
 ): Record<string, string | string[]> {
   const forwarded: Record<string, string | string[]> = {};
   for (const [rawName, value] of Object.entries(headers)) {
@@ -319,8 +331,8 @@ export function forwardableResponseHeaders(
     }
     if (name === "set-cookie") {
       forwarded[rawName] = Array.isArray(value)
-        ? value.map(stripSetCookieDomain)
-        : stripSetCookieDomain(value);
+        ? value.map((cookie) => filterSetCookieDomain(cookie, options?.allowedCookieDomain))
+        : filterSetCookieDomain(value, options?.allowedCookieDomain);
       continue;
     }
     forwarded[rawName] = value;

@@ -16,6 +16,7 @@ import { sessionApplicationWorkflowService } from "./session-application-workflo
 import {
   buildEndpointHostPattern,
   buildEndpointPublicUrl,
+  endpointPreviewCookieDomain,
   ENDPOINT_DEFAULT_SUB,
   generateEndpointKey,
 } from "./endpoint-utils.js";
@@ -563,6 +564,13 @@ export class SessionApplicationService {
         endpointEnv[`TRACE_ENDPOINT_HOST_PATTERN_${suffix}`] = buildEndpointHostPattern(
           endpoint.key,
         );
+        const port = processConfig.ports.find(
+          (candidate) => candidate.id === endpoint.portConfigId,
+        );
+        if (port?.sharedCookieDomain) {
+          endpointEnv.TRACE_COOKIE_SUFFIX = `--${endpoint.key}`;
+          endpointEnv.TRACE_COOKIE_DOMAIN = endpointPreviewCookieDomain();
+        }
       }
     }
 
