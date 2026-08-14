@@ -12,7 +12,8 @@ import { CREATE_TERMINAL_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "@trace
 import { type InteractionMode, MODE_CYCLE, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
-import { canSendMessage, canQueueMessage } from "./sessionStatus";
+import { isDisconnected, canSendMessage, canQueueMessage } from "./sessionStatus";
+import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
 import { getModelLabel } from "./modelOptions";
 import { getToolLabel } from "./picker/pickerShared";
 import { TraceLoader } from "../ui/trace-loader";
@@ -93,6 +94,7 @@ export function SessionInput({
   const editorRef = useRef<ChatEditorHandle>(null);
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
+  const disconnected = isDisconnected(connection);
   const preparing =
     isSessionPreparing({
       agentStatus,
@@ -382,6 +384,14 @@ export function SessionInput({
   const handleQueueSubmit = useCallback(() => {
     void editorRef.current?.submit();
   }, []);
+
+  // If the user has bridge access (owner or granted), a disconnected session
+  // belongs to the recovery panel — not the permission prompt. Non-owners
+  // without access always see the permission prompt so they can request
+  // access, whether the bridge is online or offline.
+  if (bridgeInteractionAllowed && disconnected && !isNotStarted) {
+    return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
+  }
 
   if (!bridgeInteractionAllowed && !isNotStarted) {
     return (

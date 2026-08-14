@@ -182,19 +182,16 @@ export function isTerminalStatus(
   );
 }
 
-/** Check if a session can accept new messages. */
+/** Check if a session can accept new messages (not disconnected and not fully unloaded) */
 export function canSendMessage(
   agentStatus: string | undefined,
-  _connection: Record<string, unknown> | null | undefined,
+  connection: Record<string, unknown> | null | undefined,
   worktreeDeleted?: boolean,
 ): boolean {
+  if (!agentStatus) return false;
   if (worktreeDeleted) return false;
   if (agentStatus === "active") return false; // waiting for response
-  // Connection state is only the latest delivery snapshot. The service accepts
-  // messages while disconnected and uses them to restore or reprovision the
-  // runtime. Older cached entities can also lack agentStatus until a fresh
-  // snapshot arrives, which must not make an otherwise messageable session
-  // read-only.
+  if (isDisconnected(connection)) return false;
   return true;
 }
 

@@ -58,12 +58,12 @@ describe("getSessionGroupDisplayStatus", () => {
 });
 
 describe("canSendMessage", () => {
-  it("allows a disconnected idle session to trigger runtime recovery", () => {
-    expect(canSendMessage("done", { state: "disconnected" }, false)).toBe(true);
+  it("keeps a disconnected session read-only", () => {
+    expect(canSendMessage("done", { state: "disconnected" }, false)).toBe(false);
   });
 
-  it("allows an older session whose cached agent status is missing", () => {
-    expect(canSendMessage(undefined, { state: "connected" }, false)).toBe(true);
+  it("keeps a session without an agent status read-only", () => {
+    expect(canSendMessage(undefined, { state: "connected" }, false)).toBe(false);
   });
 
   it("keeps a deleted worktree read-only", () => {
