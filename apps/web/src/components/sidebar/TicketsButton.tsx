@@ -1,7 +1,6 @@
 import { SquareCheck } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
-import { sidebarRootLeftEdgeRowClass } from "./sidebarItemStyles";
 
 export function TicketsButton() {
   const activePage = useUIStore((s) => s.activePage);
@@ -12,15 +11,13 @@ export function TicketsButton() {
       type="button"
       onClick={() => setActivePage("tickets")}
       className={cn(
-        "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
-        sidebarRootLeftEdgeRowClass,
-        "pl-4",
+        "flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 text-sm font-medium transition-colors",
         activePage === "tickets"
-          ? "bg-white/10 text-foreground"
-          : "text-foreground hover:bg-white/10",
+          ? "bg-white/[0.1] text-foreground shadow-sm shadow-black/20"
+          : "text-foreground/80 hover:bg-white/[0.07] hover:text-foreground",
       )}
     >
-      <SquareCheck size={16} />
+      <SquareCheck size={16} className="text-muted-foreground" />
       <span>Tickets</span>
     </button>
   );

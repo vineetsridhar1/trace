@@ -20,17 +20,16 @@ export function InboxButton() {
       type="button"
       onClick={() => setActivePage("inbox")}
       className={cn(
-        "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
-        "pl-4",
+        "flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 text-sm font-medium transition-colors",
         activePage === "inbox"
-          ? "bg-white/10 text-foreground"
-          : "text-foreground hover:bg-white/10",
+          ? "bg-white/[0.1] text-foreground shadow-sm shadow-black/20"
+          : "text-foreground/80 hover:bg-white/[0.07] hover:text-foreground",
       )}
     >
-      <Inbox size={16} />
+      <Inbox size={16} className="text-muted-foreground" />
       <span>Inbox</span>
       {count > 0 && (
-        <span className="ml-auto mr-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-semibold text-accent-foreground">
+        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-semibold text-accent-foreground">
           {count}
         </span>
       )}

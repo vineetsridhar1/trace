@@ -1,6 +1,15 @@
 import { memo, useMemo, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
-import { ChevronRight, Mail, Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import {
+  ChevronRight,
+  FolderKanban,
+  Mail,
+  Pencil,
+  Plus,
+  Trash2,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -88,12 +97,12 @@ export const ChannelItem = memo(function ChannelItem({
                 onClick={onClick}
                 tooltip={name ?? ""}
                 className={cn(
-                  "h-8 cursor-pointer gap-2 rounded-md bg-transparent px-0 pl-2 text-sm font-medium text-foreground",
+                  "h-8 cursor-pointer gap-2 rounded-lg bg-transparent px-2 text-sm font-medium text-foreground/80",
                   canStartSession && "pr-16",
-                  isActive && "bg-white/10 text-foreground",
-                  "hover:!bg-white/10 hover:!text-foreground active:!bg-white/10 active:!text-foreground",
-                  "data-active:!bg-white/10 data-active:font-medium data-active:!text-foreground",
-                  "data-[active=true]:!bg-white/10 data-[active=true]:font-medium data-[active=true]:!text-foreground",
+                  isActive && "bg-white/[0.1] text-foreground shadow-sm shadow-black/20",
+                  "hover:!bg-white/[0.07] hover:!text-foreground active:!bg-white/[0.1] active:!text-foreground",
+                  "data-active:!bg-white/[0.1] data-active:font-medium data-active:!text-foreground",
+                  "data-[active=true]:!bg-white/[0.1] data-[active=true]:font-medium data-[active=true]:!text-foreground",
                 )}
               >
                 {canExpand && (
@@ -124,6 +133,8 @@ export const ChannelItem = memo(function ChannelItem({
                     />
                   </span>
                 )}
+                {!canExpand && <span aria-hidden="true" className="h-4 w-4 shrink-0" />}
+                <FolderKanban size={15} className="shrink-0 text-muted-foreground" />
                 <span
                   className={cn(
                     "truncate",

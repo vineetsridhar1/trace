@@ -132,10 +132,9 @@ export function AppSidebar() {
     <>
       <Sidebar collapsible="offcanvas" className="border-none">
         <div
-          className="flex size-full flex-col bg-transparent text-sidebar-foreground"
-          style={{ backgroundColor: "transparent" }}
+          className="flex size-full flex-col border-r border-white/[0.07] bg-surface-mid/95 text-sidebar-foreground shadow-[12px_0_36px_rgba(0,0,0,0.16)] backdrop-blur-xl"
         >
-          <div className="app-region-drag h-12 shrink-0" />
+          <div className="app-region-drag h-12 shrink-0 border-b border-white/[0.07]" />
           <SidebarContent className="app-region-no-drag overflow-hidden">
             {features.messaging ? (
               <div
@@ -188,13 +187,13 @@ export function AppSidebar() {
 
           <SidebarFooter className="app-region-no-drag gap-0 p-0">
             {features.messaging && (
-              <div className="px-3 py-2">
+              <div className="px-3 pb-2 pt-1">
                 <SidebarTabSwitcher tabProgress={tabProgress} onTabClick={expandedTabs.selectTab} />
               </div>
             )}
             <CodingToolsSidebarItem />
             <SidebarGettingStartedItem />
-            <div className="border-t border-white/10">
+            <div className="px-2 pb-2">
               <UserMenu />
             </div>
           </SidebarFooter>
