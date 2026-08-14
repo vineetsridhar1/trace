@@ -72,8 +72,7 @@ describe("SessionRecoveryPanel owned local bridge retry", () => {
 
   it("invokes the existing retry mutation once when an owned local session opens", async () => {
     mocks.access = bridgeAccess();
-    const connection = { ...retryableConnection, autoRetryable: true };
-    const renderer = await renderPanel(connection);
+    const renderer = await renderPanel();
 
     expect(mocks.mutation).toHaveBeenCalledTimes(1);
     expect(mocks.mutation).toHaveBeenCalledWith("retry-session-connection", {
@@ -81,7 +80,9 @@ describe("SessionRecoveryPanel owned local bridge retry", () => {
     });
 
     await act(async () =>
-      renderer.update(<SessionRecoveryPanel sessionId="session-1" connection={connection} />),
+      renderer.update(
+        <SessionRecoveryPanel sessionId="session-1" connection={retryableConnection} />,
+      ),
     );
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_000);
