@@ -14,6 +14,30 @@ export type PlacedScreen = {
   clearanceAbove: number;
 };
 
+/**
+ * True when an artboard overlaps the viewport after the canvas transform has
+ * been applied. `overscan` is expressed in screen pixels so panning does not
+ * repeatedly mount and unmount screens at the viewport edge.
+ */
+export function isPlacedScreenVisible(
+  screen: PlacedScreen,
+  viewport: { x: number; y: number; zoom: number },
+  viewportSize: { width: number; height: number },
+  overscan: number,
+): boolean {
+  const left = screen.x * viewport.zoom + viewport.x;
+  const top = screen.y * viewport.zoom + viewport.y;
+  const right = left + screen.screen.viewport.width * viewport.zoom;
+  const bottom = top + screen.screen.viewport.height * viewport.zoom;
+
+  return (
+    right >= -overscan &&
+    bottom >= -overscan &&
+    left <= viewportSize.width + overscan &&
+    top <= viewportSize.height + overscan
+  );
+}
+
 /** Arrange each section as a horizontal flow row, with sections stacked vertically. */
 export function placeScreens(manifest: DesignManifest): PlacedScreen[] {
   const byId = new Map(manifest.screens.map((screen) => [screen.id, screen]));

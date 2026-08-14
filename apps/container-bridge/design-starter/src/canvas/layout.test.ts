@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { placeScreens } from "./layout";
+import { isPlacedScreenVisible, placeScreens } from "./layout";
 
 test("lays out screens as rows and stacks sections vertically when positions are omitted", () => {
   const placed = placeScreens({
@@ -62,4 +62,38 @@ test("keeps explicit screen coordinates relative to its section row", () => {
   });
 
   assert.deepEqual({ x: placed?.x, y: placed?.y }, { x: 120, y: 122 });
+});
+
+test("keeps only artboards within the transformed viewport and overscan mounted", () => {
+  const [placed] = placeScreens({
+    version: 1,
+    sections: [{ id: "main", name: "Main", screenIds: ["screen"] }],
+    screens: [
+      {
+        id: "screen",
+        name: "Screen",
+        component: "./screens/Screen.tsx",
+        viewport: { width: 400, height: 800 },
+      },
+    ],
+  });
+  assert.ok(placed);
+
+  assert.equal(
+    isPlacedScreenVisible(placed, { x: 0, y: 0, zoom: 1 }, { width: 500, height: 500 }, 0),
+    true,
+  );
+  assert.equal(
+    isPlacedScreenVisible(placed, { x: -500, y: 0, zoom: 1 }, { width: 500, height: 500 }, 0),
+    false,
+  );
+  assert.equal(
+    isPlacedScreenVisible(
+      placed,
+      { x: -500, y: 0, zoom: 1 },
+      { width: 500, height: 500 },
+      120,
+    ),
+    true,
+  );
 });
