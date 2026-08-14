@@ -24,20 +24,13 @@ import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useBridgePendingRequestToasts } from "./hooks/useBridgePendingRequestToasts";
 import { Toaster } from "./components/ui/sonner";
 import { TraceLoader } from "./components/ui/trace-loader";
-import { TraceLoaderGallery } from "./components/ui/trace-loader-gallery";
 import { LoginPage } from "./components/auth/LoginPage";
 import { features } from "./lib/features";
 import { ManualEditNavigationGuard } from "./components/session/applications/ManualEditNavigationGuard";
 import { useHomeComposerStore } from "./stores/home-composer";
 import { navigateToSessionGroup } from "./stores/ui";
 
-const SHOW_LOADER_GALLERY = true;
-
 export function App() {
-  return SHOW_LOADER_GALLERY ? <TraceLoaderGallery /> : <TraceApp />;
-}
-
-function TraceApp() {
   const user = useAuthStore((s: AuthState) => s.user);
   const loading = useAuthStore((s: AuthState) => s.loading);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
