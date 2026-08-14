@@ -13,24 +13,6 @@ interface TraceLoaderProps {
 const GRID_SIZE = 3;
 const DOT_SPACING = 22;
 const GRID_ORIGIN = 38;
-const SNAKE_PATH = [
-  [0, 0],
-  [1, 0],
-  [2, 0],
-  [2, 1],
-  [1, 1],
-  [0, 1],
-  [0, 2],
-  [1, 2],
-  [2, 2],
-  [2, 1],
-  [2, 0],
-  [1, 0],
-  [1, 1],
-  [1, 2],
-  [0, 2],
-  [0, 1],
-] as const;
 
 const dots = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, index) => {
   const x = index % GRID_SIZE;
@@ -42,17 +24,6 @@ const dots = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, index) => {
     y,
   };
 });
-
-const snakeLights = SNAKE_PATH.map(([x, y], index) => ({
-  id: `${x}:${y}:${index}`,
-  x,
-  y,
-  snakeIndex: index,
-}));
-
-type SnakeDotStyle = CSSProperties & {
-  "--snake-index": number;
-};
 
 export function TraceLoader({
   className,
@@ -86,44 +57,38 @@ export function TraceLoader({
         <style>
           {`
             .trace-loader-dot {
-              opacity: .5;
-              transform-box: fill-box;
+              opacity: .32;
+            }
+
+            .trace-loader-cursor {
+              opacity: .9;
+              animation: trace-loader-cursor 1.6s linear infinite;
+              transform-box: view-box;
               transform-origin: center;
             }
 
-            .trace-loader-light {
-              opacity: 0;
-              animation: trace-loader-light 1.28s linear infinite;
-              animation-delay: calc(var(--snake-index) * -80ms);
-              transform-box: fill-box;
-              transform-origin: center;
-            }
-
-            @keyframes trace-loader-light {
-              0%, 100% {
-                opacity: 0;
-                transform: scale(.84);
-              }
-              6% {
-                opacity: .32;
-                transform: scale(.96);
-              }
-              12% {
-                opacity: .7;
-                transform: scale(1.28);
-              }
-              24% {
-                opacity: .7;
-                transform: scale(1.14);
-              }
-              34% {
-                opacity: .12;
-                transform: scale(.94);
-              }
+            @keyframes trace-loader-cursor {
+              0% { transform: translate(-18.333%, -18.333%); }
+              6.25% { transform: translate(0, -18.333%); }
+              12.5% { transform: translate(18.333%, -18.333%); }
+              18.75% { transform: translate(18.333%, 0); }
+              25% { transform: translate(0, 0); }
+              31.25% { transform: translate(-18.333%, 0); }
+              37.5% { transform: translate(-18.333%, 18.333%); }
+              43.75% { transform: translate(0, 18.333%); }
+              50% { transform: translate(18.333%, 18.333%); }
+              56.25% { transform: translate(18.333%, 0); }
+              62.5% { transform: translate(18.333%, -18.333%); }
+              68.75% { transform: translate(0, -18.333%); }
+              75% { transform: translate(0, 0); }
+              81.25% { transform: translate(0, 18.333%); }
+              87.5% { transform: translate(-18.333%, 18.333%); }
+              93.75% { transform: translate(-18.333%, 0); }
+              100% { transform: translate(-18.333%, -18.333%); }
             }
 
             @media (prefers-reduced-motion: reduce) {
-              .trace-loader-light {
+              .trace-loader-cursor {
                 animation: none;
               }
             }
@@ -135,26 +100,24 @@ export function TraceLoader({
           const cy = GRID_ORIGIN + dot.y * DOT_SPACING;
 
           return (
-            <circle key={dot.id} className="trace-loader-dot" cx={cx} cy={cy} r="4.5" fill="currentColor" />
-          );
-        })}
-
-        {snakeLights.map((dot) => {
-          const cx = GRID_ORIGIN + dot.x * DOT_SPACING;
-          const cy = GRID_ORIGIN + dot.y * DOT_SPACING;
-
-          return (
             <circle
               key={dot.id}
-              className="trace-loader-light"
+              className="trace-loader-dot"
               cx={cx}
               cy={cy}
-              r="5"
+              r="4.5"
               fill="currentColor"
-              style={{ "--snake-index": dot.snakeIndex } as SnakeDotStyle}
             />
           );
         })}
+
+        <circle
+          className="trace-loader-cursor"
+          cx={GRID_ORIGIN + DOT_SPACING}
+          cy={GRID_ORIGIN + DOT_SPACING}
+          r="6"
+          fill="currentColor"
+        />
       </svg>
 
       {showLabel ? (
