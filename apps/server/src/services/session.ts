@@ -5767,19 +5767,24 @@ export class SessionService {
       sessionRouter.unbindSession(id);
     }
 
-    let deletedSessionGroupId: string | null = null;
-    let deletedDesignSystem: DeletedAuthoredDesignSystem | null = null;
-    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await tx.sessionProject.deleteMany({ where: { sessionId: id } });
-      await tx.ticketLink.deleteMany({ where: { entityType: "session", entityId: id } });
-      await tx.session.delete({ where: { id } });
+    const { deletedSessionGroupId, deletedDesignSystem } = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        await tx.sessionProject.deleteMany({ where: { sessionId: id } });
+        await tx.ticketLink.deleteMany({ where: { entityType: "session", entityId: id } });
+        await tx.session.delete({ where: { id } });
 
-      if (session.sessionGroupId && remainingCount === 0) {
-        deletedDesignSystem = await this.deleteAuthoredDesignSystem(tx, session.sessionGroupId);
-        await tx.sessionGroup.delete({ where: { id: session.sessionGroupId } });
-        deletedSessionGroupId = session.sessionGroupId;
-      }
-    });
+        if (session.sessionGroupId && remainingCount === 0) {
+          const deletedDesignSystem = await this.deleteAuthoredDesignSystem(
+            tx,
+            session.sessionGroupId,
+          );
+          await tx.sessionGroup.delete({ where: { id: session.sessionGroupId } });
+          return { deletedSessionGroupId: session.sessionGroupId, deletedDesignSystem };
+        }
+
+        return { deletedSessionGroupId: null, deletedDesignSystem: null };
+      },
+    );
 
     await Promise.all(
       artifactObjects.map(({ storageKey }) =>
