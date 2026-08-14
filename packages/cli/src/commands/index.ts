@@ -1,13 +1,17 @@
 import type { CommandDefinition, CommandGroupDefinition } from "../runtime.js";
 import { artifactCommand } from "./artifact.js";
+import { appCommands } from "./app/index.js";
 import { channelListCommand } from "./channel/list.js";
 import { contextCommand } from "./context.js";
+import { portCommands } from "./port/index.js";
 import { repoListCommand } from "./repo/list.js";
 import { sessionCommands } from "./session/index.js";
 import { terminalCommands } from "./terminal/index.js";
 
 export const commands: readonly CommandDefinition[] = [
   contextCommand,
+  ...appCommands,
+  ...portCommands,
   channelListCommand,
   repoListCommand,
   ...sessionCommands,
@@ -16,6 +20,34 @@ export const commands: readonly CommandDefinition[] = [
 ];
 
 export const commandGroups: readonly CommandGroupDefinition[] = [
+  {
+    name: "app",
+    description: "Control live cloud-session applications",
+    workflow: [
+      'Run "$TRACE_CLI" app list --json to discover configured applications, processes, and preview URLs.',
+      'Use "$TRACE_CLI" app start, stop, restart, and logs to control live cloud-session servers.',
+    ],
+    examples: ['"$TRACE_CLI" app start all --json', '"$TRACE_CLI" app list --json'],
+    notes: ["Live application controls require a connected cloud session and fail for local sessions."],
+  },
+  {
+    name: "port",
+    description: "Forward arbitrary cloud-session ports independently of applications",
+    workflow: [
+      'Run "$TRACE_CLI" port list --json to inspect configured and arbitrary endpoints.',
+      'Run "$TRACE_CLI" port forward <port> --json after starting any HTTP server on the cloud runtime.',
+      'Use "$TRACE_CLI" port disable or port enable without stopping or restarting the server.',
+    ],
+    examples: [
+      '"$TRACE_CLI" port forward 5173 --json',
+      '"$TRACE_CLI" port disable <endpoint-id> --json',
+    ],
+    notes: [
+      "Port forwarding is independent of repo application commands and configured application ports.",
+      "Public is the default for newly forwarded arbitrary ports; use --access private when required.",
+      "Port controls fail for local sessions; forwarding and enabling require a connected cloud runtime.",
+    ],
+  },
   {
     name: "session",
     description: "Discover and control Trace AI sessions",

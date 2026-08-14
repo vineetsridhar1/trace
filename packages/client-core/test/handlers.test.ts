@@ -683,6 +683,38 @@ describe("handleOrgEvent", () => {
     expect(session._sortTimestamp).toBe("2026-02-01T00:00:00.000Z");
   });
 
+  it("preserves application config when session output contains a partial repository", () => {
+    const applicationConfig = {
+      setupScripts: [],
+      applications: [{ id: "app-1", name: "Web", processes: [] }],
+    };
+    useEntityStore.setState({
+      sessionGroups: {
+        "group-1": {
+          id: "group-1",
+          repo: { id: "repo-1", name: "trace", applicationConfig },
+        } as never,
+      },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_output",
+        scopeId: "session-1",
+        payload: {
+          type: "assistant",
+          sessionGroup: { id: "group-1", repo: { id: "repo-1", name: "renamed" } },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionGroups["group-1"].repo).toEqual({
+      id: "repo-1",
+      name: "renamed",
+      applicationConfig,
+    });
+  });
+
   it("applies an explicit resumed status from a sent session message", () => {
     useEntityStore.setState({
       sessions: {

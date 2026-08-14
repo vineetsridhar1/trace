@@ -8,7 +8,11 @@ import {
 } from "react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
-import { SESSION_TERMINALS_QUERY, START_SESSION_MUTATION } from "@trace/client-core";
+import {
+  mergeSessionGroupEntity,
+  SESSION_TERMINALS_QUERY,
+  START_SESSION_MUTATION,
+} from "@trace/client-core";
 import type { Terminal } from "@trace/gql";
 import { useDetailPanelStore } from "../../stores/detail-panel";
 import { useEntityField, useEntityStore } from "@trace/client-core";
@@ -357,7 +361,7 @@ export function SessionGroupDetailView({
         upsert(
           "sessionGroups",
           fetchedGroup.id,
-          existingGroup ? { ...existingGroup, ...fetchedGroup } : fetchedGroup,
+          mergeSessionGroupEntity(existingGroup, fetchedGroup),
         );
         const fetchedSessions = fetchedGroup.sessions as
           | Array<Record<string, unknown> & { id: string }>

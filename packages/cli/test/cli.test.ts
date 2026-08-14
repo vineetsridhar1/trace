@@ -132,6 +132,127 @@ describe("Trace CLI", () => {
     }
   });
 
+  it("forwards an arbitrary cloud-session port independently of application config", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-app");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    let request:
+      | { operationName: string; query: string; variables: Record<string, unknown> }
+      | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: URL, init?: RequestInit) => {
+        request = JSON.parse(String(init?.body)) as {
+          operationName: string;
+          query: string;
+          variables: Record<string, unknown>;
+        };
+        return new Response(
+          JSON.stringify({
+            data: {
+              forwardSessionPort: {
+                id: "endpoint-1",
+                url: "https://endpoint.example.test",
+                label: "Arbitrary server",
+                targetPort: 4321,
+                status: "enabled",
+                accessMode: "public",
+                source: "manual",
+                appConfigId: null,
+                processConfigId: null,
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    const exitCode = await run([
+      "port",
+      "forward",
+      "4321",
+      "--label",
+      "Arbitrary server",
+      "--json",
+    ]);
+    expect(exitCode, stderr.mock.calls.flat().join("")).toBe(0);
+    expect(request).toEqual({
+      operationName: "TraceCliForwardSessionPort",
+      query: expect.any(String),
+      variables: {
+        sessionGroupId: "group-app",
+        port: 4321,
+        label: "Arbitrary server",
+        accessMode: "public",
+      },
+    });
+    expect(stdout.mock.calls.flat().join("")).toContain("https://endpoint.example.test");
+  });
+
+  it("starts every configured application in the current cloud session", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-app");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    const operationNames: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: URL, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as {
+          operationName: string;
+          variables: Record<string, unknown>;
+        };
+        operationNames.push(request.operationName);
+        if (request.operationName === "TraceCliSessionApplicationState") {
+          return new Response(
+            JSON.stringify({
+              data: {
+                sessionApplicationState: {
+                  applications: [
+                    { id: "web", name: "Web", processes: [] },
+                    { id: "worker", name: "Worker", processes: [] },
+                  ],
+                  processes: [],
+                  endpoints: [],
+                },
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        const appConfigId = request.variables.appConfigId as string;
+        return new Response(
+          JSON.stringify({
+            data: {
+              startSessionApplication: [
+                {
+                  id: `process-${appConfigId}`,
+                  appConfigId,
+                  processConfigId: "main",
+                  label: appConfigId,
+                  status: "starting",
+                  endpoints: [],
+                },
+              ],
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    const exitCode = await run(["app", "start", "all", "--json"]);
+    expect(exitCode, stderr.mock.calls.flat().join("")).toBe(0);
+    expect(operationNames).toEqual([
+      "TraceCliSessionApplicationState",
+      "TraceCliStartSessionApplication",
+      "TraceCliStartSessionApplication",
+    ]);
+    expect(stdout.mock.calls.flat().join("")).toContain('"appConfigId":"worker"');
+  });
+
   it("starts a new group in the current session destination without exposing the bearer", async () => {
     vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
     vi.stubEnv("TRACE_SESSION_ID", "session-1");

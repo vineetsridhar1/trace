@@ -1,8 +1,7 @@
 type PreviewEndpoint = {
   id: string;
   sessionGroupId: string;
-  appConfigId: string;
-  processConfigId: string;
+  source: string;
   status: string;
   url?: string | null;
 };
@@ -18,6 +17,7 @@ export function findReadyPreviewEndpoint<T extends PreviewEndpoint>(
   return endpoints.find(
     (endpoint) =>
       endpoint.sessionGroupId === sessionGroupId &&
+      endpoint.source === "application" &&
       endpoint.status === "enabled" &&
       Boolean(endpoint.url),
   );

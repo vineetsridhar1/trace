@@ -948,7 +948,7 @@ export class ContainerBridge implements IBridgeClient {
 
       case "list_skills": {
         void handleListSkills(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
-          userSkillsDir: null,
+          userSkillsDirs: [],
           fs,
           path,
         });

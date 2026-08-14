@@ -4,6 +4,7 @@ import { findReadyPreviewEndpoint } from "./app-preview-readiness";
 const endpoint = {
   id: "endpoint-1",
   sessionGroupId: "group-1",
+  source: "application",
   appConfigId: "app",
   processConfigId: "dev",
   status: "enabled",
@@ -27,5 +28,11 @@ describe("findReadyPreviewEndpoint", () => {
 
   it("does not match an endpoint from another session group", () => {
     expect(findReadyPreviewEndpoint("group-2", [endpoint])).toBeUndefined();
+  });
+
+  it("does not use an independently forwarded manual port as the app preview", () => {
+    expect(
+      findReadyPreviewEndpoint("group-1", [{ ...endpoint, source: "manual" }]),
+    ).toBeUndefined();
   });
 });

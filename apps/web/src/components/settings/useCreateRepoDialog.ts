@@ -43,6 +43,7 @@ export function useCreateRepoDialog({
   const [manualName, setManualName] = useState("");
   const [manualRemoteUrl, setManualRemoteUrl] = useState("");
   const [defaultBranch, setDefaultBranch] = useState("");
+  const [pendingBranchConfirmation, setPendingBranchConfirmation] = useState<string | null>(null);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const open = controlledOpen ?? uncontrolledOpen;
 
@@ -50,6 +51,7 @@ export function useCreateRepoDialog({
     setError(null);
     setDetected(null);
     setDefaultBranch("");
+    setPendingBranchConfirmation(null);
 
     const folderPath = await window.trace!.pickFolder();
     if (!folderPath) return;
@@ -108,6 +110,7 @@ export function useCreateRepoDialog({
 
   async function handleLink() {
     const branch = defaultBranch.trim();
+    const normalizedBranch = branch.toLowerCase();
     const repo =
       detected ??
       (manualName.trim()
@@ -118,6 +121,14 @@ export function useCreateRepoDialog({
           }
         : null);
     if (!repo || !branch) return;
+    if (
+      normalizedBranch !== "main" &&
+      normalizedBranch !== "master" &&
+      pendingBranchConfirmation !== branch
+    ) {
+      setPendingBranchConfirmation(branch);
+      return;
+    }
 
     setCreating(true);
     setError(null);
@@ -179,6 +190,7 @@ export function useCreateRepoDialog({
     setManualName("");
     setManualRemoteUrl("");
     setDefaultBranch("");
+    setPendingBranchConfirmation(null);
     setUncontrolledOpen(false);
     onOpenChange?.(false);
   }
@@ -202,13 +214,20 @@ export function useCreateRepoDialog({
     manualName,
     manualRemoteUrl,
     defaultBranch,
+    pendingBranchConfirmation,
     canLink: (!!detected || !!manualName.trim()) && !!defaultBranch.trim(),
     canCreate: canCreateLocalProject && !!parentSelection && !!projectName.trim(),
-    setMode,
+    setMode: (nextMode: RepoDialogMode) => {
+      setMode(nextMode);
+      setPendingBranchConfirmation(null);
+    },
     setProjectName,
     setManualName,
     setManualRemoteUrl,
-    setDefaultBranch,
+    setDefaultBranch: (branch: string) => {
+      setDefaultBranch(branch);
+      setPendingBranchConfirmation(null);
+    },
     handleOpenChange,
     handlePickFolder,
     handlePickParentFolder,

@@ -12,6 +12,7 @@ function context(sessionId: string): Context {
     role: null,
     actorType: "agent",
     agentSessionId: sessionId,
+    agentSessionGroupId: "group-a",
     agentCapabilities: [...TRACE_CLI_CAPABILITIES],
   } as Context;
 }
@@ -60,8 +61,9 @@ describe("agent GraphQL authorization", () => {
       const restricted = restrictAgentRootResolvers(operation, {
         [definition.rootField]: resolver,
       });
-      const args =
-        definition.rootField === "events"
+      const args = definition.sessionGroupArgumentPath
+        ? { sessionGroupId: "group-a" }
+        : definition.rootField === "events"
           ? { organizationId: "org-1", scope: { type: "session", id: "session-a" } }
           : {};
       expect(
@@ -73,6 +75,20 @@ describe("agent GraphQL authorization", () => {
         ),
       ).toBe("ok");
     }
+  });
+
+  it("limits scoped CLI operations to the agent's current session group", () => {
+    const restricted = restrictAgentRootResolvers("Mutation", {
+      forwardSessionPort: () => ({}),
+    });
+    expect(() =>
+      restricted.forwardSessionPort(
+        null,
+        { sessionGroupId: "group-b", port: 3000 },
+        context("session-a"),
+        infoFor(traceCliOperations.forwardSessionPort.document),
+      ),
+    ).toThrow("only access its current session group");
   });
 
   it("allows an approved operation for any session visible to the owner", () => {

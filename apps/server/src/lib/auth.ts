@@ -465,6 +465,7 @@ async function buildAuthenticatedContext(input: ContextBuildInput): Promise<Cont
     role,
     actorType,
     agentSessionId: authSubject.kind === "agent" ? authSubject.sessionId : null,
+    agentSessionGroupId: authSubject.kind === "agent" ? authSubject.sessionGroupId : null,
     agentCapabilities: authSubject.kind === "agent" ? authSubject.capabilities : [],
     userLoader: createUserLoader(),
     sessionLoader: createSessionLoader(),

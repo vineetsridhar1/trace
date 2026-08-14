@@ -276,10 +276,10 @@ describe("GraphQL authz guards", () => {
     );
   });
 
-  it("uses the org-scoped runtime key when loading bridge slash commands", async () => {
+  it("uses the org-scoped runtime key when loading Codex skills", async () => {
     vi.mocked(prisma.session.findFirst).mockResolvedValueOnce({
       id: "session-1",
-      tool: "claude_code",
+      tool: "codex",
       workdir: "/worktree",
       sessionGroupId: "group-1",
       connection: { runtimeInstanceId: "runtime-1" },
@@ -291,7 +291,7 @@ describe("GraphQL authz guards", () => {
       ws: { readyState: 1, OPEN: 1 },
       hostingMode: "local",
       organizationId: "org-1",
-      supportedTools: ["claude_code"],
+      supportedTools: ["codex"],
       registeredRepoIds: [],
       lastHeartbeat: Date.now(),
       boundSessions: new Set<string>(),
@@ -316,7 +316,18 @@ describe("GraphQL authz guards", () => {
       { name: "project-plan", description: "Plan work", source: "project" },
     ]);
 
-    await sessionQueries.sessionSlashCommands({}, { sessionId: "session-1" }, ctx);
+    const commands = await sessionQueries.sessionSlashCommands(
+      {},
+      { sessionId: "session-1" },
+      ctx,
+    );
+
+    expect(commands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "clear", source: "builtin" }),
+        expect.objectContaining({ name: "project-plan", source: "project_skill" }),
+      ]),
+    );
 
     expect(sessionRouter.listSkills).toHaveBeenCalledWith(
       "org-1:runtime-1",

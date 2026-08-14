@@ -7,7 +7,12 @@ import type {
   SessionEndpoint,
   SessionSetupScriptRun,
 } from "@trace/gql";
-import { useEntityField, useEntityStore, type SessionGroupEntity } from "@trace/client-core";
+import {
+  mergeSessionGroupEntity,
+  useEntityField,
+  useEntityStore,
+  type SessionGroupEntity,
+} from "@trace/client-core";
 import { client } from "../../../lib/urql";
 import { withRepoApplicationConfigDefaults } from "../../../lib/repo-application-config";
 import {
@@ -62,19 +67,10 @@ export function useSessionApplicationsData(sessionGroupId: string) {
       | undefined;
     if (group?.id) {
       const existing = useEntityStore.getState().sessionGroups[group.id];
-      // The query only selects `id` + a partial `repo` ({ id, applicationConfig }),
-      // so a shallow spread would clobber the stored repo's other fields
-      // (name/remoteUrl/defaultBranch/provider). Deep-merge the nested repo.
       upsert(
         "sessionGroups",
         group.id,
-        (existing
-          ? {
-              ...existing,
-              ...group,
-              repo: group.repo ? { ...existing.repo, ...group.repo } : existing.repo,
-            }
-          : group) as SessionGroupEntity,
+        mergeSessionGroupEntity(existing, group as SessionGroupEntity),
       );
     }
     if (result.data?.sessionApplicationProcesses) {

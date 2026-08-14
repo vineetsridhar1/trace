@@ -7,7 +7,6 @@ import { sessionRouter } from "../lib/session-router.js";
 import type { RuntimeDescriptor } from "../lib/runtime-directory.js";
 import { parseCookieToken, verifyToken } from "../lib/auth.js";
 import { canViewSessionGroup } from "./access.js";
-import { sessionGroupRuntimeInstanceId } from "./session-applications.js";
 import {
   endpointPreviewCookieHeader,
   endpointPreviewTokenFromCookie,
@@ -42,6 +41,35 @@ const TRACE_APP_ORIGIN = (() => {
 
 function runtimeDescriptor(...args: Parameters<typeof sessionRouter.getRuntimeDescriptor>) {
   return sessionRouter.getRuntimeDescriptor(...args);
+}
+
+async function endpointRuntimeInstanceId(endpoint: {
+  source: "application" | "manual";
+  sessionGroupId: string;
+  appConfigId: string | null;
+  processConfigId: string | null;
+  currentRuntimeInstanceId: string | null;
+}): Promise<string | null> {
+  if (endpoint.source === "manual") return endpoint.currentRuntimeInstanceId;
+  if (!endpoint.appConfigId || !endpoint.processConfigId) return null;
+  const process = await prisma.sessionApplicationProcess.findUnique({
+    where: {
+      sessionGroupId_appConfigId_processConfigId: {
+        sessionGroupId: endpoint.sessionGroupId,
+        appConfigId: endpoint.appConfigId,
+        processConfigId: endpoint.processConfigId,
+      },
+    },
+    select: { status: true, runtimeInstanceId: true },
+  });
+  if (
+    process?.status !== "running" ||
+    !process.runtimeInstanceId ||
+    process.runtimeInstanceId !== endpoint.currentRuntimeInstanceId
+  ) {
+    return null;
+  }
+  return process.runtimeInstanceId;
 }
 
 async function sendRuntimeCommand(...args: Parameters<typeof sessionRouter.sendToRuntime>) {
@@ -126,11 +154,19 @@ function requestUrl(req: IncomingMessage): URL {
 // process's runtime when one is running (it carries the process instance id used
 // for traffic attribution) and otherwise route to the session group's runtime.
 async function resolveEndpointTarget(endpoint: {
+  source: "application" | "manual";
   sessionGroupId: string;
-  appConfigId: string;
-  processConfigId: string;
+  appConfigId: string | null;
+  processConfigId: string | null;
+  currentRuntimeInstanceId: string | null;
   organizationId: string;
 }): Promise<{ runtime: RuntimeDescriptor; processInstanceId?: string } | null> {
+  if (endpoint.source === "manual") {
+    if (!endpoint.currentRuntimeInstanceId) return null;
+    const runtime = runtimeDescriptor(endpoint.currentRuntimeInstanceId, endpoint.organizationId);
+    return runtime ? { runtime } : null;
+  }
+  if (!endpoint.appConfigId || !endpoint.processConfigId) return null;
   const process = await prisma.sessionApplicationProcess.findUnique({
     where: {
       sessionGroupId_appConfigId_processConfigId: {
@@ -140,10 +176,9 @@ async function resolveEndpointTarget(endpoint: {
       },
     },
   });
-  const runtimeInstanceId =
-    (process?.status === "running" ? process.runtimeInstanceId : null) ??
-    (await sessionGroupRuntimeInstanceId(endpoint.sessionGroupId, endpoint.organizationId));
+  const runtimeInstanceId = process?.status === "running" ? process.runtimeInstanceId : null;
   if (!runtimeInstanceId) return null;
+  if (runtimeInstanceId !== endpoint.currentRuntimeInstanceId) return null;
   const runtime = runtimeDescriptor(runtimeInstanceId, endpoint.organizationId);
   if (!runtime) return null;
   return { runtime, processInstanceId: process?.id };

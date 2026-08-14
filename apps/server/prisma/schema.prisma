@@ -296,6 +296,11 @@ enum SessionEndpointAccessMode {
   public
 }
 
+enum SessionEndpointSource {
+  application
+  manual
+}
+
 enum EndpointTrafficCaptureMode {
   metadata
   headers
@@ -782,9 +787,11 @@ model SessionEndpoint {
   repoId         String?
   repo           Repo?        @relation(fields: [repoId], references: [id], onDelete: Cascade)
 
-  appConfigId     String
-  processConfigId String
-  portConfigId    String
+  source          SessionEndpointSource @default(application)
+  appConfigId     String?
+  processConfigId String?
+  portConfigId    String?
+  manualPort      Int?
   label           String
   targetPort      Int
   protocol        String @default("http")
@@ -809,6 +816,7 @@ model SessionEndpoint {
   trafficEntries EndpointTrafficEntry[]
 
   @@unique([sessionGroupId, appConfigId, processConfigId, portConfigId])
+  @@unique([sessionGroupId, manualPort])
   @@index([organizationId, sessionGroupId])
   @@index([status])
 }

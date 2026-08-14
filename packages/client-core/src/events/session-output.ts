@@ -2,6 +2,7 @@ import { asJsonObject } from "@trace/shared";
 import type { JsonObject } from "@trace/shared";
 import type { AgentStatus, Event, EventType, ScopeType, SessionStatus } from "@trace/gql";
 import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
+import { mergeSessionGroupEntity } from "../lib/session-group.js";
 import type { OrgEventUIBindings } from "./ui-bindings.js";
 
 const CONNECTION_EVENT_TYPES = new Set([
@@ -141,7 +142,7 @@ export function upsertSessionGroupFromPayload({
   if (sessionGroup && typeof sessionGroup.id === "string") {
     const existing = batch.get("sessionGroups", sessionGroup.id);
     batch.upsert("sessionGroups", sessionGroup.id, {
-      ...(existing ? { ...existing, ...sessionGroup } : sessionGroup),
+      ...mergeSessionGroupEntity(existing, sessionGroup as SessionGroupEntity),
       ...(bumpSort ? { _sortTimestamp: timestamp } : {}),
     } as SessionGroupEntity);
   }

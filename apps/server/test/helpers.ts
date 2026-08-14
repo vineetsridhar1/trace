@@ -247,6 +247,7 @@ export function createPrismaMock() {
     },
     sessionEndpoint: {
       create: vi.fn(),
+      upsert: vi.fn(),
       deleteMany: vi.fn(),
       findFirst: vi.fn(),
       findFirstOrThrow: vi.fn(),

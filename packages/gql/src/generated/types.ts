@@ -708,6 +708,7 @@ export type Mutation = {
   editChatMessage: Message;
   enableSessionEndpointForwarding: SessionEndpoint;
   forkSession: Session;
+  forwardSessionPort: SessionEndpoint;
   /** Adopt an existing local worktree into a not-yet-started session's group (local hosting only). */
   importWorktree: SessionGroup;
   joinChannel: Channel;
@@ -947,6 +948,7 @@ export type MutationDestroyTerminalArgs = {
 
 export type MutationDisableSessionEndpointForwardingArgs = {
   endpointId: Scalars["ID"]["input"];
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type MutationDismissInboxItemArgs = {
@@ -970,10 +972,18 @@ export type MutationEditChatMessageArgs = {
 export type MutationEnableSessionEndpointForwardingArgs = {
   accessMode?: InputMaybe<SessionEndpointAccessMode>;
   endpointId: Scalars["ID"]["input"];
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type MutationForkSessionArgs = {
   eventId: Scalars["ID"]["input"];
+};
+
+export type MutationForwardSessionPortArgs = {
+  accessMode?: InputMaybe<SessionEndpointAccessMode>;
+  label?: InputMaybe<Scalars["String"]["input"]>;
+  port: Scalars["Int"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationImportWorktreeArgs = {
@@ -1486,6 +1496,7 @@ export type Query = {
   session?: Maybe<Session>;
   sessionApplicationLogs: Array<SessionApplicationLogEntry>;
   sessionApplicationProcesses: Array<SessionApplicationProcess>;
+  sessionApplicationState: SessionApplicationState;
   sessionApplicationWorkflowRuns: Array<SessionApplicationWorkflowRun>;
   sessionEndpoints: Array<SessionEndpoint>;
   sessionEventsAroundEvent: Array<Event>;
@@ -1698,9 +1709,14 @@ export type QuerySessionApplicationLogsArgs = {
   beforeSequence?: InputMaybe<Scalars["Int"]["input"]>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
   processId: Scalars["ID"]["input"];
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type QuerySessionApplicationProcessesArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionApplicationStateArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -2056,6 +2072,12 @@ export type SessionApplicationProcess = {
   stoppedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
+export type SessionApplicationState = {
+  __typename?: "SessionApplicationState";
+  applications: Array<RepoApplicationDefinition>;
+  processes: Array<SessionApplicationProcess>;
+};
+
 export type SessionApplicationWorkflowRun = {
   __typename?: "SessionApplicationWorkflowRun";
   appConfigId: Scalars["String"]["output"];
@@ -2130,16 +2152,17 @@ export type SessionConnectionState =
 export type SessionEndpoint = {
   __typename?: "SessionEndpoint";
   accessMode: SessionEndpointAccessMode;
-  appConfigId: Scalars["String"]["output"];
+  appConfigId?: Maybe<Scalars["String"]["output"]>;
   disabledAt?: Maybe<Scalars["DateTime"]["output"]>;
   enabledAt?: Maybe<Scalars["DateTime"]["output"]>;
   id: Scalars["ID"]["output"];
   key: Scalars["String"]["output"];
   label: Scalars["String"]["output"];
-  portConfigId: Scalars["String"]["output"];
-  processConfigId: Scalars["String"]["output"];
+  portConfigId?: Maybe<Scalars["String"]["output"]>;
+  processConfigId?: Maybe<Scalars["String"]["output"]>;
   revokedAt?: Maybe<Scalars["DateTime"]["output"]>;
   sessionGroupId: Scalars["ID"]["output"];
+  source: SessionEndpointSource;
   status: SessionEndpointStatus;
   targetPort: Scalars["Int"]["output"];
   trafficCaptureMode: EndpointTrafficCaptureMode;
@@ -2153,6 +2176,8 @@ export type SessionEndpointPreview = {
   expiresAt: Scalars["DateTime"]["output"];
   url: Scalars["String"]["output"];
 };
+
+export type SessionEndpointSource = "application" | "manual";
 
 export type SessionEndpointStatus = "disabled" | "enabled" | "revoked" | "unavailable";
 

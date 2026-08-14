@@ -12,6 +12,7 @@ const APP_PREVIEW_ENDPOINTS_QUERY = gql`
     sessionEndpoints(sessionGroupId: $sessionGroupId) {
       id
       sessionGroupId
+      source
       appConfigId
       processConfigId
       portConfigId

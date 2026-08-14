@@ -171,6 +171,11 @@ enum SessionEndpointAccessMode {
   public
 }
 
+enum SessionEndpointSource {
+  application
+  manual
+}
+
 enum EndpointTrafficCaptureMode {
   metadata
   headers
@@ -886,6 +891,11 @@ type SessionApplicationLogEntry {
   timestamp: DateTime!
 }
 
+type SessionApplicationState {
+  applications: [RepoApplicationDefinition!]!
+  processes: [SessionApplicationProcess!]!
+}
+
 type SessionApplicationWorkflowStep {
   stepId: String!
   kind: WorkflowStepKind!
@@ -911,9 +921,10 @@ type SessionEndpoint {
   key: String!
   url: String!
   sessionGroupId: ID!
-  appConfigId: String!
-  processConfigId: String!
-  portConfigId: String!
+  source: SessionEndpointSource!
+  appConfigId: String
+  processConfigId: String
+  portConfigId: String
   label: String!
   targetPort: Int!
   status: SessionEndpointStatus!
@@ -1548,8 +1559,10 @@ type Query {
   channelTerminals(channelId: ID!, bridgeRuntimeId: ID!): [Terminal!]!
   sessionSetupScriptRuns(sessionGroupId: ID!): [SessionSetupScriptRun!]!
   sessionApplicationProcesses(sessionGroupId: ID!): [SessionApplicationProcess!]!
+  sessionApplicationState(sessionGroupId: ID!): SessionApplicationState!
   sessionApplicationWorkflowRuns(sessionGroupId: ID!): [SessionApplicationWorkflowRun!]!
   sessionApplicationLogs(
+    sessionGroupId: ID
     processId: ID!
     limit: Int
     beforeSequence: Int
@@ -1805,10 +1818,17 @@ type Mutation {
     processConfigId: ID!
   ): SessionApplicationProcess!
   enableSessionEndpointForwarding(
+    sessionGroupId: ID
     endpointId: ID!
     accessMode: SessionEndpointAccessMode
   ): SessionEndpoint!
-  disableSessionEndpointForwarding(endpointId: ID!): SessionEndpoint!
+  disableSessionEndpointForwarding(sessionGroupId: ID, endpointId: ID!): SessionEndpoint!
+  forwardSessionPort(
+    sessionGroupId: ID!
+    port: Int!
+    label: String
+    accessMode: SessionEndpointAccessMode
+  ): SessionEndpoint!
   rotateSessionEndpoint(endpointId: ID!): SessionEndpoint!
   updateSessionEndpointTrafficCapture(
     endpointId: ID!

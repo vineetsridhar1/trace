@@ -9,7 +9,7 @@ import type {
   InboxItem,
   SessionGroup,
 } from "@trace/gql";
-import { useAuthStore } from "@trace/client-core";
+import { mergeSessionGroupEntity, useAuthStore } from "@trace/client-core";
 import { useEntityStore, useEntityIds } from "@trace/client-core";
 import type { EntityTableMap } from "@trace/client-core";
 import { useUIStore } from "../stores/ui";
@@ -395,8 +395,10 @@ export function useSidebarData() {
           const entityState = useEntityStore.getState();
           const sessions = groups.flatMap((group) => group.sessions ?? []);
           const sessionGroups = groups.map((group) => ({
-            ...(entityState.sessionGroups[group.id] ?? {}),
-            ...group,
+            ...mergeSessionGroupEntity(
+              entityState.sessionGroups[group.id],
+              group as EntityTableMap["sessionGroups"],
+            ),
             sessions: entityState.sessionGroups[group.id]?.sessions ?? [],
             _sortTimestamp:
               group.sessions?.[0]?.lastMessageAt ??
