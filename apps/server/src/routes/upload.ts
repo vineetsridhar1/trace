@@ -15,7 +15,9 @@ const MAX_FILENAME_LENGTH = 100;
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const FALLBACK_BASENAME = "file";
 const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
-const BLOCKED_BROWSER_RENDERED_CONTENT_TYPES = new Set(["image/svg+xml", "text/html"]);
+// HTML attachments are presented as downloads by the client, while SVGs can be
+// rendered as image previews and therefore remain unsupported.
+const BLOCKED_BROWSER_RENDERED_CONTENT_TYPES = new Set(["image/svg+xml"]);
 const CONTENT_TYPE_PATTERN = /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/;
 
 function normalizeUploadContentType(contentType: string): string | null {

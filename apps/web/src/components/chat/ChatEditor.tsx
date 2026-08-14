@@ -132,7 +132,19 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     const handler = (e: ClipboardEvent) => {
       if (!onPasteFilesRef.current) return;
 
+      // Chromium normally exposes copied images through `files`, but some
+      // sources (including an image copied from a context menu) only expose
+      // them through clipboard items.
       const files = Array.from(e.clipboardData?.files ?? []);
+      if (files.length === 0) {
+        files.push(
+          ...Array.from(e.clipboardData?.items ?? []).flatMap((item) => {
+            if (item.kind !== "file") return [];
+            const file = item.getAsFile();
+            return file ? [file] : [];
+          }),
+        );
+      }
       if (files.length > 0) {
         e.preventDefault();
         e.stopImmediatePropagation();
