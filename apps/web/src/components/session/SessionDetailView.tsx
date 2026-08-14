@@ -507,7 +507,7 @@ export function SessionDetailView({
     connectionState !== null &&
     connectionState !== "connected" &&
     !suppressSharedCloudStartupNotice &&
-    RUNTIME_BOOTING_STATES.has(connectionState)
+    (RUNTIME_BOOTING_STATES.has(connectionState) || RUNTIME_FAILURE_STATES.has(connectionState))
       ? connectionState
       : null;
 
