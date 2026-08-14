@@ -39,7 +39,6 @@ function AttachmentChip({ imageKey, label }: { imageKey: string; label: string }
       const data = (await res.json()) as { url?: string };
       if (data.url) {
         setSrc(data.url);
-        setLightboxOpen(true);
       }
     } catch (err) {
       console.warn("Failed to load image URL:", err);

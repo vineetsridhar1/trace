@@ -96,6 +96,12 @@ export function CreateRepoDialog({
           )}
 
           {state.error && <p className="text-sm text-destructive">{state.error}</p>}
+          {state.pendingBranchConfirmation && (
+            <p className="text-sm text-amber-600 dark:text-amber-400">
+              “{state.pendingBranchConfirmation}” is not main or master. Press Link Repository again
+              to confirm it is the right base branch.
+            </p>
+          )}
         </div>
 
         <DialogFooter>
