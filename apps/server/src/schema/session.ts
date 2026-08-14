@@ -333,7 +333,7 @@ export const sessionQueries = {
         connection: true,
       },
     });
-    if (!session || session.tool !== "claude_code") return [];
+    if (!session || session.tool === "pi") return [];
 
     const runtimeInstanceId =
       session.connection &&
@@ -375,7 +375,11 @@ export const sessionQueries = {
     const commands: Array<{ name: string; description: string; source: string; category: string }> =
       [];
 
-    for (const cmd of BUILTIN_SLASH_COMMANDS) {
+    const builtins =
+      session.tool === "claude_code"
+        ? BUILTIN_SLASH_COMMANDS
+        : BUILTIN_SLASH_COMMANDS.filter((cmd) => cmd.category === "special");
+    for (const cmd of builtins) {
       commands.push({
         name: cmd.name,
         description: cmd.description,

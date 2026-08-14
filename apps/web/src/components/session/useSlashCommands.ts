@@ -16,6 +16,10 @@ const BUILTIN_FALLBACK: SlashCommandItem[] = BUILTIN_SLASH_COMMANDS.map(
   }),
 );
 
+const SESSION_ACTION_FALLBACK = BUILTIN_FALLBACK.filter(
+  (command) => command.category === "special",
+);
+
 const PI_SLASH_COMMANDS: SlashCommandItem[] = [
   {
     id: "login",
@@ -33,7 +37,11 @@ export function useSlashCommands(sessionId: string): {
 } {
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const [commands, setCommands] = useState<SlashCommandItem[]>(() =>
-    tool === "claude_code" ? BUILTIN_FALLBACK : tool === "pi" ? PI_SLASH_COMMANDS : [],
+    tool === "claude_code"
+      ? BUILTIN_FALLBACK
+      : tool === "pi"
+        ? PI_SLASH_COMMANDS
+        : SESSION_ACTION_FALLBACK,
   );
   const [loading, setLoading] = useState(false);
 
@@ -45,9 +53,13 @@ export function useSlashCommands(sessionId: string): {
     }
 
     let cancelled = false;
-    const shouldSeedBuiltins = tool === "claude_code";
-    const localCommands = tool === "pi" ? PI_SLASH_COMMANDS : [];
-    setCommands(shouldSeedBuiltins ? BUILTIN_FALLBACK : localCommands);
+    const localCommands =
+      tool === "pi"
+        ? PI_SLASH_COMMANDS
+        : tool === "claude_code"
+          ? BUILTIN_FALLBACK
+          : SESSION_ACTION_FALLBACK;
+    setCommands(localCommands);
     if (tool === "pi") {
       setLoading(false);
       return;
@@ -67,14 +79,10 @@ export function useSlashCommands(sessionId: string): {
           source: string;
           category: string;
         }>;
-        // The server returns [] when session.tool !== "claude_code". If the
-        // client-side tool is claude_code, an empty response means the tool
-        // mutation hasn't committed yet — keep the optimistic builtins rather
-        // than clearing them. Trade-off: bridge-provided skills (user/project
-        // skills from a local Claude Code bridge) won't appear until the hook
-        // re-runs (e.g., next navigation). Acceptable because builtins are the
-        // common case and bridge skills are an enhancement.
-        if (shouldSeedBuiltins && raw.length === 0) {
+        // An empty response can mean the runtime has not connected yet. Keep
+        // the locally handled commands (such as /clear) until a runtime can
+        // report its user and project skills.
+        if (raw.length === 0) {
           return;
         }
         const mapped: SlashCommandItem[] = raw.map(
