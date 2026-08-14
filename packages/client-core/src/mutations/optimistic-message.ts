@@ -5,8 +5,7 @@ import {
   useEntityStore,
   eventScopeKey,
   messageScopeKey,
-  removeEventIdByScope,
-  upsertEventIdByScope,
+  updateScopedEventCache,
 } from "../stores/entity.js";
 import { useAuthStore } from "../stores/auth.js";
 import { generateUUID } from "../utils/uuid.js";
@@ -15,6 +14,7 @@ type EntityStoreState = {
   messages: Record<string, Message>;
   eventsByScope: Record<string, Record<string, Event>>;
   _eventIdsByScope: Record<string, string[]>;
+  _eventIdsByParentId: Record<string, string[]>;
   _messageIdsByScope: Record<string, string[]>;
 };
 
@@ -180,23 +180,7 @@ export function takePendingOptimisticChat(
 
 function upsertSessionEvents(scopeKey: string, events: Array<Event & { id: string }>): void {
   useEntityStore.setState((state: EntityStoreState) => {
-    const bucket = { ...(state.eventsByScope[scopeKey] ?? {}) };
-    let eventIdsByScope = state._eventIdsByScope;
-    for (const event of events) {
-      eventIdsByScope = upsertEventIdByScope(
-        eventIdsByScope,
-        scopeKey,
-        event.id,
-        event,
-        bucket,
-        bucket[event.id],
-      );
-      bucket[event.id] = event;
-    }
-    return {
-      eventsByScope: { ...state.eventsByScope, [scopeKey]: bucket },
-      ...(eventIdsByScope !== state._eventIdsByScope ? { _eventIdsByScope: eventIdsByScope } : {}),
-    };
+    return updateScopedEventCache(state, scopeKey, events);
   });
 }
 
@@ -261,14 +245,7 @@ export function removeOptimisticSessionMessage(sessionId: string, tempEventId: s
 
   const scopeKey = eventScopeKey("session", sessionId);
   useEntityStore.setState((state: EntityStoreState) => {
-    const bucket = state.eventsByScope[scopeKey];
-    if (!bucket || !bucket[tempEventId]) return state;
-    const { [tempEventId]: _, ...rest } = bucket;
-    const eventIdsByScope = removeEventIdByScope(state._eventIdsByScope, scopeKey, tempEventId);
-    return {
-      eventsByScope: { ...state.eventsByScope, [scopeKey]: rest },
-      ...(eventIdsByScope !== state._eventIdsByScope ? { _eventIdsByScope: eventIdsByScope } : {}),
-    };
+    return updateScopedEventCache(state, scopeKey, [], [tempEventId]);
   });
 }
 
@@ -299,26 +276,7 @@ export function upsertSessionEventWithOptimisticResolution(
   }
 
   useEntityStore.setState((state: EntityStoreState) => {
-    const bucket = { ...(state.eventsByScope[scopeKey] ?? {}) };
-    let eventIdsByScope = removeEventIdByScope(
-      state._eventIdsByScope,
-      scopeKey,
-      pending.tempEventId,
-    );
-    eventIdsByScope = upsertEventIdByScope(
-      eventIdsByScope,
-      scopeKey,
-      event.id,
-      event,
-      bucket,
-      bucket[event.id],
-    );
-    delete bucket[pending.tempEventId];
-    bucket[event.id] = event;
-    return {
-      eventsByScope: { ...state.eventsByScope, [scopeKey]: bucket },
-      ...(eventIdsByScope !== state._eventIdsByScope ? { _eventIdsByScope: eventIdsByScope } : {}),
-    };
+    return updateScopedEventCache(state, scopeKey, [event], [pending.tempEventId]);
   });
 }
 
@@ -340,27 +298,12 @@ export function upsertFetchedSessionEventsWithOptimisticResolution(
   }
 
   useEntityStore.setState((state: EntityStoreState) => {
-    const bucket = { ...(state.eventsByScope[scopeKey] ?? {}) };
-    let eventIdsByScope = state._eventIdsByScope;
-    for (const event of events) {
-      eventIdsByScope = upsertEventIdByScope(
-        eventIdsByScope,
-        scopeKey,
-        event.id,
-        event,
-        bucket,
-        bucket[event.id],
-      );
-      bucket[event.id] = event;
-    }
-    for (const entry of matched) {
-      delete bucket[entry.tempEventId];
-      eventIdsByScope = removeEventIdByScope(eventIdsByScope, scopeKey, entry.tempEventId);
-    }
-    return {
-      eventsByScope: { ...state.eventsByScope, [scopeKey]: bucket },
-      ...(eventIdsByScope !== state._eventIdsByScope ? { _eventIdsByScope: eventIdsByScope } : {}),
-    };
+    return updateScopedEventCache(
+      state,
+      scopeKey,
+      events,
+      matched.map((entry) => entry.tempEventId),
+    );
   });
 }
 
@@ -460,20 +403,12 @@ export function removeOptimisticChatMessage(
       nextMsgIndex = { ...nextMsgIndex, [msgSK]: filtered };
     }
 
-    let nextEventsByScope = state.eventsByScope;
-    let nextEventIdsByScope = state._eventIdsByScope;
-    const bucket = nextEventsByScope[eventSK];
-    if (bucket?.[tempEventId]) {
-      const { [tempEventId]: _evt, ...rest } = bucket;
-      nextEventsByScope = { ...nextEventsByScope, [eventSK]: rest };
-      nextEventIdsByScope = removeEventIdByScope(nextEventIdsByScope, eventSK, tempEventId);
-    }
+    const eventCache = updateScopedEventCache(state, eventSK, [], [tempEventId]);
 
     return {
       messages: restMessages,
       _messageIdsByScope: nextMsgIndex,
-      eventsByScope: nextEventsByScope,
-      _eventIdsByScope: nextEventIdsByScope,
+      ...eventCache,
     };
   });
 }
@@ -533,35 +468,17 @@ export function upsertFetchedChatMessagesWithOptimisticResolution(
     }
     nextMsgIndex[msgSK] = filtered;
 
-    let nextEventsByScope = state.eventsByScope;
-    let nextEventIdsByScope = state._eventIdsByScope;
-    let bucket = state.eventsByScope[scopeKey];
-    let bucketChanged = false;
-
-    for (const entry of matched) {
-      if (bucket?.[entry.tempEventId]) {
-        if (!bucketChanged) {
-          nextEventsByScope = { ...state.eventsByScope };
-          bucket = { ...(bucket ?? {}) };
-          nextEventsByScope[scopeKey] = bucket;
-          bucketChanged = true;
-        }
-        delete bucket[entry.tempEventId];
-        nextEventIdsByScope = removeEventIdByScope(
-          nextEventIdsByScope,
-          scopeKey,
-          entry.tempEventId,
-        );
-      }
-    }
+    const eventCache = updateScopedEventCache(
+      state,
+      scopeKey,
+      [],
+      matched.map((entry) => entry.tempEventId),
+    );
 
     return {
       messages: nextMessages,
       _messageIdsByScope: nextMsgIndex,
-      ...(bucketChanged ? { eventsByScope: nextEventsByScope } : {}),
-      ...(nextEventIdsByScope !== state._eventIdsByScope
-        ? { _eventIdsByScope: nextEventIdsByScope }
-        : {}),
+      ...eventCache,
     };
   });
 }

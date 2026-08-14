@@ -260,9 +260,10 @@ export const sessionQueries = {
       typeof (session.connection as { runtimeInstanceId?: unknown }).runtimeInstanceId === "string"
         ? ((session.connection as { runtimeInstanceId?: string }).runtimeInstanceId ?? null)
         : null;
-    const runtime =
-      (runtimeInstanceId ? sessionRouter.getRuntime(runtimeInstanceId, orgId) : null) ??
-      sessionRouter.getRuntimeForSession(args.sessionId);
+    const boundRuntime = sessionRouter.getRuntimeForSession(args.sessionId);
+    const runtime = runtimeInstanceId
+      ? sessionRouter.getRuntimeMetadata(runtimeInstanceId, orgId)
+      : boundRuntime;
 
     // Try to get skills from bridge
     let skills: BridgeSkillInfo[] = [];

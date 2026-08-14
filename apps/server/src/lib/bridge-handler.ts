@@ -23,6 +23,7 @@ import { endpointProxyService } from "../services/endpoint-proxy.js";
 import { prisma } from "./db.js";
 import { AuthorizationError } from "./errors.js";
 import { runtimeLeaseTtlMs } from "./provisioned-runtime-lease.js";
+import { correlatedResponseRelay } from "./correlated-response-relay.js";
 
 /** Grace period before marking sessions disconnected — allows fast reconnects */
 const DISCONNECT_GRACE_MS = 10_000;
@@ -85,10 +86,175 @@ function jsonRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+function linkedCheckoutStatus(value: unknown): BridgeLinkedCheckoutStatus | null {
+  const status = jsonRecord(value);
+  return status && typeof status.repoId === "string" && typeof status.isAttached === "boolean"
+    ? (status as unknown as BridgeLinkedCheckoutStatus)
+    : null;
+}
+
 function isTerminalConnectionState(connection: unknown): boolean {
   const state = jsonRecord(connection)?.state;
   return state === "failed" || state === "timed_out" || state === "stopped";
 }
+
+function dispatchRelayedCorrelatedResponse(msg: Record<string, unknown>, runtimeKey: string): void {
+  const requestId = typeof msg.requestId === "string" ? msg.requestId : null;
+  if (!requestId) return;
+  const error = typeof msg.error === "string" ? msg.error : undefined;
+
+  if (msg.type === "endpoint_http_response") {
+    endpointProxyService.resolveHttpResponse(requestId, {
+      status: typeof msg.status === "number" ? msg.status : 502,
+      headers:
+        msg.headers && typeof msg.headers === "object" && !Array.isArray(msg.headers)
+          ? (msg.headers as Record<string, string | string[]>)
+          : {},
+      bodyBase64: typeof msg.bodyBase64 === "string" ? msg.bodyBase64 : undefined,
+    });
+  } else if (msg.type === "endpoint_http_error") {
+    endpointProxyService.resolveHttpError(requestId, error ?? "Endpoint proxy failed");
+  } else if (msg.type === "endpoint_ws_opened") {
+    endpointProxyService.resolveWebSocketOpened(requestId);
+  } else if (msg.type === "endpoint_ws_data" && typeof msg.dataBase64 === "string") {
+    endpointProxyService.resolveWebSocketData(
+      requestId,
+      msg.dataBase64,
+      typeof msg.isBinary === "boolean" ? msg.isBinary : true,
+    );
+  } else if (msg.type === "endpoint_ws_closed") {
+    endpointProxyService.resolveWebSocketClosed(requestId);
+  } else if (msg.type === "linked_checkout_status_result") {
+    sessionRouter.resolveLinkedCheckoutStatusRequest(
+      requestId,
+      msg.status as BridgeLinkedCheckoutStatus,
+      runtimeKey,
+    );
+  } else if (msg.type === "linked_checkout_changed_file_result") {
+    sessionRouter.resolveLinkedCheckoutChangedFileRequest(
+      requestId,
+      msg.file as BridgeLinkedCheckoutChangedFilePreview | undefined,
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "linked_checkout_action_result") {
+    sessionRouter.resolveLinkedCheckoutActionRequest(
+      requestId,
+      msg.result as BridgeLinkedCheckoutActionResultPayload,
+      runtimeKey,
+    );
+  } else if (msg.type === "session_current_branch_result") {
+    sessionRouter.resolveSessionCurrentBranchRequest(
+      requestId,
+      typeof msg.branch === "string" ? msg.branch : null,
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "session_git_sync_status_result") {
+    sessionRouter.resolveSessionGitSyncStatusRequest(
+      requestId,
+      msg.status && typeof msg.status === "object" && !Array.isArray(msg.status)
+        ? (msg.status as Parameters<typeof sessionRouter.resolveSessionGitSyncStatusRequest>[1])
+        : undefined,
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "branches_result") {
+    sessionRouter.resolveBranchRequest(
+      requestId,
+      Array.isArray(msg.branches)
+        ? msg.branches.filter((item): item is string => typeof item === "string")
+        : [],
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "workspace_slugs_result") {
+    sessionRouter.resolveWorkspaceSlugRequest(
+      requestId,
+      Array.isArray(msg.slugs)
+        ? msg.slugs.filter((item): item is string => typeof item === "string")
+        : [],
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "worktrees_result") {
+    sessionRouter.resolveWorktreeListRequest(
+      requestId,
+      Array.isArray(msg.worktrees) ? (msg.worktrees as BridgeRepoWorktree[]) : [],
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "files_result") {
+    sessionRouter.resolveFileRequest(
+      requestId,
+      Array.isArray(msg.files)
+        ? msg.files.filter((item): item is string => typeof item === "string")
+        : [],
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "file_content_result") {
+    sessionRouter.resolveFileContentRequest(
+      requestId,
+      typeof msg.content === "string" ? msg.content : "",
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "file_write_result") {
+    sessionRouter.resolveFileWriteRequest(requestId, error, runtimeKey);
+  } else if (msg.type === "file_commit_result") {
+    sessionRouter.resolveFileCommitRequest(
+      requestId,
+      typeof msg.commitSha === "string" ? msg.commitSha : undefined,
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "worktree_changes_result") {
+    const files = Array.isArray(msg.files)
+      ? (msg.files as Parameters<typeof sessionRouter.resolveWorktreeChangesRequest>[1])
+      : [];
+    sessionRouter.resolveWorktreeChangesRequest(
+      requestId,
+      files,
+      typeof msg.totalCount === "number" ? msg.totalCount : files.length,
+      msg.truncated === true,
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "revert_worktree_file_result") {
+    sessionRouter.resolveRevertWorktreeFileRequest(requestId, error, runtimeKey);
+  } else if (msg.type === "branch_diff_result") {
+    sessionRouter.resolveBranchDiffRequest(
+      requestId,
+      Array.isArray(msg.files)
+        ? (msg.files as Parameters<typeof sessionRouter.resolveBranchDiffRequest>[1])
+        : [],
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "file_at_ref_result") {
+    sessionRouter.resolveFileAtRefRequest(
+      requestId,
+      typeof msg.content === "string" ? msg.content : "",
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "skills_result") {
+    sessionRouter.resolveSkillsRequest(
+      requestId,
+      Array.isArray(msg.skills)
+        ? (msg.skills as Parameters<typeof sessionRouter.resolveSkillsRequest>[1])
+        : [],
+      error,
+      runtimeKey,
+    );
+  }
+}
+
+correlatedResponseRelay.onResponse(({ message, runtimeKey, connectionGeneration }) => {
+  if (!sessionRouter.isRuntimeGenerationCurrent(runtimeKey, connectionGeneration)) return;
+  dispatchRelayedCorrelatedResponse(message, runtimeKey);
+});
 
 export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequest) {
   // Default runtime ID; replaced if the bridge sends runtime_hello
@@ -97,6 +263,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
   let registered = false;
   const bridgeAuth = req?.bridgeAuth;
   let lastLeaseAuthorizationAt = 0;
+  let localConnectionStartedAt: Date | null = null;
 
   function renewCloudRuntimeLease(): void {
     if (bridgeAuth?.kind !== "cloud" || ws.readyState !== ws.OPEN) return;
@@ -280,6 +447,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
                 registeredRepoIds,
               },
             });
+            localConnectionStartedAt = bridgeRuntime.connectedAt;
             await agentEnvironmentService
               .ensureLocalBridgeEnvironment(
                 {
@@ -301,8 +469,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
             runtimeId = newId;
             runtimeKey = runtimeRouterKey(newId, bridgeAuth.organizationId);
-            const existingRuntime = sessionRouter.getRuntime(newId, bridgeAuth.organizationId);
-            sessionRouter.registerRuntime({
+            const claimedOwnership = await sessionRouter.registerRuntime({
               key: runtimeKey,
               id: runtimeId,
               label: bridgeRuntime.label,
@@ -314,16 +481,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               supportedTools,
               protocolVersion: msg.protocolVersion,
               registeredRepoIds,
+              connectedAt: bridgeRuntime.connectedAt,
             });
-
-            if (existingRuntime && existingRuntime.ws !== ws) {
-              runtimeDebug("closing superseded websocket for runtime", {
-                runtimeId: newId,
-                previousLabel: existingRuntime.label,
-                previousReadyState: existingRuntime.ws.readyState,
-              });
-              existingRuntime.ws.close();
-            }
+            if (!claimedOwnership) return;
           } else if (bridgeAuth.kind === "cloud") {
             if (newId !== bridgeAuth.instanceId || hostingMode !== "cloud") {
               runtimeDebug("cloud bridge auth rejected runtime_hello mismatch", {
@@ -400,7 +560,6 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
             runtimeId = newId;
             runtimeKey = runtimeId;
-            const existingRuntime = sessionRouter.getRuntime(newId);
             if (bridgeAuth.sessionId) {
               const authorization = await sessionService.authorizeRuntimeLease({
                 sessionId: bridgeAuth.sessionId,
@@ -426,7 +585,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               }
               lastLeaseAuthorizationAt = Date.now();
             }
-            sessionRouter.registerRuntime({
+            const claimedOwnership = await sessionRouter.registerRuntime({
               id: runtimeId,
               label: (msg.label as string) ?? runtimeId,
               ws,
@@ -437,17 +596,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               protocolVersion: msg.protocolVersion,
               registeredRepoIds,
             });
+            if (!claimedOwnership) return;
             if (bridgeAuth.sessionId) {
               sessionRouter.bindSession(bridgeAuth.sessionId, runtimeKey);
-            }
-
-            if (existingRuntime && existingRuntime.ws !== ws) {
-              runtimeDebug("closing superseded websocket for runtime", {
-                runtimeId: newId,
-                previousLabel: existingRuntime.label,
-                previousReadyState: existingRuntime.ws.readyState,
-              });
-              existingRuntime.ws.close();
             }
           }
 
@@ -508,6 +659,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
       if (msg.type === "runtime_heartbeat") {
         if (!registered) return;
+        if (!(await sessionRouter.confirmCurrentRuntimeSocket(runtimeKey, ws))) return;
         const recorded = sessionRouter.recordHeartbeat(runtimeKey, ws);
         if (!recorded) return;
         if (bridgeAuth?.kind === "cloud" && !(await revalidateAndRenewCloudRuntimeLease())) {
@@ -550,6 +702,32 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       // organization is known from here on. Scope every runtime-driven mutation
       // to it so a compromised runtime can't touch another tenant's rows.
       if (!bridgeAuth) return;
+
+      const connectionGeneration = sessionRouter.getCurrentRuntimeConnectionGeneration(
+        runtimeKey,
+        ws,
+      );
+      if (!connectionGeneration) {
+        runtimeDebug("bridge ignored message from stale websocket", {
+          runtimeId,
+          messageType: typeof msg.type === "string" ? msg.type : "unknown",
+        });
+        return;
+      }
+
+      const status =
+        msg.type === "linked_checkout_status_result"
+          ? linkedCheckoutStatus(msg.status)
+          : msg.type === "linked_checkout_action_result"
+            ? linkedCheckoutStatus(jsonRecord(msg.result)?.status)
+            : null;
+      if (status) sessionRouter.recordLinkedCheckoutStatus(runtimeKey, status, ws);
+
+      // Request IDs for cross-replica commands encode the caller replica. Send
+      // correlated responses back there before consulting this replica's
+      // in-memory pending-request maps.
+      if (await correlatedResponseRelay.forwardIfRemote(msg, runtimeKey, connectionGeneration))
+        return;
 
       if (msg.type === "repo_linked") {
         const repoId = typeof msg.repoId === "string" ? msg.repoId.trim() : "";
@@ -986,9 +1164,10 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         msg.type === "terminal_exit" ||
         msg.type === "terminal_error"
       ) {
-        terminalRelay.relayFromBridge(
+        await terminalRelay.relayFromBridge(
           msg as { type: string; terminalId: string; [key: string]: unknown },
           runtimeKey,
+          connectionGeneration,
         );
         return;
       }
@@ -1077,6 +1256,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
   });
 
   ws.on("close", (code: number, reason: Buffer) => {
+    const disconnectedAt = new Date().toISOString();
     const reasonText = reason.toString();
     runtimeDebug("bridge websocket closed, grace period starting", {
       runtimeId,
@@ -1085,15 +1265,20 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       graceMs: DISCONNECT_GRACE_MS,
     });
     const closedRuntimeId = bridgeAuth?.kind === "local" ? bridgeAuth.instanceId : runtimeId;
+    const wasCurrentOwner = registered && sessionRouter.isCurrentRuntimeSocket(runtimeKey, ws);
     const affectedSessions = registered ? sessionRouter.unregisterRuntime(runtimeKey, ws) : [];
     runtimeDebug("bridge close affected sessions", {
       runtimeId: closedRuntimeId,
       affectedSessions,
     });
 
-    if (bridgeAuth?.kind === "local") {
+    if (bridgeAuth?.kind === "local" && wasCurrentOwner) {
       runtimeAccessService
-        .markRuntimeDisconnected(closedRuntimeId, bridgeAuth.organizationId)
+        .markRuntimeDisconnected(
+          closedRuntimeId,
+          bridgeAuth.organizationId,
+          localConnectionStartedAt,
+        )
         .catch((err) => {
           console.error("[bridge] failed to mark local runtime disconnected:", err);
         });
@@ -1120,6 +1305,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             sessionId,
             "runtime_disconnected",
             closedRuntimeId,
+            disconnectedAt,
           );
         });
       }

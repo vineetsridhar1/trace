@@ -29,6 +29,7 @@ vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     getRuntimeForSession: vi.fn(),
     getRuntime: vi.fn(),
+    getRuntimeMetadata: vi.fn(),
     isRuntimeAvailable: vi.fn(),
     getLinkedCheckoutStatus: vi.fn(),
   },
@@ -69,6 +70,9 @@ describe("TerminalService", () => {
     vi.clearAllMocks();
     runtimeAccessServiceMock.assertAccess.mockResolvedValue(undefined);
     sessionRouterMock.getRuntimeForSession.mockReturnValue(undefined);
+    sessionRouterMock.getRuntimeMetadata.mockImplementation((...args: unknown[]) =>
+      sessionRouterMock.getRuntime(...args),
+    );
     terminalRelayMock.getTerminalAuthContext.mockImplementation((terminalId: string) => ({
       kind: "session",
       sessionId: terminalRelayMock.getSessionId(terminalId) ?? "session-1",
@@ -848,6 +852,34 @@ describe("TerminalService", () => {
         },
         select: { id: true, repoId: true },
       });
+    });
+
+    it("creates a channel terminal when another replica owns the bridge", async () => {
+      baseChannelSetup();
+      sessionRouterMock.getRuntime.mockReturnValue(null);
+      sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+        key: "org-1:runtime-1",
+        id: "runtime-1",
+        organizationId: "org-1",
+        hostingMode: "local",
+        registeredRepoIds: ["repo-1"],
+      });
+
+      await expect(
+        terminalService.createForChannel({
+          channelId: "channel-1",
+          bridgeRuntimeId: "bridge-1",
+          cols: 80,
+          rows: 24,
+          organizationId: "org-1",
+          userId: "user-1",
+        }),
+      ).resolves.toEqual({ id: "term-channel-1", sessionId: "channel-1" });
+
+      expect(sessionRouterMock.getLinkedCheckoutStatus).toHaveBeenCalledWith(
+        "org-1:runtime-1",
+        "repo-1",
+      );
     });
 
     it("throws when channel is not found or user is not a member", async () => {

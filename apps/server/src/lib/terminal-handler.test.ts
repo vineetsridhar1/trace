@@ -5,7 +5,9 @@ const mocks = vi.hoisted(() => ({
   isExternalLocalModeRequest: vi.fn(() => false),
   parseCookieToken: vi.fn(),
   getTerminalAuthContext: vi.fn(() => null),
+  getTerminalAuthContextDistributed: vi.fn(),
   attachFrontend: vi.fn(() => true),
+  attachFrontendDistributed: vi.fn(),
   detachAllForFrontend: vi.fn(),
   relayFromFrontend: vi.fn(),
   assertAccess: vi.fn(),
@@ -20,7 +22,9 @@ vi.mock("./auth.js", () => ({
 vi.mock("./terminal-relay.js", () => ({
   terminalRelay: {
     getTerminalAuthContext: mocks.getTerminalAuthContext,
+    getTerminalAuthContextDistributed: mocks.getTerminalAuthContextDistributed,
     attachFrontend: mocks.attachFrontend,
+    attachFrontendDistributed: mocks.attachFrontendDistributed,
     detachAllForFrontend: mocks.detachAllForFrontend,
     relayFromFrontend: mocks.relayFromFrontend,
   },
@@ -81,6 +85,13 @@ describe("terminal handler auth", () => {
     mocks.parseCookieToken.mockReturnValue(undefined);
     mocks.authenticateUserAccessToken.mockResolvedValue({ kind: "session", userId: "user-1" });
     mocks.attachFrontend.mockReturnValue(true);
+    mocks.getTerminalAuthContextDistributed.mockImplementation(async (terminalId: string) =>
+      mocks.getTerminalAuthContext(terminalId),
+    );
+    mocks.attachFrontendDistributed.mockImplementation(
+      async (terminalId: string, ws: unknown, userId: string) =>
+        mocks.attachFrontend(terminalId, ws, userId),
+    );
     mocks.assertAccess.mockResolvedValue(undefined);
     prismaMock.user.findUnique.mockResolvedValue({ id: "user-1" });
   });
@@ -239,6 +250,49 @@ describe("terminal handler auth", () => {
     expect(mocks.relayFromFrontend).not.toHaveBeenCalled();
     expect(ws.close).toHaveBeenCalledWith(1008, "Access denied");
   });
+
+  it.each([
+    ["input", { type: "input", data: "whoami\n" }, "input", { data: "whoami\n" }],
+    ["resize", { type: "resize", cols: 120, rows: 40 }, "resize", { cols: 120, rows: 40 }],
+  ] as const)(
+    "uses distributed terminal metadata when forwarding cross-replica %s",
+    async (_name, message, commandType, payload) => {
+      const authContext = {
+        kind: "session" as const,
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+        runtimeInstanceId: "runtime-1",
+        ownerUserId: "user-1",
+      };
+      mocks.getTerminalAuthContext.mockReturnValue(null);
+      mocks.getTerminalAuthContextDistributed.mockResolvedValue(authContext);
+      prismaMock.session.findFirst.mockResolvedValue({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+      });
+      const ws = createMockWs();
+
+      handleTerminalConnection(ws as never, {
+        headers: {},
+        url: "/terminal?token=session-token",
+        socket: { remoteAddress: "127.0.0.1" },
+      });
+      await Promise.resolve();
+      ws.emitMessage({ type: "attach", terminalId: "term-1" });
+      await vi.waitFor(() => {
+        expect(mocks.attachFrontendDistributed).toHaveBeenCalledWith("term-1", ws, "user-1");
+      });
+
+      ws.emitMessage(message);
+
+      await vi.waitFor(() => {
+        expect(mocks.relayFromFrontend).toHaveBeenCalledWith("term-1", commandType, payload);
+      });
+      expect(mocks.getTerminalAuthContext).not.toHaveBeenCalled();
+      expect(ws.close).not.toHaveBeenCalled();
+    },
+  );
 
   it("requires active channel membership before attaching to a channel terminal", async () => {
     mocks.getTerminalAuthContext.mockReturnValue({

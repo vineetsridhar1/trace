@@ -221,31 +221,51 @@ describe("upload routes in local mode", () => {
     expect(storageMock.getUploadTarget).not.toHaveBeenCalled();
   });
 
-  it("rejects active browser-rendered content types", async () => {
+  it("allows HTML attachments but rejects SVG uploads", async () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: "user-1" });
     prismaMock.organization.findFirst.mockResolvedValue({ id: "org-local" });
     prismaMock.orgMember.findUnique.mockResolvedValue({ role: "admin" });
 
     const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
-    for (const contentType of ["text/html", "image/svg+xml"]) {
-      const res = await fetch(`${baseUrl}/uploads/presign`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          filename: "active-file",
-          contentType,
-          contentLength: 1024,
-          organizationId: "org-local",
-        }),
-      });
+    storageMock.getUploadTarget.mockResolvedValueOnce({
+      method: "PUT",
+      url: "https://upload.example/html",
+    });
 
-      expect(res.status).toBe(400);
-      await expect(res.json()).resolves.toEqual({ error: "contentType is not supported" });
-    }
-    expect(storageMock.getUploadTarget).not.toHaveBeenCalled();
+    const htmlRes = await fetch(`${baseUrl}/uploads/presign`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        filename: "page.html",
+        contentType: "text/html",
+        contentLength: 1024,
+        organizationId: "org-local",
+      }),
+    });
+
+    expect(htmlRes.status).toBe(200);
+    expect(storageMock.getUploadTarget).toHaveBeenCalledOnce();
+
+    const svgRes = await fetch(`${baseUrl}/uploads/presign`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        filename: "active-file.svg",
+        contentType: "image/svg+xml",
+        contentLength: 1024,
+        organizationId: "org-local",
+      }),
+    });
+
+    expect(svgRes.status).toBe(400);
+    await expect(svgRes.json()).resolves.toEqual({ error: "contentType is not supported" });
+    expect(storageMock.getUploadTarget).toHaveBeenCalledOnce();
   });
 
   it("rejects local-mode upload URLs for non-canonical organizations", async () => {

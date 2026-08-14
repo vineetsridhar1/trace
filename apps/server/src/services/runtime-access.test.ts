@@ -13,6 +13,9 @@ vi.mock("../lib/session-router.js", () => ({
       label: "Laptop",
       hostingMode: "local",
     }),
+    getRuntimeMetadata: vi.fn(),
+    getLinkedCheckoutStatus: vi.fn(),
+    isLinkedCheckoutStatusFresh: vi.fn().mockReturnValue(true),
   },
 }));
 
@@ -41,6 +44,9 @@ const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").c
 const sessionRouterMock = sessionRouter as unknown as {
   isRuntimeAvailable: ReturnType<typeof vi.fn>;
   getRuntime: ReturnType<typeof vi.fn>;
+  getRuntimeMetadata: ReturnType<typeof vi.fn>;
+  getLinkedCheckoutStatus: ReturnType<typeof vi.fn>;
+  isLinkedCheckoutStatusFresh: ReturnType<typeof vi.fn>;
 };
 const eventServiceMock = eventService as unknown as {
   create: ReturnType<typeof vi.fn>;
@@ -59,6 +65,138 @@ describe("runtimeAccessService", () => {
       id: "runtime-1",
       label: "Laptop",
       hostingMode: "local",
+    });
+    sessionRouterMock.getRuntimeMetadata.mockImplementation((...args: unknown[]) =>
+      sessionRouterMock.getRuntime(...args),
+    );
+    sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValue(null);
+    sessionRouterMock.isLinkedCheckoutStatusFresh.mockReturnValue(true);
+  });
+
+  it("filters and deduplicates registered repos against the runtime organization", async () => {
+    sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce(undefined);
+    prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-visible" }]);
+
+    await expect(
+      runtimeAccessService.listRuntimeRegisteredRepoIds({
+        runtimeInstanceId: "runtime-1",
+        organizationId: "org-1",
+        persistedMetadata: {
+          registeredRepoIds: ["repo-visible", "repo-hidden", "repo-visible"],
+        },
+      }),
+    ).resolves.toEqual(["repo-visible"]);
+    expect(prismaMock.repo.findMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ["repo-visible", "repo-hidden"] },
+        organizationId: "org-1",
+      },
+      select: { id: true },
+    });
+  });
+
+  it("reads remote linked checkout statuses from the shared runtime snapshot", async () => {
+    sessionRouterMock.getRuntime.mockReturnValueOnce(null);
+    sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+      key: "org-1:runtime-remote",
+      id: "runtime-remote",
+      organizationId: "org-1",
+      registeredRepoIds: ["repo-1", "repo-2"],
+      linkedCheckoutStatuses: [
+        { repoId: "repo-1", repoPath: "/repos/one", isAttached: true },
+        { repoId: "repo-2", repoPath: "/repos/two", isAttached: true },
+      ],
+    });
+    prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-1" }, { id: "repo-2" }]);
+
+    await expect(
+      runtimeAccessService.listLinkedCheckoutStatuses({
+        runtimeInstanceId: "runtime-remote",
+        organizationId: "org-1",
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({ repoId: "repo-1" }),
+      expect.objectContaining({ repoId: "repo-2" }),
+    ]);
+    expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
+  });
+
+  it("does not read linked checkout state from a stale local generation", async () => {
+    sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+      key: "org-1:runtime-remote",
+      id: "runtime-remote",
+      organizationId: "org-1",
+      connectionGeneration: "generation-current",
+      registeredRepoIds: ["repo-1"],
+      linkedCheckoutStatuses: [{ repoId: "repo-1", repoPath: "/repos/current", isAttached: true }],
+    });
+    sessionRouterMock.getRuntime.mockReturnValueOnce({
+      connectionGeneration: "generation-stale",
+      linkedCheckouts: new Map([
+        ["repo-1", { repoId: "repo-1", repoPath: "/repos/stale", isAttached: true }],
+      ]),
+    });
+    prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-1" }]);
+    await expect(
+      runtimeAccessService.listLinkedCheckoutStatuses({
+        runtimeInstanceId: "runtime-remote",
+        organizationId: "org-1",
+      }),
+    ).resolves.toEqual([expect.objectContaining({ repoId: "repo-1", repoPath: "/repos/current" })]);
+    expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
+  });
+
+  it("does not issue bridge status commands while reading a remote snapshot", async () => {
+    sessionRouterMock.getRuntime.mockReturnValueOnce(null);
+    sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+      key: "org-1:runtime-remote",
+      id: "runtime-remote",
+      organizationId: "org-1",
+      registeredRepoIds: ["repo-1"],
+      linkedCheckoutStatuses: [],
+    });
+    prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-1" }]);
+    await expect(
+      runtimeAccessService.listLinkedCheckoutStatuses({
+        runtimeInstanceId: "runtime-remote",
+        organizationId: "org-1",
+      }),
+    ).resolves.toEqual([]);
+    expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
+  });
+
+  it("does not expose an expired linked checkout snapshot", async () => {
+    sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+      key: "org-1:runtime-remote",
+      id: "runtime-remote",
+      organizationId: "org-1",
+      registeredRepoIds: ["repo-1"],
+      linkedCheckoutStatuses: [
+        { repoId: "repo-1", repoPath: "/repos/one", isAttached: true },
+      ],
+    });
+    sessionRouterMock.isLinkedCheckoutStatusFresh.mockReturnValue(false);
+    prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-1" }]);
+
+    await expect(
+      runtimeAccessService.listLinkedCheckoutStatuses({
+        runtimeInstanceId: "runtime-remote",
+        organizationId: "org-1",
+      }),
+    ).resolves.toEqual([]);
+  });
+
+  it("marks a runtime disconnected only for the socket's database generation", async () => {
+    const connectedAt = new Date("2026-08-08T12:00:00.000Z");
+
+    await runtimeAccessService.markRuntimeDisconnected("runtime-1", "org-1", connectedAt);
+
+    expect(prismaMock.bridgeRuntime.updateMany).toHaveBeenCalledWith({
+      where: { instanceId: "runtime-1", organizationId: "org-1", connectedAt },
+      data: {
+        disconnectedAt: expect.any(Date),
+        lastSeenAt: expect.any(Date),
+      },
     });
   });
 
@@ -320,6 +458,23 @@ describe("runtimeAccessService", () => {
     expect(access.allowed).toBe(false);
     expect(access.isOwner).toBe(false);
     expect(access.capabilities).toEqual([]);
+  });
+
+  it("uses distributed runtime metadata to classify a remote cloud runtime", async () => {
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce(null);
+    sessionRouterMock.getRuntime.mockReturnValue(null);
+    sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+      id: "runtime-remote",
+      hostingMode: "cloud",
+    });
+
+    const access = await runtimeAccessService.getAccessState({
+      userId: "user-2",
+      organizationId: "org-1",
+      runtimeInstanceId: "runtime-remote",
+    });
+
+    expect(access.hostingMode).toBe("cloud");
   });
 
   it("emits an owner-only bridge request event when access is requested", async () => {

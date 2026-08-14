@@ -3,6 +3,8 @@ import { prisma } from "../db.js";
 import { pubsub, topics } from "../pubsub.js";
 import { buildEndpointPublicUrl } from "../../services/endpoint-utils.js";
 import { getSlackClient } from "./client.js";
+import { redis } from "../redis.js";
+import { realtimeBackplane } from "../realtime-backplane.js";
 
 type ThreadBinding = {
   slackTeamId: string;
@@ -51,6 +53,8 @@ function buildWorkflowText(
 type EventEnvelope = { sessionEvents: PrismaEvent };
 
 const TERMINAL_EVENT_TYPES = new Set(["session_deleted"]);
+const SLACK_BRIDGE_LEASE_TTL_MS = 30_000;
+const SLACK_BRIDGE_LEASE_RETRY_MS = 10_000;
 
 function getObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -142,9 +146,53 @@ class SlackEventBridgeManager {
   private cancellers = new Map<string, () => void>();
   private activeGroups = new Map<string, ThreadBinding>();
   private groupCancellers = new Map<string, () => void>();
+  private desired = new Map<string, ThreadBinding>();
+  private leaseTimers = new Map<string, NodeJS.Timeout>();
+  private retryTimers = new Map<string, NodeJS.Timeout>();
 
   attach(sessionId: string, binding: ThreadBinding): void {
+    this.desired.set(sessionId, binding);
+    void this.attemptAttach(sessionId);
+  }
+
+  private async attemptAttach(sessionId: string): Promise<void> {
     if (this.active.has(sessionId)) return;
+    const binding = this.desired.get(sessionId);
+    if (!binding) return;
+    if (realtimeBackplane.enabled) {
+      const claimed = await redis.set(
+        this.leaseKey(sessionId),
+        realtimeBackplane.replicaId,
+        "PX",
+        SLACK_BRIDGE_LEASE_TTL_MS,
+        "NX",
+      );
+      if (claimed !== "OK") {
+        this.scheduleRetry(sessionId);
+        return;
+      }
+      const leaseTimer = setInterval(() => {
+        void redis
+          .eval(
+            "if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('pexpire',KEYS[1],ARGV[2]) else return 0 end",
+            1,
+            this.leaseKey(sessionId),
+            realtimeBackplane.replicaId,
+            String(SLACK_BRIDGE_LEASE_TTL_MS),
+          )
+          .then((renewed) => {
+            if (renewed === 1) return;
+            this.releaseLocal(sessionId);
+            this.scheduleRetry(sessionId);
+          })
+          .catch(() => {
+            this.releaseLocal(sessionId);
+            this.scheduleRetry(sessionId);
+          });
+      }, SLACK_BRIDGE_LEASE_TTL_MS / 3);
+      leaseTimer.unref();
+      this.leaseTimers.set(sessionId, leaseTimer);
+    }
     this.active.set(sessionId, binding);
 
     const iterator = pubsub.asyncIterator<EventEnvelope>(topics.sessionEvents(sessionId));
@@ -180,10 +228,43 @@ class SlackEventBridgeManager {
   }
 
   detach(sessionId: string): void {
+    this.desired.delete(sessionId);
+    const retry = this.retryTimers.get(sessionId);
+    if (retry) clearTimeout(retry);
+    this.retryTimers.delete(sessionId);
+    this.releaseLocal(sessionId);
+    if (realtimeBackplane.enabled) {
+      void redis.eval(
+        "if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end",
+        1,
+        this.leaseKey(sessionId),
+        realtimeBackplane.replicaId,
+      );
+    }
+  }
+
+  private releaseLocal(sessionId: string): void {
     const canceller = this.cancellers.get(sessionId);
     this.cancellers.delete(sessionId);
     this.active.delete(sessionId);
+    const leaseTimer = this.leaseTimers.get(sessionId);
+    if (leaseTimer) clearInterval(leaseTimer);
+    this.leaseTimers.delete(sessionId);
     if (canceller) canceller();
+  }
+
+  private scheduleRetry(sessionId: string): void {
+    if (!this.desired.has(sessionId) || this.retryTimers.has(sessionId)) return;
+    const timer = setTimeout(() => {
+      this.retryTimers.delete(sessionId);
+      void this.attemptAttach(sessionId);
+    }, SLACK_BRIDGE_LEASE_RETRY_MS);
+    timer.unref();
+    this.retryTimers.set(sessionId, timer);
+  }
+
+  private leaseKey(sessionId: string): string {
+    return `trace:slack-bridge:v1:${sessionId}`;
   }
 
   isAttached(sessionId: string): boolean {
@@ -380,7 +461,10 @@ class SlackEventBridgeManager {
 
     if (event.eventType === "session_terminated") {
       const link = await buildTraceSessionLink(sessionId);
-      await this.post(binding, link ? `🔴 Session ended. <${link}|Open in Trace>` : "🔴 Session ended.");
+      await this.post(
+        binding,
+        link ? `🔴 Session ended. <${link}|Open in Trace>` : "🔴 Session ended.",
+      );
       return;
     }
 
@@ -477,6 +561,24 @@ class SlackEventBridgeManager {
     }
     if (threads.length > 0) {
       console.log(`[slack-bridge] rehydrated ${threads.length} active thread session(s)`);
+    }
+  }
+
+  async stop(): Promise<void> {
+    const sessionIds = [...this.active.keys()];
+    this.desired.clear();
+    for (const timer of this.retryTimers.values()) clearTimeout(timer);
+    this.retryTimers.clear();
+    for (const sessionId of sessionIds) {
+      this.releaseLocal(sessionId);
+      if (realtimeBackplane.enabled) {
+        await redis.eval(
+          "if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end",
+          1,
+          this.leaseKey(sessionId),
+          realtimeBackplane.replicaId,
+        );
+      }
     }
   }
 }

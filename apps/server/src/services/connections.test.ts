@@ -8,21 +8,34 @@ vi.mock("../lib/db.js", async () => {
 vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     listRuntimes: vi.fn(),
+    listRuntimeMetadata: vi.fn(),
+  },
+}));
+
+vi.mock("./runtime-access.js", () => ({
+  runtimeAccessService: {
+    listLinkedCheckoutStatuses: vi.fn(),
   },
 }));
 
 import { prisma } from "../lib/db.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { connectionsService } from "./connections.js";
+import { runtimeAccessService } from "./runtime-access.js";
 
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const sessionRouterMock = sessionRouter as unknown as {
   listRuntimes: ReturnType<typeof vi.fn>;
+  listRuntimeMetadata: ReturnType<typeof vi.fn>;
+};
+const runtimeAccessServiceMock = runtimeAccessService as unknown as {
+  listLinkedCheckoutStatuses: ReturnType<typeof vi.fn>;
 };
 
 describe("connectionsService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    runtimeAccessServiceMock.listLinkedCheckoutStatuses.mockResolvedValue([]);
   });
 
   it("returns connected bridge repos visible through user member channels", async () => {
@@ -66,8 +79,9 @@ describe("connectionsService", () => {
       ])
       .mockResolvedValueOnce([]);
 
-    sessionRouterMock.listRuntimes.mockReturnValueOnce([
+    sessionRouterMock.listRuntimeMetadata.mockReturnValueOnce([
       {
+        key: "runtime-1",
         id: "runtime-1",
         organizationId: "org-1",
         registeredRepoIds: ["repo-1", "repo-hidden"],
@@ -92,6 +106,24 @@ describe("connectionsService", () => {
             },
           ],
         ]),
+      },
+    ]);
+    runtimeAccessServiceMock.listLinkedCheckoutStatuses.mockResolvedValueOnce([
+      {
+        repoId: "repo-1",
+        repoPath: "/repos/gorilla",
+        isAttached: true,
+        attachedSessionGroupId: "group-1",
+        targetBranch: "main",
+        autoSyncEnabled: true,
+        currentBranch: "main",
+        currentCommitSha: "abcdef123",
+        lastSyncedCommitSha: "abcdef123",
+        lastSyncError: null,
+        restoreBranch: null,
+        restoreCommitSha: null,
+        hasUncommittedChanges: false,
+        changedFiles: [],
       },
     ]);
 
@@ -144,6 +176,11 @@ describe("connectionsService", () => {
         }),
       }),
     );
+    expect(runtimeAccessServiceMock.listLinkedCheckoutStatuses).toHaveBeenCalledOnce();
+    expect(runtimeAccessServiceMock.listLinkedCheckoutStatuses).toHaveBeenCalledWith({
+      runtimeInstanceId: "runtime-1",
+      organizationId: "org-1",
+    });
   });
 
   it("returns bridges granted to the user as work bridges", async () => {
@@ -175,7 +212,7 @@ describe("connectionsService", () => {
         ],
       },
     ]);
-    sessionRouterMock.listRuntimes.mockReturnValueOnce([]);
+    sessionRouterMock.listRuntimeMetadata.mockReturnValueOnce([]);
 
     const result = await connectionsService.listMine({
       userId: "user-1",
@@ -233,8 +270,9 @@ describe("connectionsService", () => {
           accessGrants: [],
         },
       ]);
-    sessionRouterMock.listRuntimes.mockReturnValueOnce([
+    sessionRouterMock.listRuntimeMetadata.mockReturnValueOnce([
       {
+        key: "runtime-3",
         id: "runtime-3",
         organizationId: "org-1",
         registeredRepoIds: ["repo-1"],

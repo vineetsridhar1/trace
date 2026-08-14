@@ -133,7 +133,7 @@ class TerminalService {
     });
     if (!bridge) throw new Error("Bridge not found");
 
-    const runtime = sessionRouter.getRuntime(bridge.instanceId, input.organizationId);
+    const runtime = sessionRouter.getRuntimeMetadata(bridge.instanceId, input.organizationId);
     if (!runtime || !sessionRouter.isRuntimeAvailable(runtime.id, input.organizationId)) {
       throw new AuthorizationError(TERMINAL_NO_RUNTIME_ERROR);
     }

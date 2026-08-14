@@ -5,12 +5,19 @@ vi.mock("../lib/db.js", async () => {
   return { prisma: createPrismaMock() };
 });
 
-vi.mock("../lib/session-router.js", () => ({
-  sessionRouter: {
-    getRuntime: vi.fn(),
-    sendToRuntime: vi.fn().mockReturnValue("delivered"),
-  },
-}));
+vi.mock("../lib/session-router.js", () => {
+  const sendToRuntime = vi.fn().mockReturnValue("delivered");
+  const getRuntime = vi.fn();
+  return {
+    sessionRouter: {
+      getRuntime,
+      getRuntimeMetadata: vi.fn((...args: unknown[]) => getRuntime(...args)),
+      isRuntimeAvailable: vi.fn().mockReturnValue(true),
+      sendToRuntime,
+      sendToRuntimeAsync: vi.fn((...args: unknown[]) => Promise.resolve(sendToRuntime(...args))),
+    },
+  };
+});
 
 vi.mock("./event.js", () => ({
   eventService: {
@@ -32,7 +39,10 @@ import {
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const sessionRouterMock = sessionRouter as unknown as {
   getRuntime: ReturnType<typeof vi.fn>;
+  getRuntimeMetadata: ReturnType<typeof vi.fn>;
+  isRuntimeAvailable: ReturnType<typeof vi.fn>;
   sendToRuntime: ReturnType<typeof vi.fn>;
+  sendToRuntimeAsync: ReturnType<typeof vi.fn>;
 };
 const eventServiceMock = eventService as unknown as {
   create: ReturnType<typeof vi.fn>;
@@ -129,6 +139,7 @@ function mockHostModeConfig() {
 describe("SessionApplicationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.sessionEndpoint.findMany.mockReset();
     mockGroup();
     sessionRouterMock.getRuntime.mockReturnValue({
       key: "runtime-1",
@@ -136,6 +147,10 @@ describe("SessionApplicationService", () => {
       hostingMode: "cloud",
       ws: { readyState: 1, OPEN: 1 },
     });
+    sessionRouterMock.getRuntimeMetadata.mockImplementation((...args: unknown[]) =>
+      sessionRouterMock.getRuntime(...args),
+    );
+    sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
     sessionRouterMock.sendToRuntime.mockReturnValue("delivered");
     prismaMock.sessionEndpoint.findUnique.mockResolvedValue(null);
     prismaMock.sessionEndpoint.create.mockResolvedValue({

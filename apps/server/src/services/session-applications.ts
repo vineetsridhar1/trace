@@ -26,6 +26,10 @@ import {
 } from "../config/hardcoded-applications.js";
 import { createEndpointPreviewToken } from "./endpoint-preview-auth.js";
 
+async function sendRuntimeCommand(...args: Parameters<typeof sessionRouter.sendToRuntime>) {
+  return sessionRouter.sendToRuntimeAsync(...args);
+}
+
 type Tx = Prisma.TransactionClient;
 const SETUP_OUTPUT_PREVIEW_LIMIT = 65_536;
 export const PROCESS_LOG_ENTRY_MAX_CHARS = 8_192;
@@ -320,7 +324,7 @@ export class SessionApplicationService {
       actorId: userId,
     });
     const env = await this.resolveEnv(organizationId, script.env);
-    const delivery = sessionRouter.sendToRuntime(
+    const delivery = await sendRuntimeCommand(
       runtimeId,
       {
         type: "setup_script_run",
@@ -519,7 +523,7 @@ export class SessionApplicationService {
       }
     }
 
-    const delivery = sessionRouter.sendToRuntime(
+    const delivery = await sendRuntimeCommand(
       runtimeId,
       {
         type: "app_process_start",
@@ -580,7 +584,7 @@ export class SessionApplicationService {
         },
       },
     });
-    const delivery = sessionRouter.sendToRuntime(
+    const delivery = await sendRuntimeCommand(
       runtimeId,
       {
         type: "app_process_stop",
@@ -1386,8 +1390,8 @@ export class SessionApplicationService {
     if (!session) throw new ValidationError("Session group does not have a connected runtime");
     const runtimeId = connectionRuntimeInstanceId(session.connection);
     if (!runtimeId) throw new ValidationError("Session group does not have a connected runtime");
-    const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
-    if (!runtime || runtime.ws.readyState !== runtime.ws.OPEN) {
+    const runtime = sessionRouter.getRuntimeMetadata(runtimeId, organizationId);
+    if (!runtime || !sessionRouter.isRuntimeAvailable(runtime.id, organizationId)) {
       throw new ValidationError("Session group runtime is not connected");
     }
     if (runtime.hostingMode !== "cloud") {

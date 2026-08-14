@@ -3,7 +3,8 @@ import type { IncomingMessage, ServerResponse } from "http";
 import type { Socket } from "net";
 import { WebSocketServer, type WebSocket } from "ws";
 import { prisma } from "../lib/db.js";
-import { sessionRouter, type RuntimeInstance } from "../lib/session-router.js";
+import { sessionRouter } from "../lib/session-router.js";
+import type { RuntimeDescriptor } from "../lib/runtime-directory.js";
 import { parseCookieToken, verifyToken } from "../lib/auth.js";
 import { canViewSessionGroup } from "./access.js";
 import { sessionGroupRuntimeInstanceId } from "./session-applications.js";
@@ -38,6 +39,14 @@ const TRACE_APP_ORIGIN = (() => {
     return "*";
   }
 })();
+
+function runtimeDescriptor(...args: Parameters<typeof sessionRouter.getRuntimeDescriptor>) {
+  return sessionRouter.getRuntimeDescriptor(...args);
+}
+
+async function sendRuntimeCommand(...args: Parameters<typeof sessionRouter.sendToRuntime>) {
+  return sessionRouter.sendToRuntimeAsync(...args);
+}
 
 type PendingHttp = {
   endpointId: string;
@@ -121,7 +130,7 @@ async function resolveEndpointTarget(endpoint: {
   appConfigId: string;
   processConfigId: string;
   organizationId: string;
-}): Promise<{ runtime: RuntimeInstance; processInstanceId?: string } | null> {
+}): Promise<{ runtime: RuntimeDescriptor; processInstanceId?: string } | null> {
   const process = await prisma.sessionApplicationProcess.findUnique({
     where: {
       sessionGroupId_appConfigId_processConfigId: {
@@ -135,8 +144,8 @@ async function resolveEndpointTarget(endpoint: {
     (process?.status === "running" ? process.runtimeInstanceId : null) ??
     (await sessionGroupRuntimeInstanceId(endpoint.sessionGroupId, endpoint.organizationId));
   if (!runtimeInstanceId) return null;
-  const runtime = sessionRouter.getRuntime(runtimeInstanceId, endpoint.organizationId);
-  if (!runtime || runtime.ws.readyState !== runtime.ws.OPEN) return null;
+  const runtime = runtimeDescriptor(runtimeInstanceId, endpoint.organizationId);
+  if (!runtime) return null;
   return { runtime, processInstanceId: process?.id };
 }
 
@@ -354,7 +363,7 @@ export class EndpointProxyService {
       injectAuthoringOverlay: endpoint.accessMode === "private",
     };
     this.pendingHttp.set(requestId, pending);
-    const delivery = sessionRouter.sendToRuntime(
+    const delivery = await sendRuntimeCommand(
       runtime.key,
       {
         type: "endpoint_http_request",
@@ -529,7 +538,7 @@ export class EndpointProxyService {
         : Array.isArray(data)
           ? Buffer.concat(data)
           : Buffer.from(data);
-      sessionRouter.sendToRuntime(
+      void sendRuntimeCommand(
         runtime.key,
         {
           type: "endpoint_ws_data",
@@ -542,7 +551,7 @@ export class EndpointProxyService {
     });
     client.on("close", (code, reason) => {
       this.pendingWs.delete(requestId);
-      sessionRouter.sendToRuntime(
+      void sendRuntimeCommand(
         runtime.key,
         {
           type: "endpoint_ws_close",
@@ -554,7 +563,7 @@ export class EndpointProxyService {
       );
     });
     const { path, query } = requestPath(req);
-    const delivery = sessionRouter.sendToRuntime(
+    const delivery = await sendRuntimeCommand(
       runtime.key,
       {
         type: "endpoint_ws_open",

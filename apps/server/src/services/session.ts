@@ -39,9 +39,11 @@ import {
   sessionRouter,
   type DeliveryResult,
   type RuntimeInstance,
+  type RuntimeMetadata,
   type RuntimeLifecycleEventType,
   type RuntimeLifecycleUpdate,
 } from "../lib/session-router.js";
+import type { RuntimeDescriptor } from "../lib/runtime-directory.js";
 import type { RuntimeAdapterType } from "../lib/runtime-adapter-registry.js";
 import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
@@ -85,6 +87,7 @@ import {
 import { orgSecretService } from "./org-secret.js";
 import { managedGitService } from "./managed-git.js";
 import { createAgentInvocationToken } from "../lib/agent-invocation-auth.js";
+import { withDistributedLock } from "../lib/distributed-lock.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -304,10 +307,9 @@ export type SessionConnectionData = {
   abandonedAt?: string;
   /**
    * Optimistic-concurrency token bumped by `updateConnectionConditional` on
-   * every successful write. Treat missing/undefined as 0. Only writers that
-   * use the helper participate; legacy writers (markConnectionLost, etc.)
-   * leave it unchanged, which is acceptable because they don't intersect
-   * with the deprovision lifecycle paths.
+   * every successful lifecycle write. Treat missing/undefined as 0. Runtime
+   * binding propagation also advances sibling versions so a callback holding
+   * the pre-rebind generation cannot commit afterward.
    */
   version?: number;
   disconnectedAt?: string;
@@ -327,6 +329,20 @@ export type SessionConnectionData = {
   [key: string]: unknown;
 };
 
+type ConnectionMutationSession = {
+  agentStatus: AgentStatus;
+  sessionStatus: SessionStatus;
+  worktreeDeleted: boolean;
+  hosting: string;
+  lastUserMessageAt: Date | null;
+  lastMessageAt: Date | null;
+};
+
+type GroupRuntimeBindingEffects = {
+  sessionGroupId: string;
+  bindingChanged: boolean;
+  sessionsToRebind: Array<{ id: string; organizationId: string }>;
+};
 const RUNTIME_IDENTITY_FIELDS = [
   "environmentId",
   "adapterType",
@@ -351,6 +367,45 @@ export type RuntimeLeaseAuthorization =
         | "environment_mismatch"
         | "runtime_stopping";
     };
+function isSameRuntimeGeneration(
+  left: SessionConnectionData,
+  right: SessionConnectionData,
+): boolean {
+  return (
+    left.runtimeInstanceId === right.runtimeInstanceId &&
+    left.providerRuntimeId === right.providerRuntimeId
+  );
+}
+
+function mergeRuntimeBinding(
+  current: SessionConnectionData,
+  source: SessionConnectionData,
+): SessionConnectionData {
+  const {
+    environmentId: _environmentId,
+    adapterType: _adapterType,
+    runtimeInstanceId: _runtimeInstanceId,
+    runtimeLabel: _runtimeLabel,
+    providerRuntimeId: _providerRuntimeId,
+    providerRuntimeUrl: _providerRuntimeUrl,
+    ...lifecycle
+  } = current;
+  return {
+    ...lifecycle,
+    ...(source.environmentId !== undefined && { environmentId: source.environmentId }),
+    ...(source.adapterType !== undefined && { adapterType: source.adapterType }),
+    ...(source.runtimeInstanceId !== undefined && {
+      runtimeInstanceId: source.runtimeInstanceId,
+    }),
+    ...(source.runtimeLabel !== undefined && { runtimeLabel: source.runtimeLabel }),
+    ...(source.providerRuntimeId !== undefined && {
+      providerRuntimeId: source.providerRuntimeId,
+    }),
+    ...(source.providerRuntimeUrl !== undefined && {
+      providerRuntimeUrl: source.providerRuntimeUrl,
+    }),
+  };
+}
 type PendingSessionCommand =
   | {
       type: "run";
@@ -680,7 +735,7 @@ type SessionMoveParams = {
   targetRuntimeLabel?: string | null;
   targetRuntime?: Pick<RuntimeInstance, "supportedTools" | "label"> | null;
   targetEnvironment?: ProvisioningEnvironment;
-  reuseCloudRuntime?: RuntimeInstance | null;
+  reuseCloudRuntime?: RuntimeMetadata | null;
   allowUnverifiedSourceGitStatus?: boolean;
   bootstrapPrompt?: string;
   conversion?: GeneratedSessionConversion;
@@ -1324,8 +1379,12 @@ function selectRuntimeSupportedTool(
   return LOCAL_TOOL_FALLBACK_ORDER.find((tool) => runtime.supportedTools.includes(tool)) ?? null;
 }
 
-function runtimeMetadata(...args: Parameters<typeof sessionRouter.getRuntime>) {
-  return sessionRouter.getRuntime(...args);
+function runtimeMetadata(...args: Parameters<typeof sessionRouter.getRuntimeMetadata>) {
+  return sessionRouter.getRuntimeMetadata(...args);
+}
+
+function listRuntimeMetadata(filter?: { hostingMode?: string }) {
+  return sessionRouter.listRuntimeMetadata(filter);
 }
 
 async function sendSessionCommand(
@@ -1337,7 +1396,7 @@ async function sendSessionCommand(
 async function sendRuntimeCommand(
   ...args: Parameters<typeof sessionRouter.sendToRuntime>
 ): Promise<DeliveryResult> {
-  return sessionRouter.sendToRuntime(...args);
+  return sessionRouter.sendToRuntimeAsync(...args);
 }
 
 const FULLY_UNLOADED_AGENT_STATUSES: readonly AgentStatus[] = ["failed", "stopped"];
@@ -1354,19 +1413,12 @@ export function isFullyUnloadedSession(
 }
 
 const RUNTIME_TRANSITION_LOCK_TTL_MS = 10 * 60 * 1000;
-const activeRuntimeTransitionLocks = new Set<string>();
 
 async function withRuntimeTransitionLock<Result>(
-  input: { key: string; ttlMs?: number },
+  input: { key: string; ttlMs: number },
   operation: () => Promise<Result>,
 ): Promise<{ acquired: true; value: Result } | { acquired: false }> {
-  if (activeRuntimeTransitionLocks.has(input.key)) return { acquired: false };
-  activeRuntimeTransitionLocks.add(input.key);
-  try {
-    return { acquired: true, value: await operation() };
-  } finally {
-    activeRuntimeTransitionLocks.delete(input.key);
-  }
+  return withDistributedLock(input, operation);
 }
 
 export class SessionService {
@@ -1831,9 +1883,7 @@ export class SessionService {
 
     const adapterType = this.lifecycleAdapterType(result.updated, update);
     const lifecycleState = this.lifecycleConnectionState(eventType, adapterType);
-    const sessionGroup = await this.syncGroupWorkspaceState(result.sessionGroupId, {
-      connection: connJson(result.updated),
-    });
+    const sessionGroup = await this.loadSessionGroupSnapshot(result.sessionGroupId);
 
     await eventService.create({
       organizationId: session.organizationId,
@@ -1845,8 +1895,8 @@ export class SessionService {
         sessionId,
         lifecycleState,
         connection: connJson(result.updated),
-        agentStatus: session.agentStatus,
-        sessionStatus: session.sessionStatus,
+        agentStatus: result.session.agentStatus,
+        sessionStatus: result.session.sessionStatus,
         ...(update.runtimeInstanceId && { runtimeInstanceId: update.runtimeInstanceId }),
         ...(update.runtimeLabel && { runtimeLabel: update.runtimeLabel }),
         ...(update.providerRuntimeId && { providerRuntimeId: update.providerRuntimeId }),
@@ -1940,6 +1990,26 @@ export class SessionService {
           ...runtimePatch,
           state: "requested",
           requestedAt: now,
+          // A start request is a new runtime generation. Do not carry provider
+          // identity or teardown evidence from the prior generation into it:
+          // mixed records make the new bridge fail ownership checks and make
+          // cleanup mistake live compute for an already-deprovisioned runtime.
+          providerRuntimeId: undefined,
+          providerRuntimeUrl: undefined,
+          providerStatus: undefined,
+          runtimeLabel: undefined,
+          provisioningAt: undefined,
+          connectingAt: undefined,
+          connectedAt: undefined,
+          disconnectedAt: undefined,
+          failedAt: undefined,
+          timedOutAt: undefined,
+          stoppingAt: undefined,
+          stoppedAt: undefined,
+          deprovisionedAt: undefined,
+          deprovisionFailedAt: undefined,
+          disconnectOnDeprovision: false,
+          disconnectReason: undefined,
           runtimeHardDeadlineAt: undefined,
           providerDeadlineEnforcementId: undefined,
           hardDeadlineWarningAt: undefined,
@@ -2123,38 +2193,101 @@ export class SessionService {
    */
   private async updateConnectionConditional(
     sessionId: string,
-    mutator: (current: SessionConnectionData) => SessionConnectionData | null,
+    mutator: (
+      current: SessionConnectionData,
+      session: ConnectionMutationSession,
+    ) => SessionConnectionData | null,
     options?: {
       maxAttempts?: number;
-      sessionData?: Prisma.SessionUpdateManyMutationInput;
+      sessionData?:
+        | Prisma.SessionUpdateManyMutationInput
+        | ((session: ConnectionMutationSession) => Prisma.SessionUpdateManyMutationInput);
     },
-  ): Promise<{ updated: SessionConnectionData; sessionGroupId: string | null } | null> {
+  ): Promise<{
+    updated: SessionConnectionData;
+    sessionGroupId: string | null;
+    session: ConnectionMutationSession;
+  } | null> {
     const maxAttempts = options?.maxAttempts ?? MAX_CONNECTION_UPDATE_ATTEMPTS;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const session = await prisma.session.findUnique({
-        where: { id: sessionId },
-        select: { connection: true, sessionGroupId: true },
-      });
-      if (!session) return null;
-      const current = this.parseConnection(session.connection);
-      const next = mutator(current);
-      if (!next) return null;
-
-      const expectedVersion = current.version ?? 0;
-      const nextWithVersion: SessionConnectionData = {
-        ...next,
-        version: expectedVersion + 1,
-      };
-
-      const result = await prisma.session.updateMany({
-        where: connectionVersionWhere(sessionId, expectedVersion),
-        data: { ...options?.sessionData, connection: connJson(nextWithVersion) },
-      });
-      if (result.count === 1) {
-        await this.syncGroupWorkspaceState(session.sessionGroupId, {
-          connection: connJson(nextWithVersion),
+      const outcome = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const row = await tx.session.findUnique({
+          where: { id: sessionId },
+          select: {
+            connection: true,
+            sessionGroupId: true,
+            agentStatus: true,
+            sessionStatus: true,
+            worktreeDeleted: true,
+            hosting: true,
+            lastUserMessageAt: true,
+            lastMessageAt: true,
+          },
         });
-        return { updated: nextWithVersion, sessionGroupId: session.sessionGroupId };
+        if (!row) return { kind: "missing" as const };
+
+        // Group runtime ownership is shared. Lock the group row before
+        // calculating the transition so lifecycle writes from different
+        // sibling sessions serialize on the same database record.
+        if (row.sessionGroupId) {
+          await tx.$queryRaw`SELECT "id" FROM "SessionGroup" WHERE "id" = ${row.sessionGroupId} FOR UPDATE`;
+        }
+
+        const sessionState: ConnectionMutationSession = row;
+        const current = this.parseConnection(row.connection);
+        const next = mutator(current, sessionState);
+        if (!next) return { kind: "declined" as const };
+
+        const expectedVersion = current.version ?? 0;
+        const nextWithVersion: SessionConnectionData = {
+          ...next,
+          version: expectedVersion + 1,
+        };
+        const extraSessionData =
+          typeof options?.sessionData === "function"
+            ? options.sessionData(sessionState)
+            : options?.sessionData;
+        const result = await tx.session.updateMany({
+          where: connectionVersionWhere(sessionId, expectedVersion),
+          data: { ...extraSessionData, connection: connJson(nextWithVersion) },
+        });
+        if (result.count !== 1) return { kind: "retry" as const };
+
+        const effects = row.sessionGroupId
+          ? await this.writeGroupRuntimeBindingInTransaction(
+              tx,
+              row.sessionGroupId,
+              sessionId,
+              nextWithVersion,
+            )
+          : null;
+        return {
+          kind: "updated" as const,
+          updated: nextWithVersion,
+          sessionGroupId: row.sessionGroupId,
+          session: {
+            ...sessionState,
+            ...(extraSessionData?.agentStatus
+              ? { agentStatus: extraSessionData.agentStatus as AgentStatus }
+              : {}),
+            ...(extraSessionData?.sessionStatus
+              ? { sessionStatus: extraSessionData.sessionStatus as SessionStatus }
+              : {}),
+          },
+          effects,
+        };
+      });
+
+      if (outcome.kind === "missing" || outcome.kind === "declined") return null;
+      if (outcome.kind === "updated") {
+        if (outcome.effects) {
+          await this.applyGroupRuntimeBindingEffects(outcome.effects, outcome.updated);
+        }
+        return {
+          updated: outcome.updated,
+          sessionGroupId: outcome.sessionGroupId,
+          session: outcome.session,
+        };
       }
       // Version mismatch — another writer landed first. Loop and retry.
     }
@@ -2353,7 +2486,7 @@ export class SessionService {
       throw new ValidationError("Private session groups require an owner");
     }
 
-    const liveRuntime = sessionRouter.getRuntime(params.runtimeInstanceId, params.organizationId);
+    const liveRuntime = runtimeMetadata(params.runtimeInstanceId, params.organizationId);
     if (liveRuntime) {
       if (liveRuntime.hostingMode !== "local" || liveRuntime.ownerUserId !== params.ownerUserId) {
         throw new ValidationError("Private sessions can only run on the owner's local bridge");
@@ -2385,14 +2518,14 @@ export class SessionService {
     tool?: string;
     repoId?: string | null;
     sessionGroupId?: string | null;
-  }): Promise<RuntimeInstance | undefined> {
+  }): Promise<RuntimeInstance | RuntimeDescriptor | undefined> {
     const accessibleRuntimeIds = await runtimeAccessService.listAccessibleRuntimeInstanceIds({
       userId: params.userId,
       organizationId: params.organizationId,
       sessionGroupId: params.sessionGroupId,
     });
 
-    for (const runtime of sessionRouter.listRuntimes({ hostingMode: "local" })) {
+    for (const runtime of listRuntimeMetadata({ hostingMode: "local" })) {
       if (runtime.organizationId !== params.organizationId) continue;
       if (!accessibleRuntimeIds.has(runtime.id)) continue;
       if (params.tool && !runtime.supportedTools.includes(params.tool)) continue;
@@ -2435,7 +2568,7 @@ export class SessionService {
         sessionGroupId: params.sessionGroupId,
         failureMessage: params.failureMessage,
       });
-      const runtime = sessionRouter.getRuntime(conn.runtimeInstanceId, params.organizationId);
+      const runtime = runtimeMetadata(conn.runtimeInstanceId, params.organizationId);
       if (runtime) {
         const supportsTool = runtime.supportedTools?.includes(params.tool) ?? true;
         if (!supportsTool) {
@@ -2562,7 +2695,7 @@ export class SessionService {
 
     const groupRuntimeId = this.getConnectionRuntimeInstanceId(group.connection);
     if (groupRuntimeId) {
-      const runtime = sessionRouter.getRuntime(groupRuntimeId, organizationId);
+      const runtime = runtimeMetadata(groupRuntimeId, organizationId);
       if (!runtime) {
         throw new Error("No connected runtime available for this session group");
       }
@@ -2597,7 +2730,7 @@ export class SessionService {
     for (const session of sessions) {
       const runtimeId = resolveSessionRuntimeId(session);
       if (!runtimeId) continue;
-      const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
+      const runtime = runtimeMetadata(runtimeId, organizationId);
       if (!runtime) continue;
       try {
         if (options.requireWrite) {
@@ -2633,7 +2766,7 @@ export class SessionService {
 
   private assertSessionGroupFileWriteAccess(
     group: { ownerUserId: string | null },
-    runtime: RuntimeInstance,
+    runtime: Pick<RuntimeInstance, "hostingMode">,
     userId: string,
   ): void {
     if (group.ownerUserId === userId) return;
@@ -2697,16 +2830,13 @@ export class SessionService {
     }
 
     const groupRuntimeId = this.getConnectionRuntimeInstanceId(group.connection);
-    const ownedRuntimesForRepo = sessionRouter
-      .listRuntimes({ hostingMode: "local" })
+    const ownedRuntimesForRepo = listRuntimeMetadata({ hostingMode: "local" })
       .filter((candidate) => {
         if (candidate.organizationId !== organizationId) return false;
         if (candidate.ownerUserId !== userId) return false;
         if (options.requireRegisteredRepo && !candidate.registeredRepoIds.includes(repoId)) {
           return false;
         }
-        if (candidate.ws.readyState !== candidate.ws.OPEN) return false;
-
         return true;
       });
     const runtime = options.runtimeInstanceId
@@ -2768,14 +2898,11 @@ export class SessionService {
     const ownerRuntimeInstanceId = this.getConnectionRuntimeInstanceId(params.group.connection);
     if (!ownerRuntimeInstanceId) return null;
 
-    const ownerRuntime = sessionRouter
-      .listRuntimes()
-      .find(
-        (candidate) =>
-          candidate.organizationId === params.organizationId &&
-          candidate.id === ownerRuntimeInstanceId &&
-          candidate.ws.readyState === candidate.ws.OPEN,
-      );
+    const ownerRuntime = listRuntimeMetadata().find(
+      (candidate) =>
+        candidate.organizationId === params.organizationId &&
+        candidate.id === ownerRuntimeInstanceId,
+    );
     if (!ownerRuntime) return null;
 
     let branch: string | null;
@@ -3150,7 +3277,7 @@ export class SessionService {
   private resolveReusableGeneratedConversionRuntime(
     session: { id: string; hosting: string; organizationId: string; connection: unknown },
     tool: CodingTool,
-  ): RuntimeInstance | null {
+  ): RuntimeMetadata | null {
     if (session.hosting !== "cloud") return null;
     const boundRuntime = sessionRouter.getRuntimeForSession(session.id);
     const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
@@ -3173,7 +3300,7 @@ export class SessionService {
 
   private async prepareGeneratedConversionWorkspace(
     session: SessionWithInclude,
-    runtime: RuntimeInstance,
+    runtime: RuntimeMetadata,
     actorType: ActorType,
     actorId: string,
   ): Promise<void> {
@@ -3984,7 +4111,7 @@ export class SessionService {
 
     if (!hasExplicitTool) {
       const requestedRuntime = input.runtimeInstanceId
-        ? sessionRouter.getRuntime(input.runtimeInstanceId, input.organizationId)
+        ? runtimeMetadata(input.runtimeInstanceId, input.organizationId)
         : undefined;
       const localFallbackRuntime =
         requestedRuntime?.hostingMode === "local"
@@ -4043,7 +4170,7 @@ export class SessionService {
     }
     const environmentRuntimeInstanceId = localEnvironmentRuntimeInstanceId(requestedEnvironment);
     if (!hasExplicitTool && environmentRuntimeInstanceId) {
-      const runtime = sessionRouter.getRuntime(environmentRuntimeInstanceId, input.organizationId);
+      const runtime = runtimeMetadata(environmentRuntimeInstanceId, input.organizationId);
       const fallbackTool = runtime ? selectRuntimeSupportedTool(runtime, tool) : null;
       if (fallbackTool) {
         tool = fallbackTool;
@@ -4124,7 +4251,7 @@ export class SessionService {
       if (!runtimeId) {
         throw new Error("Requested runtime not found");
       }
-      let runtime = sessionRouter.getRuntime(runtimeId, input.organizationId);
+      let runtime = runtimeMetadata(runtimeId, input.organizationId);
       runtimeDebug("startSession resolving requested runtime", {
         sessionId: "pending",
         runtimeInstanceId: runtimeId,
@@ -4485,7 +4612,7 @@ export class SessionService {
     const runtimeToBind = requestedRuntimeInstanceId;
     if (runtimeToBind) {
       const runtimeKeyToBind =
-        sessionRouter.getRuntime(runtimeToBind, input.organizationId)?.key ?? runtimeToBind;
+        runtimeMetadata(runtimeToBind, input.organizationId)?.key ?? runtimeToBind;
       sessionRouter.bindSession(session.id, runtimeKeyToBind);
     }
 
@@ -4821,7 +4948,8 @@ export class SessionService {
             state: "connecting",
             runtimeInstanceId: input.runtimeInstanceId,
             runtimeLabel:
-              sessionRouter.getRuntime(input.runtimeInstanceId)?.label ?? conn.runtimeLabel,
+              runtimeMetadata(input.runtimeInstanceId, session.organizationId)?.label ??
+              conn.runtimeLabel,
           }),
         },
         include: SESSION_INCLUDE,
@@ -5047,7 +5175,7 @@ export class SessionService {
       runtimeEnv: invocation.runtimeEnv,
     };
 
-    const deliveryResult = sessionRouter.send(id, command, {
+    const deliveryResult = await sendSessionCommand(id, command, {
       expectedHomeRuntimeId: runtimeBinding.runtimeId ?? conn.runtimeInstanceId,
       organizationId: session.organizationId,
     });
@@ -5067,7 +5195,10 @@ export class SessionService {
 
     // Only transition to active after successful delivery
     // Persist the runtime binding so restoreSessionsForRuntime can recover it after restart
-    const boundRuntime = sessionRouter.getRuntimeForSession(id);
+    const expectedRuntimeId = runtimeBinding.runtimeId ?? conn.runtimeInstanceId;
+    const boundRuntime =
+      sessionRouter.getRuntimeForSession(id) ??
+      (expectedRuntimeId ? runtimeMetadata(expectedRuntimeId, session.organizationId) : undefined);
     const updated = await prisma.session.update({
       where: { id },
       data: {
@@ -5517,7 +5648,7 @@ export class SessionService {
           runtimeInstanceId: config.runtimeInstanceId,
           sessionGroupId: prev.sessionGroupId,
         });
-        const runtime = sessionRouter.getRuntime(config.runtimeInstanceId, organizationId);
+        const runtime = runtimeMetadata(config.runtimeInstanceId, organizationId);
         if (!runtime) throw new Error("Requested runtime not found");
         newHosting = runtime.hostingMode;
         runtimeInstanceId = runtime.id;
@@ -6463,7 +6594,7 @@ export class SessionService {
     const deliveryResult: DeliveryResult =
       session.hosting === "cloud" && !expectedRuntimeId
         ? "no_runtime"
-        : sessionRouter.send(sessionId, deliveryCommand, {
+        : await sendSessionCommand(sessionId, deliveryCommand, {
             expectedHomeRuntimeId: expectedRuntimeId ?? undefined,
             organizationId: session.organizationId,
           });
@@ -6515,7 +6646,9 @@ export class SessionService {
 
     // Only mark active after successful delivery
     // Persist the runtime binding so restoreSessionsForRuntime can recover it after restart
-    const boundRuntime = sessionRouter.getRuntimeForSession(sessionId);
+    const boundRuntime =
+      sessionRouter.getRuntimeForSession(sessionId) ??
+      (expectedRuntimeId ? runtimeMetadata(expectedRuntimeId, session.organizationId) : undefined);
     const updatedSession = await prisma.session.update({
       where: { id: sessionId },
       data: {
@@ -7391,7 +7524,12 @@ export class SessionService {
 
   // ─── Connection Management ───
 
-  async markConnectionLost(sessionId: string, reason: string, runtimeInstanceId?: string) {
+  async markConnectionLost(
+    sessionId: string,
+    reason: string,
+    runtimeInstanceId?: string,
+    observedAt = new Date().toISOString(),
+  ) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       select: {
@@ -7412,51 +7550,65 @@ export class SessionService {
     if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus, session.worktreeDeleted))
       return;
 
-    const conn = this.parseConnection(session.connection);
-    const updated: SessionConnectionData = {
-      ...conn,
-      state: "disconnected",
-      lastError: reason,
-      runtimeInstanceId: runtimeInstanceId ?? conn.runtimeInstanceId,
-      canRetry: true,
-      canMove: true,
-      autoRetryable: session.hosting !== "cloud",
-    };
-    const sameRuntime = runtimeInstanceId ? conn.runtimeInstanceId === runtimeInstanceId : true;
-    if (
-      session.hosting === "cloud" &&
-      session.agentStatus === "done" &&
-      conn.state === "disconnected" &&
-      conn.lastError === reason &&
-      sameRuntime
-    ) {
-      return;
-    }
+    const result = await this.updateConnectionConditional(
+      sessionId,
+      (conn, currentSession) => {
+        if (
+          isFullyUnloadedSession(
+            currentSession.agentStatus,
+            currentSession.sessionStatus,
+            currentSession.worktreeDeleted,
+          )
+        ) {
+          return null;
+        }
+        // A close callback belongs to one immutable runtime generation. It may
+        // arrive after Retry/Move reserved a replacement; never let the stale
+        // callback steal ownership back by writing its runtime id.
+        if (runtimeInstanceId && conn.runtimeInstanceId !== runtimeInstanceId) return null;
 
-    // A lost runtime means Trace can no longer observe or control work that is
-    // in flight. An idle, never-started session may still be bound to the same
-    // local runtime, so only fail startup when its initial user message has not
-    // been answered.
-    // The user can explicitly retry or move the failed session once a runtime
-    // is available again.
-    const hasUnansweredUserMessage =
-      session.lastUserMessageAt !== null &&
-      (session.lastMessageAt === null || session.lastUserMessageAt >= session.lastMessageAt);
-    const agentStatus =
-      session.agentStatus === "active" ||
-      (session.agentStatus === "not_started" && hasUnansweredUserMessage)
-        ? "failed"
-        : session.agentStatus;
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: {
-        connection: connJson(updated),
-        agentStatus,
+        // WebSocket close handling deliberately waits through a reconnect
+        // grace period. During a rolling deployment the replacement API task
+        // records a newer lastSeen while the draining task cannot observe its
+        // in-memory router. The database timestamp is the cross-replica fence.
+        const lastSeenMs = conn.lastSeen ? Date.parse(conn.lastSeen) : Number.NaN;
+        const observedMs = Date.parse(observedAt);
+        if (!Number.isNaN(lastSeenMs) && !Number.isNaN(observedMs) && lastSeenMs > observedMs) {
+          return null;
+        }
+        if (conn.state === "disconnected" && conn.lastError === reason) return null;
+
+        return {
+          ...conn,
+          state: "disconnected",
+          disconnectedAt: observedAt,
+          lastError: reason,
+          canRetry: true,
+          canMove: true,
+          autoRetryable: currentSession.hosting !== "cloud",
+        };
       },
-    });
-    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      connection: connJson(updated),
-    });
+      {
+        sessionData: (currentSession) => {
+          // Derive status from the same locked snapshot as the connection
+          // write. Otherwise a delayed close callback can fail a session that
+          // completed or unloaded while the callback was waiting.
+          const hasUnansweredUserMessage =
+            currentSession.lastUserMessageAt !== null &&
+            (currentSession.lastMessageAt === null ||
+              currentSession.lastUserMessageAt >= currentSession.lastMessageAt);
+          const agentStatus =
+            currentSession.agentStatus === "active" ||
+            (currentSession.agentStatus === "not_started" && hasUnansweredUserMessage)
+              ? "failed"
+              : currentSession.agentStatus;
+          return { agentStatus };
+        },
+      },
+    );
+    if (!result) return;
+    const updated = result.updated;
+    const sessionGroup = await this.loadSessionGroupSnapshot(session.sessionGroupId);
 
     await eventService.create({
       organizationId: session.organizationId,
@@ -7468,8 +7620,8 @@ export class SessionService {
         reason,
         runtimeInstanceId,
         connection: connJson(updated),
-        agentStatus,
-        sessionStatus: session.sessionStatus,
+        agentStatus: result.session.agentStatus,
+        sessionStatus: result.session.sessionStatus,
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
@@ -7490,30 +7642,28 @@ export class SessionService {
     });
     if (!session) return;
 
-    const conn = this.parseConnection(session.connection);
-    const updated: SessionConnectionData = {
-      ...conn,
-      state: "connected",
-      runtimeInstanceId,
-      runtimeLabel:
-        sessionRouter.getRuntime(runtimeInstanceId, session.organizationId)?.label ??
-        conn.runtimeLabel,
-      lastSeen: new Date().toISOString(),
-      lastError: undefined,
-      canRetry: true,
-      canMove: true,
-      autoRetryable: true,
-    };
-
-    // Preserve agent/session status — only update connection state.
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: {
-        connection: connJson(updated),
-      },
+    const restoredAt = new Date().toISOString();
+    const result = await this.updateConnectionConditional(sessionId, (conn) => {
+      // Registration is authorized against persisted ownership before this
+      // method runs. Repeat that fence at the write boundary so a reconnect
+      // racing with Move cannot reclaim a superseded generation.
+      if (conn.runtimeInstanceId !== runtimeInstanceId) return null;
+      return {
+        ...conn,
+        state: "connected",
+        runtimeLabel:
+          runtimeMetadata(runtimeInstanceId, session.organizationId)?.label ?? conn.runtimeLabel,
+        connectedAt: restoredAt,
+        lastSeen: restoredAt,
+        lastError: undefined,
+        canRetry: true,
+        canMove: true,
+        autoRetryable: true,
+      };
     });
+    if (!result) return;
+    const updated = result.updated;
     const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      connection: connJson(updated),
       worktreeDeleted: false,
     });
 
@@ -7577,7 +7727,7 @@ export class SessionService {
       sessionRouter.bindSession(session.id, runtime.key);
 
       if (runtime.hostingMode === "local" && session.workdir) {
-        sessionRouter.sendToRuntime(
+        void sendRuntimeCommand(
           runtime.id,
           {
             type: "track_session",
@@ -7724,7 +7874,7 @@ export class SessionService {
       session.organizationId,
       session.sessionGroupId,
     );
-    const deliveryResult = sessionRouter.send(
+    const deliveryResult = await sendSessionCommand(
       sessionId,
       {
         type: "send",
@@ -7822,7 +7972,6 @@ export class SessionService {
   private sessionGroupTransitionLockKey(sessionGroupId: string): string {
     return `trace:session-group-runtime-transition:${sessionGroupId}`;
   }
-
   private async retryConnectionLocked(
     sessionId: string,
     organizationId: string,
@@ -7886,12 +8035,13 @@ export class SessionService {
         allowUnverifiedSourceGitStatus: true,
         actorType,
         actorId,
+        runtimeLockHeld: true,
       });
     }
 
     const runtime = homeRuntimeId
       ? sessionRouter.isRuntimeAvailable(homeRuntimeId, organizationId)
-        ? sessionRouter.getRuntime(homeRuntimeId, organizationId)
+        ? runtimeMetadata(homeRuntimeId, organizationId)
         : undefined
       : session.hosting === "local"
         ? await this.resolveDefaultAccessibleLocalRuntime({
@@ -7914,25 +8064,29 @@ export class SessionService {
           ? `${conn.runtimeLabel} is offline — use Move to continue on another bridge`
           : "The original bridge is offline — use Move to continue on another bridge"
         : "No runtime available";
-      const failedConn: SessionConnectionData = {
-        ...conn,
-        state: "disconnected",
-        retryCount: conn.retryCount + 1,
-        lastError: failureMessage,
-        lastDeliveryFailureAt: new Date().toISOString(),
-        canRetry: true,
-        canMove: true,
-        // home_runtime_offline is non-transient — stop the auto-retry loop.
-        // The user must either bring the home bridge back online or Move.
-        autoRetryable: failureReason !== "home_runtime_offline",
-      };
-      await prisma.session.update({
-        where: { id: sessionId },
-        data: { connection: connJson(failedConn) },
+      const failed = await this.updateConnectionConditional(sessionId, (current) => {
+        if (current.runtimeInstanceId !== homeRuntimeId) return null;
+        return {
+          ...current,
+          state: "disconnected",
+          retryCount: current.retryCount + 1,
+          lastError: failureMessage,
+          lastDeliveryFailureAt: new Date().toISOString(),
+          canRetry: true,
+          canMove: true,
+          // home_runtime_offline is non-transient — stop the auto-retry loop.
+          // The user must either bring the home bridge back online or Move.
+          autoRetryable: failureReason !== "home_runtime_offline",
+        };
       });
-      const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
-        connection: connJson(failedConn),
-      });
+      if (!failed) {
+        return prisma.session.findUniqueOrThrow({
+          where: { id: sessionId },
+          include: SESSION_INCLUDE,
+        });
+      }
+      const failedConn = failed.updated;
+      const sessionGroup = await this.loadSessionGroupSnapshot(session.sessionGroupId);
 
       await eventService.create({
         organizationId: session.organizationId,
@@ -7954,6 +8108,34 @@ export class SessionService {
         include: SESSION_INCLUDE,
       });
     }
+
+    const restoredAt = new Date().toISOString();
+    const restored = await this.updateConnectionConditional(sessionId, (current) => {
+      if (homeRuntimeId) {
+        if (current.runtimeInstanceId !== homeRuntimeId || runtime.id !== homeRuntimeId)
+          return null;
+      } else if (current.runtimeInstanceId) {
+        return null;
+      }
+      return {
+        ...current,
+        state: "connected",
+        runtimeInstanceId: runtime.id,
+        runtimeLabel: runtime.label,
+        connectedAt: restoredAt,
+        lastSeen: restoredAt,
+        lastError: undefined,
+        retryCount: 0,
+        autoRetryable: true,
+      };
+    });
+    if (!restored) {
+      return prisma.session.findUniqueOrThrow({
+        where: { id: sessionId },
+        include: SESSION_INCLUDE,
+      });
+    }
+    const restoredConn = restored.updated;
 
     // Bind and attempt workspace setup if needed
     sessionRouter.bindSession(sessionId, runtime.key);
@@ -8021,7 +8203,7 @@ export class SessionService {
           };
       // Re-run workspace preparation — pin delivery to the runtime we just
       // resolved (the home bridge) so no other bridge can intercept.
-      const prepResult = sessionRouter.send(sessionId, retryPreparation, {
+      const prepResult = await sendSessionCommand(sessionId, retryPreparation, {
         expectedHomeRuntimeId: runtime.id,
         organizationId: session.organizationId,
       });
@@ -8039,19 +8221,20 @@ export class SessionService {
         });
       }
 
-      // Restore the connection while leaving the session in its prior idle state.
-      // Preserve agent/session status unless it was previously marked terminal by a retryable failure.
-      const updateData: Prisma.SessionUpdateInput = {
-        connection: connJson(restoredConn),
-        ...(session.agentStatus === "failed" ? { agentStatus: "done" } : {}),
-      };
-      const updated = await prisma.session.update({
+      // Preserve agent/session status unless it was previously marked terminal
+      // by a retryable failure. Fence this secondary status write to the
+      // connection version restored above.
+      if (session.agentStatus === "failed") {
+        await prisma.session.updateMany({
+          where: connectionVersionWhere(sessionId, restoredConn.version ?? 0),
+          data: { agentStatus: "done" },
+        });
+      }
+      const updated = await prisma.session.findUniqueOrThrow({
         where: { id: sessionId },
-        data: updateData,
         include: SESSION_INCLUDE,
       });
       const sessionGroup = await this.syncGroupWorkspaceState(updated.sessionGroupId, {
-        connection: connJson(restoredConn),
         worktreeDeleted: false,
       });
 
@@ -8075,29 +8258,18 @@ export class SessionService {
       return updated;
     }
 
-    // No repo — just restore connection
-    const restoredConn: SessionConnectionData = {
-      ...conn,
-      state: "connected",
-      runtimeInstanceId: runtime.id,
-      runtimeLabel: runtime.label,
-      lastSeen: new Date().toISOString(),
-      lastError: undefined,
-      retryCount: 0,
-    };
-
-    // Preserve agent/session status unless it was previously marked terminal by a retryable failure.
-    const updateData: Prisma.SessionUpdateInput = {
-      connection: connJson(restoredConn),
-      ...(session.agentStatus === "failed" ? { agentStatus: "done" } : {}),
-    };
-    const updated = await prisma.session.update({
+    // No repo — the connection was already restored with generation fencing.
+    if (session.agentStatus === "failed") {
+      await prisma.session.updateMany({
+        where: connectionVersionWhere(sessionId, restoredConn.version ?? 0),
+        data: { agentStatus: "done" },
+      });
+    }
+    const updated = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
-      data: updateData,
       include: SESSION_INCLUDE,
     });
     const sessionGroup = await this.syncGroupWorkspaceState(updated.sessionGroupId, {
-      connection: connJson(restoredConn),
       worktreeDeleted: false,
     });
 
@@ -8444,7 +8616,7 @@ export class SessionService {
           adapterType: "provisioned" as const,
           runtimeInstanceId: reuseCloudRuntime.id,
           runtimeLabel: reuseCloudRuntime.label,
-        }
+      }
       : targetHosting === "local"
         ? defaultConnection({
             runtimeInstanceId: targetRuntimeInstanceId ?? undefined,
@@ -8970,8 +9142,8 @@ export class SessionService {
       runtimeInstanceId,
       sessionGroupId: session.sessionGroupId,
     });
-    const targetRuntime = sessionRouter.getRuntime(runtimeInstanceId, organizationId);
-    if (!targetRuntime || targetRuntime.ws.readyState !== targetRuntime.ws.OPEN) {
+    const targetRuntime = runtimeMetadata(runtimeInstanceId, organizationId);
+    if (!targetRuntime) {
       throw new Error("Selected runtime is not available");
     }
     if (
@@ -9086,7 +9258,7 @@ export class SessionService {
     // install instructions. `supportedTools` is still returned so callers can
     // reflect install state in the UI.
     const allRuntimes = sessionRouter
-      .listRuntimes()
+      .listRuntimeMetadata({ hostingMode: "local" })
       .filter(
         (runtime) =>
           runtime.hostingMode === "local" &&
@@ -9095,18 +9267,24 @@ export class SessionService {
             runtime.ownerUserId === scopedGroup.ownerUserId),
       );
 
-    const sessionIds = allRuntimes.flatMap((runtime) => [...runtime.boundSessions]);
     const sessions =
-      sessionIds.length === 0
+      allRuntimes.length === 0
         ? []
         : await prisma.session.findMany({
             where: {
-              id: { in: sessionIds },
               organizationId,
+              OR: allRuntimes.map((runtime) => ({
+                connection: { path: ["runtimeInstanceId"], equals: runtime.id },
+              })),
             },
-            select: { id: true },
+            select: { connection: true },
           });
-    const orgSessionIds = new Set(sessions.map((session: { id: string }) => session.id));
+    const sessionCounts = new Map<string, number>();
+    for (const session of sessions) {
+      const runtimeInstanceId = this.getConnectionRuntimeInstanceId(session.connection);
+      if (!runtimeInstanceId) continue;
+      sessionCounts.set(runtimeInstanceId, (sessionCounts.get(runtimeInstanceId) ?? 0) + 1);
+    }
 
     const result = await Promise.all(
       allRuntimes.map(async (r) => {
@@ -9127,9 +9305,8 @@ export class SessionService {
           label: r.label,
           hostingMode: r.hostingMode,
           supportedTools: r.supportedTools,
-          connected: r.ws.readyState === r.ws.OPEN,
-          sessionCount: [...r.boundSessions].filter((sessionId) => orgSessionIds.has(sessionId))
-            .length,
+          connected: "ws" in r ? r.ws.readyState === r.ws.OPEN : r.expiresAt > Date.now(),
+          sessionCount: sessionCounts.get(r.id) ?? 0,
           registeredRepoIds,
           access,
         };
@@ -9197,7 +9374,7 @@ export class SessionService {
         runtimeInstanceId: runtimeId,
         sessionGroupId,
       });
-      const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
+      const runtime = runtimeMetadata(runtimeId, organizationId);
       if (!runtime) throw new Error("Requested runtime not found");
       runtimeId = runtime.key;
     } else {
@@ -9206,8 +9383,7 @@ export class SessionService {
         organizationId,
         sessionGroupId,
       });
-      const runtime = sessionRouter
-        .listRuntimes()
+      const runtime = listRuntimeMetadata()
         .find(
           (runtime) =>
             runtime.organizationId === organizationId &&
@@ -9235,7 +9411,7 @@ export class SessionService {
     let runtimeId = runtimeInstanceId;
     if (runtimeId) {
       await this.assertRuntimeAccess({ userId, organizationId, runtimeInstanceId: runtimeId });
-      const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
+      const runtime = runtimeMetadata(runtimeId, organizationId);
       if (!runtime) throw new Error("Requested runtime not found");
       if (runtime.hostingMode !== "local") {
         throw new ValidationError("Worktree import is only available for local runtimes");
@@ -9246,8 +9422,7 @@ export class SessionService {
         userId,
         organizationId,
       });
-      const runtime = sessionRouter
-        .listRuntimes()
+      const runtime = listRuntimeMetadata()
         .find(
           (runtime) =>
             runtime.organizationId === organizationId &&
@@ -9933,6 +10108,102 @@ export class SessionService {
     return defaultConnection(raw as Partial<SessionConnectionData>);
   }
 
+  private async writeGroupRuntimeBindingInTransaction(
+    tx: Prisma.TransactionClient,
+    sessionGroupId: string,
+    initiatingSessionId: string,
+    targetConnection: SessionConnectionData,
+  ): Promise<GroupRuntimeBindingEffects> {
+    const currentGroup = await tx.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      select: { connection: true },
+    });
+    if (!currentGroup) {
+      return { sessionGroupId, bindingChanged: false, sessionsToRebind: [] };
+    }
+
+    const bindingChanged = hasRuntimeBindingChanged(
+      this.parseConnection(currentGroup.connection),
+      targetConnection,
+    );
+    await tx.sessionGroup.update({
+      where: { id: sessionGroupId },
+      data: { connection: connJson(targetConnection) },
+    });
+
+    if (!bindingChanged) {
+      return { sessionGroupId, bindingChanged: false, sessionsToRebind: [] };
+    }
+
+    const sessions = await tx.session.findMany({
+      where: { sessionGroupId },
+      select: { id: true, organizationId: true, connection: true },
+    });
+    for (const session of sessions) {
+      if (session.id === initiatingSessionId) continue;
+      const currentConnection = this.parseConnection(session.connection);
+      const reboundConnection = mergeRuntimeBinding(currentConnection, targetConnection);
+      await tx.session.update({
+        where: { id: session.id },
+        data: {
+          connection: connJson({
+            // Runtime identity is group-owned, but lifecycle state and retry
+            // history remain session-owned.
+            ...reboundConnection,
+            version: (currentConnection.version ?? 0) + 1,
+          }),
+        },
+      });
+    }
+
+    return {
+      sessionGroupId,
+      bindingChanged: true,
+      sessionsToRebind: sessions.map(({ id, organizationId }) => ({ id, organizationId })),
+    };
+  }
+
+  private async applyGroupRuntimeBindingEffects(
+    effects: GroupRuntimeBindingEffects,
+    targetConnection: SessionConnectionData,
+  ): Promise<void> {
+    if (!effects.bindingChanged) return;
+
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: effects.sessionGroupId },
+      select: { organizationId: true, connection: true },
+    });
+    // Transaction side effects can be delayed behind a newer committed move.
+    // Only mutate router/terminal state if this binding still owns the group.
+    if (
+      !group ||
+      hasRuntimeBindingChanged(this.parseConnection(group.connection), targetConnection)
+    ) {
+      return;
+    }
+
+    terminalRelay.destroyAllForSessionGroup(effects.sessionGroupId);
+    if (group) {
+      await sessionApplicationService
+        .markSessionGroupRuntimeStopped(effects.sessionGroupId, group.organizationId)
+        .catch((error: unknown) => {
+          console.warn(
+            `[session-service] failed to stop application processes for group ${effects.sessionGroupId} after runtime rebind: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        });
+    }
+
+    const runtimeInstanceId = targetConnection.runtimeInstanceId;
+    const runtime = runtimeInstanceId
+      ? runtimeMetadata(runtimeInstanceId, effects.sessionsToRebind[0]?.organizationId)
+      : null;
+    for (const session of effects.sessionsToRebind) {
+      sessionRouter.unbindSession(session.id);
+      if (runtime) sessionRouter.bindSession(session.id, runtime.key);
+    }
+  }
   private async syncGroupWorkspaceState(
     sessionGroupId: string | null | undefined,
     patch: GroupWorkspaceStatePatch,
@@ -10255,7 +10526,7 @@ export class SessionService {
     assertCloudRepoRemoteAvailable(session.hosting, repo);
 
     const conn = this.parseConnection(session.connection);
-    const deliveryResult = await sessionRouter.sendAsync(
+    const deliveryResult = await sendSessionCommand(
       sessionId,
       {
         type: "upgrade_workspace",
@@ -10397,7 +10668,7 @@ export class SessionService {
     };
 
     const conn = this.parseConnection(session.connection);
-    const deliveryResult = sessionRouter.send(sessionId, command, {
+    const deliveryResult = await sendSessionCommand(sessionId, command, {
       expectedHomeRuntimeId: conn.runtimeInstanceId,
       organizationId: session.organizationId,
     });
@@ -10406,7 +10677,10 @@ export class SessionService {
       return deliveryResult;
     }
 
-    const boundRuntime = sessionRouter.getRuntimeForSession(sessionId);
+    const expectedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
+    const boundRuntime =
+      sessionRouter.getRuntimeForSession(sessionId) ??
+      (expectedRuntimeId ? runtimeMetadata(expectedRuntimeId, session.organizationId) : undefined);
     const resumedSessionStatus = getRunningSessionStatus(session.sessionStatus);
     const updatedSession = await prisma.session.update({
       where: { id: sessionId },
@@ -10520,25 +10794,36 @@ export class SessionService {
           ? `${bridgeLabel} does not have Pi installed. Install it with \`${PI_INSTALL_COMMAND}\`, then restart the bridge. Docs: ${PI_INSTALL_DOCS_URL}`
           : `${bridgeLabel} does not support ${session.tool}`
         : `${operation}: ${deliveryResult}`;
-    const updated: SessionConnectionData = {
-      ...conn,
-      state: "disconnected",
-      lastError,
-      lastDeliveryFailureAt: new Date().toISOString(),
-      retryCount: conn.retryCount + 1,
-      canRetry: true,
-      canMove: true,
-      // Don't spin the auto-retry loop for a non-transient failure.
-      autoRetryable: session.hosting !== "cloud" && !homeOffline && !unsupportedHomeTool,
-    };
-
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: { connection: connJson(updated) },
+    const result = await this.updateConnectionConditional(sessionId, (current, currentSession) => {
+      // Delivery happened against the snapshot read above. A reconnect or move
+      // that advanced either the generation or version supersedes this result.
+      if (
+        !isSameRuntimeGeneration(current, conn) ||
+        (current.version ?? 0) !== (conn.version ?? 0) ||
+        isFullyUnloadedSession(
+          currentSession.agentStatus,
+          currentSession.sessionStatus,
+          currentSession.worktreeDeleted,
+        )
+      ) {
+        return null;
+      }
+      return {
+        ...current,
+        state: "disconnected",
+        lastError,
+        lastDeliveryFailureAt: new Date().toISOString(),
+        retryCount: current.retryCount + 1,
+        canRetry: true,
+        canMove: true,
+        // Don't spin the auto-retry loop for a non-transient failure.
+        autoRetryable:
+          currentSession.hosting !== "cloud" && !homeOffline && !unsupportedHomeTool,
+      };
     });
-    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      connection: connJson(updated),
-    });
+    if (!result) return;
+    const updated = result.updated;
+    const sessionGroup = await this.loadSessionGroupSnapshot(result.sessionGroupId);
 
     await eventService.create({
       organizationId,
@@ -10981,18 +11266,23 @@ export class SessionService {
       select: { connection: true },
     });
     const groupRuntimeConnection = this.parseConnection(runtimeSession.connection);
+    const latestConnection = this.parseConnection(latest?.connection ?? cloudSession.connection);
+    const targetGeneration = disconnectFlagged.updated;
     if (
+      !isSameRuntimeGeneration(groupRuntimeConnection, targetGeneration) ||
+      !isSameRuntimeGeneration(latestConnection, targetGeneration) ||
       isRuntimeStartInFlight(groupRuntimeConnection, cutoff) ||
-      (latest && isRuntimeStartInFlight(this.parseConnection(latest.connection), cutoff))
+      isRuntimeStartInFlight(latestConnection, cutoff)
     ) {
       await this.updateConnectionConditional(cloudSession.id, (conn) => {
+        if (!isSameRuntimeGeneration(conn, targetGeneration)) return null;
         if (conn.disconnectOnDeprovision !== true) return null;
         return { ...conn, disconnectOnDeprovision: false, disconnectReason: undefined };
       });
       return false;
     }
 
-    const reapedConnection = this.parseConnection(latest?.connection ?? cloudSession.connection);
+    const reapedConnection = latestConnection;
     logAgentEnvironmentTelemetry("cloud_idle_cleanup.reaping_runtime", {
       organizationId: session.organizationId,
       sessionId: cloudSession.id,
@@ -11297,7 +11587,7 @@ export class SessionService {
       return;
     }
 
-    const runtime = sessionRouter.getRuntime(runtimeInstanceId);
+    const runtime = runtimeMetadata(runtimeInstanceId);
     if (runtime?.ownerUserId && runtime.ownerUserId !== ownerUserId) {
       return;
     }

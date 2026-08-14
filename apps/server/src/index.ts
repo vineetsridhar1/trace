@@ -40,10 +40,11 @@ import { sessionService } from "./services/session.js";
 import { codexCredentialService } from "./services/codex-credential.js";
 import { runtimeDebug } from "./lib/runtime-debug.js";
 import { handleTerminalConnection } from "./lib/terminal-handler.js";
-import { connectRedis, disconnectRedis, redis } from "./lib/redis.js";
+import { connectRedis, disconnectRedis } from "./lib/redis.js";
 import { pubsub } from "./lib/pubsub.js";
 import { runtimeAccessService } from "./services/runtime-access.js";
 import { isLocalMode } from "./lib/mode.js";
+import { withDistributedLock } from "./lib/distributed-lock.js";
 import {
   getAllowedCorsOrigins,
   hasSessionCookie,
@@ -60,6 +61,9 @@ import {
   warnIfPreviewHostNotIsolated,
   endpointTrafficRetentionHours,
 } from "./services/endpoint-utils.js";
+import { ServerLifecycle } from "./lib/server-lifecycle.js";
+import { realtimeBackplane } from "./lib/realtime-backplane.js";
+import { runtimeDirectory } from "./lib/runtime-directory.js";
 
 // A single proxied response is base64-framed over the bridge WS; bound a single
 // message so an untrusted runtime can't force an unbounded allocation.
@@ -72,6 +76,7 @@ const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS = 60 * 60 * 1000;
 const DEFAULT_CLOUD_SESSION_GROUP_ACTIVE_IDLE_CLEANUP_AFTER_MS = 12 * 60 * 60 * 1000;
 const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY = "trace:jobs:cloud-session-group-idle-cleanup";
+const DEPROVISION_RECONCILE_LOCK_KEY = "trace:jobs:deprovision-reconcile";
 const RUNTIME_HARD_DEADLINE_RECONCILE_INTERVAL_MS = 60 * 1000;
 const RUNTIME_HARD_DEADLINE_RECONCILE_LOCK_KEY = "trace:jobs:runtime-hard-deadline-reconcile";
 const ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
@@ -95,26 +100,8 @@ async function withRedisJobLock<T>(options: {
   run: () => Promise<T>;
 }): Promise<T | null> {
   if (!options.enabled) return options.run();
-
-  const token = `${process.pid}:${Date.now()}:${Math.random()}`;
-  const acquired = await redis.set(options.key, token, "PX", options.ttlMs, "NX");
-  if (acquired !== "OK") return null;
-
-  try {
-    return await options.run();
-  } finally {
-    await redis
-      .eval(
-        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-        1,
-        options.key,
-        token,
-      )
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(`[redis-lock] failed to release ${options.key}: ${message}`);
-      });
-  }
+  const locked = await withDistributedLock({ key: options.key, ttlMs: options.ttlMs }, options.run);
+  return locked.acquired ? locked.value : null;
 }
 
 function requestHasSessionCookie(req: Pick<express.Request, "headers">): boolean {
@@ -147,7 +134,18 @@ async function main() {
     traceWebUrl: process.env.TRACE_WEB_URL,
     corsAllowedOrigins: process.env.CORS_ALLOWED_ORIGINS,
   });
-  let startupReady = false;
+  const lifecycle = new ServerLifecycle();
+
+  // Once draining begins, fail new application work immediately. The health
+  // endpoints remain available so the load balancer can observe readiness
+  // before the process closes its long-lived connections.
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (!lifecycle.isDraining() || req.path === "/health" || req.path === "/health/live") {
+      next();
+      return;
+    }
+    res.status(503).json({ error: "Server is draining" });
+  });
 
   // Preview-proxied requests (Host = <key>.<previewHost>) belong to the app
   // session's own server. Hand them to the endpoint proxy BEFORE any CORS /
@@ -169,7 +167,10 @@ async function main() {
   });
 
   app.get("/health", (_req: express.Request, res: express.Response) => {
-    res.json({ status: "ok", ready: startupReady });
+    res.status(lifecycle.isReady() ? 200 : 503).json(lifecycle.snapshot());
+  });
+  app.get("/health/live", (_req: express.Request, res: express.Response) => {
+    res.json({ status: "ok" });
   });
 
   const appleTeamId = process.env.APPLE_TEAM_ID?.trim();
@@ -357,6 +358,7 @@ async function main() {
         void runtimeAccessService.markRuntimeDisconnected(
           stale.runtimeInstanceId,
           stale.organizationId,
+          stale.connectedAt,
         );
       }
       for (const sessionId of eviction.affectedSessions) {
@@ -375,9 +377,16 @@ async function main() {
 
   const deprovisionReconciler = setInterval(() => {
     const startedAt = Date.now();
-    void sessionService
-      .reconcileStuckDeprovisions()
-      .then((result) => {
+    void withDistributedLock(
+      {
+        key: DEPROVISION_RECONCILE_LOCK_KEY,
+        ttlMs: 10 * 60_000,
+      },
+      () => sessionService.reconcileStuckDeprovisions(),
+    )
+      .then((locked) => {
+        if (!locked.acquired) return;
+        const result = locked.value;
         logAgentEnvironmentTelemetry("deprovision.reconciler_iteration", {
           reconciledCount: result.reconciled.length,
           abandonedCount: result.abandoned.length,
@@ -520,6 +529,11 @@ async function main() {
 
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    if (!lifecycle.isReady()) {
+      socket.write("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n");
+      socket.destroy();
+      return;
+    }
     if (endpointProxyService.isEndpointHost(req.headers.host)) {
       endpointProxyService.handleWebSocketUpgrade(req, socket as import("net").Socket, head);
       return;
@@ -607,14 +621,34 @@ async function main() {
         async serverWillStart() {
           return {
             async drainServer() {
-              await wsServerCleanup.dispose();
+              // Stop every mutating background loop as soon as ECS begins
+              // draining. Waiting for long-lived WebSockets first leaves the
+              // retiring replica running cleanup/reconciliation against the
+              // same rows as its replacement for the full deregistration
+              // window.
               clearInterval(staleRuntimeMonitor);
               clearInterval(deprovisionReconciler);
               if (cloudIdleCleanup) clearInterval(cloudIdleCleanup);
               clearInterval(runtimeHardDeadlineReconciler);
               clearInterval(endpointTrafficCleanup);
+
+              // Code 1012 tells bridges to reconnect to the replacement task
+              // immediately. The persisted generation/lastSeen fences make the
+              // draining task's delayed close callback harmless once that
+              // reconnect lands on another replica.
+              for (const client of bridgeWss.clients) {
+                client.close(1012, "Service restart");
+              }
+              for (const client of terminalWss.clients) {
+                client.close(1012, "Service restart");
+              }
+
+              await wsServerCleanup.dispose();
               bridgeWss.close();
               terminalWss.close();
+              await slackEventBridge.stop();
+              runtimeDirectory.stop();
+              await realtimeBackplane.stop();
               await disconnectRedis();
             },
           };
@@ -625,6 +659,40 @@ async function main() {
 
   await apollo.start();
   app.use("/graphql", expressMiddleware(apollo, { context: buildContext }));
+
+  let shutdownPromise: Promise<void> | null = null;
+  const shutdown = (signal: NodeJS.Signals): Promise<void> => {
+    if (shutdownPromise) return shutdownPromise;
+    lifecycle.beginDrain();
+    console.log(`[shutdown] ${signal} received; draining server`);
+    const forceExitAfterMs = readDurationEnv("TRACE_SHUTDOWN_TIMEOUT_MS", 30_000);
+    const forceExit = setTimeout(() => {
+      console.error(`[shutdown] forced exit after ${forceExitAfterMs}ms`);
+      process.exit(1);
+    }, forceExitAfterMs);
+    forceExit.unref();
+
+    shutdownPromise = apollo
+      .stop()
+      .then(() => {
+        lifecycle.markStopped();
+        clearTimeout(forceExit);
+        console.log("[shutdown] server drained");
+      })
+      .catch((error: unknown) => {
+        clearTimeout(forceExit);
+        console.error("[shutdown] drain failed:", error);
+        throw error;
+      });
+    return shutdownPromise;
+  };
+
+  process.once("SIGTERM", () => {
+    void shutdown("SIGTERM").catch(() => process.exit(1));
+  });
+  process.once("SIGINT", () => {
+    void shutdown("SIGINT").catch(() => process.exit(1));
+  });
 
   await new Promise<void>((resolve) => {
     httpServer.listen(PORT, "0.0.0.0", () => {
@@ -650,6 +718,11 @@ async function main() {
     }
   }
 
+  // A replica must be listening on its command inbox and have hydrated the
+  // shared runtime directory before it is eligible for load-balancer traffic.
+  await realtimeBackplane.start();
+  await runtimeDirectory.start();
+
   // Reattach Slack event bridges only when Slack is configured.
   if (isSlackConfigured()) {
     await slackEventBridge.rehydrate().catch((err: unknown) => {
@@ -657,7 +730,7 @@ async function main() {
     });
   }
 
-  startupReady = true;
+  lifecycle.markReady();
 }
 
 main().catch((error) => {
