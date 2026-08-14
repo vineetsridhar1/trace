@@ -35,7 +35,7 @@ Independent ready tickets can run in parallel while preserving a coherent final 
 
 - This is intentionally post-v1.
 - Keep the v1 sequential scheduler as `maxParallelWorkers = 1`.
-- Expect more conflicts when workers start from the same integration checkpoint.
+- Expect more conflicts when workers start from the same integration commit.
 - Do not change dependency semantics introduced by the ticket planning model.
 
 ## How to test

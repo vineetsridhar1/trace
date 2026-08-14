@@ -229,14 +229,13 @@ describe("createApplication", () => {
     fetchSessionGroupDetailMock.mockResolvedValue({ ok: true, error: null });
 
     const { createApplication } = await import("./createQuickSession");
-    const created = await createApplication("  Build a launch tracker  ");
+    const created = await createApplication();
 
     expect(created).toBe(true);
     expect(mutationMock).toHaveBeenCalledWith(START_SESSION_MUTATION, {
       input: {
         kind: "app",
         hosting: "cloud",
-        prompt: "Build a launch tracker",
       },
     });
     expect(setOverlaySessionIdMock).toHaveBeenCalledWith("session_app");
@@ -250,7 +249,7 @@ describe("createApplication", () => {
     });
 
     const { createApplication } = await import("./createQuickSession");
-    const created = await createApplication("Build a launch tracker");
+    const created = await createApplication();
 
     expect(created).toBe(false);
     expect(replaceMock).not.toHaveBeenCalled();

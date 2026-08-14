@@ -11,7 +11,7 @@ import {
 } from "@trace/client-core";
 import { haptic } from "@/lib/haptics";
 import { userFacingError } from "@/lib/requestError";
-import { getClient } from "@/lib/urql";
+import { getClient, recreateClient } from "@/lib/urql";
 import { uploadFile } from "@/lib/upload";
 import { useDraftsStore, type FileAttachment } from "@/stores/drafts";
 
@@ -94,9 +94,14 @@ export function useComposerSubmit({
               text: wrapped,
               attachmentKeys: attachmentKeys.length > 0 ? attachmentKeys : undefined,
               interactionMode,
-            })
+          })
             .toPromise();
           if (result.error) throw result.error;
+          // Queue updates are ordinarily applied by queued_message_added. If
+          // the native socket survived a network change in a stale state, this
+          // successful mutation is the earliest reliable recovery point: a
+          // fresh subscription triggers the normal reconnect catch-up query.
+          recreateClient();
           useDraftsStore
             .getState()
             .setAttachments(sessionId, (prev) =>

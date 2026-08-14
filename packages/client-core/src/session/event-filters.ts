@@ -8,8 +8,6 @@
 export const HIDDEN_SESSION_PAYLOAD_TYPES = [
   "connection_lost",
   "connection_restored",
-  "git_checkpoint",
-  "git_checkpoint_rewrite",
   "title_generated",
   "config_changed",
   "branch_renamed",
@@ -23,7 +21,6 @@ export const HIDDEN_SESSION_PAYLOAD_TYPES = [
   "session_runtime_provisioning",
   "session_runtime_connecting",
   "session_runtime_connected",
-  "session_runtime_start_failed",
   "session_runtime_start_timed_out",
   "session_runtime_stopping",
   "session_runtime_stopped",

@@ -14,7 +14,14 @@ vi.mock("../lib/terminal-relay.js", () => ({
     getTerminalsForChannel: vi.fn().mockReturnValue([]),
     getSessionId: vi.fn(),
     getTerminalAuthContext: vi.fn(),
+    getTerminalState: vi.fn(),
     destroyTerminal: vi.fn(),
+  },
+}));
+
+vi.mock("./event.js", () => ({
+  eventService: {
+    create: vi.fn().mockResolvedValue({ id: "event-1" }),
   },
 }));
 
@@ -68,6 +75,10 @@ describe("TerminalService", () => {
       sessionGroupId: "group-1",
       runtimeInstanceId: "runtime-1",
       ownerUserId: "user-1",
+    }));
+    terminalRelayMock.getTerminalState.mockImplementation((terminalId: string) => ({
+      id: terminalId,
+      sessionId: terminalRelayMock.getSessionId(terminalId) ?? "session-1",
     }));
   });
 

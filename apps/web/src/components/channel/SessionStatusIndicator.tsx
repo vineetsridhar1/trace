@@ -12,7 +12,8 @@ export function SessionStatusIndicator({
   size?: number;
   showDonePulse?: boolean;
 }) {
-  const color = sessionStatusColor[row.displaySessionStatus] ?? "text-muted-foreground";
+  const status = row.displaySessionStatus ?? "in_progress";
+  const color = sessionStatusColor[status] ?? "text-muted-foreground";
   const hasDoneBadge = useUIStore((s: UIState) => !!s.sessionGroupDoneBadges[row.id]);
 
   return (
@@ -20,7 +21,7 @@ export function SessionStatusIndicator({
       className={`relative inline-flex shrink-0 items-center justify-center pl-1 ${color}`}
       style={{ width: size + 4, height: size }}
     >
-      <AgentStatusIcon agentStatus={row.displayAgentStatus ?? "done"} size={size} />
+      <AgentStatusIcon agentStatus={row.displayAgentStatus} size={size} />
       {hasDoneBadge && showDonePulse && (
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75" />
       )}

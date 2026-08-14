@@ -1,4 +1,4 @@
-import { useAuthStore } from "@trace/client-core";
+import { getPlatform, useAuthStore } from "@trace/client-core";
 import { getActiveApiUrl } from "@/lib/connection-target";
 
 const FATAL_TERMINAL_ERRORS = new Set([
@@ -84,7 +84,7 @@ export class TerminalSocket {
   private openSocket(): void {
     const token = getToken();
     const wsBase = getTerminalWsBaseUrl();
-    this.ws = new WebSocket(`${wsBase}/terminal`);
+    this.ws = getPlatform().createWebSocket(`${wsBase}/terminal`);
 
     this.ws.onopen = () => {
       this.awaitingReconnectReady = this.reconnectAttempts > 0;

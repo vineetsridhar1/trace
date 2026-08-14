@@ -1,5 +1,4 @@
 import { memo } from "react";
-import type { GitCheckpoint } from "@trace/gql";
 import type { AgentToolResult, SessionNode } from "./groupReadGlob";
 import { SessionMessage } from "./SessionMessage";
 import { ReadGlobGroup } from "./messages/ReadGlobGroup";
@@ -10,11 +9,11 @@ import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/mar
 
 export interface SessionNodeRendererProps {
   node: SessionNode;
-  gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
   completedAgentTools: Map<string, AgentToolResult>;
   toolResultByUseId: Map<string, unknown>;
   highlightEventId?: string | null;
   activePlanId?: string | null;
+  replacedQuestionIds?: ReadonlySet<string>;
   planComments?: MarkdownSteerCommentsByBlock;
   onAddPlanComment?: (block: MarkdownSteerBlock, text: string) => void;
   onRemovePlanComment?: (blockId: string, commentId: string) => void;
@@ -25,11 +24,11 @@ export interface SessionNodeRendererProps {
 
 export const SessionNodeRenderer = memo(function SessionNodeRenderer({
   node,
-  gitCheckpointsByPromptEventId,
   completedAgentTools,
   toolResultByUseId,
   highlightEventId,
   activePlanId,
+  replacedQuestionIds,
   planComments,
   onAddPlanComment,
   onRemovePlanComment,
@@ -49,12 +48,12 @@ export const SessionNodeRenderer = memo(function SessionNodeRenderer({
       >
         <SessionMessage
           id={node.id}
-          gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
           completedAgentTools={completedAgentTools}
           toolResultByUseId={toolResultByUseId}
           onForkSession={onForkSession}
           canForkSession={canForkSession}
           showActions={messageActionsEventIds?.has(node.id) ?? false}
+          repeatCount={node.repeatCount}
         />
       </div>
     );
@@ -86,7 +85,13 @@ export const SessionNodeRenderer = memo(function SessionNodeRenderer({
   }
 
   if (node.kind === "ask-user-question") {
-    return <AskUserQuestionInline questions={node.questions} timestamp={node.timestamp} />;
+    return (
+      <AskUserQuestionInline
+        questions={node.questions}
+        timestamp={node.timestamp}
+        replaced={replacedQuestionIds?.has(node.id) ?? false}
+      />
+    );
   }
 
   return <ReadGlobGroup items={node.items} />;

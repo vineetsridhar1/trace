@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { FolderGit2, GitBranch } from "lucide-react";
-import type { GitCheckpoint } from "@trace/gql";
 import { useEntityField } from "@trace/client-core";
 import { useComposerStore } from "../../stores/composer";
 import { ImportWorktreeDialog } from "./ImportWorktreeDialog";
@@ -54,13 +53,11 @@ function estimateNodeHeight(node: SessionListNode): number {
   return 88;
 }
 
-
 export interface SessionMessageListProps {
   key?: React.Key;
   sessionId: string;
   nodes: SessionListNode[];
   promptIndexItems: SessionPromptIndexItem[];
-  gitCheckpoints: GitCheckpoint[];
   initialLoading?: boolean;
   hasOlder?: boolean;
   loadingOlder?: boolean;
@@ -71,6 +68,7 @@ export interface SessionMessageListProps {
   scrollToEventId?: string | null;
   onScrollComplete?: () => void;
   activePlanId?: string | null;
+  replacedQuestionIds?: ReadonlySet<string>;
   planComments?: MarkdownSteerCommentsByBlock;
   onAddPlanComment?: (block: MarkdownSteerBlock, text: string) => void;
   onRemovePlanComment?: (blockId: string, commentId: string) => void;
@@ -85,7 +83,6 @@ export function SessionMessageList({
   sessionId,
   nodes,
   promptIndexItems,
-  gitCheckpoints,
   initialLoading = false,
   hasOlder,
   loadingOlder,
@@ -96,6 +93,7 @@ export function SessionMessageList({
   scrollToEventId,
   onScrollComplete,
   activePlanId,
+  replacedQuestionIds,
   planComments,
   onAddPlanComment,
   onRemovePlanComment,
@@ -116,19 +114,10 @@ export function SessionMessageList({
   const pendingTimelineAnchorRef = useRef<string | null>(null);
   const currentIndexFrameRef = useRef<number | null>(null);
   const previousTouchYRef = useRef<number | null>(null);
-
-  const gitCheckpointsByPromptEventId = useMemo(() => {
-    const byPromptEventId = new Map<string, GitCheckpoint[]>();
-    for (const checkpoint of gitCheckpoints) {
-      const existing = byPromptEventId.get(checkpoint.promptEventId) ?? [];
-      existing.push(checkpoint);
-      byPromptEventId.set(checkpoint.promptEventId, existing);
-    }
-    for (const checkpoints of byPromptEventId.values()) {
-      checkpoints.sort((a, b) => a.committedAt.localeCompare(b.committedAt));
-    }
-    return byPromptEventId;
-  }, [gitCheckpoints]);
+  const lastScrollRequestRef = useRef<number | null>(null);
+  const scrollToBottomRequest = useComposerStore(
+    (state) => state.scrollToBottomBySession[sessionId] ?? 0,
+  );
 
   // Index of the node at the viewport anchor, for the prompt timeline.
   const [currentNodeIndex, setCurrentNodeIndex] = useState<number | null>(null);
@@ -263,10 +252,8 @@ export function SessionMessageList({
     });
   }, [handleScroll, initialLoading, nodes.length]);
 
-  // Follow the bottom while content grows (streaming events, images loading,
-  // panel resize). A single ResizeObserver on the content and the container
-  // replaces per-item measurement: whenever heights change and the user was
-  // near the bottom, re-pin to the bottom.
+  // Keep the view live while it is already following the tail, but once the
+  // user scrolls away, do not take control back until they return to the end.
   useEffect(() => {
     const container = scrollContainerRef.current;
     const rowsEl = rowsContainerRef.current;
@@ -281,6 +268,22 @@ export function SessionMessageList({
     observer.observe(container);
     return () => observer.disconnect();
   }, []);
+
+  // Sending is an explicit request to return to the live tail. Keep this
+  // separate from streamed content so ordinary updates do not steal scroll.
+  useLayoutEffect(() => {
+    if (lastScrollRequestRef.current === null) {
+      lastScrollRequestRef.current = scrollToBottomRequest;
+      return;
+    }
+    if (scrollToBottomRequest === lastScrollRequestRef.current) return;
+    lastScrollRequestRef.current = scrollToBottomRequest;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
+    previousScrollTopRef.current = container.scrollTop;
+    isNearBottomRef.current = true;
+  }, [scrollToBottomRequest]);
 
   // When the floating composer height changes (grows to multiple lines, or swaps
   // to a taller plan/question bar), the reserved bottom padding changes — re-pin
@@ -297,7 +300,7 @@ export function SessionMessageList({
     return () => cancelAnimationFrame(frame);
   }, [scrollPaddingBottom]);
 
-  // Scroll to a specific event when requested (e.g. from checkpoint panel or prompt timeline)
+  // Scroll to a specific event when requested from the prompt timeline.
   const [highlightEventId, setHighlightEventId] = useState<string | null>(null);
   const [timelineScrollToEventId, setTimelineScrollToEventId] = useState<string | null>(null);
   const [scrollIntentVersion, setScrollIntentVersion] = useState(0);
@@ -618,11 +621,11 @@ export function SessionMessageList({
             rowsRef={rowsContainerRef}
             nodes={nodes}
             sessionId={sessionId}
-            gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
             completedAgentTools={completedAgentTools}
             toolResultByUseId={toolResultByUseId}
             highlightEventId={highlightEventId}
             activePlanId={activePlanId}
+            replacedQuestionIds={replacedQuestionIds}
             planComments={planComments}
             onAddPlanComment={onAddPlanComment}
             onRemovePlanComment={onRemovePlanComment}
@@ -640,11 +643,11 @@ interface SessionMessageRowsProps {
   rowsRef: React.RefObject<HTMLDivElement | null>;
   nodes: SessionListNode[];
   sessionId: string;
-  gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
   completedAgentTools: Map<string, AgentToolResult>;
   toolResultByUseId: Map<string, unknown>;
   highlightEventId: string | null;
   activePlanId?: string | null;
+  replacedQuestionIds?: ReadonlySet<string>;
   planComments?: MarkdownSteerCommentsByBlock;
   onAddPlanComment?: (block: MarkdownSteerBlock, text: string) => void;
   onRemovePlanComment?: (blockId: string, commentId: string) => void;
@@ -659,11 +662,11 @@ const SessionMessageRows = memo(function SessionMessageRows({
   rowsRef,
   nodes,
   sessionId,
-  gitCheckpointsByPromptEventId,
   completedAgentTools,
   toolResultByUseId,
   highlightEventId,
   activePlanId,
+  replacedQuestionIds,
   planComments,
   onAddPlanComment,
   onRemovePlanComment,
@@ -689,16 +692,15 @@ const SessionMessageRows = memo(function SessionMessageRows({
             <CollapsedSessionEventsRow
               sessionId={sessionId}
               collapsedRanges={node.collapsedRanges}
-              gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
             />
           ) : (
             <SessionNodeRenderer
               node={node}
-              gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
               completedAgentTools={completedAgentTools}
               toolResultByUseId={toolResultByUseId}
               highlightEventId={highlightEventId}
               activePlanId={activePlanId}
+              replacedQuestionIds={replacedQuestionIds}
               planComments={planComments}
               onAddPlanComment={onAddPlanComment}
               onRemovePlanComment={onRemovePlanComment}

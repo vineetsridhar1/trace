@@ -15,16 +15,8 @@ declare global {
   }
 
   type DesktopBridgeConnectionStatus = "connecting" | "connected" | "disconnected";
-  type DesktopGitHookState =
-    | "not_installed"
-    | "trace_managed"
-    | "custom_present"
-    | "chained"
-    | "error";
-
   type DesktopRepoConfig = {
     path: string;
-    gitHooksEnabled: boolean;
     linkedCheckout?: {
       sessionGroupId: string;
       targetBranch: string;
@@ -47,6 +39,21 @@ declare global {
     installed: boolean;
     authenticated: boolean;
     error: string | null;
+  };
+
+  type DesktopCodingToolStatus = {
+    tool: string;
+    label: string;
+    status: "installed" | "missing" | "update_available" | "unknown";
+    installedVersion: string | null;
+    latestVersion: string | null;
+  };
+
+  type DesktopAppUpdateStatus = {
+    state: "up_to_date" | "update_available" | "unavailable";
+    currentVersion: string;
+    latestVersion: string | null;
+    directDownload: boolean;
   };
 
   type DesktopLinkedCheckoutStatus = {
@@ -97,20 +104,6 @@ declare global {
     commitMessage?: string | null;
   };
 
-  type DesktopRepoGitHookStatus = {
-    hooksDir: string;
-    state: DesktopGitHookState;
-    hooks: Array<{
-      hookName: string;
-      hookPath: string;
-      state: DesktopGitHookState;
-      isExecutable: boolean;
-      runnerPath: string | null;
-      chainedHookPath: string | null;
-      error?: string | null;
-    }>;
-  };
-
   type GitInfoResult =
     | {
         name: string;
@@ -153,12 +146,11 @@ declare global {
     getRepoConfig: (repoId: string) => Promise<DesktopRepoConfig | null>;
     getGithubCliStatus: () => Promise<DesktopGithubCliStatus>;
     getGithubAuthToken: () => Promise<string>;
-    setRepoGitHooksEnabled: (
-      repoId: string,
-      enabled: boolean,
-    ) => Promise<{ config: DesktopRepoConfig | null; status: DesktopRepoGitHookStatus | null }>;
-    getRepoGitHookStatus: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
-    repairRepoGitHooks: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
+    loginCodexWithChatgpt: () => Promise<string>;
+    getCodingToolStatuses: () => Promise<DesktopCodingToolStatus[]>;
+    installOrUpdateCodingTool: (toolId: string) => Promise<DesktopCodingToolStatus>;
+    getAppUpdateStatus: () => Promise<DesktopAppUpdateStatus>;
+    openAppUpdateDownload: () => Promise<boolean>;
     getBridgeStatus: () => Promise<DesktopBridgeConnectionStatus>;
     getBridgeInfo: () => Promise<DesktopBridgeInfo>;
     setBridgeLabel: (label: string) => Promise<DesktopBridgeInfo>;

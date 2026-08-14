@@ -34,6 +34,7 @@ export { generateUUID } from "./utils/uuid.js";
 export {
   getSessionChannelId,
   getSessionGroupChannelId,
+  hasSelectedSessionGroupRuntime,
   mergeSessionGroupEntity,
 } from "./lib/session-group.js";
 
@@ -74,8 +75,6 @@ export type {
 export { handleOrgEvent, handleSessionEvent } from "./events/handlers.js";
 export {
   extractMessagePreview,
-  mergeGitCheckpoints,
-  rewriteGitCheckpoints,
   routeSessionOutput,
   sessionPatchFromOutput,
   shouldBumpSortTimestampForOutput,
@@ -107,6 +106,7 @@ export {
   ASK_PREFIX,
   PLAN_PREFIX,
   formatCommandLabel,
+  formatMessageTimestamp,
   formatTime,
   getCommandPrefix,
   serializeUnknown,
@@ -115,4 +115,9 @@ export {
   wrapPrompt,
 } from "./session/messages.js";
 export type { InteractionMode } from "./session/messages.js";
+export {
+  questionAnswerLabel,
+  type QuestionAnswerLabelInput,
+} from "./session/question-answer-label.js";
 export { useQuestionState } from "./session/question-state.js";
+export { structuredResponseSummary } from "./session/structured-response-summary.js";

@@ -1,4 +1,9 @@
-import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import type { StorageAdapter } from "./types.js";
@@ -32,15 +37,29 @@ export class S3StorageAdapter implements StorageAdapter {
     return { method: "POST" as const, url: target.url, fields: target.fields };
   }
 
-  async putObject(key: string, body: Buffer, contentType: string): Promise<void> {
+  async putObject(
+    key: string,
+    body: Buffer,
+    contentType: string,
+    options?: { ifAbsent?: boolean },
+  ): Promise<void> {
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
         Body: body,
         ContentType: contentType,
+        ...(options?.ifAbsent ? { IfNoneMatch: "*" } : {}),
       }),
     );
+  }
+
+  async getObject(key: string): Promise<Buffer> {
+    const response = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    if (!response.Body) throw new Error("Storage object has no body");
+    return Buffer.from(await response.Body.transformToByteArray());
   }
 
   async getGetUrl(key: string, options?: { downloadFilename?: string }): Promise<string> {
@@ -52,6 +71,10 @@ export class S3StorageAdapter implements StorageAdapter {
         : {}),
     });
     return getSignedUrl(this.client, command, { expiresIn: 3600 });
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 }
 

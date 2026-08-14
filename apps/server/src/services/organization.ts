@@ -45,7 +45,7 @@ export class OrganizationService {
 
   async listRepos(organizationId: string) {
     // Managed repos are durability plumbing for design/app sessions — hide them
-    // from normal repo lists and pickers. Session/checkpoint services resolve
+    // from normal repo lists and pickers. Session services resolve
     // them directly by id and are unaffected by this filter.
     return prisma.repo.findMany({
       where: { organizationId, provider: "github" },
@@ -78,6 +78,32 @@ export class OrganizationService {
     return prisma.project.findFirst({
       where: { id, organizationId },
       include: PROJECT_INCLUDE,
+    });
+  }
+
+  async listProjectsForChannels(channelIds: readonly string[], organizationId: string) {
+    return prisma.channelProject.findMany({
+      where: {
+        channelId: { in: [...channelIds] },
+        project: { organizationId },
+      },
+      select: {
+        channelId: true,
+        project: { include: { repo: true } },
+      },
+    });
+  }
+
+  async listProjectsForSessions(sessionIds: readonly string[], organizationId: string) {
+    return prisma.sessionProject.findMany({
+      where: {
+        sessionId: { in: [...sessionIds] },
+        project: { organizationId },
+      },
+      select: {
+        sessionId: true,
+        project: { include: { repo: true } },
+      },
     });
   }
 
@@ -215,22 +241,27 @@ export class OrganizationService {
     actorType: ActorType,
     actorId: string,
   ) {
+    const name = input.name?.trim();
+    const defaultBranch = input.defaultBranch?.trim();
+    const remoteUrl = input.remoteUrl === undefined ? undefined : input.remoteUrl?.trim() || null;
+    if (input.name != null && !name) throw new ValidationError("Repository name is required");
+    if (input.defaultBranch != null && !defaultBranch) {
+      throw new ValidationError("Default branch is required");
+    }
+
     const [repo] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Verify repo belongs to caller's org before updating
       const existing = await tx.repo.findFirstOrThrow({
         where: { id, organizationId },
-        select: { id: true, name: true, remoteUrl: true, setupConfig: true },
+        select: { id: true, name: true, remoteUrl: true, setupConfig: true, webhookId: true },
       });
 
-      const remoteUrl = input.remoteUrl?.trim();
-      if (input.remoteUrl != null) {
-        if (!remoteUrl) {
-          throw new ValidationError("Remote URL cannot be empty.");
-        }
-        if (existing.remoteUrl && existing.remoteUrl !== remoteUrl) {
-          throw new ValidationError("This repo already has a remote URL.");
-        }
-
+      if (remoteUrl !== undefined && remoteUrl !== existing.remoteUrl && existing.webhookId) {
+        throw new ValidationError(
+          "Disconnect the repository webhook before changing its remote URL",
+        );
+      }
+      if (remoteUrl) {
         const repoWithRemote = await tx.repo.findUnique({
           where: {
             organizationId_remoteUrl: {
@@ -268,9 +299,9 @@ export class OrganizationService {
       const repo = await tx.repo.update({
         where: { id },
         data: {
-          ...(input.name != null && { name: input.name }),
-          ...(remoteUrl != null && { remoteUrl }),
-          ...(input.defaultBranch != null && { defaultBranch: input.defaultBranch }),
+          ...(name !== undefined && { name }),
+          ...(remoteUrl !== undefined && { remoteUrl }),
+          ...(defaultBranch !== undefined && { defaultBranch }),
           ...(setupConfig !== undefined && { setupConfig }),
         },
         include: { projects: true, sessions: true },
@@ -285,7 +316,8 @@ export class OrganizationService {
           organizationId: repo.organizationId,
           scopeType: "system",
           scopeId: repo.id,
-          eventType: input.applicationConfig != null ? "application_config_updated" : "repo_updated",
+          eventType:
+            input.applicationConfig != null ? "application_config_updated" : "repo_updated",
           payload: {
             repo: {
               id: repo.id,
@@ -308,6 +340,57 @@ export class OrganizationService {
     });
 
     return repo;
+  }
+
+  async deleteRepo(
+    id: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<boolean> {
+    const event = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const repo = await tx.repo.findFirstOrThrow({
+        where: { id, organizationId, provider: "github" },
+        select: {
+          id: true,
+          channels: { select: { id: true } },
+          projects: { select: { id: true } },
+          sessions: { select: { id: true } },
+          sessionGroups: { select: { id: true } },
+        },
+      });
+
+      await Promise.all([
+        tx.channel.updateMany({ where: { repoId: id }, data: { repoId: null } }),
+        tx.project.updateMany({ where: { repoId: id }, data: { repoId: null } }),
+        tx.session.updateMany({ where: { repoId: id }, data: { repoId: null } }),
+        tx.sessionGroup.updateMany({ where: { repoId: id }, data: { repoId: null } }),
+      ]);
+      await tx.repo.delete({ where: { id } });
+
+      return eventService.create(
+        {
+          organizationId,
+          scopeType: "system",
+          scopeId: id,
+          eventType: "repo_deleted",
+          payload: {
+            repoId: id,
+            channelIds: repo.channels.map(({ id: entityId }) => entityId),
+            projectIds: repo.projects.map(({ id: entityId }) => entityId),
+            sessionIds: repo.sessions.map(({ id: entityId }) => entityId),
+            sessionGroupIds: repo.sessionGroups.map(({ id: entityId }) => entityId),
+          },
+          actorType,
+          actorId,
+          deferPublish: true,
+        },
+        tx,
+      );
+    });
+
+    eventService.publishCreated(event);
+    return true;
   }
 
   async createProject(input: CreateProjectInput, actorType: ActorType, actorId: string) {

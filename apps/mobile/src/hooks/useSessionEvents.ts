@@ -11,7 +11,7 @@ import {
 import type { Event, Session, SessionTimelineMode } from "@trace/gql";
 import { handleUnauthorized, isUnauthorized } from "@/lib/auth";
 import { timedEventIngest } from "@/lib/perf";
-import { getClient } from "@/lib/urql";
+import { getClient, useGqlClientGeneration } from "@/lib/urql";
 import { useConnectionStore, type ConnectionState } from "@/stores/connection";
 import { PendingFetchedEvents, SessionEventBuffer } from "./session-events-buffer";
 import {
@@ -170,6 +170,7 @@ export function useSessionEvents(
   const [timelineItems, setTimelineItems] =
     useState<SessionTimelineDisplayItem[]>(EMPTY_TIMELINE_ITEMS);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
+  const clientGeneration = useGqlClientGeneration();
   const oldestCursorRef = useRef<EventCursor | null>(null);
   const loadingOlderRef = useRef(false);
   const hasOlderRef = useRef(true);
@@ -346,7 +347,7 @@ export function useSessionEvents(
       eventSub.unsubscribe();
       statusSub.unsubscribe();
     };
-  }, [activeOrgId, commitLiveEventWithTimeline, fetchEnabled, sessionId]);
+  }, [activeOrgId, clientGeneration, commitLiveEventWithTimeline, fetchEnabled, sessionId]);
 
   // Catch up missed events after a WS reconnect: the server's pubsub has no
   // replay, so anything the agent emitted while we were disconnected is lost

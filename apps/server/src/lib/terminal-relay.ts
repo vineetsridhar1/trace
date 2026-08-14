@@ -19,6 +19,8 @@ interface TerminalEntry {
   runtimeInstanceId: string;
   /** User that created the terminal. Frontend attach/list/destroy is owner-only. */
   ownerUserId: string | null;
+  cols: number;
+  rows: number;
   frontendWs: WebSocket | null;
   /** User who currently has a frontend WebSocket attached to this terminal. */
   attachedUserId: string | null;
@@ -88,6 +90,8 @@ export class TerminalRelay {
       runtimeInstanceId,
       runtimeKey,
       ownerUserId,
+      cols,
+      rows,
       frontendWs: null,
       attachedUserId: null,
       ready: false,
@@ -159,6 +163,8 @@ export class TerminalRelay {
       runtimeInstanceId,
       runtimeKey,
       ownerUserId,
+      cols,
+      rows,
       frontendWs: null,
       attachedUserId: null,
       ready: false,
@@ -349,6 +355,8 @@ export class TerminalRelay {
           runtimeInstanceId,
           runtimeKey,
           ownerUserId,
+          cols: 80,
+          rows: 24,
           frontendWs: null,
           attachedUserId: null,
           ready: true,
@@ -383,6 +391,8 @@ export class TerminalRelay {
         runtimeInstanceId,
         runtimeKey,
         ownerUserId,
+        cols: 80,
+        rows: 24,
         frontendWs: null,
         attachedUserId: null,
         ready: true, // Bridge says it's alive, so it's ready
@@ -541,6 +551,74 @@ export class TerminalRelay {
       runtimeInstanceId: entry.runtimeInstanceId,
       ownerUserId: entry.ownerUserId,
     };
+  }
+
+  getTerminalState(terminalId: string): {
+    id: string;
+    sessionId: string;
+    status: string;
+    cols: number;
+    rows: number;
+    connected: boolean;
+    closed: boolean;
+  } | null {
+    const entry = this.terminals.get(terminalId);
+    if (!entry) return null;
+    return {
+      id: terminalId,
+      sessionId: entry.sessionId,
+      status: entry.terminated ? "closed" : entry.ready ? "ready" : "connecting",
+      cols: entry.cols,
+      rows: entry.rows,
+      connected:
+        !entry.terminated &&
+        sessionRouter.isRuntimeAvailable(entry.runtimeInstanceId, entry.organizationId),
+      closed: entry.terminated,
+    };
+  }
+
+  captureTerminal(
+    terminalId: string,
+    maxBytes: number,
+  ): {
+    output: string;
+    byteCount: number;
+    truncated: boolean;
+    closed: boolean;
+    connected: boolean;
+  } | null {
+    const entry = this.terminals.get(terminalId);
+    if (!entry) return null;
+    const source = Buffer.from(entry.scrollback.join(""), "utf8");
+    const truncated = source.length > maxBytes;
+    let start = truncated ? source.length - maxBytes : 0;
+    while (start < source.length && (source[start]! & 0xc0) === 0x80) start += 1;
+    const output = source.subarray(start).toString("utf8");
+    return {
+      output,
+      byteCount: Buffer.byteLength(output),
+      truncated,
+      closed: entry.terminated,
+      connected:
+        !entry.terminated &&
+        sessionRouter.isRuntimeAvailable(entry.runtimeInstanceId, entry.organizationId),
+    };
+  }
+
+  sendInput(terminalId: string, data: string): boolean {
+    const entry = this.terminals.get(terminalId);
+    if (!entry || entry.terminated) return false;
+    this.sendTerminalCommand(entry, { type: "terminal_input", terminalId, data });
+    return true;
+  }
+
+  resizeTerminal(terminalId: string, cols: number, rows: number): boolean {
+    const entry = this.terminals.get(terminalId);
+    if (!entry || entry.terminated) return false;
+    entry.cols = cols;
+    entry.rows = rows;
+    this.sendTerminalCommand(entry, { type: "terminal_resize", terminalId, cols, rows });
+    return true;
   }
 
   /** Forward a message from the bridge to the attached frontend WebSocket. */

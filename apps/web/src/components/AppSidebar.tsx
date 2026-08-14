@@ -11,6 +11,9 @@ import { SidebarDirectMessagesPane } from "./sidebar/SidebarDirectMessagesPane";
 import { PeekOverlay } from "./sidebar/PeekOverlay";
 import { SidebarTabSwitcher } from "./sidebar/SidebarTabSwitcher";
 import { UserMenu } from "./sidebar/UserMenu";
+import { CodingToolsSidebarItem } from "./desktop/CodingToolsSidebarItem";
+import { AppUpdateSidebarItem } from "./desktop/AppUpdateSidebarItem";
+import { SidebarGettingStartedItem } from "./sidebar/SidebarGettingStartedItem";
 import { getPreferredSidebarTab, getTabIndex, type SidebarTab } from "./sidebar/sidebarTabs";
 import { Sidebar, SidebarContent, SidebarFooter, useSidebar } from "./ui/sidebar";
 
@@ -157,6 +160,7 @@ export function AppSidebar() {
                   channelsById={sidebarData.channelsById}
                   channelsLoading={sidebarData.channelsLoading}
                   groupIds={sidebarData.groupIds}
+                  linkedChannelId={sidebarData.linkedChannelId}
                   onChannelClick={handleChannelClick}
                   onSessionClick={handleSessionClick}
                   topLevelItems={sidebarData.topLevelItems}
@@ -174,6 +178,7 @@ export function AppSidebar() {
                   channelsById={sidebarData.channelsById}
                   channelsLoading={sidebarData.channelsLoading}
                   groupIds={sidebarData.groupIds}
+                  linkedChannelId={sidebarData.linkedChannelId}
                   onChannelClick={handleChannelClick}
                   onSessionClick={handleSessionClick}
                   topLevelItems={sidebarData.topLevelItems}
@@ -188,6 +193,9 @@ export function AppSidebar() {
                 <SidebarTabSwitcher tabProgress={tabProgress} onTabClick={expandedTabs.selectTab} />
               </div>
             )}
+            <AppUpdateSidebarItem />
+            <CodingToolsSidebarItem />
+            <SidebarGettingStartedItem />
             <div className="border-t border-white/10">
               <UserMenu />
             </div>

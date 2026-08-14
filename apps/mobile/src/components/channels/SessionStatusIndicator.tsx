@@ -18,13 +18,11 @@ function indicatorKind(
   status: SessionGroupStatus | SessionStatus | null | undefined,
   agentStatus: string | null | undefined,
 ): IndicatorKind {
-  // Terminal display states force a static dot regardless of agent state —
-  // matches web's `getDisplayAgentStatus` which collapses archived/stopped
-  // back to a non-spinning indicator.
-  if (status === "archived" || status === "stopped" || status === "merged") {
+  // Terminal pipeline states force a static dot regardless of agent state.
+  if (status === "archived" || status === "merged") {
     return "dot";
   }
-  if (status === "failed" || agentStatus === "failed") return "x";
+  if (agentStatus === "failed") return "x";
   if (agentStatus === "active" || agentStatus === "preparing") return "loader";
   return "dot";
 }
@@ -37,9 +35,11 @@ export function SessionStatusIndicator({
   const theme = useTheme();
   const kind = indicatorKind(status, agentStatus);
   const color =
-    kind === "loader" && agentStatus === "preparing"
-      ? theme.colors.warning
-      : statusIndicatorColor(theme, status);
+    kind === "x"
+      ? theme.colors.statusFailed
+      : kind === "loader" && agentStatus === "preparing"
+        ? theme.colors.warning
+        : statusIndicatorColor(theme, status);
 
   if (kind === "x") {
     return (

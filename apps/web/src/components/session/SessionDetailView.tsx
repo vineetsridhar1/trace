@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { gql } from "@urql/core";
-import type { GitCheckpoint, QueuedMessage } from "@trace/gql";
+import type { QueuedMessage } from "@trace/gql";
 import { toast } from "sonner";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useSessionPromptIndex } from "../../hooks/useSessionPromptIndex";
 import {
   useEntityStore,
   useEntityField,
+  useAuthStore,
   useScopedEvents,
   eventScopeKey,
   type SessionEntity,
@@ -41,10 +42,13 @@ import {
   MOVE_SESSION_TO_CLOUD_MUTATION,
   RETRY_SESSION_CONNECTION_MUTATION,
   RETRY_SESSION_GROUP_SETUP_MUTATION,
-  SEND_SESSION_MESSAGE_MUTATION,
 } from "@trace/client-core";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
+import { uploadFile } from "../../lib/upload";
+import type { FileAttachment } from "./ImageAttachmentBar";
+import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
+import { findActiveQuestion, findReplacedQuestionIds } from "./questionHistory";
 
 const RUNTIME_BOOTING_STATES = new Set([
   "pending",
@@ -86,7 +90,6 @@ const SESSION_DETAIL_QUERY = gql`
       outputTokens
       cacheReadTokens
       cacheCreationTokens
-      costUsd
       connection {
         state
         runtimeInstanceId
@@ -110,20 +113,6 @@ const SESSION_DETAIL_QUERY = gql`
         prUrl
         workdir
         worktreeDeleted
-        gitCheckpoints {
-          id
-          sessionId
-          promptEventId
-          commitSha
-          subject
-          author
-          committedAt
-          filesChanged
-          captureStatus
-          captureUrl
-          capturedAt
-          createdAt
-        }
         channel {
           id
         }
@@ -182,20 +171,6 @@ const SESSION_DETAIL_QUERY = gql`
         setupStatus
         setupError
       }
-      gitCheckpoints {
-        id
-        sessionId
-        promptEventId
-        commitSha
-        subject
-        author
-        committedAt
-        filesChanged
-        captureStatus
-        captureUrl
-        capturedAt
-        createdAt
-      }
       channel {
         id
       }
@@ -252,9 +227,6 @@ export function SessionDetailView({
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
     | string
-    | undefined;
-  const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
-    | GitCheckpoint[]
     | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | Record<string, unknown>
@@ -461,7 +433,7 @@ export function SessionDetailView({
     connectionState !== null &&
     connectionState !== "connected" &&
     !suppressSharedCloudStartupNotice &&
-    (RUNTIME_BOOTING_STATES.has(connectionState) || RUNTIME_FAILURE_STATES.has(connectionState))
+    RUNTIME_BOOTING_STATES.has(connectionState)
       ? connectionState
       : null;
 
@@ -476,13 +448,12 @@ export function SessionDetailView({
   }, [nodes, sessionStatus]);
 
   const activeQuestion = useMemo(() => {
-    if (sessionStatus !== "needs_input") return null;
-    for (let i = nodes.length - 1; i >= 0; i--) {
-      const node = nodes[i];
-      if (node.kind === "ask-user-question") return { node, index: i };
-    }
-    return null;
-  }, [nodes, sessionStatus]);
+    return findActiveQuestion(nodes, events);
+  }, [events, nodes]);
+  const replacedQuestionIds = useMemo(
+    () => findReplacedQuestionIds(nodes, events),
+    [events, nodes],
+  );
 
   const [planComments, setPlanComments] = useState<MarkdownSteerCommentsByBlock>({});
 
@@ -529,6 +500,11 @@ export function SessionDetailView({
     if (activePlan && activePlan.index > activeQuestion.index) return null;
     return activeQuestion.node;
   })();
+  const pinnedQuestion =
+    activeQuestion?.node.id === dismissedQuestionId &&
+    !(activePlan && activePlan.index > activeQuestion.index)
+      ? activeQuestion.node
+      : null;
 
   const latestTodos = useMemo(
     () =>
@@ -557,6 +533,32 @@ export function SessionDetailView({
   }, [sessionId]);
 
   const addAttachments = useAddAttachments(sessionId);
+  const handleQuestionResponse = useCallback(
+    async (text: string, attachments: FileAttachment[] = []) => {
+      try {
+        const organizationId = useAuthStore.getState().activeOrgId;
+        const attachmentKeys = await Promise.all(
+          attachments.map((attachment) => uploadFile(attachment.file, organizationId ?? undefined)),
+        );
+        await sendOptimisticSessionMessage({
+          sessionId,
+          text,
+          imageKeys: attachmentKeys.length > 0 ? attachmentKeys : undefined,
+          imagePreviewUrls:
+            attachmentKeys.length > 0
+              ? attachments.map((attachment) => attachment.previewUrl)
+              : undefined,
+        });
+        for (const attachment of attachments) URL.revokeObjectURL(attachment.previewUrl);
+      } catch (questionError) {
+        toast.error(
+          questionError instanceof Error ? questionError.message : "Failed to send answers",
+        );
+        throw questionError;
+      }
+    },
+    [sessionId],
+  );
   // Mirror the conditions under which the composer (with its attachment bar) is
   // actually shown and can accept input. Otherwise dropped files would land in a
   // draft with no visible attachment bar (recovery panel) or no way to send
@@ -617,7 +619,6 @@ export function SessionDetailView({
                   sessionId={sessionId}
                   nodes={listNodes}
                   promptIndexItems={promptIndexItems}
-                  gitCheckpoints={gitCheckpoints ?? []}
                   initialLoading={initialEventsLoading}
                   hasOlder={hasOlder}
                   loadingOlder={loadingOlder}
@@ -628,6 +629,7 @@ export function SessionDetailView({
                   scrollToEventId={scrollToEventId}
                   onScrollComplete={onScrollComplete}
                   activePlanId={activePlan?.node.id}
+                  replacedQuestionIds={replacedQuestionIds}
                   planComments={planComments}
                   onAddPlanComment={handleAddPlanComment}
                   onRemovePlanComment={handleRemovePlanComment}
@@ -698,57 +700,67 @@ export function SessionDetailView({
           </div>
 
           <div ref={bottomBarRef} className="absolute inset-x-0 bottom-0 z-10">
-          {runtimeLifecycleState ? (
-            <RuntimeLifecycleNotice
-              sessionId={sessionId}
-              connection={connection}
-              connectionState={runtimeLifecycleState}
-            />
-          ) : !bridgeInteractionAllowed ? (
-            <div className="border-t bg-background p-4">
-              <BridgeAccessNotice
-                access={bridgeAccess}
-                sessionGroupId={sessionGroupId ?? null}
-                onRequested={refreshBridgeAccess}
-              />
-            </div>
-          ) : showQuestion ? (
-            <AskUserQuestionBar
-              node={showQuestion}
-              onResponse={(text) => {
-                client
-                  .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-                    sessionId,
-                    text,
-                    interactionMode: activePlan ? "plan" : undefined,
-                  })
-                  .toPromise();
-              }}
-              onDismiss={() => {
-                setDismissedQuestionId(showQuestion.id);
-              }}
-            />
-          ) : activePlan ? (
-            <PlanResponseBar
-              sessionId={sessionId}
-              planContent={activePlan.node.planContent}
-              planComments={planComments}
-              onClearPlanComments={handleClearPlanComments}
-              onDismiss={handleDismissPlan}
-            />
-          ) : (
-            <>
-              {agentStatus === "active" && latestTodos && <StickyTodoList todos={latestTodos} />}
-              <QueuedMessagesList sessionId={sessionId} />
-              <SessionInput
+            {runtimeLifecycleState ? (
+              <RuntimeLifecycleNotice
                 sessionId={sessionId}
-                onStop={handleStop}
-                bridgeAccess={bridgeAccess}
-                sessionGroupId={sessionGroupId ?? null}
-                onAccessRequested={refreshBridgeAccess}
+                connection={connection}
+                connectionState={runtimeLifecycleState}
               />
-            </>
-          )}
+            ) : !bridgeInteractionAllowed ? (
+              <div className="border-t bg-background p-4">
+                <BridgeAccessNotice
+                  access={bridgeAccess}
+                  sessionGroupId={sessionGroupId ?? null}
+                  onRequested={refreshBridgeAccess}
+                />
+              </div>
+            ) : showQuestion || pinnedQuestion ? (
+              <>
+                <AskUserQuestionBar
+                  key={(showQuestion ?? pinnedQuestion!).id}
+                  node={showQuestion ?? pinnedQuestion!}
+                  collapsed={Boolean(pinnedQuestion)}
+                  onResponse={handleQuestionResponse}
+                  onDismiss={() => setDismissedQuestionId((showQuestion ?? pinnedQuestion)!.id)}
+                  onResume={() => setDismissedQuestionId(null)}
+                />
+                {pinnedQuestion ? (
+                  <>
+                    {agentStatus === "active" && latestTodos && (
+                      <StickyTodoList todos={latestTodos} />
+                    )}
+                    <QueuedMessagesList sessionId={sessionId} />
+                    <SessionInput
+                      sessionId={sessionId}
+                      onStop={handleStop}
+                      bridgeAccess={bridgeAccess}
+                      sessionGroupId={sessionGroupId ?? null}
+                      onAccessRequested={refreshBridgeAccess}
+                    />
+                  </>
+                ) : null}
+              </>
+            ) : activePlan ? (
+              <PlanResponseBar
+                sessionId={sessionId}
+                planContent={activePlan.node.planContent}
+                planComments={planComments}
+                onClearPlanComments={handleClearPlanComments}
+                onDismiss={handleDismissPlan}
+              />
+            ) : (
+              <>
+                {agentStatus === "active" && latestTodos && <StickyTodoList todos={latestTodos} />}
+                <QueuedMessagesList sessionId={sessionId} />
+                <SessionInput
+                  sessionId={sessionId}
+                  onStop={handleStop}
+                  bridgeAccess={bridgeAccess}
+                  sessionGroupId={sessionGroupId ?? null}
+                  onAccessRequested={refreshBridgeAccess}
+                />
+              </>
+            )}
           </div>
         </SessionDropzone>
       </div>

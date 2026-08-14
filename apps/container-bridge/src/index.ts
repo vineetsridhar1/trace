@@ -1,8 +1,9 @@
 import fs from "fs";
 import { execFileSync } from "child_process";
 import { ContainerBridge } from "./bridge.js";
-import { loginAvailableTools } from "./tool-auth.js";
+import { installCodexAuthFile, loginAvailableTools } from "./tool-auth.js";
 import { parseRuntimeSetupCommands, runRuntimeSetupCommands } from "./runtime-setup.js";
+import { RuntimeLeaseWatchdog, type RuntimeLeaseExpirationReason } from "./runtime-lease.js";
 
 /**
  * If an SSH private key was injected (base64-encoded), decode it to ~/.ssh/id_rsa
@@ -53,21 +54,93 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function optionalPositiveIntegerEnv(name: string): number | null {
+  const raw = process.env[name]?.trim();
+  if (!raw) return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 1) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return Math.floor(value);
+}
+
 async function main(): Promise<void> {
   const bridgeUrl = requireEnv("TRACE_BRIDGE_URL");
   const bridgeToken = requireEnv("TRACE_RUNTIME_TOKEN");
   const runtimeInstanceId = requireEnv("TRACE_RUNTIME_INSTANCE_ID");
+  const leaseRequired = process.env.TRACE_RUNTIME_LEASE_REQUIRED === "true";
+  const leaseTtlMs = optionalPositiveIntegerEnv("TRACE_RUNTIME_LEASE_TTL_MS");
+  const hardDeadlineTtlMs = optionalPositiveIntegerEnv("TRACE_RUNTIME_HARD_DEADLINE_TTL_MS");
   const tool = process.env.CODING_TOOL ?? process.env.TRACE_TOOL ?? "claude_code";
+
+  // Arm the fail-safe before setup, authentication, or bridge connection.
+  // A hung bootstrap command must not bypass the same lifetime boundary that
+  // protects an already-connected runtime.
+  let bridge: ContainerBridge | null = null;
+  if (leaseRequired && (!leaseTtlMs || !hardDeadlineTtlMs)) {
+    throw new Error(
+      "runtime lease enforcement is required but TRACE_RUNTIME_LEASE_TTL_MS or TRACE_RUNTIME_HARD_DEADLINE_TTL_MS is missing",
+    );
+  }
+  const leaseWatchdog =
+    leaseTtlMs && hardDeadlineTtlMs
+      ? new RuntimeLeaseWatchdog({
+          leaseTtlMs,
+          hardDeadlineTtlMs,
+          onHardDeadlineApproaching: (remainingMs) => {
+            console.warn(
+              JSON.stringify({
+                event: "runtime_hard_deadline_approaching",
+                runtimeInstanceId,
+                remainingMs,
+              }),
+            );
+          },
+          onExpired: (reason: RuntimeLeaseExpirationReason) => {
+            console.error(
+              JSON.stringify({
+                event: "runtime_lease_expired",
+                runtimeInstanceId,
+                reason,
+              }),
+            );
+            if (!bridge) {
+              process.exit(0);
+              return;
+            }
+            void bridge.shutdown().finally(() => process.exit(0));
+          },
+        })
+      : null;
+  if (leaseWatchdog) {
+    leaseWatchdog.start();
+  } else {
+    console.warn(
+      "[container-bridge] runtime lease enforcement disabled for legacy launch compatibility",
+    );
+  }
 
   // Set up SSH key before any git operations
   setupSshKey();
+  installCodexAuthFile();
 
   await runRuntimeSetupCommands(
     parseRuntimeSetupCommands(process.env.TRACE_RUNTIME_SETUP_COMMANDS),
   );
 
   // Connect to server — sessions register dynamically via prepare commands
-  const bridge = new ContainerBridge(bridgeUrl, bridgeToken, runtimeInstanceId, tool);
+  bridge = new ContainerBridge(
+    bridgeUrl,
+    bridgeToken,
+    runtimeInstanceId,
+    tool,
+    leaseWatchdog !== null,
+    (ttlMs) => {
+      if (!leaseWatchdog?.renew(ttlMs)) {
+        console.warn("[container-bridge] ignored invalid runtime lease renewal");
+      }
+    },
+  );
   bridge.connect();
 
   // Pre-authenticate whatever tools we have credentials for. This is only a warm-up:
@@ -81,14 +154,14 @@ async function main(): Promise<void> {
   // Keep the process alive
   process.on("SIGTERM", () => {
     console.log("[container-bridge] received SIGTERM, shutting down");
-    bridge.disconnect();
-    process.exit(0);
+    leaseWatchdog?.stop();
+    void bridge.shutdown().finally(() => process.exit(0));
   });
 
   process.on("SIGINT", () => {
     console.log("[container-bridge] received SIGINT, shutting down");
-    bridge.disconnect();
-    process.exit(0);
+    leaseWatchdog?.stop();
+    void bridge.shutdown().finally(() => process.exit(0));
   });
 }
 

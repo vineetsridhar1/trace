@@ -19,6 +19,7 @@ import { ConnectionStatus } from "../ConnectionStatus";
 import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
 import { ChannelMembersDialog } from "./ChannelMembersDialog";
+import { JoinProjectButton } from "./JoinProjectButton";
 
 const SESSION_GROUPS_QUERY = gql`
   query SessionGroups($channelId: ID!, $archived: Boolean) {
@@ -64,7 +65,6 @@ const SESSION_GROUPS_QUERY = gql`
         outputTokens
         cacheReadTokens
         cacheCreationTokens
-        costUsd
         connection {
           state
           runtimeInstanceId
@@ -116,6 +116,8 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
   const refreshTick = useUIStore((s: UIState) => s.refreshTick);
   const channelSubPage = useUIStore((s: UIState) => s.channelSubPage);
   const setChannelSubPage = useUIStore((s: UIState) => s.setChannelSubPage);
+  const mergedArchivedOpen =
+    channelSubPage === "merged-archived" || channelSubPage === "merged-archived-archived";
 
   const fetchSessionGroups = useCallback(async () => {
     const result = await client
@@ -162,24 +164,32 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
           </span>
         )}
         <ConnectionStatus />
+        <JoinProjectButton channelId={channelId} />
         {canAddChannelMembers && <ChannelMembersDialog channelId={channelId} />}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-          onClick={() =>
-            setChannelSubPage(channelSubPage === "merged-archived" ? null : "merged-archived")
-          }
-          title="Merged & Archived"
-        >
-          <Archive size={15} />
-        </Button>
-        <StartSessionDialog channelId={channelId} />
+        {viewerIsMember && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            onClick={() => setChannelSubPage(mergedArchivedOpen ? null : "merged-archived")}
+            title="Merged & Archived"
+          >
+            <Archive size={15} />
+          </Button>
+        )}
+        {viewerIsMember && <StartSessionDialog channelId={channelId} />}
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {channelSubPage === "merged-archived" ? (
-          <MergedArchivedPage channelId={channelId} onBack={() => setChannelSubPage(null)} />
+        {mergedArchivedOpen ? (
+          <MergedArchivedPage
+            activeTab={channelSubPage === "merged-archived-archived" ? "archived" : "merged"}
+            channelId={channelId}
+            onBack={() => history.back()}
+            onTabChange={(tab) =>
+              setChannelSubPage(tab === "archived" ? "merged-archived-archived" : "merged-archived")
+            }
+          />
         ) : loading ? (
           <div className="space-y-1 px-4 pt-2">
             {Array.from({ length: 8 }).map((_, index) => (

@@ -69,9 +69,8 @@ export async function createQuickSession(channelId: string): Promise<void> {
 /**
  * Create a standalone cloud app session and open its chat/preview workspace.
  */
-export async function createApplication(prompt: string): Promise<boolean> {
-  const trimmedPrompt = prompt.trim();
-  if (!trimmedPrompt || appCreationPending) return false;
+export async function createApplication(): Promise<boolean> {
+  if (appCreationPending) return false;
   appCreationPending = true;
 
   void haptic.light();
@@ -82,7 +81,6 @@ export async function createApplication(prompt: string): Promise<boolean> {
         input: {
           kind: "app",
           hosting: "cloud",
-          prompt: trimmedPrompt,
         },
       })
       .toPromise();

@@ -18,15 +18,25 @@
       "import": "./dist/animal-names.js",
       "require": "./dist/cjs/animal-names.js"
     },
-    "./git-hooks": {
-      "types": "./dist/git-hooks.d.ts",
-      "import": "./dist/git-hooks.js",
-      "require": "./dist/cjs/git-hooks.js"
-    },
     "./adapters": {
       "types": "./dist/adapters.d.ts",
       "import": "./dist/adapters.js",
       "require": "./dist/cjs/adapters.js"
+    },
+    "./trace-runtime": {
+      "types": "./dist/trace-runtime.d.ts",
+      "import": "./dist/trace-runtime.js",
+      "require": "./dist/cjs/trace-runtime.js"
+    },
+    "./trace-invocation-env": {
+      "types": "./dist/trace-invocation-env.d.ts",
+      "import": "./dist/trace-invocation-env.js",
+      "require": "./dist/cjs/trace-invocation-env.js"
+    },
+    "./general-workspace": {
+      "types": "./dist/general-workspace.d.ts",
+      "import": "./dist/general-workspace.js",
+      "require": "./dist/cjs/general-workspace.js"
     }
   },
   "typesVersions": {
@@ -34,11 +44,17 @@
       "animal-names": [
         "dist/animal-names.d.ts"
       ],
-      "git-hooks": [
-        "dist/git-hooks.d.ts"
-      ],
       "adapters": [
         "dist/adapters.d.ts"
+      ],
+      "trace-runtime": [
+        "dist/trace-runtime.d.ts"
+      ],
+      "trace-invocation-env": [
+        "dist/trace-invocation-env.d.ts"
+      ],
+      "general-workspace": [
+        "dist/general-workspace.d.ts"
       ]
     }
   },

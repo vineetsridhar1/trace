@@ -12,14 +12,26 @@ export type {
   ToolResultBlock,
   QuestionOption,
   Question,
+  QuestionType,
   QuestionBlock,
+  TraceInputResponse,
   PlanBlock,
 } from "./adapters/coding-tool.js";
+export type { ActionRequiredArtifact } from "./action-required.js";
+export {
+  actionRequiredArtifactForToolError,
+  actionRequiredArtifactForToolOutput,
+  actionRequiredArtifactKey,
+  isActionRequiredArtifact,
+} from "./action-required.js";
+export { resolveGitHubCloneUrl } from "./github-clone-url.js";
 export {
   hasPlanBlock,
   hasQuestionBlock,
   isMissingToolSessionError,
   parseQuestion,
+  parseTraceRequestInputs,
+  parseTraceInputResponses,
 } from "./adapters/coding-tool.js";
 export type {
   BridgeClient,
@@ -33,6 +45,7 @@ export type {
   BridgePauseCommand,
   BridgeResumeCommand,
   BridgeDeleteCommand,
+  BridgeRuntimeLeaseCommand,
   BridgeListBranchesCommand,
   BridgeListWorkspaceSlugsCommand,
   BridgeRuntimeHello,
@@ -45,7 +58,6 @@ export type {
   BridgeWorkspaceFailed,
   BridgeToolSessionId,
   BridgeToolSessionMissing,
-  BridgeGitCheckpoint,
   BridgeRepoLinked,
   BridgeBranchesResult,
   BridgeWorkspaceSlugsResult,
@@ -103,6 +115,8 @@ export type {
   BridgeWorktreesResult,
 } from "./bridge.js";
 export {
+  BRIDGE_PROTOCOL_VERSION,
+  GENERAL_WORKSPACE_PROTOCOL_VERSION,
   parseBranchOutput,
   parseWorktreeListPorcelain,
   walkDir,
@@ -132,27 +146,7 @@ export {
 } from "./session-git-sync-status.js";
 export type { BuiltinSlashCommand } from "./slash-commands.js";
 export { BUILTIN_SLASH_COMMANDS } from "./slash-commands.js";
-export type {
-  GitCheckpointBridgePayload,
-  GitCheckpointContext,
-  GitCheckpointTrigger,
-} from "./git-checkpoint.js";
-export {
-  addTraceCheckpointTrailer,
-  assertValidCommitSha,
-  buildGitDiffTreeArgs,
-  buildGitShowArgs,
-  extractGitCheckpointTrigger,
-  extractGitToolUsePending,
-  extractGitToolResultTrigger,
-  GIT_SHOW_ARGS,
-  GIT_DIFF_TREE_ARGS,
-  isValidCommitSha,
-  parseGitShowOutput,
-  parseTraceCheckpointContextId,
-  shortSha,
-  TRACE_CHECKPOINT_TRAILER,
-} from "./git-checkpoint.js";
+export { assertValidCommitSha, isValidCommitSha, shortSha } from "./git.js";
 export type {
   LLMRole,
   LLMProvider,
@@ -199,6 +193,7 @@ export {
 } from "./models.js";
 export type { CodingToolCli } from "./coding-tools.js";
 export { CODING_TOOL_CLIS, CODING_TOOL_IDS, getCodingToolCli } from "./coding-tools.js";
+export { TRACE_AI_USER_ID } from "./ai-user.js";
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "./json.js";
 export { asJsonObject, isJsonObject } from "./json.js";
 export {

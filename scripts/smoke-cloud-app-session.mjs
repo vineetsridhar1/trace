@@ -16,12 +16,11 @@ const prompt =
     "Build a lightweight CRM approval tracker app.",
     "Keep the exact text TRACE_SMOKE_APP_READY visible on the home page.",
     "Start the preinstalled Redis server and use it from the app for a small cache or health check.",
-    "Use the existing app starter, keep the app runnable on port 3000, and create a checkpoint when done.",
+    "Use the existing app starter and keep the app runnable on port 3000.",
   ].join(" ");
 const expectedText = process.env.TRACE_SMOKE_EXPECTED_TEXT ?? "TRACE_SMOKE_APP_READY";
 const timeoutMs = readDurationEnv("TRACE_SMOKE_TIMEOUT_MS", 20 * 60 * 1000);
 const pollMs = readDurationEnv("TRACE_SMOKE_POLL_MS", 5000);
-const requireCapture = process.env.TRACE_SMOKE_REQUIRE_CAPTURE !== "0";
 const skipBrowser = process.env.TRACE_SMOKE_SKIP_BROWSER === "1";
 
 const chromeCandidates = [
@@ -78,15 +77,6 @@ const APP_STATE = `
         hosting
         agentStatus
         sessionStatus
-      }
-      gitCheckpoints {
-        id
-        commitSha
-        subject
-        captureStatus
-        captureUrl
-        capturedAt
-        createdAt
       }
     }
     sessionApplicationProcesses(sessionGroupId: $sessionGroupId) {
@@ -235,7 +225,7 @@ async function appState(sessionGroupId) {
 }
 
 async function waitForReadyApp(sessionGroupId, label) {
-  return pollUntil(`${label} app runtime, endpoint, logs, and checkpoint`, async () => {
+  return pollUntil(`${label} app runtime, endpoint, and logs`, async () => {
     const state = await appState(sessionGroupId);
     const group = state.sessionGroup;
     if (!group) return { ok: false, detail: "session group not found" };
@@ -259,19 +249,7 @@ async function waitForReadyApp(sessionGroupId, label) {
       return { ok: false, detail: `no logs for process ${process.id}` };
     }
 
-    const checkpoints = group.gitCheckpoints;
-    if (checkpoints.length === 0) return { ok: false, detail: "no checkpoint recorded yet" };
-    const checkpoint = checkpoints[0];
-    if (requireCapture && checkpoint.captureStatus !== "captured") {
-      return {
-        ok: false,
-        detail: `checkpoint capture is ${checkpoint.captureStatus ?? "missing"}`,
-      };
-    }
-    if (requireCapture && !checkpoint.captureUrl) {
-      return { ok: false, detail: "checkpoint capture URL is missing" };
-    }
-    return { ok: true, value: { state, process, endpoint, checkpoint } };
+    return { ok: true, value: { state, process, endpoint } };
   });
 }
 
@@ -419,21 +397,27 @@ const publishedEndpointIds = [];
 
 async function teardown() {
   if (keepResources) {
-    process.stdout.write("TRACE_SMOKE_KEEP=1 — leaving created resources in place for debugging.\n");
+    process.stdout.write(
+      "TRACE_SMOKE_KEEP=1 — leaving created resources in place for debugging.\n",
+    );
     return;
   }
   for (const endpointId of publishedEndpointIds) {
     try {
       await graphql(DISABLE_ENDPOINT, { endpointId });
     } catch (error) {
-      process.stdout.write(`Teardown: failed to disable endpoint ${endpointId}: ${error.message}\n`);
+      process.stdout.write(
+        `Teardown: failed to disable endpoint ${endpointId}: ${error.message}\n`,
+      );
     }
   }
   for (const groupId of createdSessionGroupIds) {
     try {
       await graphql(ARCHIVE_SESSION_GROUP, { id: groupId });
     } catch (error) {
-      process.stdout.write(`Teardown: failed to archive session group ${groupId}: ${error.message}\n`);
+      process.stdout.write(
+        `Teardown: failed to archive session group ${groupId}: ${error.message}\n`,
+      );
     }
   }
 }
@@ -459,41 +443,12 @@ try {
   publishedEndpointIds.push(published.id);
   await renderUrl(published.url, "published public URL");
 
-  // Checkpoint revert/resume is currently out of scope for app-session QA.
-  // TRACE_SMOKE_SKIP_RESTORE=1 skips the restore leg (loudly); leave it unset to
-  // exercise the full flow once restore lineage is back in scope.
-  const skipRestore = process.env.TRACE_SMOKE_SKIP_RESTORE === "1";
-  let restored = null;
-  if (skipRestore) {
-    process.stdout.write(
-      "SKIPPED: restore leg (TRACE_SMOKE_SKIP_RESTORE=1) — checkpoint restore is NOT verified by this run.\n",
-    );
-  } else {
-    restored = await startAppSession({
-      restoreCheckpointId: initial.checkpoint.id,
-      ...(process.env.TRACE_SMOKE_MODEL ? { model: process.env.TRACE_SMOKE_MODEL } : {}),
-      ...(process.env.TRACE_SMOKE_TOOL ? { tool: process.env.TRACE_SMOKE_TOOL } : {}),
-    });
-    createdSessionGroupIds.push(restored.sessionGroupId);
-    const restoredReady = await waitForReadyApp(restored.sessionGroupId, "restored");
-    await verifyRuntimeTerminal(restored.id);
-    const restoredPreviewUrl = await createPreviewUrl(restoredReady.endpoint.id);
-    await renderUrl(restoredPreviewUrl, "restored private preview URL", { requireFetch: false });
-    const restoredPublished = await publishApp(restored.sessionGroupId);
-    publishedEndpointIds.push(restoredPublished.id);
-    await renderUrl(restoredPublished.url, "restored public URL");
-  }
-
   process.stdout.write(
     [
       "Trace cloud app session smoke passed.",
       `Initial session: ${session.id}`,
       `Initial group: ${session.sessionGroupId}`,
-      `Checkpoint: ${initial.checkpoint.id} ${initial.checkpoint.commitSha}`,
       `Published URL: ${published.url}`,
-      ...(restored
-        ? [`Restored session: ${restored.id}`, `Restored group: ${restored.sessionGroupId}`]
-        : ["Restore leg: SKIPPED"]),
     ].join("\n") + "\n",
   );
 } finally {

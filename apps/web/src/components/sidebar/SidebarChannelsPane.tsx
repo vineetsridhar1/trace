@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { ChevronRight } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import type { Channel, ChannelGroup } from "@trace/gql";
 import type { TopLevelItem } from "../../hooks/useSidebarData";
 import { features } from "../../lib/features";
@@ -7,6 +9,7 @@ import { CreateChannelDialog } from "./CreateChannelDialog";
 import { AppsSection } from "./AppsSection";
 import { HomeButton } from "./HomeButton";
 import { InboxButton } from "./InboxButton";
+import { LinkedProjectSection } from "./LinkedProjectSection";
 import { TicketsButton } from "./TicketsButton";
 import { SidebarChannelTree } from "./SidebarChannelTree";
 import {
@@ -27,6 +30,7 @@ export interface SidebarChannelsPaneProps {
   channelsById: Record<string, Channel>;
   channelsLoading: boolean;
   groupIds: string[];
+  linkedChannelId: string | null;
   onChannelClick: (id: string) => void;
   onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string | null) => void;
   onDragActiveChange?: (active: boolean) => void;
@@ -43,6 +47,7 @@ export function SidebarChannelsPane({
   channelsById,
   channelsLoading,
   groupIds,
+  linkedChannelId,
   onChannelClick,
   onSessionClick,
   onDragActiveChange,
@@ -50,6 +55,7 @@ export function SidebarChannelsPane({
 }: SidebarChannelsPaneProps) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForGroupId, setCreateForGroupId] = useState<string | null>(null);
+  const [projectsExpanded, setProjectsExpanded] = useState(true);
   const [sessionScopes, setSessionScopes] =
     useState<SidebarSessionScopes>(readSidebarSessionScopes);
 
@@ -80,10 +86,24 @@ export function SidebarChannelsPane({
 
         <AppsSection activeOrgId={activeOrgId} activeSessionGroupId={activeSessionGroupId} />
 
-        <div className="group/projects-header flex items-center justify-between px-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
-            Projects
-          </span>
+        <div className="group/projects-header flex items-center justify-between rounded-md pr-1 transition-colors hover:bg-white/10">
+          <button
+            type="button"
+            aria-controls="sidebar-projects-list"
+            aria-expanded={projectsExpanded}
+            onClick={() => setProjectsExpanded((value) => !value)}
+            className="flex flex-1 cursor-pointer items-center gap-1 rounded-md px-0 py-1 pl-2 text-left text-xs font-semibold uppercase tracking-wider text-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ChevronRight
+              size={14}
+              className={
+                projectsExpanded
+                  ? "shrink-0 rotate-90 transition-transform"
+                  : "shrink-0 transition-transform"
+              }
+            />
+            <span>Projects</span>
+          </button>
           <div className="pointer-events-none flex items-center gap-0.5 opacity-0 transition-opacity group-hover/projects-header:pointer-events-auto group-hover/projects-header:opacity-100 group-focus-within/projects-header:pointer-events-auto group-focus-within/projects-header:opacity-100">
             <BrowseChannelsDialog />
             <CreateChannelDialog
@@ -98,27 +118,47 @@ export function SidebarChannelsPane({
           </div>
         </div>
 
-        <SidebarChannelTree
-          activeChannelId={activeChannelId}
-          activeSessionGroupId={activeSessionGroupId}
-          activeOrgId={activeOrgId}
-          allChannelIds={allChannelIds}
-          channelGroupsById={channelGroupsById}
-          channelIdsByGroup={channelIdsByGroup}
-          channelsById={channelsById}
-          channelsLoading={channelsLoading}
-          groupIds={groupIds}
-          onToggleSessionScope={toggleSessionScope}
-          onAddChannel={(groupId: string) => {
-            setCreateForGroupId(groupId);
-            setCreateDialogOpen(true);
-          }}
-          onChannelClick={onChannelClick}
-          onSessionClick={onSessionClick}
-          onDragActiveChange={onDragActiveChange}
-          sessionScopes={sessionScopes}
-          topLevelItems={topLevelItems}
-        />
+        <AnimatePresence initial={false}>
+          {projectsExpanded ? (
+            <motion.div
+              id="sidebar-projects-list"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
+              className="overflow-hidden"
+            >
+              <SidebarChannelTree
+                activeChannelId={activeChannelId}
+                activeSessionGroupId={activeSessionGroupId}
+                activeOrgId={activeOrgId}
+                allChannelIds={allChannelIds}
+                channelGroupsById={channelGroupsById}
+                channelIdsByGroup={channelIdsByGroup}
+                channelsById={channelsById}
+                channelsLoading={channelsLoading}
+                groupIds={groupIds}
+                onToggleSessionScope={toggleSessionScope}
+                onAddChannel={(groupId: string) => {
+                  setCreateForGroupId(groupId);
+                  setCreateDialogOpen(true);
+                }}
+                onChannelClick={onChannelClick}
+                onSessionClick={onSessionClick}
+                onDragActiveChange={onDragActiveChange}
+                sessionScopes={sessionScopes}
+                topLevelItems={topLevelItems}
+              />
+              {linkedChannelId && (
+                <LinkedProjectSection
+                  channelId={linkedChannelId}
+                  onChannelClick={onChannelClick}
+                  onSessionClick={onSessionClick}
+                />
+              )}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
     </section>
   );

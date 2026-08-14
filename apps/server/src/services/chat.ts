@@ -13,6 +13,13 @@ import {
 import { normalizeMembers } from "./member-utils.js";
 import { visibleChannelWhere, visibleSessionWhere } from "./access.js";
 
+/**
+ * Upper bound on how many (most recently active) sessions the event search
+ * scans. Keeps the unindexed `payload::text ILIKE` scan and the `scopeId IN (…)`
+ * clause bounded regardless of how many sessions an org accumulates.
+ */
+const MAX_SEARCH_SESSIONS = 500;
+
 /** A search hit spanning both chat/channel messages and session conversation events. */
 export interface MessageSearchHit {
   id: string;
@@ -601,9 +608,16 @@ export class ChatService {
     // Scope to sessions the user can view, then match the query against the raw
     // event payload (case-insensitive). ILIKE can over-match on JSON structure,
     // so we re-check the extracted display text below.
+    //
+    // NOTE: the event scan uses `payload::text ILIKE` with no full-text index, so
+    // it is inherently a sequential scan. To keep it bounded we only consider the
+    // most recently active sessions (older sessions' output is excluded from
+    // search). Replace with a real search index if this list needs to grow.
     const sessions = await prisma.session.findMany({
       where: { organizationId, ...visibleSessionWhere(userId) },
       select: { id: true, sessionGroupId: true, tool: true },
+      orderBy: { updatedAt: "desc" },
+      take: MAX_SEARCH_SESSIONS,
     });
     if (sessions.length === 0) return [];
 

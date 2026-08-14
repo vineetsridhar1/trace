@@ -28,11 +28,15 @@ import type {
   BridgeSessionGitSyncStatus,
   BridgeListWorkspaceSlugsCommand,
   BridgeRepoWorktree,
+  ActionRequiredArtifact,
 } from "@trace/shared";
+import { GENERAL_WORKSPACE_PROTOCOL_VERSION } from "@trace/shared";
 import { prisma } from "./db.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { ProvisionedLauncherError, runtimeAdapterRegistry } from "./runtime-adapters.js";
 import { apiTokenService } from "../services/api-token.js";
+import { codexCredentialService } from "../services/codex-credential.js";
+import { ActionRequiredError } from "./errors.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
 import {
   RuntimeAdapterRegistry,
@@ -49,6 +53,8 @@ interface BaseSessionCommand {
     | "resume"
     | "send"
     | "prepare"
+    | "prepare_general"
+    | "cleanup_general_workspace"
     | "prepare_app"
     | "delete"
     | "list_branches"
@@ -95,6 +101,7 @@ export interface RuntimeInstance {
   ownerUserId?: string;
   bridgeRuntimeId?: string;
   supportedTools: string[];
+  protocolVersion?: number;
   /** Repo IDs this runtime has locally registered. Cloud runtimes use empty (supports all). */
   registeredRepoIds: string[];
   lastHeartbeat: number;
@@ -131,7 +138,7 @@ export interface SessionAdapterCreateOptions {
   sessionId: string;
   /** Session group ID — used to key worktrees so all sessions in a group share the same workspace. */
   sessionGroupId?: string;
-  sessionGroupKind?: "coding" | "design" | "app";
+  sessionGroupKind?: "general" | "coding" | "design" | "app";
   prepareAppGit?: (runtimeInstanceId: string) => Promise<{
     repoId: string;
     repoRemoteUrl: string;
@@ -148,13 +155,15 @@ export interface SessionAdapterCreateOptions {
   /** Named launcher runtime profile from the repo's setup config. */
   runtimeProfile?: string;
   branch?: string;
-  checkpointSha?: string;
+  baseCommitSha?: string;
   createdById: string;
   organizationId: string;
   readOnly?: boolean;
   /** Absolute path to an existing worktree to adopt instead of creating one (local only). */
   adoptWorktreePath?: string;
   adapterType?: RuntimeAdapterType;
+  /** Persisted local bridge selected as this session's authorized home. */
+  expectedHomeRuntimeId?: string;
   runtimeToken?: string;
   bridgeUrl?: string;
   environment?: {
@@ -171,7 +180,10 @@ export type RuntimeLifecycleUpdate = {
   providerRuntimeId?: string;
   providerRuntimeUrl?: string;
   providerStatus?: string;
+  runtimeHardDeadlineAt?: string;
+  providerDeadlineEnforcementId?: string;
   error?: string;
+  artifact?: ActionRequiredArtifact;
   /**
    * Set on `session_runtime_deprovision_failed` to mark the runtime
    * permanently abandoned (cap exhausted). Suppresses retry flags so the
@@ -211,14 +223,25 @@ function adapterTypeFromHosting(
 async function resolveUserRuntimeTokens(
   userId: string,
   options: { includeCodexAccessToken: boolean },
-): Promise<{ userGithubToken?: string; userCodexAccessToken?: string }> {
+): Promise<{
+  userGithubToken?: string;
+  userCodexAccessToken?: string;
+  userCodexAuthMethod?: "chatgpt_session" | "access_token" | "api_key";
+  userCodexCredential?: string;
+}> {
   try {
-    const tokens = await apiTokenService.getDecryptedTokens(userId);
+    const [tokens, codexCredential] = await Promise.all([
+      apiTokenService.getDecryptedTokens(userId),
+      options.includeCodexAccessToken
+        ? codexCredentialService.getDecryptedCredential(userId)
+        : Promise.resolve(null),
+    ]);
     return {
       userGithubToken: tokens.github,
-      userCodexAccessToken: options.includeCodexAccessToken
-        ? tokens.codex_access_token
-        : undefined,
+      userCodexAccessToken:
+        options.includeCodexAccessToken && !codexCredential ? tokens.codex_access_token : undefined,
+      userCodexAuthMethod: codexCredential?.method,
+      userCodexCredential: codexCredential?.credential,
     };
   } catch (err) {
     // Fall back to launcher/runtime-side auth on transient lookup failures
@@ -268,6 +291,15 @@ function lifecycleSnapshotFromConnection(
   if (providerRuntimeId) snapshot.providerRuntimeId = providerRuntimeId;
   const providerRuntimeUrl = optionalConnectionString(connection, "providerRuntimeUrl");
   if (providerRuntimeUrl) snapshot.providerRuntimeUrl = providerRuntimeUrl;
+  const runtimeHardDeadlineAt = optionalConnectionString(connection, "runtimeHardDeadlineAt");
+  if (runtimeHardDeadlineAt) snapshot.runtimeHardDeadlineAt = runtimeHardDeadlineAt;
+  const providerDeadlineEnforcementId = optionalConnectionString(
+    connection,
+    "providerDeadlineEnforcementId",
+  );
+  if (providerDeadlineEnforcementId) {
+    snapshot.providerDeadlineEnforcementId = providerDeadlineEnforcementId;
+  }
   return snapshot;
 }
 
@@ -451,6 +483,7 @@ export class SessionRouter {
     ownerUserId?: string;
     bridgeRuntimeId?: string;
     supportedTools: string[];
+    protocolVersion?: number;
     registeredRepoIds?: string[];
   }) {
     const runtimeKey = runtime.key ?? runtime.id;
@@ -776,6 +809,14 @@ export class SessionRouter {
     } catch {
       return "delivery_failed";
     }
+  }
+
+  async sendAsync(
+    sessionId: string,
+    command: SessionCommand,
+    options?: { expectedHomeRuntimeId?: string; organizationId?: string | null },
+  ): Promise<DeliveryResult> {
+    return this.send(sessionId, command, options);
   }
 
   /** Find a connected runtime that has a given repo registered (or any cloud runtime). */
@@ -2064,13 +2105,15 @@ export class SessionRouter {
           repo: options.repo,
           runtimeProfile: options.runtimeProfile,
           branch: options.branch,
-          checkpointSha: options.checkpointSha,
+          baseCommitSha: options.baseCommitSha,
           readOnly: options.readOnly,
           runtimeInstanceId: provisionedRuntimeInstanceId,
           runtimeToken: options.runtimeToken,
           bridgeUrl: options.bridgeUrl,
           userGithubToken: userRuntimeTokens.userGithubToken,
           userCodexAccessToken: userRuntimeTokens.userCodexAccessToken,
+          userCodexAuthMethod: userRuntimeTokens.userCodexAuthMethod,
+          userCodexCredential: userRuntimeTokens.userCodexCredential,
         });
 
         if (startResult.runtimeInstanceId && adapterType !== "provisioned") {
@@ -2086,6 +2129,12 @@ export class SessionRouter {
             }),
             ...(startResult.providerRuntimeUrl && {
               providerRuntimeUrl: startResult.providerRuntimeUrl,
+            }),
+            ...(startResult.runtimeHardDeadlineAt && {
+              runtimeHardDeadlineAt: startResult.runtimeHardDeadlineAt,
+            }),
+            ...(startResult.providerDeadlineEnforcementId && {
+              providerDeadlineEnforcementId: startResult.providerDeadlineEnforcementId,
             }),
             providerStatus: startResult.status,
           } satisfies RuntimeLifecycleUpdate;
@@ -2137,6 +2186,9 @@ export class SessionRouter {
           await options.onLifecycle?.("session_runtime_connected", lifecycleUpdate);
         }
 
+        const expectedHomeRuntimeId =
+          startResult.runtimeInstanceId ?? options.expectedHomeRuntimeId;
+
         if (options.sessionGroupKind === "app") {
           const runtimeInstanceId = startResult.runtimeInstanceId;
           if (!runtimeInstanceId || !options.prepareAppGit) {
@@ -2151,14 +2203,43 @@ export class SessionRouter {
               sessionId: options.sessionId,
               sessionGroupId: options.sessionGroupId,
               slug: options.slug,
-              checkpointSha: options.checkpointSha,
+              baseCommitSha: options.baseCommitSha,
               ...appGit,
             },
-            { expectedHomeRuntimeId: startResult.runtimeInstanceId },
+            { expectedHomeRuntimeId, organizationId: options.organizationId },
           );
           if (result !== "delivered") {
             options.onFailed(`prepare_app: ${result}`);
           }
+          return;
+        }
+
+        // A linked repository is context for a general session, not permission
+        // to place the agent in a writable checkout. General sessions always
+        // start in their disposable scratch directory and convert before coding.
+        if (options.sessionGroupKind === "general") {
+          const runtime = expectedHomeRuntimeId
+            ? this.getRuntime(expectedHomeRuntimeId, options.organizationId)
+            : this.getRuntimeForSession(options.sessionId);
+          if ((runtime?.protocolVersion ?? 1) < GENERAL_WORKSPACE_PROTOCOL_VERSION) {
+            // Older bridges do not understand prepare_general. Preserve their
+            // established home-directory behavior until they are upgraded.
+            options.onWorkspaceReady?.(adapterType === "provisioned" ? "/home/coder" : "");
+            return;
+          }
+          const result = await this.sendAsync(
+            options.sessionId,
+            {
+              type: "prepare_general",
+              sessionId: options.sessionId,
+              sessionGroupId: options.sessionGroupId,
+            },
+            {
+              expectedHomeRuntimeId,
+              organizationId: options.organizationId,
+            },
+          );
+          if (result !== "delivered") options.onFailed(`prepare_general: ${result}`);
           return;
         }
 
@@ -2176,11 +2257,11 @@ export class SessionRouter {
               repoRemoteUrl: options.repo.remoteUrl,
               defaultBranch: options.repo.defaultBranch,
               branch: options.branch,
-              checkpointSha: options.checkpointSha,
+              baseCommitSha: options.baseCommitSha,
               readOnly: options.readOnly,
               adoptWorktreePath: options.adoptWorktreePath,
             },
-            { expectedHomeRuntimeId: startResult.runtimeInstanceId },
+            { expectedHomeRuntimeId, organizationId: options.organizationId },
           );
           if (result !== "delivered") {
             options.onFailed(`prepare: ${result}`);
@@ -2195,7 +2276,10 @@ export class SessionRouter {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[runtime-adapter] failed to start ${options.sessionId}:`, message);
         if (adapterType === "provisioned") {
-          await options.onLifecycle?.("session_runtime_start_failed", { error: message });
+          await options.onLifecycle?.("session_runtime_start_failed", {
+            error: message,
+            ...(err instanceof ActionRequiredError ? { artifact: err.artifact } : {}),
+          });
         }
         options.onFailed(`${adapterType} runtime failed: ${message}`);
       }
@@ -2434,6 +2518,8 @@ export class SessionRouter {
         runtimeProfile: runtimeProfileFromSetupConfig(session.repo?.setupConfig),
         userGithubToken: userRuntimeTokens.userGithubToken,
         userCodexAccessToken: userRuntimeTokens.userCodexAccessToken,
+        userCodexAuthMethod: userRuntimeTokens.userCodexAuthMethod,
+        userCodexCredential: userRuntimeTokens.userCodexCredential,
       });
       const runtimeId =
         startResult.runtimeInstanceId ??

@@ -64,6 +64,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     reasoningEffort,
     enableClaudeInChrome,
     toolSessionId,
+    runtimeEnv,
   }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
@@ -75,14 +76,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       this.claudeSessionId = toolSessionId;
     }
 
-    const args = [
-      "-p",
-      "--input-format",
-      "text",
-      "--output-format",
-      "stream-json",
-      "--verbose",
-    ];
+    const args = ["-p", "--input-format", "text", "--output-format", "stream-json", "--verbose"];
     if (model) {
       args.push("--model", model);
     }
@@ -105,7 +99,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     const child = spawn("claude", args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: buildChildProcessEnv(),
+      env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),
       detached: true,
     });
     child.stdin?.on("error", () => {});
@@ -375,13 +369,11 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       const isError = data.is_error === true || data.subtype === "error";
       this.resultEmitted = true;
       const usage = parseClaudeUsage(data.usage);
-      const costUsd = typeof data.total_cost_usd === "number" ? data.total_cost_usd : undefined;
       const includeUsage = usage && !this.emittedIncrementalUsage;
       onOutput({
         type: "result",
         subtype: isError ? "error" : "success",
         ...(includeUsage ? { usage } : {}),
-        ...(costUsd != null ? { costUsd } : {}),
       });
       return;
     }

@@ -80,7 +80,7 @@ Codes expire after 5 minutes and can be used once. Paired devices appear in the
 ## Next steps
 
 - Start a session on a linked repo from a coding channel.
-- Follow status, files, terminals, and checkpoints from web, desktop, or mobile.
+- Follow status, files, and terminals from web, desktop, or mobile.
 - See [Running Trace](running-trace.md) for self-hosting and deployment.
-</content>
-</invoke>
+  </content>
+  </invoke>

@@ -17,10 +17,12 @@ contextBridge.exposeInMainWorld("trace", {
   getRepoConfig: (repoId: string) => ipcRenderer.invoke("get-repo-config", repoId),
   getGithubCliStatus: () => ipcRenderer.invoke("get-github-cli-status"),
   getGithubAuthToken: () => ipcRenderer.invoke("get-github-auth-token"),
-  setRepoGitHooksEnabled: (repoId: string, enabled: boolean) =>
-    ipcRenderer.invoke("set-repo-git-hooks-enabled", repoId, enabled),
-  getRepoGitHookStatus: (repoId: string) => ipcRenderer.invoke("get-repo-git-hook-status", repoId),
-  repairRepoGitHooks: (repoId: string) => ipcRenderer.invoke("repair-repo-git-hooks", repoId),
+  loginCodexWithChatgpt: () => ipcRenderer.invoke("login-codex-with-chatgpt"),
+  getCodingToolStatuses: () => ipcRenderer.invoke("get-coding-tool-statuses"),
+  installOrUpdateCodingTool: (toolId: string) =>
+    ipcRenderer.invoke("install-or-update-coding-tool", toolId),
+  getAppUpdateStatus: () => ipcRenderer.invoke("get-app-update-status"),
+  openAppUpdateDownload: () => ipcRenderer.invoke("open-app-update-download"),
   getBridgeStatus: () => ipcRenderer.invoke("get-bridge-status"),
   getBridgeInfo: () => ipcRenderer.invoke("get-bridge-info"),
   setBridgeLabel: (label: string) => ipcRenderer.invoke("set-bridge-label", label),

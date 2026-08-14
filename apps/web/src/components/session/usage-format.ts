@@ -5,12 +5,6 @@ export function formatTokens(tokens: number): string {
   return `${(tokens / 1_000_000).toFixed(1)}M`;
 }
 
-/** Format a USD cost: <$0.01 shows "<$0.01", otherwise two decimals. */
-export function formatCostUsd(costUsd: number): string {
-  if (costUsd > 0 && costUsd < 0.01) return "<$0.01";
-  return `$${costUsd.toFixed(2)}`;
-}
-
 export function formatSessionUsageDateRange(
   start: string | null | undefined,
   end: string | null | undefined,

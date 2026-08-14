@@ -18,6 +18,7 @@ import type {
   SessionEndpoint,
   SessionSetupScriptRun,
   SessionStatus,
+  Artifact,
 } from "@trace/gql";
 import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
 import { useAuthStore } from "../stores/auth.js";
@@ -56,7 +57,7 @@ const SESSION_RUNTIME_EVENTS: Set<EventType> = new Set([
   "session_runtime_reconnected",
 ]);
 
-/** PR lifecycle events update the group PR URL; review state is derived from that. */
+/** PR lifecycle events carry explicit pipeline-status updates for every affected session. */
 const SESSION_PR_EVENTS: Set<EventType> = new Set(["session_pr_opened", "session_pr_closed"]);
 
 const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set(["session_output", "message_sent"]);
@@ -135,8 +136,6 @@ function sessionStatusFromEvent(
   switch (eventType) {
     case "session_started":
       return "in_progress";
-    case "session_resumed":
-      return "in_progress";
     case "session_pr_merged":
       return "merged";
     default:
@@ -160,6 +159,13 @@ export function handleOrgEvent(event: Event): void {
   const payload = asJsonObject(event.payload) ?? ({} as JsonObject);
 
   const scopeKey = `${event.scopeType}:${event.scopeId}`;
+
+  if (event.eventType === "artifact_created") {
+    const artifact = asJsonObject(payload.artifact);
+    if (artifact && typeof artifact.id === "string") {
+      batch.upsert("artifacts", artifact.id, artifact as unknown as Artifact);
+    }
+  }
 
   // App process logs are high-volume and already live in their own capped entity
   // table. Storing them in the scoped-event log too would defeat that cap, so
@@ -209,6 +215,30 @@ export function handleOrgEvent(event: Event): void {
         repo.id,
         (existing ? { ...existing, ...repo } : repo) as unknown as Repo,
       );
+    }
+  }
+
+  if (event.eventType === "repo_deleted" && typeof payload.repoId === "string") {
+    batch.remove("repos", payload.repoId);
+    if (Array.isArray(payload.channelIds)) {
+      for (const id of payload.channelIds) {
+        if (typeof id === "string") batch.patch("channels", id, { repo: null });
+      }
+    }
+    if (Array.isArray(payload.projectIds)) {
+      for (const id of payload.projectIds) {
+        if (typeof id === "string") batch.patch("projects", id, { repo: null });
+      }
+    }
+    if (Array.isArray(payload.sessionIds)) {
+      for (const id of payload.sessionIds) {
+        if (typeof id === "string") batch.patch("sessions", id, { repo: null });
+      }
+    }
+    if (Array.isArray(payload.sessionGroupIds)) {
+      for (const id of payload.sessionGroupIds) {
+        if (typeof id === "string") batch.patch("sessionGroups", id, { repo: null });
+      }
     }
   }
 
@@ -506,6 +536,23 @@ export function handleOrgEvent(event: Event): void {
     }
   }
 
+  // Conversion keeps the same active session and group. The event carries
+  // complete snapshots so a route/UI mode switch never needs a refetch.
+  if (event.eventType === ("session_converted" as EventType)) {
+    const session = asJsonObject(payload.session);
+    if (session && typeof session.id === "string") {
+      upsertSessionGroupFromPayload({ batch, payload, timestamp: event.timestamp, bumpSort: true });
+      const existingSession = batch.get("sessions", session.id);
+      batch.upsert("sessions", session.id, {
+        ...(existingSession ? { ...existingSession, ...session } : session),
+        _sortTimestamp:
+          (session.lastMessageAt as string | undefined) ??
+          (session.updatedAt as string | undefined) ??
+          event.timestamp,
+      } as unknown as SessionEntity);
+    }
+  }
+
   // Session deleted — remove from store and navigate away if active
   if (
     event.eventType === "session_deleted" &&
@@ -706,6 +753,21 @@ export function handleOrgEvent(event: Event): void {
     event.scopeType === ("session" satisfies ScopeType)
   ) {
     upsertSessionGroupFromPayload({ batch, payload, timestamp: event.timestamp, bumpSort: true });
+    const sessionStatusUpdates = payload.sessionStatusUpdates;
+    if (Array.isArray(sessionStatusUpdates)) {
+      for (const update of sessionStatusUpdates) {
+        const statusUpdate = asJsonObject(update);
+        if (
+          typeof statusUpdate?.id === "string" &&
+          typeof statusUpdate.sessionStatus === "string"
+        ) {
+          batch.patch("sessions", statusUpdate.id, {
+            sessionStatus: statusUpdate.sessionStatus as SessionStatus,
+            updatedAt: event.timestamp,
+          });
+        }
+      }
+    }
   }
 
   // Handle session_output subtypes that update session fields
@@ -729,6 +791,8 @@ export function handleOrgEvent(event: Event): void {
       event.eventType === "message_sent" || payload.type === "assistant";
     const updates: Partial<SessionEntity> = {
       updatedAt: event.timestamp,
+      ...(payload.agentStatus ? { agentStatus: payload.agentStatus as AgentStatus } : {}),
+      ...(payload.sessionStatus ? { sessionStatus: payload.sessionStatus as SessionStatus } : {}),
       ...(isConversationalMessage ? { lastMessageAt: event.timestamp } : {}),
       ...(isUserMessage ? { lastUserMessageAt: event.timestamp } : {}),
     };
@@ -781,6 +845,14 @@ export function handleSessionEvent(sessionId: string, event: Event & { id: strin
   upsertSessionEventWithOptimisticResolution(sessionId, event);
 
   const payload = asJsonObject(event.payload) ?? ({} as JsonObject);
+  if (event.eventType === "artifact_created") {
+    const artifact = asJsonObject(payload.artifact);
+    if (artifact && typeof artifact.id === "string") {
+      const batch = new StoreBatchWriter();
+      batch.upsert("artifacts", artifact.id, artifact as unknown as Artifact);
+      batch.flush();
+    }
+  }
   if (event.eventType === "session_output" && event.scopeType === ("session" satisfies ScopeType)) {
     const batch = new StoreBatchWriter();
     routeSessionOutput({ event, payload, batch, ui: getOrgEventUIBindings() });

@@ -4,7 +4,7 @@
   "version": "0.0.2",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --env-file=.env src/index.ts",
+    "dev": "pnpm --filter @trace/cli-contract build && tsx watch --env-file=.env src/index.ts",
     "build": "tsc -b",
     "start": "node dist/index.js",
     "lint": "tsc -b",
@@ -26,6 +26,7 @@
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@prisma/client": "^6.19.2",
     "@slack/web-api": "^7.10.0",
+    "@trace/cli-contract": "workspace:*",
     "@trace/gql": "workspace:*",
     "@trace/mcp": "workspace:*",
     "@trace/shared": "workspace:*",
@@ -41,7 +42,8 @@
     "jsonwebtoken": "^9.0.3",
     "openai": "^6.32.0",
     "sanitize-html": "^2.17.2",
-    "ws": "^8.18.0"
+    "tar": "^7.5.22",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

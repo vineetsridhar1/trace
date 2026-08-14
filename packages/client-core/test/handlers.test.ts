@@ -158,6 +158,31 @@ describe("handleOrgEvent", () => {
     expect(useEntityStore.getState().eventsByScope["system:managed-1"]?.[event.id]).toEqual(event);
   });
 
+  it("removes deleted repos from the entity store", () => {
+    useEntityStore.getState().upsert("repos", "repo-1", {
+      id: "repo-1",
+      name: "Trace",
+      provider: "github",
+      remoteUrl: null,
+      defaultBranch: "main",
+      webhookActive: false,
+      applicationConfig: { setupScripts: [], runScripts: [], applications: [] },
+      projects: [],
+      sessions: [],
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "repo_deleted",
+        scopeType: "system",
+        scopeId: "repo-1",
+        payload: { repoId: "repo-1" },
+      }),
+    );
+
+    expect(useEntityStore.getState().repos["repo-1"]).toBeUndefined();
+  });
+
   it("upserts the event into the scoped bucket", () => {
     const event = makeEvent({
       eventType: "session_output",
@@ -336,6 +361,49 @@ describe("handleOrgEvent", () => {
     expect(group).toMatchObject({ id: "group-1" });
   });
 
+  it("updates the existing work unit from a session conversion event", () => {
+    useEntityStore.setState((state) => ({
+      sessions: {
+        ...state.sessions,
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          name: "Discuss auth",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        } as never,
+      },
+      sessionGroups: {
+        ...state.sessionGroups,
+        "group-1": { id: "group-1", kind: "general", name: "Discuss auth" } as never,
+      },
+    }));
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_converted",
+        scopeId: "session-1",
+        payload: {
+          session: {
+            id: "session-1",
+            sessionGroupId: "group-1",
+            repo: { id: "repo-1", name: "trace" },
+            updatedAt: "2026-01-02T00:00:00.000Z",
+          },
+          sessionGroup: { id: "group-1", kind: "coding", repo: { id: "repo-1" } },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessions["session-1"]).toMatchObject({
+      id: "session-1",
+      repo: { id: "repo-1" },
+    });
+    expect(useEntityStore.getState().sessionGroups["group-1"]).toMatchObject({
+      id: "group-1",
+      kind: "coding",
+    });
+  });
+
   it("auto-navigates to a continuation session when source is active", () => {
     const harness = installBindings({ activeSessionId: "session-old" });
     const event = makeEvent({
@@ -467,6 +535,60 @@ describe("handleOrgEvent", () => {
     expect(sessions["session-2"].worktreeDeleted).toBe(true);
   });
 
+  it("applies explicit pipeline status updates from PR lifecycle events", () => {
+    useEntityStore.setState({
+      sessions: {
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          sessionStatus: "in_progress",
+        } as never,
+        "session-2": {
+          id: "session-2",
+          sessionGroupId: "group-1",
+          sessionStatus: "in_progress",
+        } as never,
+      },
+      sessionGroups: { "group-1": { id: "group-1" } as never },
+      _sessionIdsByGroup: { "group-1": ["session-1", "session-2"] },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_pr_opened",
+        scopeId: "session-1",
+        payload: {
+          sessionStatusUpdates: [
+            { id: "session-1", sessionStatus: "in_review" },
+            { id: "session-2", sessionStatus: "in_review" },
+          ],
+        },
+      }),
+    );
+
+    const sessions = useEntityStore.getState().sessions;
+    expect(sessions["session-1"].sessionStatus).toBe("in_review");
+    expect(sessions["session-2"].sessionStatus).toBe("in_review");
+  });
+
+  it("keeps the stored pipeline status for legacy session-resumed events", () => {
+    useEntityStore.setState({
+      sessions: {
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          sessionStatus: "in_review",
+        } as never,
+      },
+      sessionGroups: { "group-1": { id: "group-1" } as never },
+      _sessionIdsByGroup: { "group-1": ["session-1"] },
+    });
+
+    handleOrgEvent(makeEvent({ eventType: "session_resumed", scopeId: "session-1" }));
+
+    expect(useEntityStore.getState().sessions["session-1"].sessionStatus).toBe("in_review");
+  });
+
   it("archives a session group and stops every session in it", () => {
     useEntityStore.setState({
       sessions: {
@@ -561,6 +683,31 @@ describe("handleOrgEvent", () => {
     expect(session._sortTimestamp).toBe("2026-02-01T00:00:00.000Z");
   });
 
+  it("applies an explicit resumed status from a sent session message", () => {
+    useEntityStore.setState({
+      sessions: {
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          sessionStatus: "needs_input",
+        } as never,
+      },
+      sessionGroups: { "group-1": { id: "group-1" } as never },
+      _sessionIdsByGroup: { "group-1": ["session-1"] },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "message_sent",
+        scopeId: "session-1",
+        payload: { text: "Continue another way", sessionStatus: "in_progress" },
+        actor: { type: "user", id: "user-1" },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessions["session-1"].sessionStatus).toBe("in_progress");
+  });
+
   it("routes session_output workspace_ready into workdir", () => {
     useEntityStore.setState({
       sessions: { "session-1": { id: "session-1", sessionGroupId: "group-1" } as never },
@@ -608,7 +755,6 @@ describe("handleOrgEvent", () => {
       outputTokens: 3,
       cacheReadTokens: 40,
       cacheCreationTokens: 0,
-      costUsd: 0.0042,
     });
   });
 
@@ -660,34 +806,6 @@ describe("handleOrgEvent", () => {
     );
 
     expect(useEntityStore.getState().sessions["session-1"].name).toBe("Refactor auth middleware");
-  });
-
-  it("routes session_output git_checkpoint into gitCheckpoints", () => {
-    useEntityStore.setState({
-      sessions: { "session-1": { id: "session-1", sessionGroupId: "group-1" } as never },
-      sessionGroups: { "group-1": { id: "group-1" } as never },
-      _sessionIdsByGroup: { "group-1": ["session-1"] },
-    });
-
-    const checkpoint = {
-      id: "ckpt-1",
-      sessionGroupId: "group-1",
-      commitSha: "abc",
-      committedAt: "2026-01-01T00:00:00.000Z",
-    };
-    handleOrgEvent(
-      makeEvent({
-        eventType: "session_output",
-        scopeId: "session-1",
-        payload: { type: "git_checkpoint", checkpoint },
-      }),
-    );
-
-    const session = useEntityStore.getState().sessions["session-1"] as never as {
-      gitCheckpoints: Array<{ id: string }>;
-    };
-    expect(session.gitCheckpoints).toHaveLength(1);
-    expect(session.gitCheckpoints[0].id).toBe("ckpt-1");
   });
 
   it("handles queued message add, update, reorder, and removal events", () => {

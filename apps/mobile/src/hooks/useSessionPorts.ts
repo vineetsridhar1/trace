@@ -2,11 +2,12 @@ import { useEffect } from "react";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import type { SessionEndpoints } from "@trace/gql";
 import { handleUnauthorized, isUnauthorized } from "@/lib/auth";
-import { getClient } from "@/lib/urql";
+import { getClient, useGqlClientGeneration } from "@/lib/urql";
 import { SESSION_PORTS_SUBSCRIPTION } from "./session-events-gql";
 
 export function useSessionPorts(sessionId: string | null | undefined, enabled = true): void {
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
+  const clientGeneration = useGqlClientGeneration();
 
   useEffect(() => {
     if (!enabled || !sessionId || !activeOrgId) return;
@@ -28,5 +29,5 @@ export function useSessionPorts(sessionId: string | null | undefined, enabled = 
       });
 
     return () => sub.unsubscribe();
-  }, [activeOrgId, enabled, sessionId]);
+  }, [activeOrgId, clientGeneration, enabled, sessionId]);
 }

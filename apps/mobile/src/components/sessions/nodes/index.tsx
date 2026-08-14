@@ -283,8 +283,6 @@ const EventNode = memo(function EventNode({ id, context }: EventNodeProps) {
 
   if (!eventType) return null;
 
-  const checkpoints = context.gitCheckpointsByPromptEventId.get(id);
-
   switch (eventType) {
     case "session_started":
       if (typeof payload?.prompt === "string") {
@@ -295,7 +293,6 @@ const EventNode = memo(function EventNode({ id, context }: EventNodeProps) {
             actorName={actor?.name}
             imageKeys={asStringArray(payload?.attachmentKeys ?? payload?.imageKeys)}
             imagePreviewUrls={asStringArray(payload?.imagePreviewUrls)}
-            checkpoints={checkpoints}
           />
         );
       }
@@ -309,7 +306,6 @@ const EventNode = memo(function EventNode({ id, context }: EventNodeProps) {
           actorName={actor?.name}
           imageKeys={asStringArray(payload?.attachmentKeys ?? payload?.imageKeys)}
           imagePreviewUrls={asStringArray(payload?.imagePreviewUrls)}
-          checkpoints={checkpoints}
         />
       );
 

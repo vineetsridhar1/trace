@@ -9,6 +9,7 @@ import { getInitials } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
 
 const ADD_ORG_MEMBER = gql`
   mutation AddOrgMember($organizationId: ID!, $userId: ID!, $role: UserRole) {
@@ -240,25 +241,38 @@ export function MembersSection() {
 
   return (
     <div>
-      <div className="mb-4">
-        <h2 className="text-base font-semibold text-foreground">Members</h2>
-        <p className="text-sm text-muted-foreground">Manage who has access to your organization.</p>
-      </div>
+      <SettingsSectionHeader
+        title="Members"
+        description="Manage who has access to this workspace. Admins manage settings and members, Members run sessions, and Observers are read-only."
+        action={
+          canManageMembers ? (
+            <Button
+              size="sm"
+              onClick={() => document.getElementById("settings-member-search")?.focus()}
+            >
+              <UserPlus size={14} />
+              Add member
+            </Button>
+          ) : null
+        }
+      />
 
-      <div className="mb-6 rounded-lg border border-border bg-surface-deep p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <UserPlus size={16} className="text-muted-foreground" />
-          <span className="text-sm font-medium text-foreground">Add a member</span>
+      <div className="mb-6 rounded-xl border border-border bg-card p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <UserPlus size={15} className="text-muted-foreground" />
+          <span className="text-[13px] font-medium text-foreground">Add a member</span>
         </div>
         {canManageMembers ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-end gap-2">
             <div className="relative flex-1">
               <Input
-                placeholder="Search by name or email..."
+                id="settings-member-search"
+                placeholder="Search by name or email"
                 value={searchQuery}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setSearchQuery(e.target.value)
                 }
+                className="h-9 bg-background text-[13px]"
               />
               {searchQuery.trim().length >= 2 && (searching || searchDone) && (
                 <div className="absolute top-full left-0 right-0 z-10 mt-1 rounded-lg border border-border bg-surface-elevated shadow-lg">
@@ -299,21 +313,24 @@ export function MembersSection() {
                 </div>
               )}
             </div>
-            <Select
-              value={addRole}
-              onValueChange={(value: string | null) => {
-                if (value) setAddRole(value as UserRole);
-              }}
-            >
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="member">Member</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="observer">Observer</SelectItem>
-              </SelectContent>
-            </Select>
+            <label className="w-36 shrink-0">
+              <span className="mb-1.5 block text-xs font-medium text-muted-foreground">Role</span>
+              <Select
+                value={addRole}
+                onValueChange={(value: string | null) => {
+                  if (value) setAddRole(value as UserRole);
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="member">Member</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="observer">Observer</SelectItem>
+                </SelectContent>
+              </Select>
+            </label>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -336,15 +353,15 @@ export function MembersSection() {
           <p className="text-sm text-muted-foreground">No members yet.</p>
         </div>
       ) : (
-        <div className="rounded-lg border border-border overflow-hidden">
-          <div className="grid grid-cols-[minmax(0,1fr)_140px_110px_48px] gap-4 border-b border-border bg-surface-deep px-4 py-2.5">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="grid grid-cols-[minmax(0,1fr)_150px_120px_40px] items-center gap-4 border-b border-border bg-background/40 px-4 py-2.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               User
             </span>
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Role
             </span>
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Joined
             </span>
             <span />
@@ -355,7 +372,7 @@ export function MembersSection() {
             return (
               <div
                 key={member.user.id}
-                className="grid grid-cols-[minmax(0,1fr)_140px_110px_48px] gap-4 items-center border-b border-border px-4 py-3 transition-colors last:border-b-0 hover:bg-surface-hover/50"
+                className="grid grid-cols-[minmax(0,1fr)_150px_120px_40px] items-center gap-4 border-b border-border px-4 py-3 transition-colors last:border-b-0 hover:bg-background/40"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   {member.user.avatarUrl ? (
@@ -382,7 +399,7 @@ export function MembersSection() {
 
                 <div>
                   {isCurrentUser || !canManageMembers ? (
-                    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground">
                       <roleMeta.icon size={14} />
                       {roleMeta.label}
                     </span>
@@ -393,7 +410,7 @@ export function MembersSection() {
                         if (v) handleRoleChange(member.user.id, v as UserRole);
                       }}
                     >
-                      <SelectTrigger className="h-8 w-full text-sm">
+                      <SelectTrigger size="sm" className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -405,7 +422,7 @@ export function MembersSection() {
                   )}
                 </div>
 
-                <span className="text-sm text-muted-foreground">
+                <span className="text-[13px] text-muted-foreground">
                   {new Date(member.joinedAt).toLocaleDateString(undefined, {
                     year: "numeric",
                     month: "short",

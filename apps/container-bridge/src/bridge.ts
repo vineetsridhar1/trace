@@ -10,13 +10,9 @@ import type {
   BridgeCommand,
   BridgeMessage,
   CodingToolAdapter,
-  GitCheckpointBridgePayload,
-  GitCheckpointTrigger,
   ToolOutput,
 } from "@trace/shared";
 import {
-  extractGitToolUsePending,
-  extractGitToolResultTrigger,
   parseBranchOutput,
   handleListFiles,
   handleReadFile,
@@ -29,14 +25,15 @@ import {
   handleListSkills,
   downloadAttachmentsToTempFiles,
   cleanupTempAttachments,
-  GIT_SHOW_ARGS,
-  GIT_DIFF_TREE_ARGS,
   isMissingToolSessionError,
-  parseGitShowOutput,
   inspectSessionCurrentBranch,
   inspectSessionGitSyncStatus,
   BridgeOutbox,
+  BRIDGE_PROTOCOL_VERSION,
 } from "@trace/shared";
+import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
+import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
+import { generalWorkspacePath, removeGeneralWorkspace } from "@trace/shared/general-workspace";
 import type { GitExecFn } from "@trace/shared";
 import {
   AntigravityAdapter,
@@ -55,28 +52,23 @@ import {
   removeWorktree,
   getRepoPath,
 } from "./workspace.js";
-import { ensureToolReady } from "./tool-auth.js";
+import { ensureToolReady, syncCodexAuthFile } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
 import { ManagedProcessManager } from "./managed-process-manager.js";
+import {
+  cleanupPlaywrightInvocationSession,
+  createPlaywrightInvocationSession,
+  type PlaywrightInvocationSession,
+} from "./playwright-session.js";
+import { installRuntimeSkillsForCodingTools } from "./runtime-skills.js";
 
 const execFileAsync = promisify(execFile);
-const BRIDGE_PROTOCOL_VERSION = 1;
 const AGENT_VERSION = "0.1.0";
+const BRIDGE_USER_AGENT = "Trace-Container-Bridge/0.1";
+const RUNTIME_LEASE_CAPABILITY = "runtime_lease_v1";
 
 function hasExecutable(command: string): boolean {
   return resolveExecutable(command) !== null;
-}
-
-async function inspectGitCheckpoint(
-  cwd: string,
-  trigger: GitCheckpointTrigger,
-  command: string,
-): Promise<GitCheckpointBridgePayload> {
-  const [{ stdout: showStdout }, { stdout: diffStdout }] = await Promise.all([
-    execFileAsync("git", [...GIT_SHOW_ARGS], { cwd, maxBuffer: 1024 * 1024 }),
-    execFileAsync("git", [...GIT_DIFF_TREE_ARGS], { cwd, maxBuffer: 5 * 1024 * 1024 }),
-  ]);
-  return parseGitShowOutput(showStdout, diffStdout, trigger, command, new Date().toISOString());
 }
 
 function isPendingInputOutput(output: ToolOutput): boolean {
@@ -111,6 +103,7 @@ export class ContainerBridge implements IBridgeClient {
   private reportedToolSessionIds = new Map<string, string>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private shutdownPromise: Promise<void> | null = null;
   private consecutiveFailures = 0;
   /** Max consecutive connection failures before the process exits, allowing the machine to stop. */
   private static MAX_RECONNECT_FAILURES = 20;
@@ -122,17 +115,19 @@ export class ContainerBridge implements IBridgeClient {
   >();
   /** Sessions running in read-only mode (no worktree, using bare repo path) */
   private readOnlySessions = new Set<string>();
-  /** Phase-1 git detection: sessionId → Map<toolUseId → {trigger, command}> */
-  private pendingGitToolUses = new Map<
-    string,
-    Map<string, { trigger: import("@trace/shared").GitCheckpointTrigger; command: string }>
-  >();
   private pendingInputToolUseIds = new Map<string, string>();
   private sessionRunSequence = new Map<string, number>();
   private activeRuns = new Map<string, number>();
+  private playwrightSessions = new Map<string, PlaywrightInvocationSession>();
   private outbox = new BridgeOutbox();
   private terminalManager: TerminalManager;
   private managedProcessManager: ManagedProcessManager;
+  private traceRuntime = ensureTraceRuntime(process.env.TRACE_RUNTIME_DIR ?? "/trace/runtime").then(
+    async (runtime) => {
+      await installRuntimeSkillsForCodingTools(runtime.skillsDir, os.homedir());
+      return runtime;
+    },
+  );
   private gitExec: GitExecFn = (args, cwd) =>
     new Promise((resolve, reject) => {
       execFile("git", args, { cwd, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
@@ -145,6 +140,8 @@ export class ContainerBridge implements IBridgeClient {
     private readonly token: string,
     private readonly runtimeInstanceId: string,
     private readonly defaultTool: string,
+    private readonly runtimeLeaseEnabled: boolean,
+    private readonly renewRuntimeLease?: (ttlMs: number) => void,
   ) {
     this.terminalManager = new TerminalManager({
       onOutput: (terminalId, data) => {
@@ -163,6 +160,7 @@ export class ContainerBridge implements IBridgeClient {
     this.ws = new WebSocket(this.serverUrl, {
       headers: {
         Authorization: `Bearer ${this.token}`,
+        "User-Agent": BRIDGE_USER_AGENT,
       },
     });
 
@@ -182,6 +180,7 @@ export class ContainerBridge implements IBridgeClient {
         hostingMode: "cloud",
         protocolVersion: BRIDGE_PROTOCOL_VERSION,
         agentVersion: AGENT_VERSION,
+        capabilities: this.runtimeLeaseEnabled ? [RUNTIME_LEASE_CAPABILITY] : [],
         supportedTools,
         registeredRepoIds: [],
         activeTerminals: this.terminalManager.getActiveTerminals(),
@@ -212,6 +211,15 @@ export class ContainerBridge implements IBridgeClient {
   }
 
   disconnect(): void {
+    void this.shutdown();
+  }
+
+  shutdown(): Promise<void> {
+    this.shutdownPromise ??= this.performShutdown();
+    return this.shutdownPromise;
+  }
+
+  private async performShutdown(): Promise<void> {
     this.stopHeartbeat();
     this.terminalManager.destroyAll();
     this.managedProcessManager.destroyAll();
@@ -223,11 +231,15 @@ export class ContainerBridge implements IBridgeClient {
       this.cancelRun(sessionId);
       adapter.abort();
     }
+    const browserCleanup = [...this.playwrightSessions.keys()].map((sessionId) =>
+      this.cleanupPlaywrightSession(sessionId),
+    );
     this.adapters.clear();
     this.outbox.clear();
     this.ws?.close();
     this.ws = null;
     this.pendingInputToolUseIds.clear();
+    await Promise.allSettled(browserCleanup);
   }
 
   send(data: BridgeMessage): void {
@@ -253,7 +265,7 @@ export class ContainerBridge implements IBridgeClient {
   }
 
   private scheduleReconnect(): void {
-    if (this.reconnectTimer) return;
+    if (this.reconnectTimer || this.shutdownPromise) return;
     this.consecutiveFailures++;
 
     if (this.consecutiveFailures >= ContainerBridge.MAX_RECONNECT_FAILURES) {
@@ -310,6 +322,28 @@ export class ContainerBridge implements IBridgeClient {
     this.activeRuns.delete(sessionId);
   }
 
+  private async preparePlaywrightSession(
+    sessionId: string,
+    invocationId: string | undefined,
+  ): Promise<PlaywrightInvocationSession | null> {
+    await this.cleanupPlaywrightSession(sessionId);
+    if (!invocationId) return null;
+
+    const session = await createPlaywrightInvocationSession({ invocationId });
+    this.playwrightSessions.set(sessionId, session);
+    return session;
+  }
+
+  private async cleanupPlaywrightSession(
+    sessionId: string,
+    expected?: PlaywrightInvocationSession | null,
+  ): Promise<void> {
+    const current = this.playwrightSessions.get(sessionId);
+    if (!current || (expected && current !== expected)) return;
+    this.playwrightSessions.delete(sessionId);
+    await cleanupPlaywrightInvocationSession(current);
+  }
+
   private isCurrentRun(sessionId: string, adapter: CodingToolAdapter, runId: number): boolean {
     return this.adapters.get(sessionId) === adapter && this.activeRuns.get(sessionId) === runId;
   }
@@ -333,6 +367,11 @@ export class ContainerBridge implements IBridgeClient {
 
   private handleCommand(cmd: BridgeCommand): void {
     switch (cmd.type) {
+      case "runtime_lease": {
+        this.renewRuntimeLease?.(cmd.ttlMs);
+        break;
+      }
+
       case "run":
       case "send": {
         this.runPrompt({
@@ -347,8 +386,10 @@ export class ContainerBridge implements IBridgeClient {
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
           imageUrls: cmd.imageUrls,
+          runtimeEnv: cmd.runtimeEnv,
         }).catch((err) => {
           console.error(`[container-bridge] runPrompt failed for ${cmd.sessionId}:`, err);
+          void this.cleanupPlaywrightSession(cmd.sessionId);
           this.send({
             type: "session_output",
             sessionId: cmd.sessionId,
@@ -369,7 +410,7 @@ export class ContainerBridge implements IBridgeClient {
           defaultBranch,
           branch,
           preserveBranchName,
-          checkpointSha,
+          baseCommitSha,
           readOnly,
         } = cmd;
 
@@ -402,7 +443,7 @@ export class ContainerBridge implements IBridgeClient {
                   defaultBranch,
                   branch,
                   preserveBranchName,
-                  checkpointSha,
+                  baseCommitSha,
                   sessionGroupId,
                   slug,
                 });
@@ -432,6 +473,53 @@ export class ContainerBridge implements IBridgeClient {
         break;
       }
 
+      case "prepare_general": {
+        const workdir = generalWorkspacePath(cmd.sessionGroupId ?? cmd.sessionId);
+        fs.promises
+          .mkdir(workdir, { recursive: true })
+          .then(() => {
+            this.sessionWorkdirs.set(cmd.sessionId, workdir);
+            this.send({ type: "register_session", sessionId: cmd.sessionId });
+            this.send({ type: "workspace_ready", sessionId: cmd.sessionId, workdir });
+          })
+          .catch((err: Error) => {
+            this.send({ type: "workspace_failed", sessionId: cmd.sessionId, error: err.message });
+          });
+        break;
+      }
+
+      case "cleanup_general_workspace": {
+        const sessionKey = cmd.sessionGroupId ?? cmd.sessionId;
+        const workdir = this.sessionWorkdirs.get(cmd.sessionId);
+        void removeGeneralWorkspace(workdir, sessionKey)
+          .then((removed) => {
+            if (removed && workdir) {
+              for (const [trackedSessionId, trackedWorkdir] of this.sessionWorkdirs) {
+                if (trackedWorkdir === workdir) this.sessionWorkdirs.delete(trackedSessionId);
+              }
+            }
+            this.send({
+              type: "cleanup_general_workspace_result",
+              sessionId: cmd.sessionId,
+              success: removed,
+              ...(!removed ? { error: "General workspace path was rejected" } : {}),
+            });
+          })
+          .catch((err: Error) => {
+            console.warn(
+              `[container-bridge] failed to remove general workspace ${workdir}:`,
+              err.message,
+            );
+            this.send({
+              type: "cleanup_general_workspace_result",
+              sessionId: cmd.sessionId,
+              success: false,
+              error: err.message,
+            });
+          });
+        break;
+      }
+
       case "list_workspace_slugs": {
         getWorkspaceSlugs(cmd.repoId)
           .then((slugs) => {
@@ -453,8 +541,9 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "prepare_app": {
-        const { sessionId, sessionGroupId, slug, repoRemoteUrl, defaultBranch, checkpointSha } =
+        const { sessionId, sessionGroupId, slug, repoRemoteUrl, defaultBranch, baseCommitSha } =
           cmd;
+        const previousWorkdir = this.sessionWorkdirs.get(sessionId);
         (async () => {
           try {
             const { workdir, slug: workspaceSlug } = await createAppWorkspace({
@@ -463,11 +552,19 @@ export class ContainerBridge implements IBridgeClient {
               slug,
               repoRemoteUrl,
               defaultBranch,
-              checkpointSha,
+              baseCommitSha,
             });
             this.sessionWorkdirs.set(sessionId, workdir);
             this.send({ type: "register_session", sessionId });
             this.send({ type: "workspace_ready", sessionId, workdir, slug: workspaceSlug });
+            try {
+              await removeGeneralWorkspace(previousWorkdir, sessionGroupId ?? sessionId);
+            } catch (error) {
+              console.warn(
+                `[container-bridge] failed to remove converted general workspace ${previousWorkdir}:`,
+                error instanceof Error ? error.message : String(error),
+              );
+            }
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             console.error(`[container-bridge] app workspace failed for ${sessionId}:`, message);
@@ -488,6 +585,7 @@ export class ContainerBridge implements IBridgeClient {
           branch,
           preserveBranchName,
         } = cmd;
+        const previousWorkdir = this.sessionWorkdirs.get(sessionId);
 
         (async () => {
           try {
@@ -516,6 +614,22 @@ export class ContainerBridge implements IBridgeClient {
               slug: worktreeSlug,
               warning: repoResult.warning,
             });
+            const sessionKey = sessionGroupId ?? sessionId;
+            try {
+              const removed = await removeGeneralWorkspace(previousWorkdir, sessionKey);
+              if (removed && previousWorkdir) {
+                for (const [trackedSessionId, trackedWorkdir] of this.sessionWorkdirs) {
+                  if (trackedWorkdir === previousWorkdir) {
+                    this.sessionWorkdirs.delete(trackedSessionId);
+                  }
+                }
+              }
+            } catch (error) {
+              console.warn(
+                `[container-bridge] failed to remove upgraded general workspace ${previousWorkdir}:`,
+                error instanceof Error ? error.message : String(error),
+              );
+            }
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             console.error(`[container-bridge] workspace upgrade failed for ${sessionId}:`, message);
@@ -531,6 +645,7 @@ export class ContainerBridge implements IBridgeClient {
           this.cancelRun(cmd.sessionId);
           adapter.abort();
         }
+        void this.cleanupPlaywrightSession(cmd.sessionId);
         break;
       }
 
@@ -540,6 +655,7 @@ export class ContainerBridge implements IBridgeClient {
           this.cancelRun(cmd.sessionId);
           adapter.abort();
         }
+        void this.cleanupPlaywrightSession(cmd.sessionId);
         break;
       }
 
@@ -559,6 +675,7 @@ export class ContainerBridge implements IBridgeClient {
         this.reportedToolSessionIds.delete(cmd.sessionId);
         this.pendingInputToolUseIds.delete(cmd.sessionId);
         this.sessionRunSequence.delete(cmd.sessionId);
+        void this.cleanupPlaywrightSession(cmd.sessionId);
         const wasReadOnly = this.readOnlySessions.has(cmd.sessionId);
         this.readOnlySessions.delete(cmd.sessionId);
         // Capture the workdir before dropping it from the map — the app
@@ -568,7 +685,6 @@ export class ContainerBridge implements IBridgeClient {
           this.sessionWorkdirs.get(cmd.sessionId) ??
           null;
         this.sessionWorkdirs.delete(cmd.sessionId);
-        this.pendingGitToolUses.delete(cmd.sessionId);
         this.terminalManager.destroyForSession(cmd.sessionId);
 
         // App sessions run managed dev-server processes (keyed by
@@ -878,6 +994,7 @@ export class ContainerBridge implements IBridgeClient {
     interactionMode,
     toolSessionId,
     imageUrls,
+    runtimeEnv,
   }: {
     sessionId: string;
     prompt: string;
@@ -890,9 +1007,14 @@ export class ContainerBridge implements IBridgeClient {
     interactionMode?: string;
     toolSessionId?: string;
     imageUrls?: string[];
+    runtimeEnv?: Record<string, string>;
   }): Promise<void> {
     const resolvedTool = tool ?? this.defaultTool;
     await ensureToolReady(resolvedTool);
+    const playwrightSession = await this.preparePlaywrightSession(
+      sessionId,
+      runtimeEnv?.TRACE_INVOCATION_ID,
+    );
 
     // If tool changed, abort old adapter and create a fresh one
     const prevTool = this.sessionTools.get(sessionId);
@@ -956,6 +1078,30 @@ export class ContainerBridge implements IBridgeClient {
     const runId = this.startRun(sessionId);
     adapter.abort();
 
+    let browserCleanupStarted = false;
+    const completeRun = () => {
+      const complete = () => this.send({ type: "session_complete", sessionId });
+      if (resolvedTool !== "codex") {
+        complete();
+        return;
+      }
+      void syncCodexAuthFile().then(complete, (error: unknown) => {
+        console.warn("[container-bridge] failed to persist Codex session credential:", error);
+        complete();
+      });
+    };
+    const completeRunAfterBrowserCleanup = () => {
+      if (browserCleanupStarted) return;
+      browserCleanupStarted = true;
+      void this.cleanupPlaywrightSession(sessionId, playwrightSession).then(
+        completeRun,
+        (error: unknown) => {
+          console.warn("[container-bridge] failed to clean Playwright session:", error);
+          completeRun();
+        },
+      );
+    };
+
     const activeAdapter = adapter;
     const recoverMissingToolSession = (message: string) => {
       if (!toolSessionId || hasForwardedOutput || recoveringMissingToolSession) return false;
@@ -968,6 +1114,7 @@ export class ContainerBridge implements IBridgeClient {
       this.reportedToolSessionIds.delete(sessionId);
       this.pendingInputToolUseIds.delete(sessionId);
       cleanupImages();
+      void this.cleanupPlaywrightSession(sessionId, playwrightSession);
       this.send({
         type: "tool_session_missing",
         sessionId,
@@ -1013,31 +1160,6 @@ export class ContainerBridge implements IBridgeClient {
         hasForwardedOutput = true;
         this.send({ type: "session_output", sessionId, data: output });
 
-        // Phase 1: collect tool_use blocks whose command is a git commit/push
-        const newPending = extractGitToolUsePending(output);
-        if (newPending.size > 0) {
-          const sessionPending = this.pendingGitToolUses.get(sessionId) ?? new Map();
-          for (const [id, val] of newPending) sessionPending.set(id, val);
-          this.pendingGitToolUses.set(sessionId, sessionPending);
-        }
-
-        // Phase 2: fire checkpoint when the matching tool_result arrives
-        const sessionPending = this.pendingGitToolUses.get(sessionId) ?? new Map();
-        const gitTrigger = extractGitToolResultTrigger(output, sessionPending);
-        if (gitTrigger) {
-          if (gitTrigger.toolUseId) sessionPending.delete(gitTrigger.toolUseId);
-          inspectGitCheckpoint(cwd, gitTrigger.trigger, gitTrigger.command)
-            .then((checkpoint) => {
-              if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
-              this.send({ type: "git_checkpoint", sessionId, checkpoint });
-            })
-            .catch((err: Error) => {
-              console.warn(
-                `[container-bridge] failed to inspect git checkpoint for ${sessionId}:`,
-                err.message,
-              );
-            });
-        }
         maybeReportToolSessionId();
 
         if (isPendingInputOutput(output)) {
@@ -1048,7 +1170,7 @@ export class ContainerBridge implements IBridgeClient {
             this.pendingInputToolUseIds.delete(sessionId);
           }
           this.finishRun(sessionId, runId);
-          this.send({ type: "session_complete", sessionId });
+          completeRunAfterBrowserCleanup();
           activeAdapter.abort();
           cleanupImages();
         }
@@ -1060,7 +1182,7 @@ export class ContainerBridge implements IBridgeClient {
           this.pendingInputToolUseIds.delete(sessionId);
         }
         this.finishRun(sessionId, runId);
-        this.send({ type: "session_complete", sessionId });
+        completeRunAfterBrowserCleanup();
         cleanupImages();
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
@@ -1068,6 +1190,7 @@ export class ContainerBridge implements IBridgeClient {
       reasoningEffort,
       enableClaudeInChrome,
       toolSessionId,
+      runtimeEnv: { ...runtimeEnv, ...playwrightSession?.env },
     });
   }
 }

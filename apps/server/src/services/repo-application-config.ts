@@ -6,6 +6,7 @@ import type {
   RepoEnvVar,
   RepoPortDefinition,
   RepoProcessDefinition,
+  RepoRunScript,
   RepoSetupScript,
 } from "@trace/gql";
 import { ValidationError } from "../lib/errors.js";
@@ -32,6 +33,7 @@ type JsonRecord = Record<string, unknown>;
 
 const EMPTY_APPLICATION_CONFIG: RepoApplicationConfig = {
   setupScripts: [],
+  runScripts: [],
   applications: [],
 };
 
@@ -138,6 +140,16 @@ function normalizeSetupScript(value: unknown): RepoSetupScript {
     workingDirectory: normalizeWorkingDirectory(input.workingDirectory),
     dependsOn: normalizeDependsOn(input.dependsOn),
     env: normalizeEnv(input.env),
+  };
+}
+
+function normalizeRunScript(value: unknown): RepoRunScript {
+  const input = record(value);
+  if (!input) throw new ValidationError("Run script must be an object");
+  return {
+    id: validateId(requiredString(input.id, "Run script ID"), "Run script ID"),
+    name: requiredString(input.name, "Run script name"),
+    command: requiredString(input.command, "Run script command"),
   };
 }
 
@@ -252,6 +264,7 @@ export class RepoApplicationConfigService {
         ...script,
         env: toPublicEnv(script.env),
       })),
+      runScripts: config.runScripts,
       applications: config.applications.map((application) => ({
         ...application,
         processes: application.processes.map((process) => ({
@@ -266,6 +279,7 @@ export class RepoApplicationConfigService {
     const root = record(input);
     if (!root) throw new ValidationError("Application config must be an object");
     const setupScripts = array(root.setupScripts).map(normalizeSetupScript);
+    const runScripts = array(root.runScripts).map(normalizeRunScript);
     const applications = array(root.applications).map((application) =>
       normalizeApplication(application, strict),
     );
@@ -273,11 +287,18 @@ export class RepoApplicationConfigService {
       setupScripts.map((script) => script.id),
       "Setup script",
     );
+    if (runScripts.length > 10) {
+      throw new ValidationError("Run scripts cannot exceed 10 entries");
+    }
+    assertUnique(
+      runScripts.map((script) => script.id),
+      "Run script",
+    );
     assertUnique(
       applications.map((application) => application.id),
       "Application",
     );
-    return { setupScripts, applications };
+    return { setupScripts, runScripts, applications };
   }
 
   parseRuntimeProfile(setupConfig: unknown): string | null {
@@ -298,9 +319,7 @@ export class RepoApplicationConfigService {
       return rest as Prisma.InputJsonValue;
     }
     if (!RUNTIME_PROFILE_RE.test(trimmed)) {
-      throw new ValidationError(
-        "Runtime profile must use lowercase letters, numbers, or hyphens",
-      );
+      throw new ValidationError("Runtime profile must use lowercase letters, numbers, or hyphens");
     }
     return { ...root, runtimeProfile: trimmed } as Prisma.InputJsonValue;
   }

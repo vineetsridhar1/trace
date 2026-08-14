@@ -11,6 +11,7 @@ export function buildPath(
   chatId: string | null = null,
 ): string {
   if (page === "settings") return "/settings";
+  if (page === "create") return "/create";
   if (page === "inbox") return "/inbox";
   if (page === "tickets") return "/tickets";
   if (page === "search") return "/search";

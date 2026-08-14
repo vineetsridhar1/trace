@@ -65,7 +65,7 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
         .toPromise();
       if (result.data?.createTerminal) {
         const { id } = result.data.createTerminal as { id: string };
-        addTerminal(id, session.id, sessionGroupId);
+        addTerminal(id, session.id, sessionGroupId, "connecting");
         setActiveSessionId(session.id);
         setActiveTerminalId(id);
       }
@@ -78,6 +78,21 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
       setActiveTerminalId,
       terminals,
     ],
+  );
+
+  const handleCreateTerminal = useCallback(
+    async (session: { id: string; _optimistic?: boolean } | null, terminalAllowed: boolean) => {
+      if (!session || session._optimistic || !terminalAllowed) return;
+      const result = await client
+        .mutation(CREATE_TERMINAL_MUTATION, { sessionId: session.id, cols: 80, rows: 24 })
+        .toPromise();
+      if (!result.data?.createTerminal) return;
+      const { id } = result.data.createTerminal as { id: string };
+      addTerminal(id, session.id, sessionGroupId, "connecting");
+      setActiveSessionId(session.id);
+      setActiveTerminalId(id);
+    },
+    [addTerminal, sessionGroupId, setActiveSessionId, setActiveTerminalId],
   );
 
   const handleCloseTerminal = useCallback(
@@ -101,6 +116,7 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
 
   return {
     handleOpenTerminal,
+    handleCreateTerminal,
     handleCloseTerminal,
     handleSelectTerminal,
   };

@@ -29,10 +29,6 @@ type ListItem =
   | { kind: "header"; status: SessionGroupSectionStatus; count: number; collapsed: boolean }
   | { kind: "row"; groupId: string };
 
-// Mirror the web behavior where terminal/less-actionable sections start
-// collapsed so the user lands on what still needs attention.
-const DEFAULT_COLLAPSED: ReadonlySet<SessionGroupSectionStatus> = new Set(["failed", "stopped"]);
-
 // LayoutAnimation is opt-in on Android; iOS already has it enabled.
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -52,9 +48,7 @@ export default function ChannelDetail() {
   const [scope, setScope] = useState<ActiveSegment>("all");
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState<Set<SessionGroupSectionStatus>>(
-    () => new Set(DEFAULT_COLLAPSED),
-  );
+  const [collapsed, setCollapsed] = useState<Set<SessionGroupSectionStatus>>(() => new Set());
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
   const channelName = useEntityField("channels", channelId, "name");

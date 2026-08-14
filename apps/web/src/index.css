@@ -95,10 +95,10 @@
   --secondary: #262626;
   --secondary-foreground: #d4d4d8;
   --muted: #262626;
-  --muted-foreground: #71717a;
+  --muted-foreground: #90909a;
   --accent: #3b82f6;
   --accent-foreground: #ffffff;
-  --destructive: #ef4444;
+  --destructive: #f87171;
   --border: #262626;
   --input: #262626;
   --ring: #3b82f6;
@@ -125,18 +125,36 @@
   --th-surface-elevated: #262626;
   --th-surface-hover: #404040;
   --th-primary: #a1a1aa;
-  --th-muted: #71717a;
+  --th-muted: #90909a;
   --th-heading: #d4d4d8;
   --th-faint: #52525b;
   --th-on-accent: #171717;
   --th-edge: #262626;
   --th-edge-hover: #404040;
+  --th-raised: #1c1c1f;
+  --th-edge-faint: #1f1f23;
+  --th-edge-strong: #2e2e33;
+  --th-status-live: #8b98a5;
+  --th-success: #34d399;
+  --th-warn: #fbbf24;
   --th-accent: #3b82f6;
   --th-accent-light: #60a5fa;
   --th-accent-tint: #3b82f622;
+  --th-kind-design: #a78bfa;
+  --th-kind-code: var(--th-accent-light);
+  --th-kind-app: #34d399;
+  --th-kind-pdf: #fbbf24;
+  --th-kind-animation: #f472b6;
+  --th-kind-system: var(--chart-3);
   --th-hover-rgb: 38, 38, 38;
   --th-code-bg: #0a0a0a;
   --trace-window-bg: rgb(39 39 42 / 0.74);
+}
+
+.structured-question {
+  --question-sunken: color-mix(in srgb, var(--th-surface-deep) 55%, var(--th-surface));
+  --question-selection: color-mix(in srgb, var(--foreground) 8%, transparent);
+  color: var(--foreground);
 }
 
 @theme inline {
@@ -236,7 +254,8 @@
   user-select: none;
 }
 
-.app-region-drag :is(
+.app-region-drag
+  :is(
     .app-region-no-drag,
     button,
     a,
@@ -250,7 +269,8 @@
     [role="menuitem"],
     [role="textbox"]
   ),
-.app-region-drag :is(
+.app-region-drag
+  :is(
     .app-region-no-drag,
     button,
     a,
@@ -263,7 +283,8 @@
     [role="menu"],
     [role="menuitem"],
     [role="textbox"]
-  ) * {
+  )
+  * {
   app-region: no-drag !important;
   -webkit-app-region: no-drag !important;
   -webkit-user-select: auto;
@@ -357,6 +378,47 @@
 .btn-ghost:focus-visible {
   outline: 2px solid var(--th-accent-light);
   outline-offset: 2px;
+}
+
+.home-status-pulse {
+  animation: home-status-pulse 2s ease-in-out infinite;
+}
+
+.home-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--th-edge-faint) 0%,
+    color-mix(in srgb, var(--th-edge-faint) 65%, white) 48%,
+    var(--th-edge-faint) 100%
+  );
+  background-size: 520px 100%;
+  animation: home-shimmer 1.4s linear infinite;
+}
+
+@keyframes home-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes home-shimmer {
+  from {
+    background-position: -520px 0;
+  }
+  to {
+    background-position: 520px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-status-pulse,
+  .home-shimmer {
+    animation: none;
+  }
 }
 
 /* ── Sticky todo list (above input bar) ── */

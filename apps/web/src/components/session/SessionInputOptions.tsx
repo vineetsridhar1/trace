@@ -1,12 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Cloud, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import type { SessionConnection, SessionRuntimeInstance } from "@trace/gql";
-import { useEntityField } from "@trace/client-core";
+import { hasSelectedSessionGroupRuntime, useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
-import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
+import {
+  AVAILABLE_RUNTIMES_QUERY,
+  RETRY_SESSION_CONNECTION_MUTATION,
+  UPDATE_SESSION_CONFIG_MUTATION,
+} from "@trace/client-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { DisabledReasonHint } from "../ui/DisabledReasonHint";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
@@ -23,6 +27,14 @@ import { cn } from "../../lib/utils";
 import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvironmentAvailable";
 import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
+
+function isRecoverableCloudFailure(connection: Record<string, unknown> | null | undefined) {
+  return (
+    connection?.state === "failed" ||
+    connection?.state === "timed_out" ||
+    connection?.state === "disconnected"
+  );
+}
 
 const UNBOUND_LOCAL_RUNTIME_ID = "__unbound_local__";
 const CLOUD_RUNTIME_ID = "__cloud__";
@@ -101,6 +113,103 @@ function EffortCycleButton({
   );
 }
 
+interface ComposerInputOptionsProps {
+  mode: InteractionMode;
+  tool: ToolOptionValue;
+  model: string | null | undefined;
+  reasoningEffort: string | null | undefined;
+  reasoningEffortOptions: readonly ReasoningEffortOption[];
+  disabled?: boolean;
+  compact?: boolean;
+  showMode?: boolean;
+  alwaysExpandToolModel?: boolean;
+  afterTool?: ReactNode;
+  afterEffort?: ReactNode;
+  onModeChange: (mode: InteractionMode) => void;
+  onToolChange: (tool: ToolOptionValue) => Promise<void> | void;
+  onModelChange: (model: string) => Promise<void> | void;
+  onReasoningEffortChange: (effort: string) => Promise<void> | void;
+}
+
+export function ComposerInputOptions({
+  mode,
+  tool,
+  model,
+  reasoningEffort,
+  reasoningEffortOptions,
+  disabled,
+  compact = false,
+  showMode = true,
+  alwaysExpandToolModel = false,
+  afterTool,
+  afterEffort,
+  onModeChange,
+  onToolChange,
+  onModelChange,
+  onReasoningEffortChange,
+}: ComposerInputOptionsProps) {
+  const modeConfig = MODE_CONFIG[mode];
+  const ModeIcon = modeConfig.icon;
+
+  return (
+    <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
+      {showMode ? (
+        <button
+          type="button"
+          onClick={() => onModeChange(mode)}
+          disabled={disabled}
+          aria-label={`${modeConfig.label} mode`}
+          title={`${modeConfig.label} mode`}
+          className={cn(
+            "relative flex h-7 cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border text-[11px] font-medium transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
+            compact ? "w-7 justify-center px-0" : "px-2",
+            modeConfig.style,
+          )}
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={mode}
+              initial={{ y: 12, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -12, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="flex items-center gap-1.5"
+            >
+              <ModeIcon size={14} className="shrink-0" />
+              {compact ? null : modeConfig.label}
+            </motion.span>
+          </AnimatePresence>
+        </button>
+      ) : null}
+      <ToolModelPicker
+        tool={tool}
+        model={model}
+        reasoningEffort={reasoningEffort}
+        reasoningEffortOptions={reasoningEffortOptions}
+        disabled={disabled}
+        compact={compact}
+        alwaysExpanded={alwaysExpandToolModel}
+        onToolChange={onToolChange}
+        onModelChange={onModelChange}
+        onReasoningEffortChange={onReasoningEffortChange}
+      />
+      {afterTool}
+      {!compact && reasoningEffortOptions.length > 0 && (
+        <div className="hidden @lg:block">
+          <EffortCycleButton
+            key={tool}
+            effort={reasoningEffort ?? reasoningEffortOptions[0]?.value ?? ""}
+            options={reasoningEffortOptions}
+            disabled={disabled}
+            onChange={onReasoningEffortChange}
+          />
+        </div>
+      )}
+      {afterEffort}
+    </div>
+  );
+}
+
 interface SessionInputOptionsProps {
   sessionId: string;
   mode: InteractionMode;
@@ -126,8 +235,21 @@ export function SessionInputOptions({
     | SessionConnection
     | null
     | undefined;
+  const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
+    | undefined;
+  const sessionGroupKind = useEntityField("sessionGroups", sessionGroupId ?? "", "kind") as
+    | string
+    | null
+    | undefined;
+  const groupConnection = useEntityField("sessionGroups", sessionGroupId ?? "", "connection") as
+    | SessionConnection
+    | null
+    | undefined;
+  const groupWorkdir = useEntityField("sessionGroups", sessionGroupId ?? "", "workdir") as
+    | string
+    | null
     | undefined;
 
   const repo = useEntityField("sessions", sessionId, "repo") as
@@ -142,6 +264,12 @@ export function SessionInputOptions({
   const reasoningEffortOptions = getReasoningEffortsForTool(currentTool, currentModel);
   const currentReasoningEffort = reasoningEffort ?? getDefaultReasoningEffort(currentTool);
   const isNotStarted = agentStatus === "not_started";
+  const runtimeLocked = sessionGroupKind === "app";
+  const groupHasSelectedRuntime = hasSelectedSessionGroupRuntime(
+    groupConnection === undefined ? connection : groupConnection,
+    groupWorkdir === undefined ? workdir : groupWorkdir,
+  );
+  const canChangeRuntime = isNotStarted && !runtimeLocked && !groupHasSelectedRuntime;
 
   const runtimeLabel = connection?.runtimeLabel ?? null;
   const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
@@ -154,11 +282,34 @@ export function SessionInputOptions({
     cloudEnvironmentAvailable || currentRuntimeValue === CLOUD_RUNTIME_ID;
   const autoSelectedRuntimeSessionRef = useRef<string | null>(null);
 
-  // Fetch runtimes when not_started so user can switch
+  const restartFailedCloudSession = useCallback(async () => {
+    if (hosting !== "cloud" || !isRecoverableCloudFailure(connection)) return;
+    const rollback = applyOptimisticPatch("sessions", sessionId, {
+      agentStatus: "active",
+      connection: {
+        ...connection,
+        canMove: connection?.canMove ?? true,
+        canRetry: connection?.canRetry ?? true,
+        retryCount: connection?.retryCount ?? 0,
+        state: "requested",
+      },
+    });
+    const retry = await client
+      .mutation(RETRY_SESSION_CONNECTION_MUTATION, { sessionId })
+      .toPromise();
+    if (retry.error) {
+      rollback();
+      toast.error("Could not restart the cloud session", { description: retry.error.message });
+    }
+  }, [connection, hosting, sessionId]);
+
+  // Runtime selection is only available while choosing the first bridge for
+  // a new, unbound group. Sibling sessions inherit the group's bridge.
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const connectedLocalRuntimes = runtimes.filter(isAccessibleLocalRuntime);
+
   const fetchAvailableRuntimes = useCallback(() => {
-    if (!isNotStarted || isOptimistic) return Promise.resolve();
+    if (!canChangeRuntime || isOptimistic) return Promise.resolve();
     return client
       .query(AVAILABLE_RUNTIMES_QUERY, {
         tool: currentTool,
@@ -172,7 +323,7 @@ export function SessionInputOptions({
       .catch((error: unknown) => {
         console.error("Failed to fetch available runtimes:", error);
       });
-  }, [isNotStarted, isOptimistic, currentTool, sessionGroupId]);
+  }, [canChangeRuntime, isOptimistic, currentTool, sessionGroupId]);
 
   useEffect(() => {
     void fetchAvailableRuntimes();
@@ -196,12 +347,13 @@ export function SessionInputOptions({
           })
           .toPromise();
         if (result.error) throw result.error;
+        await restartFailedCloudSession();
       } catch (error) {
         rollback();
         console.error("Failed to update session tool:", error);
       }
     },
-    [isOptimistic, sessionId],
+    [isOptimistic, restartFailedCloudSession, sessionId],
   );
 
   const handleModelChange = useCallback(
@@ -213,12 +365,13 @@ export function SessionInputOptions({
           .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel })
           .toPromise();
         if (result.error) throw result.error;
+        await restartFailedCloudSession();
       } catch (error) {
         rollback();
         console.error("Failed to update session model:", error);
       }
     },
-    [isOptimistic, sessionId],
+    [isOptimistic, restartFailedCloudSession, sessionId],
   );
 
   const handleReasoningEffortChange = useCallback(
@@ -245,7 +398,7 @@ export function SessionInputOptions({
 
   const handleRuntimeChange = useCallback(
     async (value: string | null) => {
-      if (isOptimistic || value === currentRuntimeValue) return;
+      if (!canChangeRuntime || isOptimistic || value === currentRuntimeValue) return;
       if (!value) return;
       if (value === UNBOUND_LOCAL_RUNTIME_ID) return;
 
@@ -329,6 +482,7 @@ export function SessionInputOptions({
     },
     [
       isOptimistic,
+      canChangeRuntime,
       sessionId,
       currentRuntimeValue,
       runtimes,
@@ -341,7 +495,9 @@ export function SessionInputOptions({
   useEffect(() => {
     if (
       !isNotStarted ||
+      !canChangeRuntime ||
       isOptimistic ||
+      runtimeLocked ||
       isCloudRuntime ||
       runtimeInstanceId ||
       currentRuntimeValue !== UNBOUND_LOCAL_RUNTIME_ID ||
@@ -362,130 +518,110 @@ export function SessionInputOptions({
     void handleRuntimeChange(ownedRuntime.id);
   }, [
     channelRepoId,
+    canChangeRuntime,
     currentRuntimeValue,
     handleRuntimeChange,
     isCloudRuntime,
     isNotStarted,
     isOptimistic,
     runtimeInstanceId,
+    runtimeLocked,
     runtimes,
     sessionId,
   ]);
 
-  const modeConfig = MODE_CONFIG[mode];
-  const ModeIcon = modeConfig.icon;
-
   return (
-    <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
-      <button
-        type="button"
-        onClick={() => onModeChange(mode)}
-        disabled={isActive || isOptimistic}
-        className={cn(
-          "relative flex h-7 cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-[11px] font-medium transition-colors hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed",
-          modeConfig.style,
-        )}
-      >
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.span
-            key={mode}
-            initial={{ y: 12, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -12, opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="flex items-center gap-1.5"
+    <ComposerInputOptions
+      mode={mode}
+      tool={currentTool}
+      model={currentModel}
+      reasoningEffort={currentReasoningEffort}
+      reasoningEffortOptions={reasoningEffortOptions}
+      disabled={isActive || isOptimistic}
+      onModeChange={onModeChange}
+      onToolChange={handleToolChange}
+      onModelChange={handleModelChange}
+      onReasoningEffortChange={handleReasoningEffortChange}
+      afterEffort={
+        canChangeRuntime ? (
+          <Select
+            value={currentRuntimeValue}
+            onValueChange={handleRuntimeChange}
+            onOpenChange={(open) => {
+              if (open) void fetchAvailableRuntimes();
+            }}
+            disabled={isOptimistic}
           >
-            <ModeIcon size={14} className="shrink-0" />
-            {modeConfig.label}
-          </motion.span>
-        </AnimatePresence>
-      </button>
-      <ToolModelPicker
-        tool={currentTool}
-        model={currentModel}
-        disabled={isActive || isOptimistic}
-        onToolChange={handleToolChange}
-        onModelChange={handleModelChange}
-      />
-      {reasoningEffortOptions.length > 0 && (
-        <EffortCycleButton
-          key={currentTool}
-          effort={currentReasoningEffort ?? reasoningEffortOptions[0]?.value ?? ""}
-          options={reasoningEffortOptions}
-          disabled={isActive || isOptimistic}
-          onChange={handleReasoningEffortChange}
-        />
-      )}
-      {isNotStarted ? (
-        <Select
-          value={currentRuntimeValue}
-          onValueChange={handleRuntimeChange}
-          onOpenChange={(open) => {
-            if (open) void fetchAvailableRuntimes();
-          }}
-          disabled={isOptimistic}
-        >
-          <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
-            <SelectValue>
-              <span className="flex items-center gap-1">
-                {currentRuntimeValue === CLOUD_RUNTIME_ID ? (
-                  <>
-                    <Cloud size={12} className="text-sky-400" /> Cloud
-                  </>
-                ) : !runtimeInstanceId ? (
-                  <>
-                    <AlertTriangle size={12} className="text-amber-500" /> Choose runtime
-                  </>
-                ) : (
-                  <>
-                    <Monitor size={12} className="text-green-400" /> {runtimeLabel ?? "Local"}
-                  </>
-                )}
-              </span>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {showCloudRuntimeOption ? (
-              <SelectItem
-                value={CLOUD_RUNTIME_ID}
-                disabled={!cloudEnvironmentAvailable || !!cloudDisabledReason}
-              >
-                <span className="flex items-center gap-1.5">
-                  <Cloud size={12} className="text-sky-400" /> Cloud
-                  {cloudDisabledReason && (
-                    <DisabledReasonHint message={cloudDisabledReason}>
-                      remote required
-                    </DisabledReasonHint>
+            <SelectTrigger
+              size="sm"
+              className="w-auto border-transparent bg-transparent hover:border-transparent hover:bg-white/10 data-popup-open:border-transparent"
+              title={
+                currentRuntimeValue === CLOUD_RUNTIME_ID
+                  ? "Cloud"
+                  : (runtimeLabel ?? (runtimeInstanceId ? "Local" : undefined))
+              }
+            >
+              <SelectValue>
+                <span className="flex items-center gap-2">
+                  {currentRuntimeValue === CLOUD_RUNTIME_ID ? (
+                    <>
+                      <Cloud /> Cloud
+                    </>
+                  ) : !runtimeInstanceId ? (
+                    <>
+                      <AlertTriangle /> Choose runtime
+                    </>
+                  ) : (
+                    <>
+                      <Monitor /> {runtimeLabel ?? "Local"}
+                    </>
                   )}
                 </span>
-              </SelectItem>
-            ) : null}
-            {(currentRuntimeValue === UNBOUND_LOCAL_RUNTIME_ID ||
-              connectedLocalRuntimes.length === 0) && (
-              <SelectItem value={UNBOUND_LOCAL_RUNTIME_ID} disabled>
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <AlertTriangle size={12} className="text-amber-500" /> Choose runtime
-                </span>
-              </SelectItem>
-            )}
-            {connectedLocalRuntimes.map((r: SessionRuntimeInstance) => {
-              const lacksRepo = !!channelRepoId && !r.registeredRepoIds.includes(channelRepoId);
-              return (
-                <SelectItem key={r.id} value={r.id} disabled={lacksRepo}>
-                  <span className="flex items-center gap-1.5">
-                    <Monitor size={12} className="text-green-400" /> {r.label}
-                    {lacksRepo && (
-                      <DisabledReasonHint message="This local runtime does not have this repo linked.">
-                        repo not linked
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent className="min-w-56">
+              {showCloudRuntimeOption ? (
+                <SelectItem
+                  value={CLOUD_RUNTIME_ID}
+                  disabled={!cloudEnvironmentAvailable || !!cloudDisabledReason}
+                >
+                  <span className="flex items-center gap-2">
+                    <Cloud /> Cloud
+                    {cloudDisabledReason && (
+                      <DisabledReasonHint message={cloudDisabledReason}>
+                        remote required
                       </DisabledReasonHint>
                     )}
                   </span>
                 </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
-      ) : null}
-    </div>
+              ) : null}
+              {(currentRuntimeValue === UNBOUND_LOCAL_RUNTIME_ID ||
+                connectedLocalRuntimes.length === 0) && (
+                <SelectItem value={UNBOUND_LOCAL_RUNTIME_ID} disabled>
+                  <span className="flex items-center gap-2 text-muted-foreground">
+                    <AlertTriangle /> Choose runtime
+                  </span>
+                </SelectItem>
+              )}
+              {connectedLocalRuntimes.map((r: SessionRuntimeInstance) => {
+                const lacksRepo = !!channelRepoId && !r.registeredRepoIds.includes(channelRepoId);
+                return (
+                  <SelectItem key={r.id} value={r.id} disabled={lacksRepo}>
+                    <span className="flex items-center gap-2">
+                      <Monitor /> {r.label}
+                      {lacksRepo && (
+                        <DisabledReasonHint message="This local runtime does not have this repo linked.">
+                          repo not linked
+                        </DisabledReasonHint>
+                      )}
+                    </span>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        ) : null
+      }
+    />
   );
 }

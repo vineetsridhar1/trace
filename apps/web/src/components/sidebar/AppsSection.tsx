@@ -11,6 +11,7 @@ import {
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
 import { useCommandPaletteStore } from "../../stores/command-palette";
+import { useHomeDataStore } from "../../stores/home-data";
 import { AppSessionItem } from "./AppSessionItem";
 
 const APP_SESSION_GROUPS_QUERY = gql`
@@ -22,11 +23,17 @@ const APP_SESSION_GROUPS_QUERY = gql`
       kind
       status
       visibility
+      owner {
+        id
+        name
+        avatarUrl
+      }
       connection {
         state
       }
       sessions {
         id
+        createdById
         sessionGroupId
         agentStatus
         sessionStatus
@@ -54,6 +61,7 @@ export function AppsSection({
   useEffect(() => {
     if (!activeOrgId) return;
     let active = true;
+    useHomeDataStore.getState().markGeneratedStatus(activeOrgId, "loading");
     void client
       .query(
         APP_SESSION_GROUPS_QUERY,
@@ -63,6 +71,9 @@ export function AppsSection({
       .toPromise()
       .then((result) => {
         if (!active) return;
+        useHomeDataStore
+          .getState()
+          .markGeneratedStatus(activeOrgId, result.error ? "error" : "ready");
         const groups = result.data?.appSessionGroups as Array<
           SessionGroup & { id: string; sessions?: Array<Session & { id: string }> }
         >;
@@ -78,6 +89,9 @@ export function AppsSection({
         // live agent status (the store links them to the group by sessionGroupId).
         const sessions = groups.flatMap((group) => group.sessions ?? []);
         if (sessions.length) upsertMany("sessions", sessions as SessionEntity[]);
+      })
+      .catch(() => {
+        if (active) useHomeDataStore.getState().markGeneratedStatus(activeOrgId, "error");
       });
     return () => {
       active = false;

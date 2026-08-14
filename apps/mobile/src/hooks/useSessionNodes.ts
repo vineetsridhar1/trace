@@ -3,20 +3,17 @@ import {
   buildSessionNodes,
   eventScopeKey,
   useEntityStore,
-  useEntityField,
   type AgentToolResult,
   type EntityState,
   type SessionNode,
 } from "@trace/client-core";
-import type { Event, GitCheckpoint } from "@trace/gql";
+import type { Event } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
 
 export interface UseSessionNodesResult {
   nodes: SessionNode[];
   completedAgentTools: Map<string, AgentToolResult>;
   toolResultByUseId: Map<string, unknown>;
-  /** Checkpoints bucketed by the user-prompt event that produced them. */
-  gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
   /** Scoped events table. Exposed so `getItemType` can segment FlashList recycling pools by eventType. */
   events: Record<string, Event>;
 }
@@ -31,7 +28,6 @@ const DISABLED_SCOPE_KEY = "__session_nodes_disabled__";
 const EMPTY_NODES: SessionNode[] = [];
 const EMPTY_COMPLETED_AGENT_TOOLS = new Map<string, AgentToolResult>();
 const EMPTY_TOOL_RESULTS = new Map<string, unknown>();
-const EMPTY_GIT_CHECKPOINTS = new Map<string, GitCheckpoint[]>();
 const EMPTY_EVENTS: Record<string, Event> = {};
 const EMPTY_EVENT_IDS: string[] = [];
 
@@ -44,9 +40,7 @@ interface ScopedEventSnapshot {
 /**
  * Derive the renderable SessionNode[] for a session from its scoped events,
  * identical to web's node model. Also exposes the two tool-output maps the
- * builder produces plus a per-prompt git-checkpoint index — renderers need
- * these to inline tool_result content and to show checkpoint markers under
- * the prompts that triggered them.
+ * builder produces so renderers can inline tool_result content.
  *
  * Event-kind nodes whose `eventType`/`payload.type` combo has no mobile
  * renderer are dropped here rather than reaching FlashList. Returning
@@ -63,9 +57,6 @@ export function useSessionNodes(
   const eventIdsOverride = options.eventIds;
   const scopeKey = enabled ? eventScopeKey("session", sessionId) : DISABLED_SCOPE_KEY;
   const snapshot = useScopedEventSnapshot(scopeKey, frozen, eventIdsOverride);
-  const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
-    | GitCheckpoint[]
-    | undefined;
   const previousResultRef = useRef<{
     scopeKey: string;
     nodes: SessionNode[];
@@ -107,24 +98,10 @@ export function useSessionNodes(
   );
   const toolResultByUseId = useStableMap(built.toolResultByUseId);
 
-  const gitCheckpointsByPromptEventId = useMemo(() => {
-    if (!enabled) return EMPTY_GIT_CHECKPOINTS;
-    const map = new Map<string, GitCheckpoint[]>();
-    for (const checkpoint of gitCheckpoints ?? []) {
-      const pid = checkpoint.promptEventId;
-      if (!pid) continue;
-      const list = map.get(pid) ?? [];
-      list.push(checkpoint);
-      map.set(pid, list);
-    }
-    return map;
-  }, [enabled, gitCheckpoints]);
-
   return {
     nodes: built.nodes,
     completedAgentTools,
     toolResultByUseId,
-    gitCheckpointsByPromptEventId,
     events: built.events,
   };
 }

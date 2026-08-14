@@ -25,6 +25,17 @@ function parseNavFromPath(path: string): {
       searchQuery: "",
     };
   }
+  if (path.startsWith("/create")) {
+    return {
+      channelId: null,
+      sessionGroupId: null,
+      sessionId: null,
+      chatId: null,
+      page: "create",
+      channelSubPage: null,
+      searchQuery: "",
+    };
+  }
   if (path.startsWith("/search")) {
     return {
       channelId: null,
@@ -185,20 +196,27 @@ export function useHistorySync() {
       parsedNav.sessionId,
     );
     const { channelId, sessionGroupId, sessionId, chatId, page } = initialRedirect ?? parsedNav;
+    const isHomeRoute = window.location.pathname === "/";
     const isTopLevelPage =
-      page === "settings" || page === "inbox" || page === "tickets" || page === "search";
+      page === "create" ||
+      page === "settings" ||
+      page === "inbox" ||
+      page === "tickets" ||
+      page === "search";
     const initialChat =
-      isTopLevelPage || channelId ? null : (chatId ?? localStorage.getItem("trace:activeChatId"));
+      isTopLevelPage || isHomeRoute || channelId
+        ? null
+        : (chatId ?? localStorage.getItem("trace:activeChatId"));
     const initialChannel =
-      isTopLevelPage || initialChat
+      isTopLevelPage || isHomeRoute || initialChat
         ? null
         : (channelId ?? localStorage.getItem("trace:activeChannelId"));
     const initialSessionGroupId =
-      isTopLevelPage || initialChat
+      isTopLevelPage || isHomeRoute || initialChat
         ? null
         : (sessionGroupId ?? localStorage.getItem("trace:activeSessionGroupId"));
     const initialSessionId =
-      isTopLevelPage || initialChat
+      isTopLevelPage || isHomeRoute || initialChat
         ? null
         : (sessionId ?? localStorage.getItem("trace:activeSessionId"));
 

@@ -10,7 +10,16 @@ export const terminalQueries = {
       sessionId: args.sessionId,
       organizationId: requireOrgContext(ctx),
       userId: ctx.userId,
+      agentSessionId: ctx.agentSessionId,
     });
+  },
+  terminalCapture: async (
+    _parent: unknown,
+    args: { terminalId: string; maxBytes?: number | null; plainText?: boolean | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return terminalService.capture({ ...args, organizationId: requireOrgContext(ctx), userId: ctx.userId, agentSessionId: ctx.agentSessionId });
   },
   channelTerminals: async (
     _parent: unknown,
@@ -40,6 +49,8 @@ export const terminalMutations = {
       rows: args.rows,
       organizationId: requireOrgContext(ctx),
       userId: ctx.userId,
+      actorType: ctx.actorType,
+      agentSessionId: ctx.agentSessionId,
     });
   },
 
@@ -65,6 +76,16 @@ export const terminalMutations = {
       terminalId: args.terminalId,
       organizationId: requireOrgContext(ctx),
       userId: ctx.userId,
+      actorType: ctx.actorType,
+      agentSessionId: ctx.agentSessionId,
     });
+  },
+  sendTerminalInput: async (_parent: unknown, args: { terminalId: string; data: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return terminalService.sendInput({ ...args, organizationId: requireOrgContext(ctx), userId: ctx.userId, agentSessionId: ctx.agentSessionId });
+  },
+  resizeTerminal: async (_parent: unknown, args: { terminalId: string; cols: number; rows: number }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return terminalService.resize({ ...args, organizationId: requireOrgContext(ctx), userId: ctx.userId, agentSessionId: ctx.agentSessionId });
   },
 };

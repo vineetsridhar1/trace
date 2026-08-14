@@ -1,4 +1,9 @@
-import type { StartSessionInput, UpdateSessionDefaultsInput, ActorType } from "@trace/gql";
+import type {
+  StartSessionInput,
+  ConvertSessionGroupInput,
+  UpdateSessionDefaultsInput,
+  ActorType,
+} from "@trace/gql";
 import type { AgentStatus, SessionStatus, CodingTool, SessionGroupKind } from "@prisma/client";
 import type { EventType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
@@ -8,11 +13,11 @@ import {
   getDefaultReasoningEffort,
   hasQuestionBlock,
   hasPlanBlock,
+  actionRequiredArtifactForToolError,
+  actionRequiredArtifactForToolOutput,
   isSupportedModel,
   isSupportedReasoningEffort,
   MAX_WORKSPACE_NAME_LENGTH,
-  type GitCheckpointBridgePayload,
-  type GitCheckpointContext,
   type BridgeSessionGitSyncStatus,
   type BridgeWorkspaceWarning,
   type BridgeRepoWorktree,
@@ -47,7 +52,10 @@ import {
   setBridgeAccessApprovedHandler,
   type BridgeAccessApprovedHandlerInput,
 } from "./runtime-access.js";
-import { agentEnvironmentService } from "./agent-environment.js";
+import {
+  agentEnvironmentService,
+  assertAgentEnvironmentSupportsTool,
+} from "./agent-environment.js";
 import {
   alertAgentEnvironmentOperator,
   logAgentEnvironmentTelemetry,
@@ -57,11 +65,7 @@ import {
   type SessionGroupStatus as DerivedSessionGroupStatus,
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
-import {
-  assertCloudHostingAllowed,
-  isCloudHostingAllowed,
-  isLocalMode,
-} from "../lib/mode.js";
+import { assertCloudHostingAllowed, isCloudHostingAllowed, isLocalMode } from "../lib/mode.js";
 import {
   assertSessionGroupAccess,
   canViewSessionGroup,
@@ -79,7 +83,7 @@ import {
 } from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
 import { managedGitService } from "./managed-git.js";
-import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
+import { createAgentInvocationToken } from "../lib/agent-invocation-auth.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -94,7 +98,7 @@ export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   clientSource?: string | null;
   forceNewGroup?: boolean;
   forkedFromSessionGroupId?: string | null;
-  checkpointSha?: string | null;
+  baseCommitSha?: string | null;
   provisionWithoutPrompt?: boolean;
   name?: string | null;
   allowVisibleSourceSession?: boolean;
@@ -117,13 +121,46 @@ async function runtimeAttachmentUrls(
   );
 }
 
+/**
+ * A session group is the durable work unit. Conversion deliberately changes
+ * that unit in place so its active session, URL, and event history survive.
+ * Target-specific provisioning is added through this service rather than a
+ * resolver so agents and GraphQL clients share the same rules.
+ */
+export type ConvertSessionGroupServiceInput = Omit<ConvertSessionGroupInput, "kind" | "tool"> & {
+  kind: SessionGroupKind;
+  tool?: CodingTool | null;
+  organizationId: string;
+  actorId: string;
+  actorType?: ActorType;
+};
+
+type GeneratedSessionConversion = {
+  kind: "app";
+  repoId: string;
+  branch: string;
+  tool: CodingTool;
+  model?: string | null;
+  reasoningEffort?: string | null;
+};
+
+type ProvisioningEnvironment = {
+  id: string;
+  name: string;
+  adapterType: RuntimeAdapterType;
+  config: Prisma.JsonValue;
+};
+
+type ConversionToolSelection = {
+  tool: CodingTool;
+  model: string | null | undefined;
+  reasoningEffort: string | null | undefined;
+};
+
 type SessionStartMetadata = {
   prompt: string | null;
   promptEventId: string | null;
-  checkpointContextId: string | null;
   sourceSessionId: string | null;
-  restoreCheckpointId: string | null;
-  restoreCheckpointSha: string | null;
 };
 
 type PendingInputInfo = {
@@ -241,6 +278,9 @@ export type SessionConnectionData = {
   providerRuntimeId?: string;
   providerRuntimeUrl?: string;
   providerStatus?: string;
+  runtimeHardDeadlineAt?: string;
+  providerDeadlineEnforcementId?: string;
+  hardDeadlineWarningAt?: string;
   requestedAt?: string;
   provisioningAt?: string;
   connectingAt?: string;
@@ -286,13 +326,36 @@ export type SessionConnectionData = {
   [key: string]: unknown;
 };
 
+const RUNTIME_IDENTITY_FIELDS = [
+  "environmentId",
+  "adapterType",
+  "runtimeInstanceId",
+  "providerRuntimeId",
+] as const satisfies ReadonlyArray<keyof SessionConnectionData>;
+
+function hasRuntimeBindingChanged(
+  current: SessionConnectionData,
+  next: SessionConnectionData,
+): boolean {
+  return RUNTIME_IDENTITY_FIELDS.some((field) => current[field] !== next[field]);
+}
+
+export type RuntimeLeaseAuthorization =
+  | { authorized: true }
+  | {
+      authorized: false;
+      reason:
+        | "session_not_active"
+        | "runtime_not_owner"
+        | "environment_mismatch"
+        | "runtime_stopping";
+    };
 type PendingSessionCommand =
   | {
       type: "run";
       prompt?: string | null;
       interactionMode?: string | null;
       clientSource?: string | null;
-      checkpointContext?: GitCheckpointContext | null;
       imageKeys?: string[] | null;
       workspaceUpgrade?: boolean;
     }
@@ -301,7 +364,6 @@ type PendingSessionCommand =
       prompt: string;
       interactionMode?: string | null;
       clientSource?: string | null;
-      checkpointContext?: GitCheckpointContext | null;
       imageKeys?: string[] | null;
       workspaceUpgrade?: boolean;
     };
@@ -466,6 +528,16 @@ function isRuntimeComputeGone(conn: SessionConnectionData): boolean {
 }
 
 /**
+ * True while the deprovision reconciler owns a runtime teardown. The idle
+ * sweep must not retry these states: doing so refreshes their teardown
+ * timestamps and can permanently starve the reconciler as well as the idle
+ * sweep's bounded candidate batch.
+ */
+function isRuntimeDeprovisionPending(conn: SessionConnectionData): boolean {
+  return conn.state === "stopping" || conn.state === "deprovision_failed";
+}
+
+/**
  * True when a runtime is still coming up (or connected within the idle window)
  * and must not be reaped by the idle sweep.
  *
@@ -496,7 +568,7 @@ function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStat
 }
 
 function getRunningSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
-  return sessionStatus === "merged" ? "merged" : "in_progress";
+  return sessionStatus === "needs_input" ? "in_progress" : (sessionStatus ?? "in_progress");
 }
 
 function getIdleAgentStatus(agentStatus?: AgentStatus | null): AgentStatus {
@@ -532,81 +604,6 @@ function localEnvironmentRuntimeInstanceId(
   return typeof runtimeInstanceId === "string" && runtimeInstanceId.trim()
     ? runtimeInstanceId
     : null;
-}
-
-function shortCommitSha(commitSha: string): string {
-  return commitSha.slice(0, 7);
-}
-
-function parseCheckpointContext(raw: unknown): GitCheckpointContext | null {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-
-  const context = raw as Record<string, unknown>;
-  if (
-    typeof context.checkpointContextId !== "string" ||
-    typeof context.sessionId !== "string" ||
-    typeof context.sessionGroupId !== "string" ||
-    typeof context.repoId !== "string" ||
-    typeof context.updatedAt !== "string"
-  ) {
-    return null;
-  }
-
-  return {
-    checkpointContextId: context.checkpointContextId,
-    promptEventId: typeof context.promptEventId === "string" ? context.promptEventId : null,
-    sessionId: context.sessionId,
-    sessionGroupId: context.sessionGroupId,
-    repoId: context.repoId,
-    updatedAt: context.updatedAt,
-  };
-}
-
-function createCheckpointContext({
-  checkpointContextId,
-  promptEventId,
-  sessionId,
-  sessionGroupId,
-  repoId,
-}: {
-  checkpointContextId: string;
-  promptEventId?: string | null;
-  sessionId: string;
-  sessionGroupId: string;
-  repoId: string;
-}): GitCheckpointContext {
-  return {
-    checkpointContextId,
-    promptEventId: promptEventId ?? null,
-    sessionId,
-    sessionGroupId,
-    repoId,
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-function buildCheckpointContextFromStartMeta({
-  sessionId,
-  sessionGroupId,
-  repoId,
-  startMeta,
-}: {
-  sessionId: string;
-  sessionGroupId?: string | null;
-  repoId?: string | null;
-  startMeta?: Pick<SessionStartMetadata, "checkpointContextId" | "promptEventId"> | null;
-}): GitCheckpointContext | null {
-  if (!sessionGroupId || !repoId || !startMeta?.checkpointContextId) {
-    return null;
-  }
-
-  return createCheckpointContext({
-    checkpointContextId: startMeta.checkpointContextId,
-    promptEventId: startMeta.promptEventId,
-    sessionId,
-    sessionGroupId,
-    repoId,
-  });
 }
 
 const SESSION_GROUP_SUMMARY_SELECT = {
@@ -675,6 +672,42 @@ type SessionWithInclude = Prisma.SessionGetPayload<{
   include: typeof SESSION_INCLUDE;
 }>;
 
+type SessionMoveParams = {
+  session: SessionWithInclude;
+  targetHosting: "cloud" | "local";
+  targetRuntimeInstanceId?: string | null;
+  targetRuntimeLabel?: string | null;
+  targetRuntime?: Pick<RuntimeInstance, "supportedTools" | "label"> | null;
+  targetEnvironment?: ProvisioningEnvironment;
+  reuseCloudRuntime?: RuntimeInstance | null;
+  allowUnverifiedSourceGitStatus?: boolean;
+  bootstrapPrompt?: string;
+  conversion?: GeneratedSessionConversion;
+  actorType: ActorType;
+  actorId: string;
+  runtimeLockHeld?: boolean;
+};
+
+type SessionMoveSourceInspection = {
+  status: BridgeSessionGitSyncStatus | null;
+  verified: boolean;
+  skippedReason: string | null;
+};
+
+type PreparedSessionMove = {
+  targetEnvironment: ProvisioningEnvironment | null;
+  sourceCloudRuntimeSession: SessionWithInclude | null;
+  sourceInspection: SessionMoveSourceInspection;
+  sessionsToMove: SessionWithInclude[];
+  sourceRuntimeId: string | null;
+  bootstrapPrompt: string;
+  baseCommitSha: string | null;
+  sourceBranch: string | null;
+  sourceConnection: SessionConnectionData;
+  shouldCleanupGeneralWorkspace: boolean;
+  nextConnectionBase: SessionConnectionData;
+};
+
 type ForkSourceEvent = Prisma.EventGetPayload<Prisma.EventDefaultArgs>;
 
 type StartSessionBuildStartEventInput = {
@@ -726,6 +759,12 @@ function numberFromBigInt(value: bigint | number | null | undefined): number {
   return typeof value === "number" ? value : 0;
 }
 
+function eventJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(
+    JSON.stringify(value, (_key, nested) => (typeof nested === "bigint" ? Number(nested) : nested)),
+  ) as Prisma.InputJsonValue;
+}
+
 function serializeSession(session: {
   id: string;
   name: string;
@@ -735,6 +774,7 @@ function serializeSession(session: {
   model: string | null;
   reasoningEffort: string | null;
   hosting: string;
+  createdById: string;
   createdBy: unknown;
   repo: unknown;
   repoId?: string | null;
@@ -751,7 +791,6 @@ function serializeSession(session: {
   outputTokens?: bigint | number | null;
   cacheReadTokens?: bigint | number | null;
   cacheCreationTokens?: bigint | number | null;
-  costUsd?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -764,6 +803,7 @@ function serializeSession(session: {
     model: session.model,
     reasoningEffort: session.reasoningEffort,
     hosting: session.hosting,
+    createdById: session.createdById,
     createdBy: session.createdBy,
     repo: session.repo ?? null,
     repoId: session.repoId ?? null,
@@ -786,51 +826,8 @@ function serializeSession(session: {
     outputTokens: numberFromBigInt(session.outputTokens),
     cacheReadTokens: numberFromBigInt(session.cacheReadTokens),
     cacheCreationTokens: numberFromBigInt(session.cacheCreationTokens),
-    costUsd: session.costUsd ?? 0,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
-  };
-}
-
-function serializeGitCheckpoint(checkpoint: {
-  id: string;
-  sessionId: string;
-  sessionGroupId: string;
-  repoId: string;
-  promptEventId: string;
-  commitSha: string;
-  parentShas: string[];
-  treeSha: string;
-  subject: string;
-  author: string;
-  committedAt: Date;
-  filesChanged: number;
-  captureStatus?: string | null;
-  captureKey?: string | null;
-  captureUrl?: string | null;
-  captureContentType?: string | null;
-  capturedAt?: Date | null;
-  createdAt: Date;
-}) {
-  return {
-    id: checkpoint.id,
-    sessionId: checkpoint.sessionId,
-    sessionGroupId: checkpoint.sessionGroupId,
-    repoId: checkpoint.repoId,
-    promptEventId: checkpoint.promptEventId,
-    commitSha: checkpoint.commitSha,
-    parentShas: checkpoint.parentShas,
-    treeSha: checkpoint.treeSha,
-    subject: checkpoint.subject,
-    author: checkpoint.author,
-    committedAt: checkpoint.committedAt.toISOString(),
-    filesChanged: checkpoint.filesChanged,
-    captureStatus: checkpoint.captureStatus ?? null,
-    captureKey: checkpoint.captureKey ?? null,
-    captureUrl: checkpoint.captureUrl ?? null,
-    captureContentType: checkpoint.captureContentType ?? null,
-    capturedAt: checkpoint.capturedAt?.toISOString() ?? null,
-    createdAt: checkpoint.createdAt.toISOString(),
   };
 }
 
@@ -864,7 +861,7 @@ function buildSessionGroupSnapshot(
   return {
     ...group,
     owner: group.ownerUser,
-    status: deriveSessionGroupStatus(sessions ?? [], group.prUrl ?? null, group.archivedAt ?? null),
+    status: deriveSessionGroupStatus(sessions ?? [], group.archivedAt ?? null, group.prUrl),
   };
 }
 
@@ -887,13 +884,6 @@ function rewriteForkPayloadReferences(
 function jsonRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as Record<string, unknown>;
-}
-
-function gitCheckpointIdFromPayload(value: unknown): string | null {
-  const payload = jsonRecord(value);
-  if (payload.type !== "git_checkpoint" && payload.type !== "git_checkpoint_rewrite") return null;
-  const checkpoint = jsonRecord(payload.checkpoint);
-  return typeof checkpoint.id === "string" ? checkpoint.id : null;
 }
 
 /** Maximum length for session names (prompt-derived or title-tag-extracted). */
@@ -932,7 +922,26 @@ const BACKGROUND_WORK_INSTRUCTION = `\n\n<system-instruction>
 If you start anything in the background, including long-running shell commands, dev servers, watchers, or subagents, keep the main agent process alive until that work is complete or intentionally stopped. Do not send a final response while background work you started is still running unless the user explicitly asks you to leave it running; in that case, report what is running and how it is being kept alive.
 </system-instruction>`;
 
-/** Instruction appended to every prompt for repo-based sessions so the AI auto-saves work. */
+/** Tell every coding agent where to find Trace's portable structured-question contract. */
+const REQUEST_USER_INPUT_SKILL_INSTRUCTION = `\n\n<system-instruction>
+Before asking the user for information, a decision, confirmation, or references, first read $TRACE_SKILLS_DIR/request-user-input/SKILL.md completely. Follow that skill's guidance for deciding whether to ask, formatting structured questions, and waiting for the response. Use the skill whenever you need user input before continuing.
+</system-instruction>`;
+
+/** Teach managed agents about Trace's session-control surface without relying on PATH discovery. */
+const TRACE_SESSION_SKILL_INSTRUCTION = `\n\n<system-instruction>
+When the request involves discovering, creating, messaging, running, stopping, monitoring, or archiving Trace sessions, read $TRACE_SKILLS_DIR/trace-session/SKILL.md completely before acting. Invoke the managed CLI using \`"$TRACE_CLI"\` exactly; do not call a bare \`trace\` command and never print $TRACE_INVOCATION_TOKEN.
+</system-instruction>`;
+
+/** Make the CLI a self-describing platform surface instead of requiring one skill per capability. */
+const TRACE_CLI_DISCOVERY_INSTRUCTION = `\n\n<system-instruction>
+When you need a Trace platform capability, first run \`"$TRACE_CLI" --help --json\`, then inspect the relevant group and leaf help with \`"$TRACE_CLI" <group> --help --json\` and \`"$TRACE_CLI" <group> <command> --help --json\`. Follow the returned workflow, effects, output, and next-step guidance. Invoke the managed CLI using \`"$TRACE_CLI"\` exactly; do not call a bare \`trace\` command, call Trace GraphQL directly, or print $TRACE_INVOCATION_TOKEN.
+</system-instruction>`;
+
+const GENERAL_SESSION_INSTRUCTION = `\n\n<system-instruction>
+This is a Trace general agent session. Coordinate, monitor, answer questions, and use the managed Trace CLI to discover the relevant channel, repository, and sessions. Do not edit code or create a specialized workspace in this session. When this conversation becomes one focused task, convert this session to Coding or App. Coding requires a coding channel, which normally supplies its repository. App sessions use isolated managed cloud workspaces. A successful conversion preserves the conversation, prepares the target workspace, and resumes the request automatically. If the CLI returns an error, report that exact failure and do not imply the conversion happened. When work is independent or parallel, create a linked session instead.
+</system-instruction>`;
+
+/** Instruction appended to every prompt for repo-based sessions so the AI auto-saves each response. */
 const AUTO_SAVE_INSTRUCTION = `\n\n<system-instruction>
 After completing each task, silently save your work to the remote:
 1. Stage all changes: git add -A
@@ -942,9 +951,66 @@ Do this silently — do not mention it to the user unless they ask or it fails.
 If the user asks you to stop auto-saving or disable auto-save, stop doing this for the rest of the session.
 </system-instruction>`;
 
-const APP_SESSION_INSTRUCTION = `\n\n<system-instruction>
-This is a Trace app session in its own isolated cloud runtime. When present, read and follow docs/ai-guidance.md and docs/trace-apps.md before changing the app. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Vite/React/Node/Tailwind/shadcn-compatible starter as the source of truth. Build frontend UI in src and add API routes or other server behavior in server.ts and related Node modules. Keep browser requests to your own API same-origin. Call third-party APIs from Node routes when browser CORS would block them. Only when an external browser origin must call this app directly, add its exact origin to the comma-separated APP_CORS_ALLOWED_ORIGINS environment variable; never use a wildcard for credentialed requests. You may install npm packages (pnpm is available) and use sudo to install any other OS packages you need. Redis and PostgreSQL are already running and ready to use — do NOT install, initialize, or reconfigure them, create roles, or edit pg_hba/auth. The \`pg\` client and its TypeScript types are already installed. For Postgres, import \`Pool\` from \`pg\`, read the DATABASE_URL environment variable, and pass it straight to \`new Pool({ connectionString: process.env.DATABASE_URL })\`; it is a complete, credentialed TCP URL (\`postgresql://user:pass@localhost:5432/app\`) for a ready database named \`app\` — do not parse it, override the user, or switch to a Unix socket. Redis is at REDIS_URL / redis://localhost:6379. Keep credentials out of git. Preserve data-trace-source attributes when adding inspectable UI elements. IMPORTANT: the dev server is already started and managed for you on port 3000 (host 0.0.0.0) and hot-reloads your file changes — do NOT run \`pnpm dev\` or otherwise start your own server, the port is already taken and a second one will crash. Just edit files; if you need to verify, curl http://localhost:3000. Commit and push meaningful checkpoints to the configured managed origin when the app reaches a working state. Sharing the live app is a valid final outcome.
+/** Require coding agents to explicitly link newly-created pull requests. */
+const PULL_REQUEST_LINK_INSTRUCTION = `\n\n<system-instruction>
+When you create a pull request for this session, link it immediately with the Trace CLI so the session stays current even if its branch name changed or repository webhooks are unavailable. First inspect \`"$TRACE_CLI" session link-pr --help --json\`, then run \`"$TRACE_CLI" session link-pr <pr-url> --self --json\` using the URL of the PR you created. Do this before reporting the PR to the user.
 </system-instruction>`;
+const APP_SESSION_INSTRUCTION = `\n\n<system-instruction>
+This is a Trace app session in its own isolated cloud runtime. When present, read and follow docs/ai-guidance.md and docs/trace-apps.md before changing the app. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Vite/React/Node/Tailwind/shadcn-compatible starter as the source of truth. Build frontend UI in src and add API routes or other server behavior in server.ts and related Node modules. Keep browser requests to your own API same-origin. Call third-party APIs from Node routes when browser CORS would block them. Only when an external browser origin must call this app directly, add its exact origin to the comma-separated APP_CORS_ALLOWED_ORIGINS environment variable; never use a wildcard for credentialed requests. You may install npm packages (pnpm is available) and use sudo to install any other OS packages you need. Redis and PostgreSQL are already running and ready to use — do NOT install, initialize, or reconfigure them, create roles, or edit pg_hba/auth. The \`pg\` client and its TypeScript types are already installed. For Postgres, import \`Pool\` from \`pg\`, read the DATABASE_URL environment variable, and pass it straight to \`new Pool({ connectionString: process.env.DATABASE_URL })\`; it is a complete, credentialed TCP URL (\`postgresql://user:pass@localhost:5432/app\`) for a ready database named \`app\` — do not parse it, override the user, or switch to a Unix socket. Redis is at REDIS_URL / redis://localhost:6379. Keep credentials out of git. Preserve data-trace-source attributes when adding inspectable UI elements. IMPORTANT: the dev server is already started and managed for you on port 3000 (host 0.0.0.0) and hot-reloads your file changes — do NOT run \`pnpm dev\` or otherwise start your own server, the port is already taken and a second one will crash. Just edit files; if you need to verify, curl http://localhost:3000. Commit and push meaningful changes to the configured managed origin when the app reaches a working state. Sharing the live app is a valid final outcome.
+</system-instruction>`;
+
+const CLARIFYING_QUESTIONS_INSTRUCTION = `\n\n<system-instruction>
+This is a creation session: the user is building something specific and wants it to match what they have in mind. Before you start building from a new request, first ask the user the clarifying questions you need so that what you create is exactly what the user wants, and wait for their answers — do not silently assume and jump straight to building. Before asking, read $TRACE_SKILLS_DIR/request-user-input/SKILL.md completely and use its structured question workflow. Ask in a single upfront batch of a few high-value questions covering only the decisions that most shape the result: purpose and audience, the must-have scope and features, visual style and tone, the specific content or data to use, and any hard constraints. Do not ask about trivial or easily-reversible details, and never re-ask anything the user already specified. Only skip questions when the request is already detailed enough to build confidently, or the user tells you to just build it or to stop asking. Once the user has answered, proceed to build as instructed below; on later turns follow the same judgment — ask when a new request is ambiguous, otherwise keep working.
+</system-instruction>`;
+
+const APP_CREATION_SESSION_INSTRUCTION = CLARIFYING_QUESTIONS_INSTRUCTION + APP_SESSION_INSTRUCTION;
+
+function conversionContinuationPrompt(kind: SessionGroupKind): string {
+  const label = kind === "app" ? "app" : "coding";
+  return `Continue the user's request in the newly prepared ${label} workspace.`;
+}
+
+function isGeneratedProjectKind(
+  kind: SessionGroupKind | null | undefined,
+): kind is GeneratedSessionConversion["kind"] {
+  return kind === "app";
+}
+
+function requireSingleGeneralConversionSession<T>(
+  source: { kind: SessionGroupKind; sessions: T[] } | null,
+): T {
+  if (!source) throw new ValidationError("Session group not found or is archived");
+  if (source.kind !== "general") {
+    throw new ValidationError("Only general sessions can be converted");
+  }
+  if (source.sessions.length !== 1) {
+    throw new ValidationError("Only single-session groups can be converted");
+  }
+  return source.sessions[0]!;
+}
+
+function resolveConversionToolSelection(
+  sourceTool: CodingTool,
+  input: Pick<ConvertSessionGroupServiceInput, "tool" | "model" | "reasoningEffort">,
+): ConversionToolSelection {
+  const tool = input.tool ?? sourceTool;
+  const toolChanged = tool !== sourceTool;
+  return {
+    tool,
+    model:
+      input.model != null
+        ? validateModelForTool(tool, input.model)
+        : toolChanged
+          ? (getDefaultModel(tool) ?? null)
+          : undefined,
+    reasoningEffort:
+      input.reasoningEffort != null
+        ? validateReasoningEffortForTool(tool, input.reasoningEffort)
+        : toolChanged
+          ? (getDefaultReasoningEffort(tool) ?? null)
+          : undefined,
+  };
+}
 
 function appendAutoSave(prompt: string, hasRepo: boolean): string {
   return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
@@ -957,8 +1023,14 @@ function appendPromptInstructions(
 ): string {
   let result = prompt + TITLE_INSTRUCTION;
   result += BACKGROUND_WORK_INSTRUCTION;
-  if (hasRepo && sessionGroupKind !== "app") result += BRANCH_INSTRUCTION;
-  result = appendAutoSave(result, hasRepo);
+  result += REQUEST_USER_INPUT_SKILL_INSTRUCTION;
+  result += TRACE_CLI_DISCOVERY_INSTRUCTION;
+  result += TRACE_SESSION_SKILL_INSTRUCTION;
+  const hasWritableUserRepo =
+    hasRepo && sessionGroupKind !== "general" && !isGeneratedProjectKind(sessionGroupKind);
+  if (sessionGroupKind === "general") result += GENERAL_SESSION_INSTRUCTION;
+  if (hasWritableUserRepo) result += BRANCH_INSTRUCTION + PULL_REQUEST_LINK_INSTRUCTION;
+  result = appendAutoSave(result, hasWritableUserRepo);
   return result;
 }
 
@@ -1189,25 +1261,15 @@ async function getSessionStartMetadata(sessionId: string): Promise<SessionStartM
     return {
       prompt: null,
       promptEventId: null,
-      checkpointContextId: null,
       sourceSessionId: null,
-      restoreCheckpointId: null,
-      restoreCheckpointSha: null,
     };
   }
 
-  const payload = startEvent.payload as Record<string, unknown>;
-  const metadata = startEvent.metadata as Record<string, unknown> | null;
+  const payload = jsonRecord(startEvent.payload);
   return {
     prompt: typeof payload.prompt === "string" ? payload.prompt : null,
     promptEventId: startEvent.id,
-    checkpointContextId:
-      typeof metadata?.checkpointContextId === "string" ? metadata.checkpointContextId : null,
     sourceSessionId: typeof payload.sourceSessionId === "string" ? payload.sourceSessionId : null,
-    restoreCheckpointId:
-      typeof payload.restoreCheckpointId === "string" ? payload.restoreCheckpointId : null,
-    restoreCheckpointSha:
-      typeof payload.restoreCheckpointSha === "string" ? payload.restoreCheckpointSha : null,
   };
 }
 
@@ -1261,6 +1323,22 @@ function selectRuntimeSupportedTool(
   return LOCAL_TOOL_FALLBACK_ORDER.find((tool) => runtime.supportedTools.includes(tool)) ?? null;
 }
 
+function runtimeMetadata(...args: Parameters<typeof sessionRouter.getRuntime>) {
+  return sessionRouter.getRuntime(...args);
+}
+
+async function sendSessionCommand(
+  ...args: Parameters<typeof sessionRouter.send>
+): Promise<DeliveryResult> {
+  return sessionRouter.sendAsync(...args);
+}
+
+async function sendRuntimeCommand(
+  ...args: Parameters<typeof sessionRouter.sendToRuntime>
+): Promise<DeliveryResult> {
+  return sessionRouter.sendToRuntime(...args);
+}
+
 const FULLY_UNLOADED_AGENT_STATUSES: readonly AgentStatus[] = ["failed", "stopped"];
 
 export function isFullyUnloadedSession(
@@ -1274,7 +1352,120 @@ export function isFullyUnloadedSession(
   );
 }
 
+const RUNTIME_TRANSITION_LOCK_TTL_MS = 10 * 60 * 1000;
+const activeRuntimeTransitionLocks = new Set<string>();
+
+async function withRuntimeTransitionLock<Result>(
+  input: { key: string; ttlMs?: number },
+  operation: () => Promise<Result>,
+): Promise<{ acquired: true; value: Result } | { acquired: false }> {
+  if (activeRuntimeTransitionLocks.has(input.key)) return { acquired: false };
+  activeRuntimeTransitionLocks.add(input.key);
+  try {
+    return { acquired: true, value: await operation() };
+  } finally {
+    activeRuntimeTransitionLocks.delete(input.key);
+  }
+}
+
 export class SessionService {
+  private async findIdempotentStartedSession(input: {
+    clientMutationId?: string | null;
+    organizationId: string;
+    createdById: string;
+  }): Promise<SessionWithInclude | null> {
+    if (!input.clientMutationId) return null;
+    const startEvent = await prisma.event.findFirst({
+      where: {
+        id: input.clientMutationId,
+        organizationId: input.organizationId,
+        scopeType: "session",
+        eventType: "session_started",
+        actorId: input.createdById,
+      },
+      select: { scopeId: true },
+    });
+    if (!startEvent) return null;
+    return prisma.session.findFirst({
+      where: {
+        id: startEvent.scopeId,
+        organizationId: input.organizationId,
+        createdById: input.createdById,
+      },
+      include: SESSION_INCLUDE,
+    });
+  }
+
+  private async prepareInvocation(
+    sessionId: string,
+    organizationId: string,
+    sessionGroupId: string | null,
+  ): Promise<{ invocationId: string; runtimeEnv: Record<string, string> }> {
+    const invocationId = randomUUID();
+    await prisma.session.updateMany({
+      where: { id: sessionId, organizationId },
+      data: { activeInvocationId: invocationId },
+    });
+    const serverUrl =
+      process.env.TRACE_SERVER_PUBLIC_URL?.trim() ||
+      `http://localhost:${process.env.PORT?.trim() || "4000"}`;
+    return {
+      invocationId,
+      runtimeEnv: {
+        TRACE_SESSION_ID: sessionId,
+        TRACE_SESSION_GROUP_ID: sessionGroupId ?? "",
+        TRACE_ORGANIZATION_ID: organizationId,
+        TRACE_SERVER_URL: serverUrl,
+        TRACE_API_URL: serverUrl,
+        TRACE_INVOCATION_ID: invocationId,
+        TRACE_INVOCATION_TOKEN: createAgentInvocationToken({
+          organizationId,
+          sessionId,
+          sessionGroupId,
+          invocationId,
+        }),
+      },
+    };
+  }
+
+  private async clearInvocation(sessionId: string, invocationId: string): Promise<void> {
+    await prisma.session.updateMany({
+      where: { id: sessionId, activeInvocationId: invocationId },
+      data: { activeInvocationId: null },
+    });
+  }
+
+  private async createGeneratedProjectGitCredential(input: {
+    organizationId: string;
+    sessionId: string;
+    runtimeInstanceId: string;
+    repo: { id: string; remoteUrl: string | null; defaultBranch: string };
+    actorType: ActorType;
+    actorId: string;
+  }): Promise<{ repoId: string; repoRemoteUrl: string; defaultBranch: string }> {
+    if (!input.repo.remoteUrl) {
+      throw new ValidationError("Generated project managed git remote is unavailable");
+    }
+    const access = await managedGitService.mintAccessToken({
+      organizationId: input.organizationId,
+      repoId: input.repo.id,
+      scope: "runtime",
+      sessionId: input.sessionId,
+      subject: input.runtimeInstanceId,
+      capabilities: ["read", "write"],
+      actorType: input.actorType,
+      actorId: input.actorId,
+    });
+    const authenticatedUrl = new URL(input.repo.remoteUrl);
+    authenticatedUrl.username = "trace";
+    authenticatedUrl.password = access.token;
+    return {
+      repoId: input.repo.id,
+      repoRemoteUrl: authenticatedUrl.toString(),
+      defaultBranch: input.repo.defaultBranch,
+    };
+  }
+
   /**
    * Encapsulates the common createRuntime call used by startSession, run, and sendMessage.
    * Resolves repo/branch/hosting and delegates to the session router.
@@ -1291,7 +1482,7 @@ export class SessionService {
     reasoningEffort?: string | null;
     repo?: { id: string; name: string; remoteUrl: string | null; defaultBranch: string } | null;
     branch?: string | null;
-    checkpointSha?: string | null;
+    baseCommitSha?: string | null;
     createdById: string;
     organizationId: string;
     /** Actor that initiated provisioning; defaults to a user actor. Agents are
@@ -1300,6 +1491,8 @@ export class SessionService {
     readOnly?: boolean;
     /** Adopt an existing local worktree at this path instead of creating one. */
     adoptWorktreePath?: string | null;
+    /** Persisted local bridge selected as this session's authorized home. */
+    expectedHomeRuntimeId?: string | null;
     adapterType?: RuntimeAdapterType;
     environment?: {
       id: string;
@@ -1361,26 +1554,15 @@ export class SessionService {
         sessionGroupKind: params.sessionGroupKind ?? undefined,
         prepareAppGit:
           params.sessionGroupKind === "app" && params.repo?.remoteUrl
-            ? async (runtimeInstanceId) => {
-                const access = await managedGitService.mintAccessToken({
+            ? (runtimeInstanceId) =>
+                this.createGeneratedProjectGitCredential({
                   organizationId: params.organizationId,
-                  repoId: params.repo!.id,
-                  scope: "runtime",
                   sessionId: params.sessionId,
-                  subject: runtimeInstanceId,
-                  capabilities: ["read", "write"],
+                  runtimeInstanceId,
+                  repo: params.repo!,
                   actorType: params.actorType ?? "user",
                   actorId: params.createdById,
-                });
-                const authenticatedUrl = new URL(params.repo!.remoteUrl!);
-                authenticatedUrl.username = "trace";
-                authenticatedUrl.password = access.token;
-                return {
-                  repoId: params.repo!.id,
-                  repoRemoteUrl: authenticatedUrl.toString(),
-                  defaultBranch: params.repo!.defaultBranch,
-                };
-              }
+                })
             : undefined,
         slug: slug ?? undefined,
         preserveBranchName,
@@ -1403,11 +1585,12 @@ export class SessionService {
               : null,
         runtimeProfile,
         branch: params.branch ?? undefined,
-        checkpointSha: params.checkpointSha ?? undefined,
+        baseCommitSha: params.baseCommitSha ?? undefined,
         createdById: params.createdById,
         organizationId: params.organizationId,
         readOnly: params.readOnly,
         adoptWorktreePath,
+        expectedHomeRuntimeId: params.expectedHomeRuntimeId ?? undefined,
         onLifecycle: (eventType, update) =>
           this.recordRuntimeLifecycle(params.sessionId, eventType, update),
         onFailed: (error) => this.workspaceFailed(params.sessionId, error),
@@ -1426,11 +1609,23 @@ export class SessionService {
     repoId: string;
   }): Promise<string[]> {
     if (params.hosting !== "local") return [];
-    const runtime = sessionRouter.getRuntimeForSession(params.sessionId);
-    if (!runtime) {
+    const localRuntime = sessionRouter.getRuntimeForSession(params.sessionId);
+    const session = localRuntime
+      ? null
+      : await prisma.session.findUnique({
+          where: { id: params.sessionId },
+          select: { connection: true },
+        });
+    const runtimeInstanceId =
+      localRuntime?.id ?? this.getConnectionRuntimeInstanceId(session?.connection);
+    if (!runtimeInstanceId) {
       throw new Error("Cannot allocate a local workspace slug before selecting a runtime");
     }
-    return sessionRouter.listWorkspaceSlugs(runtime.id, params.repoId, params.organizationId);
+    return sessionRouter.listWorkspaceSlugs(
+      runtimeInstanceId,
+      params.repoId,
+      params.organizationId,
+    );
   }
 
   /**
@@ -1486,45 +1681,46 @@ export class SessionService {
     sessionId: string;
     organizationId: string;
     adapterType?: RuntimeAdapterType;
-  }): Promise<{
-    id: string;
-    name: string;
-    adapterType: RuntimeAdapterType;
-    config: Prisma.JsonValue;
-  } | null> {
+  }): Promise<ProvisioningEnvironment | null> {
     if (params.adapterType !== "provisioned") return null;
     const session = await prisma.session.findUnique({
       where: { id: params.sessionId },
       select: { connection: true },
     });
     const environmentId = this.parseConnection(session?.connection ?? null).environmentId;
-    const environment = environmentId
+    const persistedEnvironment = environmentId
       ? await prisma.agentEnvironment.findFirst({
           where: { id: environmentId, organizationId: params.organizationId },
           select: { id: true, name: true, adapterType: true, config: true },
         })
-      : await prisma.agentEnvironment.findFirst({
-          where: {
-            organizationId: params.organizationId,
-            adapterType: "provisioned",
-            enabled: true,
-            isDefault: true,
-          },
-          select: { id: true, name: true, adapterType: true, config: true },
-        });
+      : null;
+    const matchingPersistedEnvironment =
+      persistedEnvironment &&
+      (!params.adapterType || persistedEnvironment.adapterType === params.adapterType)
+        ? persistedEnvironment
+        : null;
+    const environment =
+      matchingPersistedEnvironment ??
+      (await prisma.agentEnvironment.findFirst({
+        where: {
+          organizationId: params.organizationId,
+          adapterType: "provisioned",
+          enabled: true,
+          isDefault: true,
+        },
+        select: { id: true, name: true, adapterType: true, config: true },
+      }));
     const fallbackEnvironment =
       environment ??
-      (environmentId
-        ? null
-        : await prisma.agentEnvironment.findFirst({
-            where: {
-              organizationId: params.organizationId,
-              adapterType: "provisioned",
-              enabled: true,
-            },
-            orderBy: { createdAt: "asc" },
-            select: { id: true, name: true, adapterType: true, config: true },
-          }));
+      (await prisma.agentEnvironment.findFirst({
+        where: {
+          organizationId: params.organizationId,
+          adapterType: "provisioned",
+          enabled: true,
+        },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, name: true, adapterType: true, config: true },
+      }));
     if (!fallbackEnvironment) return null;
     if (
       fallbackEnvironment.adapterType !== "local" &&
@@ -1557,43 +1753,80 @@ export class SessionService {
         sessionStatus: true,
       },
     });
-    if (!session) return;
-
-    const result = await this.updateConnectionConditional(sessionId, (conn) => {
-      if (
-        update.runtimeInstanceId &&
-        conn.runtimeInstanceId &&
-        conn.runtimeInstanceId !== update.runtimeInstanceId
-      ) {
-        return null;
+    if (!session) {
+      if (eventType === "session_runtime_start_requested") {
+        throw new Error(`Cannot reserve runtime ownership for missing session ${sessionId}`);
       }
+      return;
+    }
 
-      if (
-        isRuntimeTerminalState(conn.state) &&
-        eventType !== "session_runtime_start_requested" &&
-        eventType !== "session_runtime_start_failed" &&
-        eventType !== "session_runtime_start_timed_out" &&
-        eventType !== "session_runtime_stopping" &&
-        eventType !== "session_runtime_stopped" &&
-        eventType !== "session_runtime_deprovision_failed"
-      ) {
-        return null;
+    const isNewRuntimeRequest = eventType === "session_runtime_start_requested";
+    const result = await this.updateConnectionConditional(
+      sessionId,
+      (conn) => {
+        if (update.runtimeInstanceId) {
+          // A new launch may claim an unbound session, but every subsequent
+          // lifecycle event must belong to the runtime generation that is
+          // currently persisted. In particular, an old stop event must not
+          // apply after another path has cleared the binding while a new
+          // runtime is starting.
+          //
+          // A new launch may ALSO claim a connection whose previous runtime ended
+          // in a terminal state, or was deprovisioned by idle cleanup. That runtime
+          // is dead, so a fresh provision must be able to take over. Idle cleanup
+          // records its completed teardown as `disconnected` to preserve the reason,
+          // but it also keeps the old binding ids; treat that specific shape as stale.
+          // Without this, the replacement task is launched but its bridge is fenced
+          // out because the database still points at the old runtime generation.
+          const canClaimStaleConnection =
+            isNewRuntimeRequest &&
+            (!conn.runtimeInstanceId ||
+              isRuntimeTerminalState(conn.state) ||
+              isRuntimeComputeGone(conn));
+          if (conn.runtimeInstanceId !== update.runtimeInstanceId && !canClaimStaleConnection) {
+            return null;
+          }
+        }
+
+        if (
+          isRuntimeTerminalState(conn.state) &&
+          eventType !== "session_runtime_start_requested" &&
+          eventType !== "session_runtime_start_failed" &&
+          eventType !== "session_runtime_start_timed_out" &&
+          eventType !== "session_runtime_stopping" &&
+          eventType !== "session_runtime_stopped" &&
+          eventType !== "session_runtime_deprovision_failed"
+        ) {
+          return null;
+        }
+
+        const adapterType = this.lifecycleAdapterType(conn, update);
+        const nextState = this.lifecycleConnectionState(eventType, adapterType);
+        if (
+          conn.state === "connected" &&
+          isRuntimeStartupState(nextState) &&
+          (conn.runtimeInstanceId || conn.providerRuntimeId || conn.connectedAt)
+        ) {
+          return null;
+        }
+
+        return { ...conn, ...this.lifecycleConnectionPatch(eventType, conn, update, adapterType) };
+      },
+      // A restart can intentionally create a fresh runtime without a new user
+      // message. Refresh activity in the same optimistic write that claims the
+      // new generation, so idle cleanup cannot select the group as stale while
+      // that runtime is provisioning.
+      isNewRuntimeRequest ? { sessionData: { lastMessageAt: new Date() } } : undefined,
+    );
+
+    if (!result) {
+      if (eventType === "session_runtime_start_requested") {
+        throw new Error(
+          `Cannot reserve runtime ${update.runtimeInstanceId ?? "unknown"} for session ${sessionId}`,
+        );
       }
-
-      const adapterType = this.lifecycleAdapterType(conn, update);
-      const nextState = this.lifecycleConnectionState(eventType, adapterType);
-      if (
-        conn.state === "connected" &&
-        isRuntimeStartupState(nextState) &&
-        (conn.runtimeInstanceId || conn.providerRuntimeId || conn.connectedAt)
-      ) {
-        return null;
-      }
-
-      return { ...conn, ...this.lifecycleConnectionPatch(eventType, conn, update, adapterType) };
-    });
-
-    if (!result) return;
+      return;
+    }
 
     const adapterType = this.lifecycleAdapterType(result.updated, update);
     const lifecycleState = this.lifecycleConnectionState(eventType, adapterType);
@@ -1618,7 +1851,14 @@ export class SessionService {
         ...(update.providerRuntimeId && { providerRuntimeId: update.providerRuntimeId }),
         ...(update.providerRuntimeUrl && { providerRuntimeUrl: update.providerRuntimeUrl }),
         ...(update.providerStatus && { providerStatus: update.providerStatus }),
+        ...(update.runtimeHardDeadlineAt && {
+          runtimeHardDeadlineAt: update.runtimeHardDeadlineAt,
+        }),
+        ...(update.providerDeadlineEnforcementId && {
+          providerDeadlineEnforcementId: update.providerDeadlineEnforcementId,
+        }),
         ...(update.error && { error: update.error }),
+        ...(update.artifact && { artifact: update.artifact }),
         ...(update.abandoned && { abandoned: true }),
         ...(update.reconcileAttempts !== undefined && {
           reconcileAttempts: update.reconcileAttempts,
@@ -1685,6 +1925,12 @@ export class SessionService {
       ...(update.providerRuntimeId && { providerRuntimeId: update.providerRuntimeId }),
       ...(update.providerRuntimeUrl && { providerRuntimeUrl: update.providerRuntimeUrl }),
       ...(update.providerStatus && { providerStatus: update.providerStatus }),
+      ...(update.runtimeHardDeadlineAt && {
+        runtimeHardDeadlineAt: update.runtimeHardDeadlineAt,
+      }),
+      ...(update.providerDeadlineEnforcementId && {
+        providerDeadlineEnforcementId: update.providerDeadlineEnforcementId,
+      }),
     };
 
     switch (eventType) {
@@ -1693,6 +1939,9 @@ export class SessionService {
           ...runtimePatch,
           state: "requested",
           requestedAt: now,
+          runtimeHardDeadlineAt: undefined,
+          providerDeadlineEnforcementId: undefined,
+          hardDeadlineWarningAt: undefined,
           lastError: undefined,
           canRetry: true,
           canMove: true,
@@ -1874,7 +2123,10 @@ export class SessionService {
   private async updateConnectionConditional(
     sessionId: string,
     mutator: (current: SessionConnectionData) => SessionConnectionData | null,
-    options?: { maxAttempts?: number },
+    options?: {
+      maxAttempts?: number;
+      sessionData?: Prisma.SessionUpdateManyMutationInput;
+    },
   ): Promise<{ updated: SessionConnectionData; sessionGroupId: string | null } | null> {
     const maxAttempts = options?.maxAttempts ?? MAX_CONNECTION_UPDATE_ATTEMPTS;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -1895,7 +2147,7 @@ export class SessionService {
 
       const result = await prisma.session.updateMany({
         where: connectionVersionWhere(sessionId, expectedVersion),
-        data: { connection: connJson(nextWithVersion) },
+        data: { ...options?.sessionData, connection: connJson(nextWithVersion) },
       });
       if (result.count === 1) {
         await this.syncGroupWorkspaceState(session.sessionGroupId, {
@@ -2564,20 +2816,19 @@ export class SessionService {
    * App-kind session groups for the org. Apps have no channel, so channel-scoped
    * listGroups never surfaces them; this backs the sidebar Apps section.
    */
-  async listAppGroups(organizationId: string, userId: string) {
+  async listAppGroups(organizationId: string, userId: string, includeArchived = false) {
     const groups = await prisma.sessionGroup.findMany({
       where: {
         organizationId,
         kind: "app",
-        archivedAt: null,
+        ...(includeArchived ? {} : { archivedAt: null }),
         AND: [visibleSessionGroupWhere(userId)],
       },
       include: SESSION_GROUP_INCLUDE,
-      // Bound this org-wide listing so it can't grow without limit as an org
-      // accumulates apps. The sidebar shows the most recent apps; the tail is
-      // reachable via search/dedicated views when those land.
+      // Sidebar listings stay bounded. The creation-history view explicitly
+      // requests archived groups and needs the full history for local search.
       orderBy: { updatedAt: "desc" },
-      take: APP_GROUP_LIST_LIMIT,
+      ...(includeArchived ? {} : { take: APP_GROUP_LIST_LIMIT }),
     });
 
     type SessionGroupWithSessions = SessionGroupSummary & {
@@ -2610,7 +2861,6 @@ export class SessionService {
     const where: Prisma.SessionGroupWhereInput = {
       channelId,
       organizationId,
-      AND: [visibleSessionGroupWhere(userId)],
     };
 
     const shouldIncludeArchived = options?.archived === true || options?.status === "archived";
@@ -2664,7 +2914,7 @@ export class SessionService {
 
   async getGroup(id: string, organizationId: string, userId: string) {
     const group = await prisma.sessionGroup.findFirst({
-      where: { id, organizationId, AND: [visibleSessionGroupWhere(userId)] },
+      where: { id, organizationId },
       include: SESSION_GROUP_INCLUDE,
     });
 
@@ -2753,6 +3003,426 @@ export class SessionService {
     }
 
     return result.sessionGroup;
+  }
+
+  /**
+   * Convert the current work unit without creating a second conversation.
+   *
+   * General sessions can become coding sessions in a selected channel or app
+   * sessions in an isolated managed cloud workspace.
+   */
+  async convertGroup(input: ConvertSessionGroupServiceInput) {
+    await assertSessionGroupAccess(input.sessionGroupId, input.actorId, input.organizationId);
+
+    const targetIsGenerated = isGeneratedProjectKind(input.kind);
+    if (input.kind !== "coding" && !targetIsGenerated) {
+      throw new ValidationError(`Unsupported conversion target: ${input.kind}`);
+    }
+    if (targetIsGenerated && (input.channelId || input.repoId || input.projectId)) {
+      throw new ValidationError(`${input.kind} conversions create an isolated managed workspace`);
+    }
+    if (targetIsGenerated && isLocalMode()) {
+      throw new ValidationError(`${input.kind} sessions require cloud hosting`);
+    }
+
+    if (targetIsGenerated) {
+      return this.convertGeneralToGenerated(
+        input,
+        input.kind as GeneratedSessionConversion["kind"],
+      );
+    }
+    return this.convertGeneralToCoding(input);
+  }
+
+  private async convertGeneralToGenerated(
+    input: ConvertSessionGroupServiceInput,
+    generatedKind: GeneratedSessionConversion["kind"],
+  ): Promise<SessionWithInclude> {
+    const source = await prisma.sessionGroup.findFirst({
+      where: {
+        id: input.sessionGroupId,
+        organizationId: input.organizationId,
+        archivedAt: null,
+      },
+      select: {
+        kind: true,
+        sessions: {
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          take: 2,
+          include: SESSION_INCLUDE,
+        },
+      },
+    });
+    const sourceSession = requireSingleGeneralConversionSession(source);
+    const target = resolveConversionToolSelection(sourceSession.tool, input);
+    const reusableCloudRuntime = this.resolveReusableGeneratedConversionRuntime(
+      sourceSession,
+      target.tool,
+    );
+    const cloudEnvironment = reusableCloudRuntime
+      ? null
+      : await this.resolveProvisioningEnvironment({
+          sessionId: sourceSession.id,
+          organizationId: input.organizationId,
+          adapterType: "provisioned",
+        });
+    if (!reusableCloudRuntime && !cloudEnvironment) {
+      throw new ValidationError("No enabled cloud agent environment is configured");
+    }
+    if (cloudEnvironment) assertAgentEnvironmentSupportsTool(cloudEnvironment, target.tool);
+    const locked = await withRuntimeTransitionLock(
+      {
+        key: this.runtimeTransitionLockKey(sourceSession.id, sourceSession.sessionGroupId),
+        ttlMs: RUNTIME_TRANSITION_LOCK_TTL_MS,
+      },
+      async () => {
+        const managedRepo = await managedGitService.createManagedRepo({
+          organizationId: input.organizationId,
+          name: `${sourceSession.name} source`,
+          actorType: input.actorType ?? "user",
+          actorId: input.actorId,
+        });
+
+        try {
+          return await this.moveSessionInPlace({
+            session: sourceSession,
+            targetHosting: "cloud",
+            targetRuntimeInstanceId: reusableCloudRuntime?.id ?? null,
+            targetRuntimeLabel: reusableCloudRuntime?.label ?? null,
+            targetRuntime: reusableCloudRuntime,
+            targetEnvironment: cloudEnvironment ?? undefined,
+            reuseCloudRuntime: reusableCloudRuntime,
+            allowUnverifiedSourceGitStatus: true,
+            bootstrapPrompt: conversionContinuationPrompt(generatedKind),
+            conversion: {
+              kind: generatedKind,
+              repoId: managedRepo.id,
+              branch: managedRepo.defaultBranch,
+              tool: target.tool,
+              model: target.model,
+              reasoningEffort: target.reasoningEffort,
+            },
+            actorType: input.actorType ?? "user",
+            actorId: input.actorId,
+            runtimeLockHeld: true,
+          });
+        } catch (error) {
+          const committed = await prisma.session.findFirst({
+            where: {
+              id: sourceSession.id,
+              organizationId: input.organizationId,
+              hosting: "cloud",
+              repoId: managedRepo.id,
+              sessionGroup: { kind: generatedKind },
+            },
+            include: SESSION_INCLUDE,
+          });
+          if (committed) {
+            const message = error instanceof Error ? error.message : String(error);
+            await this.workspaceFailed(
+              committed.id,
+              `Converted to ${generatedKind}, but workspace preparation failed: ${message}`,
+            ).catch(() => {});
+            return prisma.session.findUniqueOrThrow({
+              where: { id: committed.id },
+              include: SESSION_INCLUDE,
+            });
+          }
+          await managedGitService
+            .deleteManagedRepo({
+              organizationId: input.organizationId,
+              repoId: managedRepo.id,
+              actorType: input.actorType ?? "user",
+              actorId: input.actorId,
+            })
+            .catch(() => {});
+          throw error;
+        }
+      },
+    );
+    if (!locked.acquired) {
+      throw new ValidationError("Session conversion is already in progress");
+    }
+    return locked.value;
+  }
+
+  private resolveReusableGeneratedConversionRuntime(
+    session: { id: string; hosting: string; organizationId: string; connection: unknown },
+    tool: CodingTool,
+  ): RuntimeInstance | null {
+    if (session.hosting !== "cloud") return null;
+    const boundRuntime = sessionRouter.getRuntimeForSession(session.id);
+    const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
+    const runtime =
+      boundRuntime ??
+      (persistedRuntimeId
+        ? runtimeMetadata(persistedRuntimeId, session.organizationId)
+        : undefined);
+    if (
+      !runtime ||
+      runtime.hostingMode !== "cloud" ||
+      (runtime.organizationId && runtime.organizationId !== session.organizationId) ||
+      !sessionRouter.isRuntimeAvailable(runtime.id, session.organizationId) ||
+      !runtime.supportedTools.includes(tool)
+    ) {
+      return null;
+    }
+    return runtime;
+  }
+
+  private async prepareGeneratedConversionWorkspace(
+    session: SessionWithInclude,
+    runtime: RuntimeInstance,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<void> {
+    const group = session.sessionGroup;
+    const kind = group?.kind;
+    if (!isGeneratedProjectKind(kind) || !group || !session.sessionGroupId || !session.repo) {
+      throw new Error("Converted generated workspace metadata is unavailable");
+    }
+    const appGit = await this.createGeneratedProjectGitCredential({
+      organizationId: session.organizationId,
+      sessionId: session.id,
+      runtimeInstanceId: runtime.id,
+      repo: session.repo,
+      actorType,
+      actorId,
+    });
+    const delivery = await sendSessionCommand(
+      session.id,
+      {
+        type: "prepare_app",
+        sessionId: session.id,
+        sessionGroupId: session.sessionGroupId,
+        sessionGroupKind: kind,
+        slug: group.slug ?? undefined,
+        ...appGit,
+      },
+      { expectedHomeRuntimeId: runtime.id, organizationId: session.organizationId },
+    );
+    if (delivery !== "delivered") {
+      throw new Error(`prepare_app: ${delivery}`);
+    }
+  }
+
+  private async resolveCodingConversionDestination(
+    tx: Prisma.TransactionClient,
+    input: ConvertSessionGroupServiceInput,
+    sourceGroup: { channelId: string | null; repoId: string | null },
+    currentProjectIds: string[],
+  ): Promise<{ channelId: string; repoId: string; projectId: string | null }> {
+    const channelId = input.channelId ?? sourceGroup.channelId;
+    if (!channelId) {
+      throw new ValidationError("Converting to coding requires a channel");
+    }
+    // Match channel mutation authorization: visibility alone is insufficient
+    // because public channels still require active membership for writes.
+    const channel = await tx.channel.findFirst({
+      where: {
+        id: channelId,
+        organizationId: input.organizationId,
+        type: "coding",
+        members: { some: { userId: input.actorId, leftAt: null } },
+      },
+      select: { id: true, repoId: true },
+    });
+    if (!channel) {
+      throw new ValidationError("Coding channel is not available to this session");
+    }
+    if (channel.repoId && input.repoId && channel.repoId !== input.repoId) {
+      throw new ValidationError("Coding channel sessions must use the channel's linked repo");
+    }
+    const repoId = channel.repoId ?? input.repoId ?? sourceGroup.repoId;
+    if (!repoId) {
+      throw new ValidationError("The selected coding channel requires a repository");
+    }
+
+    // An explicit project must be valid for the destination. Otherwise keep the
+    // project the user already chose for the general session when it still
+    // belongs to that destination, and drop it when it no longer applies.
+    const requestedProjectId = input.projectId ?? currentProjectIds[0] ?? null;
+    let projectId: string | null = null;
+    if (requestedProjectId) {
+      const project = await tx.project.findFirst({
+        where: {
+          id: requestedProjectId,
+          organizationId: input.organizationId,
+          channels: { some: { channelId } },
+        },
+        select: { id: true, repoId: true },
+      });
+      const compatible = !!project && (!project.repoId || project.repoId === repoId);
+      if (input.projectId && !project) {
+        throw new ValidationError("Project is not linked to the selected channel");
+      }
+      if (input.projectId && !compatible) {
+        throw new ValidationError("Project must be linked to the selected repository");
+      }
+      projectId = compatible ? requestedProjectId : null;
+    }
+
+    const repo = await tx.repo.findFirst({
+      where: { id: repoId, organizationId: input.organizationId },
+      select: { id: true },
+    });
+    if (!repo) throw new ValidationError("Repository does not belong to this organization");
+    return { channelId, repoId, projectId };
+  }
+
+  private async convertGeneralToCoding(
+    input: ConvertSessionGroupServiceInput,
+  ): Promise<SessionWithInclude> {
+    // Conversion rebinds the repo and then upgrades the running workspace, so
+    // it has to serialize against the other runtime transitions for this group
+    // exactly like the generated path does.
+    const locked = await withRuntimeTransitionLock(
+      {
+        key: this.sessionGroupTransitionLockKey(input.sessionGroupId),
+        ttlMs: RUNTIME_TRANSITION_LOCK_TTL_MS,
+      },
+      () => this.applyCodingConversion(input),
+    );
+    if (!locked.acquired) {
+      throw new ValidationError("Session conversion is already in progress");
+    }
+    return locked.value;
+  }
+
+  private async applyCodingConversion(
+    input: ConvertSessionGroupServiceInput,
+  ): Promise<SessionWithInclude> {
+    const result: {
+      session: SessionWithInclude;
+      event: Awaited<ReturnType<typeof eventService.create>>;
+    } = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.$queryRaw`SELECT "id" FROM "SessionGroup" WHERE "id" = ${input.sessionGroupId} FOR UPDATE`;
+      const group = await tx.sessionGroup.findFirst({
+        where: {
+          id: input.sessionGroupId,
+          organizationId: input.organizationId,
+          archivedAt: null,
+        },
+        select: {
+          id: true,
+          kind: true,
+          channelId: true,
+          repoId: true,
+          sessions: {
+            orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+            include: { ...SESSION_INCLUDE, projects: { select: { projectId: true } } },
+          },
+        },
+      });
+      const session = requireSingleGeneralConversionSession(group);
+      const generalGroup = group!;
+      const target = resolveConversionToolSelection(session.tool, input);
+      const boundRuntime = sessionRouter.getRuntimeForSession(session.id);
+      const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
+      const effectiveRuntime =
+        boundRuntime ??
+        (persistedRuntimeId
+          ? runtimeMetadata(persistedRuntimeId, input.organizationId)
+          : undefined);
+      if (effectiveRuntime && !effectiveRuntime.supportedTools.includes(target.tool)) {
+        throw new ToolNotInstalledError(target.tool, effectiveRuntime.label ?? null);
+      }
+      const destination = await this.resolveCodingConversionDestination(
+        tx,
+        input,
+        generalGroup,
+        session.projects.map((link: { projectId: string }) => link.projectId),
+      );
+      // The upgrade below builds a worktree on this runtime, so it has to be a
+      // runtime that actually has the destination repository linked.
+      if (
+        effectiveRuntime?.hostingMode === "local" &&
+        !effectiveRuntime.registeredRepoIds.includes(destination.repoId)
+      ) {
+        throw new ValidationError("Selected runtime does not have this repo linked");
+      }
+
+      await tx.sessionGroup.update({
+        where: { id: generalGroup.id },
+        data: {
+          kind: input.kind,
+          channelId: destination.channelId,
+          repoId: destination.repoId,
+        },
+      });
+      const updated = await tx.session.update({
+        where: { id: session.id },
+        data: {
+          channelId: destination.channelId,
+          repoId: destination.repoId,
+          // The conversion always prepares a writable worktree below.
+          readOnlyWorkspace: false,
+          ...(input.tool ? { tool: target.tool } : {}),
+          ...(target.model !== undefined ? { model: target.model } : {}),
+          ...(target.reasoningEffort !== undefined
+            ? { reasoningEffort: target.reasoningEffort }
+            : {}),
+          projects: destination.projectId
+            ? { deleteMany: {}, create: { projectId: destination.projectId } }
+            : { deleteMany: {} },
+        },
+        include: SESSION_INCLUDE,
+      });
+      const sessionGroup = await this.loadSessionGroupSnapshot(generalGroup.id, tx);
+      if (!sessionGroup) throw new Error("Session group disappeared during conversion");
+      const event = await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: updated.id,
+          eventType: "session_converted" as EventType,
+          payload: eventJson({
+            sessionGroupId: generalGroup.id,
+            fromKind: generalGroup.kind,
+            toKind: input.kind,
+            session: serializeSession(updated),
+            sessionGroup,
+          }),
+          actorType: input.actorType ?? "user",
+          actorId: input.actorId,
+          deferPublish: true,
+        },
+        tx,
+      );
+      return { session: updated, event };
+    });
+
+    eventService.publishCreated(result.event);
+
+    // Replace the disposable general scratch directory with the repository
+    // worktree the converted session now claims to work in — otherwise the
+    // session would keep running outside a checkout while carrying
+    // repo-backed coding instructions. An agent-initiated conversion is a
+    // handoff rather than the end of the user's request, so it also resumes
+    // the same tool conversation there: workspaceReady atomically consumes
+    // that pending run, and the bridge aborts the old general-workspace
+    // process before starting it in the new cwd.
+    const isAgentHandoff = input.actorType === "agent";
+    await this.triggerWorkspaceUpgrade(
+      result.session.id,
+      result.session,
+      isAgentHandoff
+        ? {
+            type: "run",
+            prompt: "Continue the user's request in the newly prepared coding workspace.",
+            interactionMode: "code",
+            clientSource: "cli",
+          }
+        : null,
+      isAgentHandoff
+        ? {
+            agentStatus: "active",
+            sessionStatus: getRunningSessionStatus(result.session.sessionStatus),
+          }
+        : undefined,
+    );
+
+    return result.session;
   }
 
   async getGroupStatusSources(sessionGroupId: string) {
@@ -2932,7 +3602,6 @@ export class SessionService {
       where: {
         id,
         organizationId,
-        AND: [visibleSessionWhere(userId)],
       },
       include: SESSION_INCLUDE,
     });
@@ -3027,47 +3696,16 @@ export class SessionService {
     return { sessions, sessionGroups };
   }
 
-  async listGitCheckpointsForSession(sessionId: string) {
-    return prisma.gitCheckpoint.findMany({
-      where: { sessionId },
-      orderBy: [{ committedAt: "asc" }, { createdAt: "asc" }],
-    });
-  }
-
-  async listGitCheckpointsForGroup(sessionGroupId: string) {
-    return prisma.gitCheckpoint.findMany({
-      where: { sessionGroupId },
-      orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
-    });
-  }
-
   async start(input: StartSessionServiceInput) {
     validateUploadKeysForOrganization(input.imageKeys, input.organizationId);
 
-    if (input.restoreCheckpointId && input.sessionGroupId) {
-      throw new Error("restoreCheckpointId cannot reuse an existing session group");
+    const clientMutationId = input.clientMutationId?.trim() || null;
+    if (input.clientMutationId != null && (!clientMutationId || clientMutationId.length > 200)) {
+      throw new ValidationError("clientMutationId must be between 1 and 200 characters");
     }
-    if (input.restoreCheckpointId && input.sourceSessionId) {
-      throw new Error("restoreCheckpointId cannot be combined with sourceSessionId");
-    }
-
-    const restoreCheckpoint = input.restoreCheckpointId
-      ? await prisma.gitCheckpoint.findUnique({
-          where: { id: input.restoreCheckpointId },
-          select: {
-            id: true,
-            sessionId: true,
-            sessionGroupId: true,
-            repoId: true,
-            commitSha: true,
-            subject: true,
-          },
-        })
-      : null;
-
-    if (input.restoreCheckpointId && !restoreCheckpoint) {
-      throw new Error("Git checkpoint not found");
-    }
+    input.clientMutationId = clientMutationId;
+    const existingIdempotentSession = await this.findIdempotentStartedSession(input);
+    if (existingIdempotentSession) return existingIdempotentSession;
 
     const userDefaults: UserSessionDefaults | null = input.tool
       ? null
@@ -3082,21 +3720,7 @@ export class SessionService {
     const hasExplicitTool = !!input.tool;
     let tool = input.tool ?? userDefaults?.defaultSessionTool ?? FALLBACK_SESSION_TOOL;
 
-    const restoreGroup = restoreCheckpoint
-      ? await prisma.sessionGroup.findFirst({
-          where: {
-            id: restoreCheckpoint.sessionGroupId,
-            organizationId: input.organizationId,
-          },
-          select: SESSION_GROUP_SUMMARY_SELECT,
-        })
-      : null;
-
-    if (restoreCheckpoint && !restoreGroup) {
-      throw new Error("Checkpoint session group not found");
-    }
-
-    const sourceSessionId = input.sourceSessionId ?? restoreCheckpoint?.sessionId ?? null;
+    const sourceSessionId = input.sourceSessionId ?? null;
 
     const sourceSession = sourceSessionId
       ? await prisma.session.findUnique({
@@ -3126,7 +3750,6 @@ export class SessionService {
       throw new Error("Source session does not belong to this organization");
     }
     if (
-      !input.restoreCheckpointId &&
       input.sessionGroupId &&
       sourceSession?.sessionGroupId &&
       input.sessionGroupId !== sourceSession.sessionGroupId
@@ -3136,9 +3759,7 @@ export class SessionService {
 
     const existingGroupId = input.forceNewGroup
       ? null
-      : input.restoreCheckpointId
-        ? null
-        : (input.sessionGroupId ?? sourceSession?.sessionGroupId ?? null);
+      : (input.sessionGroupId ?? sourceSession?.sessionGroupId ?? null);
     const existingGroup = existingGroupId
       ? await prisma.sessionGroup.findFirst({
           where: { id: existingGroupId, organizationId: input.organizationId },
@@ -3161,20 +3782,17 @@ export class SessionService {
     } else if (resolvedGroup) {
       this.assertPrivateGroupOwner(resolvedGroup, input.createdById);
     }
-    const seedGroup = input.restoreCheckpointId ? restoreGroup : resolvedGroup;
+    const seedGroup = resolvedGroup;
     const resolvedKind = input.kind ?? seedGroup?.kind ?? "coding";
     if (existingGroup && input.kind && input.kind !== existingGroup.kind) {
       throw new ValidationError("Session kind cannot change within an existing session group");
     }
-    if (resolvedKind === "app") {
-      if (input.sourceSessionId && !input.restoreCheckpointId) {
+    if (isGeneratedProjectKind(resolvedKind)) {
+      if (input.sourceSessionId) {
         throw new ValidationError("App sessions cannot start from a source session");
       }
-      if (!existingGroup && !input.restoreCheckpointId && input.repoId) {
+      if (!existingGroup && input.repoId) {
         throw new ValidationError("App sessions cannot start from a linked repo");
-      }
-      if (!existingGroup && !input.restoreCheckpointId && !input.prompt?.trim()) {
-        throw new ValidationError("App sessions require an initial prompt");
       }
       if (input.hosting === "local") {
         throw new ValidationError("App sessions require cloud hosting");
@@ -3199,15 +3817,50 @@ export class SessionService {
     if (resolvedChannel && resolvedChannel.organizationId !== input.organizationId) {
       throw new Error("Channel does not belong to this organization");
     }
+    const requiresCompleteCodingInput = input.clientSource === "cli" && resolvedKind === "coding";
+    if (requiresCompleteCodingInput && !input.prompt?.trim()) {
+      throw new ValidationError("Coding sessions require a non-empty task prompt");
+    }
+    const resolvedProject = input.projectId
+      ? await prisma.project.findFirst({
+          where: {
+            id: input.projectId,
+            organizationId: input.organizationId,
+            ...(resolvedChannelId ? { channels: { some: { channelId: resolvedChannelId } } } : {}),
+          },
+          select: { id: true, repoId: true },
+        })
+      : null;
+    if (input.projectId && !resolvedProject) {
+      throw new ValidationError(
+        resolvedChannelId
+          ? "Project is not linked to the selected channel"
+          : "Project does not belong to this organization",
+      );
+    }
+    if (requiresCompleteCodingInput && !existingGroup && !resolvedChannelId) {
+      throw new ValidationError(
+        "New coding session groups require a channel. Select a channel before starting the session.",
+      );
+    }
 
     const authoritativeChannelRepoId =
       resolvedChannel?.type === "coding" ? (resolvedChannel.repoId ?? null) : null;
+    const authoritativeProjectRepoId = resolvedProject?.repoId ?? null;
     if (resolvedKind === "app" && authoritativeChannelRepoId && !existingGroup) {
       throw new ValidationError("App sessions cannot start in a repo-linked coding channel");
     }
 
     if (authoritativeChannelRepoId && input.repoId && input.repoId !== authoritativeChannelRepoId) {
       throw new Error("Coding channel sessions must use the channel's linked repo");
+    }
+    if (
+      !authoritativeChannelRepoId &&
+      authoritativeProjectRepoId &&
+      input.repoId &&
+      input.repoId !== authoritativeProjectRepoId
+    ) {
+      throw new Error("Project sessions must use the project's linked repo");
     }
     if (
       authoritativeChannelRepoId &&
@@ -3223,19 +3876,12 @@ export class SessionService {
     ) {
       throw new Error("Source session repo does not match the channel's linked repo");
     }
-    // A restore must stay on the checkpoint's repo. Allowing an explicit
-    // input.repoId to override it produces a group whose provisioning fails at
-    // token mint (e.g. attaching a GitHub repoId to a managed-repo checkpoint).
-    if (restoreCheckpoint?.repoId && input.repoId && input.repoId !== restoreCheckpoint.repoId) {
-      throw new Error("Restored session must use the checkpoint's repo");
-    }
-
     let resolvedRepoId =
       authoritativeChannelRepoId ??
+      authoritativeProjectRepoId ??
       input.repoId ??
       seedGroup?.repoId ??
       sourceSession?.repoId ??
-      restoreCheckpoint?.repoId ??
       undefined;
     let resolvedRepo = resolvedRepoId
       ? await prisma.repo.findFirst({
@@ -3252,10 +3898,8 @@ export class SessionService {
       sourceSession?.branch ??
       resolvedChannel?.baseBranch ??
       undefined;
-    const sharedWorkdir =
-      input.restoreCheckpointId || input.forceNewGroup ? null : (resolvedGroup?.workdir ?? null);
-    const sharedConnection =
-      input.restoreCheckpointId || input.forceNewGroup ? null : (resolvedGroup?.connection ?? null);
+    const sharedWorkdir = input.forceNewGroup ? null : (resolvedGroup?.workdir ?? null);
+    const sharedConnection = input.forceNewGroup ? null : (resolvedGroup?.connection ?? null);
     const sharedRuntimeInstanceId =
       sharedConnection &&
       typeof sharedConnection === "object" &&
@@ -3263,16 +3907,6 @@ export class SessionService {
         ? ((sharedConnection as { runtimeInstanceId?: string | null }).runtimeInstanceId ?? null)
         : null;
 
-    // For checkpoint restores, inherit the runtime from the source group so the
-    // restored session is prepared on the same machine that owns the repo.
-    const restoreGroupRuntimeInstanceId = (() => {
-      if (!input.restoreCheckpointId || !restoreGroup) return null;
-      const conn = restoreGroup.connection;
-      if (conn && typeof conn === "object" && "runtimeInstanceId" in conn) {
-        return (conn as { runtimeInstanceId?: string | null }).runtimeInstanceId ?? null;
-      }
-      return null;
-    })();
     const sourceProjectIds =
       sourceSession?.projects.map((project: { projectId: string }) => project.projectId) ?? [];
     const sourceTicketLinks = sourceSessionId
@@ -3281,19 +3915,6 @@ export class SessionService {
           select: { ticketId: true },
         })
       : [];
-
-    if (input.restoreCheckpointId && !resolvedRepoId) {
-      throw new Error("Checkpoint is not associated with a repo");
-    }
-
-    if (
-      existingGroup?.id &&
-      sharedRuntimeInstanceId &&
-      input.runtimeInstanceId &&
-      input.runtimeInstanceId !== sharedRuntimeInstanceId
-    ) {
-      throw new Error("This session group is already bound to a different runtime");
-    }
 
     if (sharedRuntimeInstanceId) {
       await this.assertRuntimeAccess({
@@ -3304,23 +3925,12 @@ export class SessionService {
       });
     }
 
-    if (restoreGroupRuntimeInstanceId) {
-      await this.assertRuntimeAccess({
-        userId: input.createdById,
-        organizationId: input.organizationId,
-        runtimeInstanceId: restoreGroupRuntimeInstanceId,
-        sessionGroupId: restoreGroup?.id ?? null,
-      });
-    }
-
     const name = input.name
       ? input.name.slice(0, MAX_SESSION_NAME_LENGTH)
       : input.prompt
         ? input.prompt.slice(0, MAX_SESSION_NAME_LENGTH)
-        : restoreCheckpoint
-          ? `Restore ${shortCommitSha(restoreCheckpoint.commitSha)} ${restoreCheckpoint.subject}`
-              .trim()
-              .slice(0, MAX_SESSION_NAME_LENGTH)
+        : isGeneratedProjectKind(resolvedKind)
+          ? "Untitled App"
           : `Session ${new Date().toLocaleString()}`;
 
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise
@@ -3336,17 +3946,32 @@ export class SessionService {
         "environmentId" in sharedConnection ||
         "providerRuntimeId" in sharedConnection ||
         "providerRuntimeUrl" in sharedConnection);
+    // A session group is bound to exactly one bridge. When joining a group that
+    // is already bound, reject any request that would place the new session on a
+    // different runtime — every session in a group must share the same bridge.
+    if (existingGroup?.id) {
+      if (sharedRuntimeInstanceId) {
+        const conflictsWithLocalRuntime =
+          (!!input.runtimeInstanceId && input.runtimeInstanceId !== sharedRuntimeInstanceId) ||
+          input.hosting === "cloud" ||
+          !!input.environmentId;
+        if (conflictsWithLocalRuntime) {
+          throw new Error("This session group is already bound to a different runtime");
+        }
+      } else if (sharedConnectionHasRuntimeSelection) {
+        const conflictsWithCloudRuntime = !!input.runtimeInstanceId || input.hosting === "local";
+        if (conflictsWithCloudRuntime) {
+          throw new Error("This session group is already bound to a different runtime");
+        }
+      }
+    }
     const reuseExistingGroupRuntimeSelection =
       !input.environmentId &&
       !!existingGroup?.id &&
       (!!sharedWorkdir || !!sharedRuntimeInstanceId || !!sharedConnectionHasRuntimeSelection);
     const deferRuntimeSelection =
       (input.deferRuntimeSelection === true && resolvedKind !== "app") ||
-      (resolvedKind !== "app" &&
-        !input.restoreCheckpointId &&
-        !requestedRuntimeSelection &&
-        !sharedRuntimeInstanceId &&
-        !restoreGroupRuntimeInstanceId);
+      (resolvedKind !== "app" && !requestedRuntimeSelection && !sharedRuntimeInstanceId);
     if (
       input.deferRuntimeSelection === true &&
       (input.environmentId || input.hosting || input.runtimeInstanceId)
@@ -3409,7 +4034,6 @@ export class SessionService {
       !!input.hosting ||
       !!input.runtimeInstanceId ||
       !!sharedRuntimeInstanceId ||
-      !!restoreGroupRuntimeInstanceId ||
       !!sourceSession?.hosting;
     if (!requestedEnvironment && !hasCompatibilityRuntimeFallback) {
       throw new ValidationError(
@@ -3470,9 +4094,7 @@ export class SessionService {
         select: { id: true },
       });
       if (conflictingGroup) {
-        throw new ValidationError(
-          "This worktree is already imported by another session group",
-        );
+        throw new ValidationError("This worktree is already imported by another session group");
       }
     }
     let runtimeLabel: string | undefined;
@@ -3492,16 +4114,10 @@ export class SessionService {
       throw new ValidationError("runtimeInstanceId does not match the selected local environment");
     }
     const shouldUseEnvironmentRuntime =
-      !input.runtimeInstanceId &&
-      !sharedRuntimeInstanceId &&
-      !restoreGroupRuntimeInstanceId &&
-      !!environmentRuntimeInstanceId;
+      !input.runtimeInstanceId && !sharedRuntimeInstanceId && !!environmentRuntimeInstanceId;
     let selectedRuntimeAccessAllowed = true;
     let requestedRuntimeInstanceId: string | null | undefined =
-      input.runtimeInstanceId ??
-      sharedRuntimeInstanceId ??
-      restoreGroupRuntimeInstanceId ??
-      environmentRuntimeInstanceId;
+      input.runtimeInstanceId ?? sharedRuntimeInstanceId ?? environmentRuntimeInstanceId;
     if (input.runtimeInstanceId || shouldUseEnvironmentRuntime) {
       const runtimeId = input.runtimeInstanceId ?? environmentRuntimeInstanceId;
       if (!runtimeId) {
@@ -3616,8 +4232,8 @@ export class SessionService {
 
     if (requestedRuntimeInstanceId && !runtimeLabel) {
       runtimeLabel =
-        sessionRouter.getRuntime(requestedRuntimeInstanceId, input.organizationId)?.label ??
-        this.parseConnection(sharedConnection ?? restoreGroup?.connection ?? null).runtimeLabel;
+        runtimeMetadata(requestedRuntimeInstanceId, input.organizationId)?.label ??
+        this.parseConnection(sharedConnection).runtimeLabel;
     }
     await this.assertPrivateRuntimeOwner({
       visibility: effectiveGroupVisibility,
@@ -3655,12 +4271,12 @@ export class SessionService {
     assertCloudRepoRemoteAvailable(hosting, resolvedRepo);
 
     // Ask-mode sessions skip worktree creation (read-only against repo root).
-    // Checkpoint restores always need a worktree to reset to a specific SHA.
-    const readOnlyWorkspace =
-      input.interactionMode === "ask" && !input.restoreCheckpointId && !adoptWorktreePath;
+    const readOnlyWorkspace = input.interactionMode === "ask" && !adoptWorktreePath;
 
     const needsRuntimeProvisioning =
-      !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
+      !sharedRuntimeInstanceId &&
+      !sharedWorkdir &&
+      (!!resolvedRepoId || hosting === "cloud" || resolvedKind === "general");
     // Queue the initial prompt as a pending run whenever we're provisioning a
     // fresh runtime for it; it's delivered once the workspace is ready
     // (workspaceReady → deliverPendingCommand). This must cover BOTH the
@@ -3687,179 +4303,176 @@ export class SessionService {
     // Sessions stay idle until a command is actually delivered to the coding tool.
     const initialAgentStatus: AgentStatus = "not_started";
     const initialSessionStatus: SessionStatus = "in_progress";
-    const initialCheckpointContextId = resolvedRepoId && input.prompt ? randomUUID() : null;
     const hasInitialUserContent = !!input.prompt || !!input.imageKeys?.length;
 
     let startEventToPublish: Awaited<ReturnType<typeof eventService.create>> | undefined;
-    const session = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const sessionGroup = existingGroup
-        ? await (async () => {
-            const nextGroupData: Prisma.SessionGroupUncheckedUpdateInput = {};
-            if (resolvedChannelId !== undefined && existingGroup.channelId !== resolvedChannelId) {
-              nextGroupData.channelId = resolvedChannelId;
-            }
-            if (existingGroup.repoId == null && resolvedRepoId !== undefined) {
-              nextGroupData.repoId = resolvedRepoId;
-            }
-            if (existingGroup.branch == null && resolvedBranch !== undefined) {
-              nextGroupData.branch = resolvedBranch;
-            }
-            if (Object.keys(nextGroupData).length === 0) {
-              return existingGroup;
-            }
-            return tx.sessionGroup.update({
-              where: { id: existingGroup.id },
-              data: nextGroupData,
+    const session = await prisma
+      .$transaction(async (tx: Prisma.TransactionClient) => {
+        const sessionGroup = existingGroup
+          ? await (async () => {
+              const nextGroupData: Prisma.SessionGroupUncheckedUpdateInput = {};
+              if (
+                resolvedChannelId !== undefined &&
+                existingGroup.channelId !== resolvedChannelId
+              ) {
+                nextGroupData.channelId = resolvedChannelId;
+              }
+              if (existingGroup.repoId == null && resolvedRepoId !== undefined) {
+                nextGroupData.repoId = resolvedRepoId;
+              }
+              if (existingGroup.branch == null && resolvedBranch !== undefined) {
+                nextGroupData.branch = resolvedBranch;
+              }
+              if (Object.keys(nextGroupData).length === 0) {
+                return existingGroup;
+              }
+              return tx.sessionGroup.update({
+                where: { id: existingGroup.id },
+                data: nextGroupData,
+                select: SESSION_GROUP_SUMMARY_SELECT,
+              });
+            })()
+          : await tx.sessionGroup.create({
+              data: {
+                name,
+                kind: resolvedKind,
+                organizationId: input.organizationId,
+                ownerUserId: input.createdById,
+                visibility: newGroupVisibility,
+                forkedFromSessionGroupId: input.forkedFromSessionGroupId ?? undefined,
+                channelId: resolvedChannelId,
+                repoId: resolvedRepoId ?? undefined,
+                branch: resolvedBranch ?? undefined,
+                connection: initialConnection,
+                // Adopting an existing worktree: record the path and flag the group
+                // so re-provisioning re-adopts it and teardown never removes it.
+                ...(adoptWorktreePath ? { workdir: adoptWorktreePath, worktreeAdopted: true } : {}),
+              },
               select: SESSION_GROUP_SUMMARY_SELECT,
             });
-          })()
-        : await tx.sessionGroup.create({
-            data: {
-              name,
-              kind: resolvedKind,
-              organizationId: input.organizationId,
-              ownerUserId: input.createdById,
-              visibility: newGroupVisibility,
-              forkedFromSessionGroupId: input.forkedFromSessionGroupId ?? undefined,
-              channelId: resolvedChannelId,
-              repoId: resolvedRepoId ?? undefined,
-              branch: resolvedBranch ?? undefined,
-              connection: initialConnection,
-              // Adopting an existing worktree: record the path and flag the group
-              // so re-provisioning re-adopts it and teardown never removes it.
-              ...(adoptWorktreePath
-                ? { workdir: adoptWorktreePath, worktreeAdopted: true }
-                : {}),
-            },
-            select: SESSION_GROUP_SUMMARY_SELECT,
-          });
 
-      const projectIds = input.projectId != null ? [input.projectId] : sourceProjectIds;
+        const projectIds = input.projectId != null ? [input.projectId] : sourceProjectIds;
 
-      const session = await tx.session.create({
-        data: {
-          name,
-          agentStatus: initialAgentStatus,
-          sessionStatus: initialSessionStatus,
-          tool,
-          model: model ?? undefined,
-          reasoningEffort: reasoningEffort ?? undefined,
-          hosting,
-          organizationId: input.organizationId,
-          createdById: input.createdById,
-          repoId: resolvedRepoId ?? undefined,
-          branch: resolvedBranch ?? undefined,
-          workdir: sessionGroup.workdir ?? undefined,
-          channelId: resolvedChannelId,
-          sessionGroupId: sessionGroup.id,
-          connection: sessionGroup.connection ?? initialConnection,
-          pendingRun: queueInitialRun
-            ? pendingRunValue([
-                {
-                  type: "run",
-                  prompt: input.prompt ?? null,
-                  interactionMode: input.interactionMode ?? null,
-                  clientSource: normalizeClientSource(input.clientSource),
-                  checkpointContext: null,
-                  ...(input.imageKeys?.length ? { imageKeys: input.imageKeys } : {}),
-                },
-              ])
-            : undefined,
-          lastUserMessageAt: hasInitialUserContent ? new Date() : undefined,
-          lastMessageAt: hasInitialUserContent ? new Date() : undefined,
-          worktreeDeleted: sessionGroup.worktreeDeleted,
-          readOnlyWorkspace,
-          ...(projectIds.length > 0 && {
-            projects: {
-              create: projectIds.map((projectId: string) => ({ projectId })),
-            },
-          }),
-        },
-        include: SESSION_INCLUDE,
-      });
-
-      if (sourceTicketLinks.length > 0) {
-        await tx.ticketLink.createMany({
-          data: sourceTicketLinks.map((ticketLink: { ticketId: string }) => ({
-            ticketId: ticketLink.ticketId,
-            entityType: "session",
-            entityId: session.id,
-          })),
-          skipDuplicates: true,
+        const session = await tx.session.create({
+          data: {
+            name,
+            agentStatus: initialAgentStatus,
+            sessionStatus: initialSessionStatus,
+            tool,
+            model: model ?? undefined,
+            reasoningEffort: reasoningEffort ?? undefined,
+            hosting,
+            organizationId: input.organizationId,
+            createdById: input.createdById,
+            repoId: resolvedRepoId ?? undefined,
+            branch: resolvedBranch ?? undefined,
+            workdir: sessionGroup.workdir ?? undefined,
+            channelId: resolvedChannelId,
+            sessionGroupId: sessionGroup.id,
+            connection: sessionGroup.connection ?? initialConnection,
+            pendingRun: queueInitialRun
+              ? pendingRunValue([
+                  {
+                    type: "run",
+                    prompt: input.prompt ?? null,
+                    interactionMode: input.interactionMode ?? null,
+                    clientSource: normalizeClientSource(input.clientSource),
+                    ...(input.imageKeys?.length ? { imageKeys: input.imageKeys } : {}),
+                  },
+                ])
+              : undefined,
+            lastUserMessageAt: hasInitialUserContent ? new Date() : undefined,
+            lastMessageAt: hasInitialUserContent ? new Date() : undefined,
+            worktreeDeleted: sessionGroup.worktreeDeleted,
+            readOnlyWorkspace,
+            ...(projectIds.length > 0 && {
+              projects: {
+                create: projectIds.map((projectId: string) => ({ projectId })),
+              },
+            }),
+          },
+          include: SESSION_INCLUDE,
         });
-      }
 
-      const sessionGroupSnapshot = buildSessionGroupSnapshot(sessionGroup, [
-        { agentStatus: initialAgentStatus, sessionStatus: initialSessionStatus },
-      ]);
+        if (sourceTicketLinks.length > 0) {
+          await tx.ticketLink.createMany({
+            data: sourceTicketLinks.map((ticketLink: { ticketId: string }) => ({
+              ticketId: ticketLink.ticketId,
+              entityType: "session",
+              entityId: session.id,
+            })),
+            skipDuplicates: true,
+          });
+        }
 
-      const startEventId = input.startEventId ?? randomUUID();
-      const startEventPayload = {
-        session: serializeSession(session),
-        sessionGroup: sessionGroupSnapshot,
-        prompt: input.prompt ?? null,
-        clientSource: normalizeClientSource(input.clientSource),
-        sourceSessionId: input.sourceSessionId ?? null,
-        restoreCheckpointId: restoreCheckpoint?.id ?? null,
-        restoreCheckpointSha: restoreCheckpoint?.commitSha ?? null,
-        ...(input.imageKeys?.length
-          ? { attachmentKeys: input.imageKeys, imageKeys: input.imageKeys }
-          : {}),
-      } as Prisma.InputJsonValue;
-      const startEventMetadata = initialCheckpointContextId
-        ? ({ checkpointContextId: initialCheckpointContextId } as Prisma.InputJsonValue)
-        : undefined;
-      const startEventOverride = input.buildStartEvent?.({
-        session,
-        sessionGroup,
-        sessionGroupSnapshot,
-        startEventId,
-        defaultPayload: startEventPayload,
-        defaultMetadata: startEventMetadata,
-      });
+        const sessionGroupSnapshot = buildSessionGroupSnapshot(sessionGroup, [
+          { sessionStatus: initialSessionStatus },
+        ]);
 
-      startEventToPublish = await eventService.create(
-        {
-          id: startEventId,
-          organizationId: input.organizationId,
-          scopeType: "session",
-          scopeId: session.id,
-          eventType: "session_started",
-          payload: startEventOverride?.payload ?? startEventPayload,
-          metadata: startEventOverride?.metadata ?? startEventMetadata,
-          actorType: startEventOverride?.actorType ?? "user",
-          actorId: startEventOverride?.actorId ?? input.createdById,
-          timestamp: startEventOverride?.timestamp,
-          deferPublish: true,
-        },
-        tx,
-      );
-
-      if (input.afterCreate) {
-        await input.afterCreate({
-          tx,
+        const startEventId = input.startEventId ?? randomUUID();
+        const startEventPayload = {
+          session: serializeSession(session),
+          sessionGroup: sessionGroupSnapshot,
+          prompt: input.prompt ?? null,
+          clientSource: normalizeClientSource(input.clientSource),
+          sourceSessionId: input.sourceSessionId ?? null,
+          ...(input.imageKeys?.length
+            ? { attachmentKeys: input.imageKeys, imageKeys: input.imageKeys }
+            : {}),
+        } as Prisma.InputJsonValue;
+        const startEventMetadata = undefined;
+        const startEventOverride = input.buildStartEvent?.({
           session,
           sessionGroup,
+          sessionGroupSnapshot,
           startEventId,
-          startEventPayload: startEventOverride?.payload ?? startEventPayload,
+          defaultPayload: startEventPayload,
+          defaultMetadata: startEventMetadata,
         });
-      }
 
-      return session;
-    }).catch(async (error: unknown) => {
-      // Don't leak the managed repo minted above if the session row never persists.
-      if (createdManagedRepoId) {
-        await managedGitService
-          .deleteManagedRepo({
+        startEventToPublish = await eventService.create(
+          {
+            id: startEventId,
             organizationId: input.organizationId,
-            repoId: createdManagedRepoId,
-            actorType: input.actorType ?? "user",
-            actorId: input.createdById,
-          })
-          .catch(() => {});
-      }
-      throw error;
-    });
+            scopeType: "session",
+            scopeId: session.id,
+            eventType: "session_started",
+            payload: startEventOverride?.payload ?? startEventPayload,
+            metadata: startEventOverride?.metadata ?? startEventMetadata,
+            actorType: startEventOverride?.actorType ?? "user",
+            actorId: startEventOverride?.actorId ?? input.createdById,
+            timestamp: startEventOverride?.timestamp,
+            deferPublish: true,
+          },
+          tx,
+        );
+
+        if (input.afterCreate) {
+          await input.afterCreate({
+            tx,
+            session,
+            sessionGroup,
+            startEventId,
+            startEventPayload: startEventOverride?.payload ?? startEventPayload,
+          });
+        }
+
+        return session;
+      })
+      .catch(async (error: unknown) => {
+        // Don't leak the managed repo minted above if the session row never persists.
+        if (createdManagedRepoId) {
+          await managedGitService
+            .deleteManagedRepo({
+              organizationId: input.organizationId,
+              repoId: createdManagedRepoId,
+              actorType: input.actorType ?? "user",
+              actorId: input.createdById,
+            })
+            .catch(() => {});
+        }
+        throw error;
+      });
 
     // Publish the start event only after the transaction commits so subscribers
     // don't query for the session before its row is visible (e.g. long-running forks).
@@ -3867,8 +4480,7 @@ export class SessionService {
       eventService.publishCreated(startEventToPublish);
     }
 
-    // Reuse the group's runtime binding when a shared workspace already exists,
-    // or inherit from the restore group so the session lands on the same machine.
+    // Reuse the group's runtime binding when a shared workspace already exists.
     const runtimeToBind = requestedRuntimeInstanceId;
     if (runtimeToBind) {
       const runtimeKeyToBind =
@@ -3878,14 +4490,10 @@ export class SessionService {
 
     // Only provision the runtime immediately when a prompt is provided.
     // Sessions created without a prompt (e.g. Cmd+N) defer provisioning
-    // until the user sends their first message. Checkpoint restores are the
-    // exception: they carry no prompt but must provision now so the workspace
-    // materializes at the pinned commit SHA — deferring to the first message
-    // loses the SHA (later provisioning paths clone HEAD) and strands the
-    // restored session with no runtime in the meantime.
+    // until the user sends their first message.
     if (
       needsRuntimeProvisioning &&
-      (input.prompt || input.provisionWithoutPrompt || input.restoreCheckpointId) &&
+      (input.prompt || input.provisionWithoutPrompt) &&
       selectedRuntimeAccessAllowed &&
       !deferRuntimeSelection &&
       input.deferInitialRun !== true
@@ -3902,12 +4510,13 @@ export class SessionService {
         reasoningEffort: session.reasoningEffort,
         repo: session.repo,
         branch: resolvedBranch,
-        checkpointSha: input.checkpointSha ?? restoreCheckpoint?.commitSha,
+        baseCommitSha: input.baseCommitSha,
         createdById: input.createdById,
         actorType: input.actorType,
         organizationId: input.organizationId,
         readOnly: readOnlyWorkspace,
         adoptWorktreePath,
+        expectedHomeRuntimeId: runtimeToBind,
         adapterType: requestedEnvironment?.adapterType,
         environment: requestedEnvironment,
       });
@@ -3954,6 +4563,8 @@ export class SessionService {
       throw new AuthorizationError("Not authorized for this session");
     }
 
+    const forkBaseCommitSha = await this.resolveForkBaseCommitSha(sourceSession);
+
     const sourceEvents = await prisma.event.findMany({
       where: {
         organizationId: input.organizationId,
@@ -3969,27 +4580,6 @@ export class SessionService {
       },
       orderBy: [{ timestamp: "asc" }, { id: "asc" }],
     });
-    const sourceCheckpointIds = sourceEvents
-      .map((event) => gitCheckpointIdFromPayload(event.payload))
-      .filter((id): id is string => !!id);
-
-    const latestCheckpoint = await prisma.gitCheckpoint.findFirst({
-      where: {
-        sessionGroupId: sourceSessionGroupId,
-        id: { in: sourceCheckpointIds },
-      },
-      orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
-      select: { commitSha: true },
-    });
-
-    const sourceCheckpoints =
-      (await prisma.gitCheckpoint.findMany({
-        where: {
-          sessionGroupId: sourceSessionGroupId,
-          id: { in: sourceCheckpointIds },
-        },
-        orderBy: [{ committedAt: "asc" }, { createdAt: "asc" }],
-      })) ?? [];
     const targetStartEventId = randomUUID();
     const targetEventIds = new Map<string, string>();
     const sourceStartEvent = sourceEvents.find((event) => event.eventType === "session_started");
@@ -4001,11 +4591,6 @@ export class SessionService {
         targetEventIds.set(sourceEvent.id, randomUUID());
       }
     }
-    const targetCheckpointIds = new Map<string, string>();
-    for (const checkpoint of sourceCheckpoints) {
-      targetCheckpointIds.set(checkpoint.id, randomUUID());
-    }
-
     const forkedSession = await this.start({
       tool: sourceSession.tool,
       model: sourceSession.model,
@@ -4023,7 +4608,7 @@ export class SessionService {
       forceNewGroup: true,
       allowVisibleSourceSession: true,
       forkedFromSessionGroupId: sourceSessionGroupId,
-      checkpointSha: latestCheckpoint?.commitSha ?? null,
+      baseCommitSha: forkBaseCommitSha,
       provisionWithoutPrompt: true,
       name: sourceSession.name,
       startEventId: targetStartEventId,
@@ -4039,7 +4624,6 @@ export class SessionService {
           targetSessionId: session.id,
           targetSessionGroupId: session.sessionGroupId,
           targetEventIds,
-          targetCheckpointIds,
         });
         const sourceStartPayload = jsonRecord(
           rewriteForkPayloadReferences(sourceStartEvent.payload, replacements),
@@ -4052,8 +4636,6 @@ export class SessionService {
             sessionGroup: targetStartPayload.sessionGroup,
             clientSource: targetStartPayload.clientSource,
             sourceSessionId: sourceSession.id,
-            restoreCheckpointId: targetStartPayload.restoreCheckpointId,
-            restoreCheckpointSha: targetStartPayload.restoreCheckpointSha,
           } as Prisma.InputJsonValue,
           metadata: {
             forkedFromSessionId: sourceSession.id,
@@ -4078,9 +4660,7 @@ export class SessionService {
             organizationId: input.organizationId,
             startEventId,
             sourceEvents,
-            sourceCheckpoints,
             targetEventIds,
-            targetCheckpointIds,
           },
           tx,
         );
@@ -4093,13 +4673,50 @@ export class SessionService {
     });
   }
 
+  private async resolveForkBaseCommitSha(
+    sourceSession: SessionWithInclude,
+  ): Promise<string | null> {
+    if (!sourceSession.repoId) return null;
+
+    const workdir = sourceSession.workdir ?? sourceSession.sessionGroup?.workdir;
+    const runtimeId =
+      sessionRouter.getRuntimeForSession(sourceSession.id)?.id ??
+      this.getConnectionRuntimeInstanceId(sourceSession.connection) ??
+      this.getConnectionRuntimeInstanceId(sourceSession.sessionGroup?.connection);
+    if (!workdir || !runtimeId) {
+      throw new ValidationError(
+        "Cannot fork this repository session because its exact workspace commit is unavailable.",
+      );
+    }
+
+    let status: BridgeSessionGitSyncStatus;
+    try {
+      status = await sessionRouter.inspectSessionGitSyncStatus(
+        runtimeId,
+        { sessionId: sourceSession.id, workdirHint: workdir },
+        SESSION_MOVE_GIT_SYNC_STATUS_TIMEOUT_MS,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new ValidationError(`Cannot fork this repository session: ${message}`);
+    }
+    if (status.hasUncommittedChanges) {
+      throw new ValidationError("Commit or discard workspace changes before forking this session.");
+    }
+    if (!status.headCommitSha) {
+      throw new ValidationError(
+        "Cannot fork this repository session because its current commit could not be resolved.",
+      );
+    }
+    return status.headCommitSha;
+  }
+
   private buildForkReplacementMap(input: {
     sourceSessionId: string;
     sourceSessionGroupId: string;
     targetSessionId: string;
     targetSessionGroupId: string;
     targetEventIds: ReadonlyMap<string, string>;
-    targetCheckpointIds: ReadonlyMap<string, string>;
   }): Map<string, string> {
     const replacements = new Map<string, string>([
       [input.sourceSessionId, input.targetSessionId],
@@ -4107,9 +4724,6 @@ export class SessionService {
     ]);
     for (const [sourceEventId, targetEventId] of input.targetEventIds) {
       replacements.set(sourceEventId, targetEventId);
-    }
-    for (const [sourceCheckpointId, targetCheckpointId] of input.targetCheckpointIds) {
-      replacements.set(sourceCheckpointId, targetCheckpointId);
     }
     return replacements;
   }
@@ -4123,22 +4737,7 @@ export class SessionService {
       organizationId: string;
       startEventId: string;
       sourceEvents: ForkSourceEvent[];
-      sourceCheckpoints: Array<{
-        id: string;
-        sessionId: string;
-        sessionGroupId: string;
-        repoId: string;
-        promptEventId: string;
-        commitSha: string;
-        parentShas: string[];
-        treeSha: string;
-        subject: string;
-        author: string;
-        committedAt: Date;
-        filesChanged: number;
-      }>;
       targetEventIds: ReadonlyMap<string, string>;
-      targetCheckpointIds: ReadonlyMap<string, string>;
     },
     tx: Prisma.TransactionClient,
   ): Promise<void> {
@@ -4148,43 +4747,9 @@ export class SessionService {
       targetSessionId: input.targetSessionId,
       targetSessionGroupId: input.targetSessionGroupId,
       targetEventIds: input.targetEventIds,
-      targetCheckpointIds: input.targetCheckpointIds,
     });
-    const checkpointsBySourcePromptEventId = new Map<string, typeof input.sourceCheckpoints>();
-    for (const checkpoint of input.sourceCheckpoints) {
-      const existing = checkpointsBySourcePromptEventId.get(checkpoint.promptEventId) ?? [];
-      existing.push(checkpoint);
-      checkpointsBySourcePromptEventId.set(checkpoint.promptEventId, existing);
-    }
-
-    const createCopiedCheckpoint = async (checkpoint: (typeof input.sourceCheckpoints)[number]) => {
-      const targetCheckpointId = input.targetCheckpointIds.get(checkpoint.id);
-      const targetPromptEventId = input.targetEventIds.get(checkpoint.promptEventId);
-      if (!targetCheckpointId || !targetPromptEventId) return;
-      await tx.gitCheckpoint.create({
-        data: {
-          id: targetCheckpointId,
-          sessionId: input.targetSessionId,
-          sessionGroupId: input.targetSessionGroupId,
-          repoId: checkpoint.repoId,
-          promptEventId: targetPromptEventId,
-          commitSha: checkpoint.commitSha,
-          parentShas: checkpoint.parentShas,
-          treeSha: checkpoint.treeSha,
-          subject: checkpoint.subject,
-          author: checkpoint.author,
-          committedAt: checkpoint.committedAt,
-          filesChanged: checkpoint.filesChanged,
-        },
-      });
-    };
-
     for (const sourceEvent of input.sourceEvents) {
-      const sourceCheckpointsForEvent = checkpointsBySourcePromptEventId.get(sourceEvent.id) ?? [];
       if (sourceEvent.eventType === "session_started") {
-        for (const checkpoint of sourceCheckpointsForEvent) {
-          await createCopiedCheckpoint(checkpoint);
-        }
         continue;
       }
 
@@ -4219,10 +4784,6 @@ export class SessionService {
         },
         tx,
       );
-
-      for (const checkpoint of sourceCheckpointsForEvent) {
-        await createCopiedCheckpoint(checkpoint);
-      }
     }
   }
 
@@ -4254,7 +4815,7 @@ export class SessionService {
         where: { id: session.id },
         data: {
           agentStatus: "active",
-          sessionStatus: "in_progress",
+          sessionStatus: getRunningSessionStatus(session.sessionStatus),
           connection: this.mergeConnection(session.connection, {
             state: "connecting",
             runtimeInstanceId: input.runtimeInstanceId,
@@ -4280,6 +4841,7 @@ export class SessionService {
         createdById: updated.createdById,
         organizationId: updated.organizationId,
         readOnly: updated.readOnlyWorkspace,
+        expectedHomeRuntimeId: input.runtimeInstanceId,
         adapterType: conn.adapterType,
       });
     }
@@ -4341,12 +4903,6 @@ export class SessionService {
         prompt: prompt ?? null,
         interactionMode: interactionMode ?? null,
         clientSource: normalizeClientSource(access?.clientSource),
-        checkpointContext: buildCheckpointContextFromStartMeta({
-          sessionId: id,
-          sessionGroupId: session.sessionGroupId,
-          repoId: session.repoId,
-          startMeta,
-        }),
         ...(imageKeys?.length ? { imageKeys } : {}),
       };
       await this.triggerWorkspaceUpgrade(id, session, pendingCommand);
@@ -4360,12 +4916,6 @@ export class SessionService {
         prompt: prompt ?? null,
         interactionMode: interactionMode ?? null,
         clientSource: normalizeClientSource(access?.clientSource),
-        checkpointContext: buildCheckpointContextFromStartMeta({
-          sessionId: id,
-          sessionGroupId: session.sessionGroupId,
-          repoId: session.repoId,
-          startMeta,
-        }),
         ...(imageKeys?.length ? { imageKeys } : {}),
       };
       const commands = this.parsePendingCommands(session.pendingRun);
@@ -4379,7 +4929,7 @@ export class SessionService {
         data: {
           pendingRun: pendingRunValue([...commands, pendingCommand]),
           agentStatus: "active",
-          sessionStatus: "in_progress",
+          sessionStatus: getRunningSessionStatus(session.sessionStatus),
           ...(markLocalPreparing && {
             connection: this.mergeConnection(session.connection, {
               state: "connecting",
@@ -4415,6 +4965,7 @@ export class SessionService {
           createdById: session.createdById,
           organizationId: session.organizationId,
           readOnly: session.readOnlyWorkspace,
+          expectedHomeRuntimeId: runtimeBinding.runtimeId ?? conn.runtimeInstanceId,
           adapterType: conn.adapterType,
         });
       }
@@ -4471,19 +5022,17 @@ export class SessionService {
       resolvedPrompt = resolvedPrompt + buildBaseBranchInstruction(channelBaseBranch);
     }
 
-    const checkpointContext = buildCheckpointContextFromStartMeta({
-      sessionId: id,
-      sessionGroupId: session.sessionGroupId,
-      repoId: session.repoId,
-      startMeta,
-    });
-
+    const invocation = await this.prepareInvocation(
+      id,
+      session.organizationId,
+      session.sessionGroupId,
+    );
     const command = {
       type: "run" as const,
       sessionId: id,
       prompt: resolvedPrompt ?? undefined,
       appendSystemPrompt:
-        session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
+        session.sessionGroup?.kind === "app" ? APP_CREATION_SESSION_INSTRUCTION : undefined,
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
@@ -4491,10 +5040,10 @@ export class SessionService {
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
-      checkpointContext,
       imageUrls: imageKeys?.length
         ? await runtimeAttachmentUrls(imageKeys, session.hosting)
         : undefined,
+      runtimeEnv: invocation.runtimeEnv,
     };
 
     const deliveryResult = sessionRouter.send(id, command, {
@@ -4503,12 +5052,12 @@ export class SessionService {
     });
 
     if (deliveryResult !== "delivered") {
+      await this.clearInvocation(id, invocation.invocationId);
       await this.storePendingCommand(id, {
         type: "run",
         prompt: resolvedPrompt ?? null,
         interactionMode: interactionMode ?? null,
         clientSource: normalizeClientSource(access?.clientSource),
-        checkpointContext,
         ...(imageKeys?.length ? { imageKeys } : {}),
       });
       await this.persistConnectionFailure(id, session.organizationId, deliveryResult, "run");
@@ -4548,7 +5097,7 @@ export class SessionService {
       payload: {
         sessionId: id,
         agentStatus: "active",
-        sessionStatus: "in_progress",
+        sessionStatus: updated.sessionStatus,
         clientSource: normalizeClientSource(access?.clientSource),
         ...(sessionGroup ? { sessionGroup } : {}),
       },
@@ -4776,12 +5325,9 @@ export class SessionService {
       });
     }
 
-    if (group.kind === "app" && group.repoId) {
-      // A restored app group shares the source group's managed repo, so this
-      // repo can be referenced by more than one group. Only delete the repo
-      // (and its bare storage + cascaded checkpoints) when no other group
-      // still points at it — otherwise deleting this group would destroy a
-      // live sibling's source and history.
+    if (isGeneratedProjectKind(group.kind) && group.repoId) {
+      // A managed repo can be referenced by more than one group. Only delete
+      // it when no other group still points at it.
       const otherReferences = await prisma.sessionGroup.count({
         where: { repoId: group.repoId, id: { not: groupId } },
       });
@@ -4887,7 +5433,17 @@ export class SessionService {
         hosting: true,
         repoId: true,
         sessionGroupId: true,
-        sessionGroup: { select: { kind: true, slug: true, visibility: true, ownerUserId: true } },
+        sessionGroup: {
+          select: {
+            kind: true,
+            slug: true,
+            visibility: true,
+            ownerUserId: true,
+            connection: true,
+            workdir: true,
+            sessions: { select: { id: true, agentStatus: true } },
+          },
+        },
         channel: { select: { baseBranch: true } },
         connection: true,
         workdir: true,
@@ -4929,6 +5485,21 @@ export class SessionService {
     const runtimeChanged =
       prev.agentStatus === "not_started" &&
       (config.hosting != null || config.runtimeInstanceId != null);
+    if (runtimeChanged && prev.sessionGroup) {
+      const groupConnection = this.parseConnection(prev.sessionGroup.connection);
+      const groupHasRuntime =
+        !!prev.sessionGroup.workdir ||
+        !!groupConnection.runtimeInstanceId ||
+        !!groupConnection.providerRuntimeId;
+      const hasStartedPeer = prev.sessionGroup.sessions.some(
+        (peer) => peer.id !== prev.id && peer.agentStatus !== "not_started",
+      );
+      if (groupHasRuntime && hasStartedPeer) {
+        throw new ValidationError(
+          "This session group already has started sessions on a bridge. Use Move to switch the entire session group.",
+        );
+      }
+    }
     let requestedEnvironment: Awaited<
       ReturnType<typeof agentEnvironmentService.resolveForSessionRequest>
     > | null = null;
@@ -5075,6 +5646,7 @@ export class SessionService {
         createdById: session.createdById,
         organizationId: session.organizationId,
         readOnly: session.readOnlyWorkspace,
+        expectedHomeRuntimeId: conn.runtimeInstanceId,
         adapterType: conn.adapterType,
         environment: requestedEnvironment,
       });
@@ -5139,6 +5711,7 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
+        tool: true,
         agentStatus: true,
         sessionStatus: true,
         sessionGroupId: true,
@@ -5148,26 +5721,34 @@ export class SessionService {
 
     const parentToolUseId =
       typeof data.parentToolUseId === "string" ? data.parentToolUseId : undefined;
+    const sourceTool = typeof data.sourceTool === "string" ? data.sourceTool : session.tool;
+    const artifact = actionRequiredArtifactForToolOutput(sourceTool, data);
+    const payload = {
+      ...data,
+      sourceTool,
+      ...(artifact ? { artifact } : {}),
+    };
 
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_output",
-      payload: data as unknown as Prisma.InputJsonValue,
+      payload: payload as Prisma.InputJsonValue,
       actorType: "system",
       actorId: "system",
       ...(parentToolUseId ? { parentId: parentToolUseId } : {}),
     });
 
-    if (data.type === "assistant") {
-      await prisma.session.update({
-        where: { id: sessionId },
-        data: { lastMessageAt: new Date() },
-      });
-    }
+    // Every bridge output is evidence that the agent is still doing work. This
+    // includes tool progress, not only assistant text: treating only assistant
+    // messages as activity let long-running tool calls look idle and be reaped.
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { lastMessageAt: new Date() },
+    });
 
-    if (data.usage || typeof data.costUsd === "number") {
+    if (data.usage) {
       await this.recordUsage(sessionId, session.organizationId, data);
     }
 
@@ -5233,8 +5814,8 @@ export class SessionService {
   }
 
   /**
-   * Accumulate token usage and cost from a coding tool output message onto
-   * the session, then emit a usage_updated patch so clients update live.
+   * Accumulate token usage from a coding tool output message onto the session,
+   * then emit a usage_updated patch so clients update live.
    */
   private async recordUsage(
     sessionId: string,
@@ -5250,14 +5831,12 @@ export class SessionService {
     const outputTokens = num(usage?.outputTokens);
     const cacheReadTokens = num(usage?.cacheReadTokens);
     const cacheCreationTokens = num(usage?.cacheCreationTokens);
-    const costUsd = num(data.costUsd);
 
     if (
       inputTokens === 0 &&
       outputTokens === 0 &&
       cacheReadTokens === 0 &&
-      cacheCreationTokens === 0 &&
-      costUsd === 0
+      cacheCreationTokens === 0
     ) {
       return;
     }
@@ -5269,14 +5848,12 @@ export class SessionService {
         outputTokens: { increment: outputTokens },
         cacheReadTokens: { increment: cacheReadTokens },
         cacheCreationTokens: { increment: cacheCreationTokens },
-        costUsd: { increment: costUsd },
       },
       select: {
         inputTokens: true,
         outputTokens: true,
         cacheReadTokens: true,
         cacheCreationTokens: true,
-        costUsd: true,
       },
     });
 
@@ -5294,7 +5871,6 @@ export class SessionService {
         outputTokens: numberFromBigInt(updated.outputTokens),
         cacheReadTokens: numberFromBigInt(updated.cacheReadTokens),
         cacheCreationTokens: numberFromBigInt(updated.cacheCreationTokens),
-        costUsd: updated.costUsd,
       },
       actorType: "system",
       actorId: "system",
@@ -5425,7 +6001,7 @@ export class SessionService {
     });
   }
 
-  async complete(id: string) {
+  async complete(id: string, options?: { drainPending?: boolean }) {
     // Only transition from active — don't overwrite explicit user actions
     const current = await prisma.session.findUnique({
       where: { id },
@@ -5523,7 +6099,7 @@ export class SessionService {
       }
     }
 
-    if (!hasPendingInput) {
+    if (!hasPendingInput && options?.drainPending !== false) {
       setImmediate(() => {
         void this.drainNextPendingOrQueuedMessage(id);
       });
@@ -5701,7 +6277,6 @@ export class SessionService {
           prompt: text,
           interactionMode: interactionMode ?? null,
           clientSource: normalizeClientSource(clientSource),
-          checkpointContext: null,
           ...(imageKeys?.length ? { imageKeys } : {}),
         };
         const markLocalPreparing = session.hosting === "local";
@@ -5748,6 +6323,7 @@ export class SessionService {
             createdById: session.createdById,
             organizationId: session.organizationId,
             readOnly: session.readOnlyWorkspace,
+            expectedHomeRuntimeId: runtimeBinding.runtimeId ?? conn.runtimeInstanceId,
             adapterType: conn.adapterType,
           });
         }
@@ -5776,15 +6352,16 @@ export class SessionService {
     // If session has a read-only workspace and user explicitly switched away from ask mode,
     // trigger a workspace upgrade to create a real worktree
     if (session.readOnlyWorkspace && interactionMode && interactionMode !== "ask" && session.repo) {
+      const resumedSessionStatus = getRunningSessionStatus(session.sessionStatus);
       const pendingCommand: PendingSessionCommand = {
         type: "send",
         prompt: text,
         interactionMode: interactionMode ?? null,
         clientSource: normalizeClientSource(clientSource),
-        checkpointContext: null,
         ...(imageKeys?.length ? { imageKeys } : {}),
       };
       await this.triggerWorkspaceUpgrade(sessionId, session, pendingCommand, {
+        sessionStatus: resumedSessionStatus,
         lastMessageAt: new Date(),
         ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
       });
@@ -5797,6 +6374,7 @@ export class SessionService {
         payload: {
           text,
           clientSource: normalizeClientSource(clientSource),
+          sessionStatus: resumedSessionStatus,
           ...(imageKeys?.length ? { attachmentKeys: imageKeys, imageKeys } : {}),
           ...(clientMutationId ? { clientMutationId } : {}),
         },
@@ -5849,19 +6427,6 @@ export class SessionService {
       sessionGroupKind: session.sessionGroup?.kind,
     });
 
-    const checkpointContext =
-      session.repoId && session.sessionGroupId
-        ? createCheckpointContext({
-            checkpointContextId: randomUUID(),
-            sessionId,
-            sessionGroupId: session.sessionGroupId,
-            repoId: session.repoId,
-          })
-        : null;
-    const checkpointMetadata = checkpointContext
-      ? ({ checkpointContextId: checkpointContext.checkpointContextId } as Prisma.InputJsonValue)
-      : undefined;
-
     // Generate presigned GET URLs for attached files
     let imageUrls: string[] | undefined;
     if (imageKeys?.length) {
@@ -5873,12 +6438,17 @@ export class SessionService {
     // runtime prevents silent bridge hijack when the home is offline and a
     // different bridge (e.g. Laptop B) is now the only connected runtime.
     const expectedRuntimeId = runtimeBinding.runtimeId ?? conn.runtimeInstanceId;
+    const invocation = await this.prepareInvocation(
+      sessionId,
+      session.organizationId,
+      session.sessionGroupId,
+    );
     const deliveryCommand = {
       type: "send" as const,
       sessionId,
       prompt,
       appendSystemPrompt:
-        session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
+        session.sessionGroup?.kind === "app" ? APP_CREATION_SESSION_INSTRUCTION : undefined,
       tool: activeTool,
       model: activeModel ?? undefined,
       reasoningEffort: activeReasoningEffort ?? undefined,
@@ -5886,8 +6456,8 @@ export class SessionService {
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
-      checkpointContext,
       imageUrls,
+      runtimeEnv: invocation.runtimeEnv,
     };
     const deliveryResult: DeliveryResult =
       session.hosting === "cloud" && !expectedRuntimeId
@@ -5896,8 +6466,10 @@ export class SessionService {
             expectedHomeRuntimeId: expectedRuntimeId ?? undefined,
             organizationId: session.organizationId,
           });
+    const resumedSessionStatus = getRunningSessionStatus(session.sessionStatus);
 
     if (deliveryResult !== "delivered") {
+      await this.clearInvocation(sessionId, invocation.invocationId);
       await this.storePendingCommand(
         sessionId,
         {
@@ -5905,10 +6477,10 @@ export class SessionService {
           prompt,
           interactionMode: interactionMode ?? null,
           clientSource: normalizeClientSource(clientSource),
-          checkpointContext,
           ...(imageKeys?.length ? { imageKeys } : {}),
         },
         {
+          sessionStatus: resumedSessionStatus,
           lastMessageAt: new Date(),
           ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
         },
@@ -5929,11 +6501,11 @@ export class SessionService {
         payload: {
           text,
           clientSource: normalizeClientSource(clientSource),
+          sessionStatus: resumedSessionStatus,
           ...(imageKeys?.length ? { attachmentKeys: imageKeys, imageKeys } : {}),
           deliveryFailed: true,
           ...(clientMutationId ? { clientMutationId } : {}),
         },
-        metadata: checkpointMetadata,
         actorType,
         actorId,
       });
@@ -5943,7 +6515,6 @@ export class SessionService {
     // Only mark active after successful delivery
     // Persist the runtime binding so restoreSessionsForRuntime can recover it after restart
     const boundRuntime = sessionRouter.getRuntimeForSession(sessionId);
-    const resumedSessionStatus = getRunningSessionStatus(session.sessionStatus);
     const updatedSession = await prisma.session.update({
       where: { id: sessionId },
       data: {
@@ -6005,7 +6576,6 @@ export class SessionService {
         ...(imageKeys?.length ? { attachmentKeys: imageKeys, imageKeys } : {}),
         ...(clientMutationId ? { clientMutationId } : {}),
       },
-      metadata: checkpointMetadata,
       actorType,
       actorId,
     });
@@ -6497,7 +7067,7 @@ export class SessionService {
     warning?: BridgeWorkspaceWarning,
   ) {
     // Read and clear pendingRun atomically in a transaction to prevent double-delivery
-    const [session, pendingRun] = await prisma.$transaction(
+    const [session, pendingRun, pendingCleanupRuntimeId] = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
         const prev = await tx.session.findUniqueOrThrow({
           where: { id: sessionId },
@@ -6507,6 +7077,7 @@ export class SessionService {
             sessionStatus: true,
             readOnlyWorkspace: true,
             workdir: true,
+            pendingGeneralWorkspaceCleanupRuntimeId: true,
           },
         });
         const pendingCommand = this.parsePendingCommands(prev.pendingRun)[0] ?? null;
@@ -6528,7 +7099,7 @@ export class SessionService {
           include: SESSION_INCLUDE,
         });
 
-        return [updated, prev.pendingRun] as const;
+        return [updated, prev.pendingRun, prev.pendingGeneralWorkspaceCleanupRuntimeId] as const;
       },
     );
     const setupScript = await this.getChannelSetupScript(session.channelId);
@@ -6537,17 +7108,28 @@ export class SessionService {
       branch !== undefined &&
       previousGroupBranch !== branch &&
       Boolean(session.sessionGroup?.prUrl);
-    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      workdir,
-      connection: session.connection as Prisma.InputJsonValue,
-      worktreeDeleted: false,
-      repoId: session.repoId ?? null,
-      ...(branch !== undefined ? { branch } : {}),
-      ...(shouldClearPrUrl ? { prUrl: null } : {}),
-      ...(slug !== undefined ? { slug } : {}),
-      setupStatus: setupScript ? "running" : "idle",
-      setupError: null,
-    });
+    // The ready workspace belongs to this session's runtime; only mirror its
+    // path to siblings that share that runtime so a cloud path can never land
+    // on a local session (or vice versa) and break its cwd.
+    const workdirRuntimeInstanceId =
+      this.parseConnection(session.connection).runtimeInstanceId ??
+      sessionRouter.getRuntimeForSession(sessionId)?.id ??
+      null;
+    const sessionGroup = await this.syncGroupWorkspaceState(
+      session.sessionGroupId,
+      {
+        workdir,
+        connection: session.connection as Prisma.InputJsonValue,
+        worktreeDeleted: false,
+        repoId: session.repoId ?? null,
+        ...(branch !== undefined ? { branch } : {}),
+        ...(shouldClearPrUrl ? { prUrl: null } : {}),
+        ...(slug !== undefined ? { slug } : {}),
+        setupStatus: setupScript ? "running" : "idle",
+        setupError: null,
+      },
+      { workdirRuntimeInstanceId },
+    );
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
@@ -6563,6 +7145,14 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+    if (pendingCleanupRuntimeId) {
+      await this.deliverGeneralWorkspaceCleanup({
+        sessionId,
+        sessionGroupId: session.sessionGroupId,
+        organizationId: session.organizationId,
+        runtimeInstanceId: pendingCleanupRuntimeId,
+      });
+    }
 
     if (warning) {
       await eventService.create({
@@ -6651,9 +7241,10 @@ export class SessionService {
   async workspaceFailed(sessionId: string, error: string) {
     const prev = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
-      select: { connection: true },
+      select: { connection: true, tool: true },
     });
     const conn = this.parseConnection(prev.connection);
+    const artifact = actionRequiredArtifactForToolError(prev.tool, error);
     const now = new Date().toISOString();
     const failedState: SessionConnectionData["state"] =
       conn.state === "timed_out" ? "timed_out" : "failed";
@@ -6691,6 +7282,7 @@ export class SessionService {
         type: "workspace_failed",
         sessionId,
         error,
+        ...(artifact ? { artifact } : {}),
         agentStatus: session.agentStatus,
         sessionStatus: session.sessionStatus,
         connection: nextConnection,
@@ -6802,6 +7394,8 @@ export class SessionService {
         hosting: true,
         connection: true,
         sessionGroupId: true,
+        lastUserMessageAt: true,
+        lastMessageAt: true,
       },
     });
     if (!session) return;
@@ -6831,13 +7425,25 @@ export class SessionService {
       return;
     }
 
-    // Preserve agent/session status — the session may still be running on the
-    // local machine even though the bridge WebSocket dropped. Only the
-    // connection state changes; the agent's actual work status is unknown.
+    // A lost runtime means Trace can no longer observe or control work that is
+    // in flight. An idle, never-started session may still be bound to the same
+    // local runtime, so only fail startup when its initial user message has not
+    // been answered.
+    // The user can explicitly retry or move the failed session once a runtime
+    // is available again.
+    const hasUnansweredUserMessage =
+      session.lastUserMessageAt !== null &&
+      (session.lastMessageAt === null || session.lastUserMessageAt >= session.lastMessageAt);
+    const agentStatus =
+      session.agentStatus === "active" ||
+      (session.agentStatus === "not_started" && hasUnansweredUserMessage)
+        ? "failed"
+        : session.agentStatus;
     await prisma.session.update({
       where: { id: sessionId },
       data: {
         connection: connJson(updated),
+        agentStatus,
       },
     });
     const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
@@ -6854,7 +7460,7 @@ export class SessionService {
         reason,
         runtimeInstanceId,
         connection: connJson(updated),
-        agentStatus: session.agentStatus,
+        agentStatus,
         sessionStatus: session.sessionStatus,
         ...(sessionGroup ? { sessionGroup } : {}),
       },
@@ -6976,13 +7582,79 @@ export class SessionService {
         );
       }
 
-      // Only emit connection_restored for sessions that were disconnected
-      // and are not already done — done sessions don't need event churn
+      // Emit connection_restored for sessions that were disconnected or whose
+      // provision wait timed out before this (now-connected) runtime's bridge
+      // arrived — but not for sessions already done, which don't need event
+      // churn. Healing `timed_out` here is what lets a slow-booting runtime
+      // reclaim its session after the 300s startup window elapsed.
       const conn = this.parseConnection(session.connection);
-      if (conn.state === "disconnected" && session.agentStatus !== "done") {
+      if (
+        (conn.state === "disconnected" || conn.state === "timed_out") &&
+        session.agentStatus !== "done"
+      ) {
         await this.markConnectionRestored(session.id, runtimeId);
       }
     }
+
+    const pendingCleanups = await prisma.session.findMany({
+      where: {
+        ...(organizationId ? { organizationId } : {}),
+        pendingGeneralWorkspaceCleanupRuntimeId: runtimeId,
+      },
+      select: { id: true, sessionGroupId: true, organizationId: true },
+    });
+    for (const cleanup of pendingCleanups) {
+      await this.deliverGeneralWorkspaceCleanup({
+        sessionId: cleanup.id,
+        sessionGroupId: cleanup.sessionGroupId,
+        organizationId: cleanup.organizationId,
+        runtimeInstanceId: runtimeId,
+      });
+    }
+  }
+
+  private async deliverGeneralWorkspaceCleanup(input: {
+    sessionId: string;
+    sessionGroupId: string | null;
+    organizationId: string;
+    runtimeInstanceId: string;
+  }): Promise<void> {
+    const cleanupResult = await sendRuntimeCommand(
+      input.runtimeInstanceId,
+      {
+        type: "cleanup_general_workspace",
+        sessionId: input.sessionId,
+        sessionGroupId: input.sessionGroupId ?? undefined,
+      },
+      input.organizationId,
+    );
+    if (cleanupResult === "delivered") return;
+    console.warn(
+      `[session] failed to clean up the general workspace for ${input.sessionId}: ${cleanupResult}`,
+    );
+  }
+
+  async generalWorkspaceCleanupCompleted(input: {
+    sessionId: string;
+    organizationId: string;
+    runtimeInstanceId: string;
+    success: boolean;
+    error?: string;
+  }): Promise<void> {
+    if (!input.success) {
+      console.warn(
+        `[session] source runtime ${input.runtimeInstanceId} failed to clean up the general workspace for ${input.sessionId}: ${input.error ?? "unknown error"}`,
+      );
+      return;
+    }
+    await prisma.session.updateMany({
+      where: {
+        id: input.sessionId,
+        organizationId: input.organizationId,
+        pendingGeneralWorkspaceCleanupRuntimeId: input.runtimeInstanceId,
+      },
+      data: { pendingGeneralWorkspaceCleanupRuntimeId: null },
+    });
   }
 
   async storeToolSessionId(sessionId: string, toolSessionId: string) {
@@ -6998,7 +7670,6 @@ export class SessionService {
       toolSessionId: string;
       message?: string;
       interactionMode?: string;
-      checkpointContext?: GitCheckpointContext | null;
       imageUrls?: string[];
     },
   ) {
@@ -7033,26 +7704,6 @@ export class SessionService {
       sessionGroupKind: session.sessionGroup?.kind,
     });
 
-    const promptEvent = await prisma.event.findFirst({
-      where: {
-        scopeId: sessionId,
-        scopeType: "session",
-        eventType: { in: ["message_sent", "session_started"] },
-      },
-      orderBy: { timestamp: "desc" },
-      select: { id: true },
-    });
-    const checkpointContext =
-      options.checkpointContext ??
-      (session.repoId && session.sessionGroupId
-        ? createCheckpointContext({
-            checkpointContextId: randomUUID(),
-            promptEventId: promptEvent?.id ?? null,
-            sessionId,
-            sessionGroupId: session.sessionGroupId,
-            repoId: session.repoId,
-          })
-        : null);
     const conn = this.parseConnection(session.connection);
 
     await prisma.session.update({
@@ -7060,6 +7711,11 @@ export class SessionService {
       data: { toolSessionId: null },
     });
 
+    const invocation = await this.prepareInvocation(
+      sessionId,
+      session.organizationId,
+      session.sessionGroupId,
+    );
     const deliveryResult = sessionRouter.send(
       sessionId,
       {
@@ -7067,20 +7723,21 @@ export class SessionService {
         sessionId,
         prompt,
         appendSystemPrompt:
-          session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
+          session.sessionGroup?.kind === "app" ? APP_CREATION_SESSION_INSTRUCTION : undefined,
         tool: session.tool,
         model: session.model ?? undefined,
         reasoningEffort: session.reasoningEffort ?? undefined,
         enableClaudeInChrome: this.claudeInChromeFlag(session.tool, session.createdBy),
         interactionMode: options.interactionMode,
         cwd: session.workdir ?? undefined,
-        checkpointContext,
         imageUrls: options.imageUrls,
+        runtimeEnv: invocation.runtimeEnv,
       },
       { expectedHomeRuntimeId: conn.runtimeInstanceId, organizationId: session.organizationId },
     );
 
     if (deliveryResult !== "delivered") {
+      await this.clearInvocation(sessionId, invocation.invocationId);
       await this.persistConnectionFailure(
         sessionId,
         session.organizationId,
@@ -7117,210 +7774,48 @@ export class SessionService {
     });
   }
 
-  async recordGitCheckpoint(sessionId: string, checkpoint: GitCheckpointBridgePayload) {
-    if (Number.isNaN(new Date(checkpoint.committedAt).getTime())) {
-      console.warn(
-        `[checkpoint] invalid committedAt for session ${sessionId}: ${checkpoint.committedAt}`,
-      );
-      return;
-    }
-
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      select: {
-        id: true,
-        organizationId: true,
-        sessionGroupId: true,
-        repoId: true,
-        sessionGroup: { select: { kind: true, ownerUserId: true } },
-      },
-    });
-    if (!session?.sessionGroupId || !session.repoId) return;
-
-    const existing = await prisma.gitCheckpoint.findUnique({
-      where: {
-        sessionGroupId_commitSha: {
-          sessionGroupId: session.sessionGroupId,
-          commitSha: checkpoint.commitSha,
-        },
-      },
-    });
-    const rewrittenCommitSha =
-      typeof checkpoint.rewrittenFromCommitSha === "string"
-        ? checkpoint.rewrittenFromCommitSha.trim()
-        : "";
-    const rewrittenCheckpoint =
-      rewrittenCommitSha && rewrittenCommitSha !== checkpoint.commitSha
-        ? await prisma.gitCheckpoint.findUnique({
-            where: {
-              sessionGroupId_commitSha: {
-                sessionGroupId: session.sessionGroupId,
-                commitSha: rewrittenCommitSha,
-              },
-            },
-          })
-        : null;
-
-    let persisted = existing;
-    let didPersistCheckpoint = false;
-
-    if (!persisted) {
-      const promptEventId = await this.resolvePromptEventIdForCheckpoint(sessionId, checkpoint);
-      if (!promptEventId) return null;
-
-      if (rewrittenCheckpoint) {
-        persisted = await prisma.gitCheckpoint.update({
-          where: { id: rewrittenCheckpoint.id },
-          data: {
-            sessionId,
-            promptEventId,
-            commitSha: checkpoint.commitSha,
-            parentShas: checkpoint.parentShas,
-            treeSha: checkpoint.treeSha,
-            subject: checkpoint.subject,
-            author: checkpoint.author,
-            committedAt: new Date(checkpoint.committedAt),
-            filesChanged: checkpoint.filesChanged,
-          },
-        });
-      } else {
-        persisted = await prisma.gitCheckpoint.create({
-          data: {
-            sessionId,
-            sessionGroupId: session.sessionGroupId,
-            repoId: session.repoId,
-            promptEventId,
-            commitSha: checkpoint.commitSha,
-            parentShas: checkpoint.parentShas,
-            treeSha: checkpoint.treeSha,
-            subject: checkpoint.subject,
-            author: checkpoint.author,
-            committedAt: new Date(checkpoint.committedAt),
-            filesChanged: checkpoint.filesChanged,
-          },
-        });
-      }
-
-      didPersistCheckpoint = true;
-    }
-
-    if (!persisted) return null;
-
-    // App checkpoints get a preview screenshot, but the headless render must not
-    // block the per-session event queue (it would freeze the agent's live output
-    // for seconds per commit). Mark it pending, emit the checkpoint now, and run
-    // the capture off-queue — a follow-up git_checkpoint event (merged by id on
-    // the client) carries the thumbnail once it's ready.
-    const shouldCaptureAppCheckpoint =
-      didPersistCheckpoint && session.sessionGroup?.kind === "app";
-    if (shouldCaptureAppCheckpoint && persisted) {
-      persisted = await prisma.gitCheckpoint.update({
-        where: { id: persisted.id },
-        data: { captureStatus: "pending" },
-      });
-    }
-
-    if (didPersistCheckpoint) {
-      await eventService.create({
-        organizationId: session.organizationId,
-        scopeType: "session",
-        scopeId: sessionId,
-        eventType: "session_output",
-        payload: {
-          type: "git_checkpoint",
-          checkpoint: serializeGitCheckpoint(persisted),
-        } as Prisma.InputJsonValue,
-        actorType: "system",
-        actorId: "system",
-      });
-    }
-
-    if (rewrittenCheckpoint && rewrittenCheckpoint.id !== persisted.id) {
-      await prisma.gitCheckpoint.delete({
-        where: { id: rewrittenCheckpoint.id },
-      });
-
-      await eventService.create({
-        organizationId: session.organizationId,
-        scopeType: "session",
-        scopeId: sessionId,
-        eventType: "session_output",
-        payload: {
-          type: "git_checkpoint_rewrite",
-          replacedCommitSha: rewrittenCheckpoint.commitSha,
-          replacedCheckpointId: rewrittenCheckpoint.id,
-          checkpoint: serializeGitCheckpoint(persisted),
-        } as Prisma.InputJsonValue,
-        actorType: "system",
-        actorId: "system",
-      });
-    }
-
-    if (shouldCaptureAppCheckpoint && persisted && session.sessionGroup) {
-      this.captureAppCheckpointAsync({
-        checkpointId: persisted.id,
-        sessionId,
-        organizationId: session.organizationId,
-        sessionGroupId: session.sessionGroupId,
-        userId: session.sessionGroup.ownerUserId,
-      });
-    }
-
-    return persisted;
-  }
-
-  /**
-   * Render and store an app checkpoint preview off the per-session event queue,
-   * then emit a follow-up git_checkpoint event carrying the captured thumbnail
-   * (the client merges checkpoints by id). Fire-and-forget: capture latency must
-   * never block the live agent output stream.
-   */
-  private captureAppCheckpointAsync(input: {
-    checkpointId: string;
-    sessionId: string;
-    organizationId: string;
-    sessionGroupId: string;
-    userId: string;
-  }): void {
-    void (async () => {
-      try {
-        const capture = await appCheckpointCaptureService.capture({
-          organizationId: input.organizationId,
-          sessionGroupId: input.sessionGroupId,
-          checkpointId: input.checkpointId,
-          userId: input.userId,
-        });
-        const updated = await prisma.gitCheckpoint.update({
-          where: { id: input.checkpointId },
-          data: {
-            captureStatus: capture.captureStatus,
-            captureKey: capture.captureKey ?? null,
-            captureUrl: capture.captureUrl ?? null,
-            captureContentType: capture.captureContentType ?? null,
-            capturedAt: capture.capturedAt ?? null,
-          },
-        });
-        await eventService.create({
-          organizationId: input.organizationId,
-          scopeType: "session",
-          scopeId: input.sessionId,
-          eventType: "session_output",
-          payload: {
-            type: "git_checkpoint",
-            checkpoint: serializeGitCheckpoint(updated),
-          } as Prisma.InputJsonValue,
-          actorType: "system",
-          actorId: "system",
-        });
-      } catch (error) {
-        // A missing row (checkpoint rewritten away) or capture failure is
-        // non-fatal — the checkpoint simply keeps its pending/last status.
-        console.error("[app-checkpoint] async capture failed", error);
-      }
-    })();
-  }
-
   async retryConnection(
+    sessionId: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    const lockScope = await prisma.session.findFirst({
+      where: { id: sessionId, organizationId },
+      select: { sessionGroupId: true },
+    });
+    const locked = await withRuntimeTransitionLock(
+      {
+        key: this.runtimeTransitionLockKey(sessionId, lockScope?.sessionGroupId),
+        ttlMs: RUNTIME_TRANSITION_LOCK_TTL_MS,
+      },
+      () => this.retryConnectionLocked(sessionId, organizationId, actorType, actorId),
+    );
+    if (locked.acquired) return locked.value;
+
+    logAgentEnvironmentTelemetry("runtime.transition_suppressed", {
+      organizationId,
+      sessionId,
+      operation: "retry",
+      reason: "transition_in_progress",
+    });
+    return prisma.session.findFirstOrThrow({
+      where: { id: sessionId, organizationId },
+      include: { ...SESSION_INCLUDE, projects: true },
+    });
+  }
+
+  private runtimeTransitionLockKey(sessionId: string, sessionGroupId?: string | null): string {
+    return sessionGroupId
+      ? this.sessionGroupTransitionLockKey(sessionGroupId)
+      : `trace:session-runtime-transition:${sessionId}`;
+  }
+
+  private sessionGroupTransitionLockKey(sessionGroupId: string): string {
+    return `trace:session-group-runtime-transition:${sessionGroupId}`;
+  }
+
+  private async retryConnectionLocked(
     sessionId: string,
     organizationId: string,
     actorType: ActorType,
@@ -7457,30 +7952,71 @@ export class SessionService {
 
     if (session.repo) {
       const startMeta = await getSessionStartMetadata(sessionId);
+      const restoredConn: SessionConnectionData = {
+        ...conn,
+        state: "connected",
+        runtimeInstanceId: runtime.id,
+        runtimeLabel: runtime.label,
+        lastSeen: new Date().toISOString(),
+        lastError: undefined,
+        retryCount: 0,
+        autoRetryable: true,
+      };
+      const isGeneratedProject = session.sessionGroup?.kind === "app";
+
+      // Managed-git credentials are bound to a connected runtime. A retry used
+      // to send a regular `prepare` command with the unauthenticated remote,
+      // so app/design workspaces got a 403 after their container restarted.
+      // Record the replacement runtime before minting its credential, then use
+      // the generated-project preparation path that refreshes origin.
+      if (isGeneratedProject) {
+        await prisma.session.update({
+          where: { id: sessionId },
+          data: { connection: connJson(restoredConn) },
+        });
+        await this.syncGroupWorkspaceState(session.sessionGroupId, {
+          connection: connJson(restoredConn),
+        });
+      }
+      const retryPreparation = isGeneratedProject
+        ? {
+            type: "prepare_app" as const,
+            sessionId,
+            sessionGroupId: session.sessionGroupId ?? undefined,
+            sessionGroupKind: session.sessionGroup?.kind,
+            slug: session.sessionGroup?.slug ?? undefined,
+            ...(await this.createGeneratedProjectGitCredential({
+              organizationId: session.organizationId,
+              sessionId,
+              runtimeInstanceId: runtime.id,
+              repo: session.repo,
+              actorType,
+              actorId,
+            })),
+          }
+        : {
+            type: "prepare" as const,
+            sessionId,
+            sessionGroupId: session.sessionGroupId ?? undefined,
+            slug: session.sessionGroup?.slug ?? undefined,
+            preserveBranchName: shouldPreserveWorkspaceBranchName({
+              slug: session.sessionGroup?.slug,
+              branch: session.branch,
+              channelBaseBranch: session.channel?.baseBranch,
+            }),
+            repoId: session.repo.id,
+            repoName: session.repo.name,
+            repoRemoteUrl: session.repo.remoteUrl,
+            defaultBranch: session.repo.defaultBranch,
+            branch: session.branch ?? undefined,
+            readOnly: session.readOnlyWorkspace,
+          };
       // Re-run workspace preparation — pin delivery to the runtime we just
       // resolved (the home bridge) so no other bridge can intercept.
-      const prepResult = sessionRouter.send(
-        sessionId,
-        {
-          type: "prepare",
-          sessionId,
-          sessionGroupId: session.sessionGroupId ?? undefined,
-          slug: session.sessionGroup?.slug ?? undefined,
-          preserveBranchName: shouldPreserveWorkspaceBranchName({
-            slug: session.sessionGroup?.slug,
-            branch: session.branch,
-            channelBaseBranch: session.channel?.baseBranch,
-          }),
-          repoId: session.repo.id,
-          repoName: session.repo.name,
-          repoRemoteUrl: session.repo.remoteUrl,
-          defaultBranch: session.repo.defaultBranch,
-          branch: session.branch ?? undefined,
-          checkpointSha: startMeta.restoreCheckpointSha ?? undefined,
-          readOnly: session.readOnlyWorkspace,
-        },
-        { expectedHomeRuntimeId: runtime.id, organizationId: session.organizationId },
-      );
+      const prepResult = sessionRouter.send(sessionId, retryPreparation, {
+        expectedHomeRuntimeId: runtime.id,
+        organizationId: session.organizationId,
+      });
 
       if (prepResult !== "delivered") {
         await this.persistConnectionFailure(
@@ -7496,17 +8032,6 @@ export class SessionService {
       }
 
       // Restore the connection while leaving the session in its prior idle state.
-      const restoredConn: SessionConnectionData = {
-        ...conn,
-        state: "connected",
-        runtimeInstanceId: runtime.id,
-        runtimeLabel: runtime.label,
-        lastSeen: new Date().toISOString(),
-        lastError: undefined,
-        retryCount: 0,
-        autoRetryable: true,
-      };
-
       // Preserve agent/session status unless it was previously marked terminal by a retryable failure.
       const updateData: Prisma.SessionUpdateInput = {
         connection: connJson(restoredConn),
@@ -7748,31 +8273,65 @@ export class SessionService {
     return { status, verified: true, skippedReason: null };
   }
 
-  private async moveSessionInPlace(params: {
-    session: Awaited<ReturnType<typeof prisma.session.findFirstOrThrow>> & {
-      repo?: { remoteUrl: string | null } | null;
-    };
-    targetHosting: "cloud" | "local";
-    targetRuntimeInstanceId?: string | null;
-    targetRuntimeLabel?: string | null;
-    allowUnverifiedSourceGitStatus?: boolean;
-    actorType: ActorType;
-    actorId: string;
-  }) {
+  private async moveSessionInPlace(params: SessionMoveParams): Promise<SessionWithInclude> {
+    if (!params.runtimeLockHeld) {
+      const locked = await withRuntimeTransitionLock(
+        {
+          key: this.runtimeTransitionLockKey(params.session.id, params.session.sessionGroupId),
+          ttlMs: RUNTIME_TRANSITION_LOCK_TTL_MS,
+        },
+        () => this.moveSessionInPlace({ ...params, runtimeLockHeld: true }),
+      );
+      if (locked.acquired) return locked.value;
+
+      logAgentEnvironmentTelemetry("runtime.transition_suppressed", {
+        organizationId: params.session.organizationId,
+        sessionId: params.session.id,
+        operation: "move",
+        reason: "transition_in_progress",
+      });
+      return prisma.session.findUniqueOrThrow({
+        where: { id: params.session.id },
+        include: { ...SESSION_INCLUDE, projects: true },
+      });
+    }
+
+    const prepared = await this.prepareSessionMove(params);
+    const moved = await this.persistSessionMove(params, prepared);
+    const movedSession = moved.sessions[0];
+    if (!movedSession) throw new Error("Moved session was not persisted");
+    if (moved.conversionEvent) eventService.publishCreated(moved.conversionEvent);
+
+    await this.rebindMovedSessions(params, moved.sessions);
+    await this.publishSessionMoveEvents(params, prepared, moved.sessions);
+
+    const failedSession = await this.activateMovedSession(params, prepared, movedSession);
+    if (failedSession) return failedSession;
+
+    if (prepared.sourceCloudRuntimeSession) {
+      await this.destroyMovedSourceCloudRuntime(
+        movedSession.id,
+        prepared.sourceCloudRuntimeSession,
+        params.targetHosting === "local" ? "session_moved_to_local" : "session_runtime_replaced",
+      );
+    }
+
+    return movedSession;
+  }
+
+  private async prepareSessionMove(params: SessionMoveParams): Promise<PreparedSessionMove> {
     const {
       session,
       targetHosting,
       targetRuntimeInstanceId,
       targetRuntimeLabel,
+      targetRuntime,
+      targetEnvironment: requestedTargetEnvironment,
+      reuseCloudRuntime,
       allowUnverifiedSourceGitStatus,
-      actorType,
-      actorId,
+      conversion,
     } = params;
-    const currentSessionGroup = (
-      session as {
-        sessionGroup?: { visibility: string; ownerUserId: string } | null;
-      }
-    ).sessionGroup;
+    const currentSessionGroup = session.sessionGroup;
     await this.assertPrivateRuntimeOwner({
       visibility: currentSessionGroup?.visibility,
       ownerUserId: currentSessionGroup?.ownerUserId,
@@ -7789,19 +8348,30 @@ export class SessionService {
         ? sourceRuntimeId
         : null;
     const targetEnvironment =
-      targetHosting === "cloud"
-        ? await this.resolveProvisioningEnvironment({
+      targetHosting === "cloud" && !reuseCloudRuntime
+        ? (requestedTargetEnvironment ??
+          (await this.resolveProvisioningEnvironment({
             sessionId: session.id,
             organizationId: session.organizationId,
             adapterType: "provisioned",
-          })
+          })))
         : null;
-    if (targetHosting === "cloud" && !targetEnvironment) {
+    if (targetHosting === "cloud" && !reuseCloudRuntime && !targetEnvironment) {
       throw new Error("No enabled cloud agent environment is configured");
     }
-    assertCloudRepoRemoteAvailable(targetHosting, session.repo);
+    const targetRepo = conversion
+      ? await prisma.repo.findFirst({
+          where: {
+            id: conversion.repoId,
+            organizationId: session.organizationId,
+            provider: "managed",
+          },
+          select: { remoteUrl: true },
+        })
+      : session.repo;
+    assertCloudRepoRemoteAvailable(targetHosting, targetRepo);
     let sourceCloudRuntimeSession =
-      session.hosting === "cloud" && targetHosting === "local"
+      session.hosting === "cloud" && (targetHosting === "local" || !reuseCloudRuntime)
         ? await this.withGroupRuntimeState(session)
         : null;
     if (sourceCloudRuntimeSession) {
@@ -7828,30 +8398,46 @@ export class SessionService {
     });
     const sourceGitStatus = sourceInspection.status;
 
-    terminalRelay.destroyAllForSession(session.id);
+    const siblings = session.sessionGroupId
+      ? await prisma.session.findMany({
+          where: {
+            sessionGroupId: session.sessionGroupId,
+            organizationId: session.organizationId,
+            id: { not: session.id },
+          },
+          include: SESSION_INCLUDE,
+        })
+      : [];
+    const sessionsToMove = [session, ...siblings];
 
-    try {
-      await sessionRouter.transitionRuntime(
-        session.id,
-        session.hosting as "cloud" | "local",
-        "terminate",
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(`[session-service] failed to terminate moved session ${session.id}: ${message}`);
-    }
+    this.assertMoveTargetSupportsSessions(sessionsToMove, targetRuntime);
+    await this.stopSessionMoveSources(sessionsToMove);
+    this.destroySessionMoveTerminals(session);
 
-    sessionRouter.unbindSession(session.id);
-
-    const bootstrapPrompt = buildMigrationPrompt(sourceInspection.verified);
-    const checkpointSha =
+    const bootstrapPrompt =
+      params.bootstrapPrompt ?? buildMigrationPrompt(sourceInspection.verified);
+    const baseCommitSha =
       sourceGitStatus?.headCommitSha && (!sourceGitStatus.branch || !sourceGitStatus.remoteBranch)
         ? sourceGitStatus.headCommitSha
         : null;
-    const sourceBranch = sourceGitStatus?.branch ?? session.branch ?? null;
+    const sourceBranch = conversion?.branch ?? sourceGitStatus?.branch ?? session.branch ?? null;
     const sourceConnection = this.parseConnection(session.connection);
-    const nextConnection = connJson(
-      targetHosting === "local"
+    const shouldCleanupGeneralWorkspace =
+      session.hosting === "local" && currentSessionGroup?.kind === "general";
+    // Mark a cloud replacement as starting before any post-move events or
+    // adapter work. `provisionRuntime` will reserve the concrete runtime id
+    // shortly afterward, but idle cleanup can run in between; persisting the
+    // startup state here keeps the normal grace window in effect for that gap.
+    const replacementRequestedAt = new Date().toISOString();
+    const nextConnectionBase = reuseCloudRuntime
+      ? {
+          ...sourceConnection,
+          state: "connected" as const,
+          adapterType: "provisioned" as const,
+          runtimeInstanceId: reuseCloudRuntime.id,
+          runtimeLabel: reuseCloudRuntime.label,
+        }
+      : targetHosting === "local"
         ? defaultConnection({
             runtimeInstanceId: targetRuntimeInstanceId ?? undefined,
             runtimeLabel: targetRuntimeLabel ?? undefined,
@@ -7859,43 +8445,267 @@ export class SessionService {
         : defaultConnection({
             adapterType: "provisioned",
             environmentId: targetEnvironment?.id ?? sourceConnection.environmentId,
-          }),
+            state: "requested",
+            requestedAt: replacementRequestedAt,
+          });
+
+    return {
+      targetEnvironment,
+      sourceCloudRuntimeSession,
+      sourceInspection,
+      sessionsToMove,
+      sourceRuntimeId,
+      bootstrapPrompt,
+      baseCommitSha,
+      sourceBranch,
+      sourceConnection,
+      shouldCleanupGeneralWorkspace,
+      nextConnectionBase,
+    };
+  }
+
+  private assertMoveTargetSupportsSessions(
+    sessions: SessionWithInclude[],
+    targetRuntime: SessionMoveParams["targetRuntime"],
+  ): void {
+    if (!targetRuntime?.supportedTools) return;
+    const unsupportedSession = sessions.find(
+      (session) => !targetRuntime.supportedTools?.includes(session.tool),
     );
-
-    const movedSession = await prisma.session.update({
-      where: { id: session.id },
-      data: {
-        agentStatus: "not_started",
-        sessionStatus: getRunningSessionStatus(session.sessionStatus),
-        createdById: actorId,
-        hosting: targetHosting,
-        branch: sourceBranch,
-        workdir: null,
-        pendingRun: {
-          type: "run",
-          prompt: bootstrapPrompt,
-          interactionMode: null,
-        } satisfies PendingSessionCommand,
-        toolSessionId: null,
-        connection: nextConnection,
-      },
-      include: SESSION_INCLUDE,
-    });
-
-    const sessionGroup = await this.syncGroupWorkspaceState(movedSession.sessionGroupId, {
-      workdir: null,
-      connection: nextConnection,
-      branch: sourceBranch,
-      worktreeDeleted: false,
-    });
-
-    if (targetHosting === "local" && targetRuntimeInstanceId) {
-      const targetRuntimeKey =
-        sessionRouter.getRuntime(targetRuntimeInstanceId, movedSession.organizationId)?.key ??
-        targetRuntimeInstanceId;
-      sessionRouter.bindSession(movedSession.id, targetRuntimeKey);
+    if (unsupportedSession) {
+      throw new ToolNotInstalledError(unsupportedSession.tool, targetRuntime.label ?? null);
     }
+  }
 
+  private async stopSessionMoveSources(sessions: SessionWithInclude[]): Promise<void> {
+    // Stop every reachable source process before committing the shared target
+    // binding. If a live bridge rejects teardown, no database binding changes.
+    for (const session of sessions) {
+      const boundRuntime = sessionRouter.getRuntimeForSession(session.id);
+      const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
+      const reachableRuntimeId =
+        boundRuntime?.id &&
+        sessionRouter.isRuntimeAvailable(boundRuntime.id, session.organizationId)
+          ? boundRuntime.id
+          : persistedRuntimeId &&
+              sessionRouter.isRuntimeAvailable(persistedRuntimeId, session.organizationId)
+            ? persistedRuntimeId
+            : null;
+      if (reachableRuntimeId) {
+        await sessionRouter.transitionRuntime(
+          session.id,
+          session.hosting as "cloud" | "local",
+          "terminate",
+        );
+      }
+    }
+  }
+
+  private destroySessionMoveTerminals(session: SessionWithInclude): void {
+    if (session.sessionGroupId) {
+      terminalRelay.destroyAllForSessionGroup(session.sessionGroupId);
+    } else {
+      terminalRelay.destroyAllForSession(session.id);
+    }
+  }
+
+  private async persistSessionMove(params: SessionMoveParams, prepared: PreparedSessionMove) {
+    const { session, targetHosting, conversion, actorType, actorId } = params;
+    const {
+      sessionsToMove,
+      sourceRuntimeId,
+      bootstrapPrompt,
+      sourceBranch,
+      sourceConnection,
+      shouldCleanupGeneralWorkspace,
+      nextConnectionBase,
+    } = prepared;
+    const movedSessions = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (session.sessionGroupId) {
+        await tx.$queryRaw`SELECT "id" FROM "SessionGroup" WHERE "id" = ${session.sessionGroupId} FOR UPDATE`;
+      } else {
+        await tx.$queryRaw`SELECT "id" FROM "Session" WHERE "id" = ${session.id} FOR UPDATE`;
+      }
+
+      // The group lock serializes all lifecycle writers. The version CAS then
+      // proves that no writer committed while this move performed external
+      // teardown work before acquiring the lock.
+      const primaryFence = await tx.session.updateMany({
+        where: connectionVersionWhere(session.id, sourceConnection.version ?? 0),
+        data: { connection: connJson(sourceConnection) },
+      });
+      if (primaryFence.count !== 1) {
+        throw new Error("Runtime transition was superseded by a newer session update");
+      }
+
+      if (session.sessionGroupId) {
+        if (conversion) {
+          const conversionFence = await tx.sessionGroup.updateMany({
+            where: {
+              id: session.sessionGroupId,
+              organizationId: session.organizationId,
+              kind: "general",
+              archivedAt: null,
+            },
+            data: {
+              kind: conversion.kind,
+              channelId: null,
+              repoId: conversion.repoId,
+            },
+          });
+          if (conversionFence.count !== 1) {
+            throw new ValidationError("Only active general sessions can be converted");
+          }
+        }
+        await tx.sessionGroup.update({
+          where: { id: session.sessionGroupId },
+          data: {
+            workdir: null,
+            connection: connJson({
+              ...nextConnectionBase,
+              version: (sourceConnection.version ?? 0) + 1,
+            }),
+            branch: sourceBranch,
+            worktreeDeleted: false,
+          },
+        });
+      }
+
+      const updated = [];
+      for (const current of sessionsToMove) {
+        const isPrimary = current.id === session.id;
+        const isMerged = current.sessionStatus === "merged";
+        updated.push(
+          await tx.session.update({
+            where: { id: current.id },
+            data: {
+              ...(!isMerged && {
+                agentStatus: "not_started",
+                sessionStatus: getRunningSessionStatus(current.sessionStatus),
+              }),
+              hosting: targetHosting,
+              branch: sourceBranch,
+              workdir: null,
+              ...(isPrimary && {
+                ...(conversion
+                  ? {
+                      channelId: null,
+                      repoId: conversion.repoId,
+                      readOnlyWorkspace: false,
+                      tool: conversion.tool,
+                      ...(conversion.model !== undefined ? { model: conversion.model } : {}),
+                      ...(conversion.reasoningEffort !== undefined
+                        ? { reasoningEffort: conversion.reasoningEffort }
+                        : {}),
+                      projects: { deleteMany: {} },
+                    }
+                  : {}),
+                pendingRun: {
+                  type: "run",
+                  prompt: bootstrapPrompt,
+                  interactionMode: null,
+                } satisfies PendingSessionCommand,
+                pendingGeneralWorkspaceCleanupRuntimeId: shouldCleanupGeneralWorkspace
+                  ? sourceRuntimeId
+                  : null,
+              }),
+              toolSessionId: null,
+              connection: connJson({
+                ...nextConnectionBase,
+                version: (this.parseConnection(current.connection).version ?? 0) + 1,
+              }),
+            },
+            include: SESSION_INCLUDE,
+          }),
+        );
+      }
+      if (session.sessionGroupId) {
+        await tx.session.updateMany({
+          where: {
+            sessionGroupId: session.sessionGroupId,
+            id: { notIn: sessionsToMove.map((current) => current.id) },
+            connection: {
+              path: ["version"],
+              equals: sourceConnection.version ?? 0,
+            },
+          },
+          data: {
+            hosting: targetHosting,
+            branch: sourceBranch,
+            workdir: null,
+            connection: connJson({
+              ...nextConnectionBase,
+              version: (sourceConnection.version ?? 0) + 1,
+            }),
+          },
+        });
+      }
+      let conversionEvent: Awaited<ReturnType<typeof eventService.create>> | null = null;
+      if (conversion) {
+        const converted = updated[0];
+        if (!converted) throw new Error("Converted session was not persisted");
+        const convertedGroup = await this.loadSessionGroupSnapshot(session.sessionGroupId, tx);
+        if (!convertedGroup) throw new Error("Session group disappeared during conversion");
+        conversionEvent = await eventService.create(
+          {
+            organizationId: session.organizationId,
+            scopeType: "session",
+            scopeId: converted.id,
+            eventType: "session_converted" as EventType,
+            payload: eventJson({
+              sessionGroupId: session.sessionGroupId,
+              fromKind: "general",
+              toKind: conversion.kind,
+              session: serializeSession(converted),
+              sessionGroup: convertedGroup,
+            }),
+            actorType,
+            actorId,
+            deferPublish: true,
+          },
+          tx,
+        );
+      }
+      return { sessions: updated, conversionEvent };
+    });
+    return movedSessions;
+  }
+
+  private async rebindMovedSessions(
+    params: SessionMoveParams,
+    movedSessions: SessionWithInclude[],
+  ): Promise<void> {
+    const movedSession = movedSessions[0];
+    if (!movedSession) return;
+    const targetRuntimeKey = params.reuseCloudRuntime
+      ? params.reuseCloudRuntime.key
+      : params.targetHosting === "local" && params.targetRuntimeInstanceId
+        ? (runtimeMetadata(params.targetRuntimeInstanceId, movedSession.organizationId)?.key ??
+          params.targetRuntimeInstanceId)
+        : null;
+
+    const sessionIdsToBind = new Set(movedSessions.map((moved) => moved.id));
+    if (movedSession.sessionGroupId) {
+      const committedGroupSessions = await prisma.session.findMany({
+        where: { sessionGroupId: movedSession.sessionGroupId },
+        select: { id: true },
+      });
+      for (const committed of committedGroupSessions) sessionIdsToBind.add(committed.id);
+    }
+    for (const movedSessionId of sessionIdsToBind) {
+      sessionRouter.unbindSession(movedSessionId);
+      if (targetRuntimeKey) sessionRouter.bindSession(movedSessionId, targetRuntimeKey);
+    }
+  }
+
+  private async publishSessionMoveEvents(
+    params: SessionMoveParams,
+    prepared: PreparedSessionMove,
+    movedSessions: SessionWithInclude[],
+  ): Promise<void> {
+    const movedSession = movedSessions[0];
+    if (!movedSession) return;
+    const sessionGroup = await this.loadSessionGroupSnapshot(movedSession.sessionGroupId);
     await eventService.create({
       organizationId: movedSession.organizationId,
       scopeType: "session",
@@ -7905,17 +8715,53 @@ export class SessionService {
         type: "runtime_move",
         session: serializeSession(movedSession),
         ...(sessionGroup ? { sessionGroup } : {}),
-        sourceHosting: session.hosting,
-        targetHosting,
-        targetRuntimeLabel: targetRuntimeLabel ?? null,
-        sourceGitStatusVerified: sourceInspection.verified,
-        sourceGitStatusSkippedReason: sourceInspection.skippedReason,
+        sourceHosting: params.session.hosting,
+        targetHosting: params.targetHosting,
+        targetRuntimeLabel: params.targetRuntimeLabel ?? null,
+        sourceGitStatusVerified: prepared.sourceInspection.verified,
+        sourceGitStatusSkippedReason: prepared.sourceInspection.skippedReason,
       } as Prisma.InputJsonValue,
-      actorType,
-      actorId,
+      actorType: params.actorType,
+      actorId: params.actorId,
     });
 
-    if (movedSession.repo || targetHosting === "cloud") {
+    for (let index = 1; index < movedSessions.length; index++) {
+      const relocated = movedSessions[index];
+      const source = prepared.sessionsToMove[index];
+      if (!relocated || !source) continue;
+      await eventService.create({
+        organizationId: relocated.organizationId,
+        scopeType: "session",
+        scopeId: relocated.id,
+        eventType: "session_started",
+        payload: {
+          type: "runtime_move",
+          session: serializeSession(relocated),
+          sourceHosting: source.hosting,
+          targetHosting: params.targetHosting,
+          targetRuntimeLabel: params.targetRuntimeLabel ?? null,
+          sourceGitStatusVerified: false,
+          sourceGitStatusSkippedReason: null,
+        } as Prisma.InputJsonValue,
+        actorType: params.actorType,
+        actorId: params.actorId,
+      });
+    }
+  }
+
+  private async activateMovedSession(
+    params: SessionMoveParams,
+    prepared: PreparedSessionMove,
+    movedSession: SessionWithInclude,
+  ): Promise<SessionWithInclude | null> {
+    if (params.reuseCloudRuntime && params.conversion) {
+      await this.prepareGeneratedConversionWorkspace(
+        movedSession,
+        params.reuseCloudRuntime,
+        params.actorType,
+        params.actorId,
+      );
+    } else if (movedSession.repo || params.targetHosting === "cloud") {
       this.provisionRuntime({
         sessionId: movedSession.id,
         sessionGroupId: movedSession.sessionGroupId,
@@ -7926,18 +8772,20 @@ export class SessionService {
           branch: movedSession.branch,
           channelBaseBranch: movedSession.channel?.baseBranch,
         }),
-        hosting: targetHosting,
+        hosting: params.targetHosting,
         tool: movedSession.tool,
         model: movedSession.model,
         reasoningEffort: movedSession.reasoningEffort,
         repo: movedSession.repo,
         branch: movedSession.branch,
-        checkpointSha,
-        createdById: actorId,
+        baseCommitSha: prepared.baseCommitSha,
+        createdById: params.actorId,
         organizationId: movedSession.organizationId,
         readOnly: movedSession.readOnlyWorkspace,
+        expectedHomeRuntimeId:
+          params.targetHosting === "local" ? params.targetRuntimeInstanceId : undefined,
         adapterType: this.parseConnection(movedSession.connection).adapterType,
-        environment: targetEnvironment,
+        environment: prepared.targetEnvironment,
       });
     } else {
       const deliveryResult = await this.deliverPendingCommand(
@@ -7958,11 +8806,107 @@ export class SessionService {
       }
     }
 
-    if (sourceCloudRuntimeSession) {
-      await this.destroyMovedSourceCloudRuntime(movedSession.id, sourceCloudRuntimeSession);
-    }
+    return null;
+  }
 
-    return movedSession;
+  /**
+   * Relocate every non-primary session in a group onto the same target runtime.
+   * Enforces the invariant that all sessions in a session group share one bridge:
+   * when one session moves, its siblings move with it. Each sibling's coding-tool
+   * process on the old bridge is terminated, its connection is re-pointed at the
+   * target, and it is re-bound to the new runtime. Siblings inherit the shared
+   * workspace re-provisioned by the primary session (via group workspace sync)
+   * and are left idle so the user resumes them on the new bridge.
+   */
+  private async relocateGroupSiblingsToRuntime(params: {
+    sessionGroupId: string | null;
+    primarySessionId: string;
+    organizationId: string;
+    targetHosting: "cloud" | "local";
+    targetRuntimeKey: string | null;
+    targetRuntimeLabel: string | null;
+    nextConnection: Prisma.InputJsonValue;
+    sourceBranch: string | null;
+    actorType: ActorType;
+    actorId: string;
+  }): Promise<void> {
+    const {
+      sessionGroupId,
+      primarySessionId,
+      organizationId,
+      targetHosting,
+      targetRuntimeKey,
+      targetRuntimeLabel,
+      nextConnection,
+      sourceBranch,
+      actorType,
+      actorId,
+    } = params;
+    if (!sessionGroupId) return;
+
+    const siblings = await prisma.session.findMany({
+      where: {
+        sessionGroupId,
+        organizationId,
+        id: { not: primarySessionId },
+        sessionStatus: { not: "merged" },
+      },
+      include: SESSION_INCLUDE,
+    });
+
+    for (const sibling of siblings) {
+      terminalRelay.destroyAllForSession(sibling.id);
+      try {
+        await sessionRouter.transitionRuntime(
+          sibling.id,
+          sibling.hosting as "cloud" | "local",
+          "terminate",
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(
+          `[session-service] failed to terminate group sibling ${sibling.id} during move: ${message}`,
+        );
+      }
+      sessionRouter.unbindSession(sibling.id);
+
+      const relocated = await prisma.session.update({
+        where: { id: sibling.id },
+        data: {
+          agentStatus: "not_started",
+          sessionStatus: getRunningSessionStatus(sibling.sessionStatus),
+          createdById: actorId,
+          hosting: targetHosting,
+          branch: sourceBranch,
+          workdir: null,
+          toolSessionId: null,
+          connection: nextConnection,
+        },
+        include: SESSION_INCLUDE,
+      });
+
+      if (targetRuntimeKey) {
+        sessionRouter.bindSession(relocated.id, targetRuntimeKey);
+      }
+
+      await eventService.create({
+        organizationId: relocated.organizationId,
+        scopeType: "session",
+        scopeId: relocated.id,
+        eventType: "session_started",
+        payload: {
+          type: "runtime_move",
+          session: serializeSession(relocated),
+          sourceHosting: sibling.hosting,
+          targetHosting,
+          targetRuntimeLabel: targetRuntimeLabel ?? null,
+          sourceGitStatusVerified: false,
+          sourceGitStatusSkippedReason: null,
+        } as Prisma.InputJsonValue,
+        actorType,
+        actorId,
+      });
+    }
   }
 
   private async destroyMovedSourceCloudRuntime(
@@ -7974,10 +8918,11 @@ export class SessionService {
       repoId?: string | null;
       connection?: unknown;
     },
+    reason: "session_moved_to_local" | "session_runtime_replaced",
   ): Promise<void> {
     try {
       await sessionRouter.destroyRuntime(sessionId, sourceRuntimeSession, {
-        reason: "session_moved_to_local",
+        reason,
         skipBridgeDelete: true,
         skipUnbind: true,
       });
@@ -8980,93 +9925,35 @@ export class SessionService {
     return defaultConnection(raw as Partial<SessionConnectionData>);
   }
 
-  private async resolvePromptEventIdForCheckpoint(
-    sessionId: string,
-    checkpoint: GitCheckpointBridgePayload,
-  ) {
-    if (typeof checkpoint.promptEventId === "string" && checkpoint.promptEventId.trim()) {
-      return checkpoint.promptEventId;
-    }
-
-    if (
-      typeof checkpoint.checkpointContextId === "string" &&
-      checkpoint.checkpointContextId.trim()
-    ) {
-      const promptEventId = await this.findPromptEventIdForCheckpointContext(
-        sessionId,
-        checkpoint.checkpointContextId,
-      );
-      if (promptEventId) return promptEventId;
-    }
-
-    return this.findPromptEventIdForCheckpoint(sessionId, checkpoint.observedAt);
-  }
-
-  private async findPromptEventIdForCheckpointContext(
-    sessionId: string,
-    checkpointContextId: string,
-  ) {
-    const promptEvent = await prisma.event.findFirst({
-      where: {
-        scopeId: sessionId,
-        scopeType: "session",
-        eventType: { in: ["session_started", "message_sent"] },
-        metadata: { path: ["checkpointContextId"], equals: checkpointContextId },
-      },
-      orderBy: { timestamp: "desc" },
-      select: { id: true },
-    });
-
-    if (!promptEvent) {
-      console.warn(
-        `[checkpoint] no prompt event found for checkpoint context ${checkpointContextId} in session ${sessionId}`,
-      );
-      return null;
-    }
-
-    return promptEvent.id;
-  }
-
-  private async findPromptEventIdForCheckpoint(sessionId: string, observedAt: string) {
-    const observedDate = new Date(observedAt);
-    if (Number.isNaN(observedDate.getTime())) {
-      console.warn(`[checkpoint] invalid observedAt for session ${sessionId}: ${observedAt}`);
-      return null;
-    }
-
-    const latestPrompt = await prisma.event.findFirst({
-      where: {
-        scopeId: sessionId,
-        scopeType: "session",
-        eventType: { in: ["session_started", "message_sent"] },
-        timestamp: { lte: observedDate },
-      },
-      orderBy: { timestamp: "desc" },
-      select: { id: true },
-    });
-
-    if (!latestPrompt) {
-      console.warn(
-        `[checkpoint] no prompt event found before ${observedAt} for session ${sessionId}`,
-      );
-      return null;
-    }
-
-    return latestPrompt.id;
-  }
-
   private async syncGroupWorkspaceState(
     sessionGroupId: string | null | undefined,
     patch: GroupWorkspaceStatePatch,
+    options?: { workdirRuntimeInstanceId?: string | null },
   ) {
     if (!sessionGroupId) return null;
 
     const groupData: Prisma.SessionGroupUncheckedUpdateInput = {};
     const sessionData: Prisma.SessionUpdateManyMutationInput = {};
 
+    // `workdir` is a runtime-specific filesystem path. A concrete path may only
+    // be stamped onto sessions that actually live on the runtime that produced
+    // it — mirroring one runtime's path onto a session bound to a different
+    // runtime yields a nonexistent cwd and `spawn ENOENT`. Groups are pinned to
+    // a single runtime, so in the healthy case this still updates every session;
+    // the runtime scope is a guard against any legacy group whose sessions
+    // diverged across runtimes. Clearing the workdir (null) is always safe to
+    // apply group-wide.
+    let scopedWorkdirUpdate: { runtimeInstanceId: string; workdir: string } | null = null;
     if (Object.prototype.hasOwnProperty.call(patch, "workdir")) {
       groupData.workdir = patch.workdir ?? null;
-      sessionData.workdir = patch.workdir ?? null;
+      if (patch.workdir && options?.workdirRuntimeInstanceId) {
+        scopedWorkdirUpdate = {
+          runtimeInstanceId: options.workdirRuntimeInstanceId,
+          workdir: patch.workdir,
+        };
+      } else {
+        sessionData.workdir = patch.workdir ?? null;
+      }
     }
 
     if (Object.prototype.hasOwnProperty.call(patch, "connection")) {
@@ -9111,8 +9998,25 @@ export class SessionService {
     }
 
     const shouldMirrorToSessions = Object.keys(sessionData).length > 0;
+    let changedRuntimeOrganizationId: string | null = null;
 
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (Object.prototype.hasOwnProperty.call(patch, "connection")) {
+        const currentGroup = await tx.sessionGroup.findFirst({
+          where: { id: sessionGroupId },
+          select: { connection: true, organizationId: true },
+        });
+        if (
+          currentGroup &&
+          hasRuntimeBindingChanged(
+            this.parseConnection(currentGroup.connection),
+            this.parseConnection(patch.connection),
+          )
+        ) {
+          changedRuntimeOrganizationId = currentGroup.organizationId;
+        }
+      }
+
       await tx.sessionGroup.update({
         where: { id: sessionGroupId },
         data: groupData,
@@ -9125,7 +10029,32 @@ export class SessionService {
           data: sessionData,
         });
       }
+
+      if (scopedWorkdirUpdate) {
+        await tx.session.updateMany({
+          where: {
+            sessionGroupId,
+            connection: {
+              path: ["runtimeInstanceId"],
+              equals: scopedWorkdirUpdate.runtimeInstanceId,
+            },
+          },
+          data: { workdir: scopedWorkdirUpdate.workdir },
+        });
+      }
     });
+
+    if (changedRuntimeOrganizationId) {
+      await sessionApplicationService
+        .markSessionGroupRuntimeStopped(sessionGroupId, changedRuntimeOrganizationId)
+        .catch((error: unknown) => {
+          console.warn(
+            `[session-service] failed to stop application processes for group ${sessionGroupId} after runtime rebind: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        });
+    }
 
     return this.loadSessionGroupSnapshot(sessionGroupId);
   }
@@ -9252,7 +10181,6 @@ export class SessionService {
         interactionMode:
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
         clientSource: typeof pending.clientSource === "string" ? pending.clientSource : null,
-        checkpointContext: parseCheckpointContext(pending.checkpointContext),
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
         workspaceUpgrade: pending.workspaceUpgrade === true,
       };
@@ -9264,7 +10192,6 @@ export class SessionService {
         interactionMode:
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
         clientSource: typeof pending.clientSource === "string" ? pending.clientSource : null,
-        checkpointContext: parseCheckpointContext(pending.checkpointContext),
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
         workspaceUpgrade: pending.workspaceUpgrade === true,
       };
@@ -9304,21 +10231,23 @@ export class SessionService {
       branch: string | null;
       connection: unknown;
     },
-    pendingCommand: PendingSessionCommand,
+    pendingCommand: PendingSessionCommand | null,
     extraData?: Partial<Prisma.SessionUpdateInput>,
   ) {
-    await this.storePendingCommand(
-      sessionId,
-      { ...pendingCommand, workspaceUpgrade: true },
-      extraData,
-    );
+    if (pendingCommand) {
+      await this.storePendingCommand(
+        sessionId,
+        { ...pendingCommand, workspaceUpgrade: true },
+        extraData,
+      );
+    }
 
     const repo = session.repo;
     if (!repo) return;
     assertCloudRepoRemoteAvailable(session.hosting, repo);
 
     const conn = this.parseConnection(session.connection);
-    const deliveryResult = sessionRouter.send(
+    const deliveryResult = await sessionRouter.sendAsync(
       sessionId,
       {
         type: "upgrade_workspace",
@@ -9417,29 +10346,23 @@ export class SessionService {
       });
     }
 
-    const fallbackCheckpointContext =
-      pending.type === "run" && !pending.checkpointContext
-        ? buildCheckpointContextFromStartMeta({
-            sessionId,
-            sessionGroupId: session.sessionGroupId,
-            repoId: session.repoId,
-            startMeta: await getSessionStartMetadata(sessionId),
-          })
-        : null;
-    const checkpointContext = pending.checkpointContext ?? fallbackCheckpointContext;
-
     // Generate presigned GET URLs for any attached files in the pending command
     let imageUrls: string[] | undefined;
     if (pending.imageKeys?.length) {
       imageUrls = await runtimeAttachmentUrls(pending.imageKeys, session.hosting);
     }
 
+    const invocation = await this.prepareInvocation(
+      sessionId,
+      session.organizationId,
+      session.sessionGroupId,
+    );
     const command = {
       type: pending.type,
       sessionId,
       prompt: prompt ?? undefined,
       appendSystemPrompt:
-        session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
+        session.sessionGroup?.kind === "app" ? APP_CREATION_SESSION_INSTRUCTION : undefined,
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
@@ -9447,8 +10370,8 @@ export class SessionService {
       interactionMode: pending.interactionMode ?? undefined,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
-      checkpointContext: checkpointContext ?? undefined,
       imageUrls,
+      runtimeEnv: invocation.runtimeEnv,
     } satisfies {
       type: "run" | "send";
       sessionId: string;
@@ -9461,8 +10384,8 @@ export class SessionService {
       interactionMode?: string;
       cwd?: string;
       toolSessionId?: string;
-      checkpointContext?: GitCheckpointContext;
       imageUrls?: string[];
+      runtimeEnv?: Record<string, string>;
     };
 
     const conn = this.parseConnection(session.connection);
@@ -9471,6 +10394,7 @@ export class SessionService {
       organizationId: session.organizationId,
     });
     if (deliveryResult !== "delivered") {
+      await this.clearInvocation(sessionId, invocation.invocationId);
       return deliveryResult;
     }
 
@@ -9507,6 +10431,8 @@ export class SessionService {
       eventType: "session_resumed",
       payload: {
         sessionId,
+        agentStatus: updatedSession.agentStatus,
+        sessionStatus: updatedSession.sessionStatus,
         clientSource: normalizeClientSource(pending.clientSource),
         ...(sessionGroup ? { sessionGroup } : {}),
       },
@@ -9566,13 +10492,13 @@ export class SessionService {
         sessionGroupId: true,
       },
     });
+    if (!session) return;
     if (
-      session &&
       isFullyUnloadedSession(session.agentStatus, session.sessionStatus, session.worktreeDeleted)
     ) {
       return;
     }
-    const conn = this.parseConnection(session?.connection);
+    const conn = this.parseConnection(session.connection);
 
     const homeOffline = deliveryResult === "runtime_disconnected" && !!conn.runtimeInstanceId;
     const unsupportedHomeTool = deliveryResult === "no_runtime" && !!conn.runtimeInstanceId;
@@ -9582,9 +10508,9 @@ export class SessionService {
         ? `${conn.runtimeLabel} is offline — use Move to continue on another bridge`
         : "The original bridge is offline — use Move to continue on another bridge"
       : unsupportedHomeTool
-        ? session?.tool === "pi"
+        ? session.tool === "pi"
           ? `${bridgeLabel} does not have Pi installed. Install it with \`${PI_INSTALL_COMMAND}\`, then restart the bridge. Docs: ${PI_INSTALL_DOCS_URL}`
-          : `${bridgeLabel} does not support ${session?.tool ?? "this coding tool"}`
+          : `${bridgeLabel} does not support ${session.tool}`
         : `${operation}: ${deliveryResult}`;
     const updated: SessionConnectionData = {
       ...conn,
@@ -9595,14 +10521,14 @@ export class SessionService {
       canRetry: true,
       canMove: true,
       // Don't spin the auto-retry loop for a non-transient failure.
-      autoRetryable: session?.hosting !== "cloud" && !homeOffline && !unsupportedHomeTool,
+      autoRetryable: session.hosting !== "cloud" && !homeOffline && !unsupportedHomeTool,
     };
 
     await prisma.session.update({
       where: { id: sessionId },
       data: { connection: connJson(updated) },
     });
-    const sessionGroup = await this.syncGroupWorkspaceState(session?.sessionGroupId, {
+    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
       connection: connJson(updated),
     });
 
@@ -9615,6 +10541,7 @@ export class SessionService {
         type: "connection_lost",
         reason: deliveryResult,
         operation,
+        sessionStatus: session.sessionStatus,
         connection: connJson(updated),
         ...(sessionGroup ? { sessionGroup } : {}),
       },
@@ -9623,25 +10550,244 @@ export class SessionService {
     });
   }
 
+  /**
+   * Authoritative renewable-lease check. A connected socket is only transport
+   * identity; the persisted runtime generation remains the ownership source of
+   * truth. Keeping this in the service layer also makes registration and later
+   * renewal use the same lifecycle policy.
+   */
+  async authorizeRuntimeLease(input: {
+    sessionId: string;
+    organizationId: string;
+    runtimeInstanceId: string;
+    environmentId?: string;
+  }): Promise<RuntimeLeaseAuthorization> {
+    const session = await prisma.session.findFirst({
+      where: {
+        id: input.sessionId,
+        organizationId: input.organizationId,
+        hosting: "cloud",
+      },
+      select: {
+        agentStatus: true,
+        sessionStatus: true,
+        connection: true,
+      },
+    });
+    if (
+      !session ||
+      session.sessionStatus === "merged" ||
+      session.agentStatus === "failed" ||
+      session.agentStatus === "stopped"
+    ) {
+      return { authorized: false, reason: "session_not_active" };
+    }
+
+    const connection = this.parseConnection(session.connection);
+    if (connection.runtimeInstanceId !== input.runtimeInstanceId) {
+      return { authorized: false, reason: "runtime_not_owner" };
+    }
+    if (
+      input.environmentId &&
+      connection.environmentId &&
+      connection.environmentId !== input.environmentId
+    ) {
+      return { authorized: false, reason: "environment_mismatch" };
+    }
+    if (
+      connection.adapterType === "local" ||
+      connection.disconnectOnDeprovision === true ||
+      connection.state === "failed" ||
+      connection.state === "stopping" ||
+      connection.state === "stopped" ||
+      connection.state === "deprovisioned" ||
+      connection.state === "deprovision_failed" ||
+      isRuntimeComputeGone(connection)
+    ) {
+      return { authorized: false, reason: "runtime_stopping" };
+    }
+
+    return { authorized: true };
+  }
+
+  /**
+   * Gracefully reconciles persisted hard deadlines before the independent
+   * container/provider kill switches fire. The hard cap remains authoritative;
+   * this job exists to publish a warning and drive the normal service-layer
+   * teardown so UI, events, terminals, and provider state converge cleanly.
+   */
+  async reconcileRuntimeHardDeadlines(
+    options: {
+      now?: number;
+      warningBeforeMs?: number;
+      batchSize?: number;
+    } = {},
+  ): Promise<{ scanned: number; warned: string[]; stopped: string[] }> {
+    const now = options.now ?? Date.now();
+    const warningBeforeMs = Math.max(60_000, options.warningBeforeMs ?? 60 * 60 * 1000);
+    const batchSize = Math.max(1, Math.min(options.batchSize ?? 500, 1_000));
+    const sessions = await prisma.session.findMany({
+      where: {
+        hosting: "cloud",
+        sessionStatus: { not: "merged" },
+        connection: {
+          path: ["runtimeHardDeadlineAt"],
+          not: Prisma.AnyNull,
+        },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        sessionGroupId: true,
+        agentStatus: true,
+        connection: true,
+      },
+      orderBy: { updatedAt: "asc" },
+      take: batchSize,
+    });
+
+    const warned: string[] = [];
+    const stopped: string[] = [];
+    const processedGroups = new Set<string>();
+    for (const session of sessions) {
+      const connection = this.parseConnection(session.connection);
+      if (isRuntimeComputeGone(connection) || !connection.runtimeInstanceId) continue;
+      const deadline = Date.parse(connection.runtimeHardDeadlineAt ?? "");
+      if (!Number.isFinite(deadline)) continue;
+      const groupKey = session.sessionGroupId ?? session.id;
+      if (processedGroups.has(groupKey)) continue;
+
+      if (deadline <= now) {
+        processedGroups.add(groupKey);
+        const activeSessionIds = session.sessionGroupId
+          ? (
+              await prisma.session.findMany({
+                where: {
+                  sessionGroupId: session.sessionGroupId,
+                  agentStatus: "active",
+                },
+                select: { id: true },
+              })
+            ).map((activeSession) => activeSession.id)
+          : session.agentStatus === "active"
+            ? [session.id]
+            : [];
+        for (const activeSessionId of activeSessionIds) {
+          await this.complete(activeSessionId, { drainPending: false });
+        }
+        const unloaded = await this.fullyUnloadSession(
+          session.id,
+          !!session.sessionGroupId,
+          "runtime_hard_deadline",
+        );
+        if (unloaded) {
+          if (session.sessionGroupId) {
+            await sessionApplicationService.markSessionGroupRuntimeStopped(
+              session.sessionGroupId,
+              session.organizationId,
+            );
+          }
+          stopped.push(session.id);
+          logAgentEnvironmentTelemetry("runtime.hard_deadline_reconciled", {
+            organizationId: session.organizationId,
+            sessionId: session.id,
+            sessionGroupId: session.sessionGroupId,
+            runtimeInstanceId: connection.runtimeInstanceId,
+            runtimeHardDeadlineAt: connection.runtimeHardDeadlineAt,
+          });
+        } else {
+          alertAgentEnvironmentOperator("runtime.hard_deadline_stop_failed", {
+            organizationId: session.organizationId,
+            sessionId: session.id,
+            sessionGroupId: session.sessionGroupId,
+            runtimeInstanceId: connection.runtimeInstanceId,
+            providerRuntimeId: connection.providerRuntimeId,
+            runtimeHardDeadlineAt: connection.runtimeHardDeadlineAt,
+            overdueMs: now - deadline,
+          });
+        }
+        continue;
+      }
+
+      if (deadline - now > warningBeforeMs || connection.hardDeadlineWarningAt) continue;
+      const warningAt = new Date(now).toISOString();
+      const warningRecorded = await this.updateConnectionConditional(session.id, (latest) => {
+        if (
+          latest.runtimeInstanceId !== connection.runtimeInstanceId ||
+          latest.runtimeHardDeadlineAt !== connection.runtimeHardDeadlineAt ||
+          latest.hardDeadlineWarningAt
+        ) {
+          return null;
+        }
+        return { ...latest, hardDeadlineWarningAt: warningAt };
+      });
+      if (!warningRecorded) continue;
+
+      warned.push(session.id);
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: session.id,
+        eventType: "session_output",
+        payload: {
+          type: "runtime_hard_deadline_warning",
+          sessionId: session.id,
+          runtimeInstanceId: connection.runtimeInstanceId,
+          runtimeHardDeadlineAt: connection.runtimeHardDeadlineAt,
+          warningBeforeMs,
+        },
+        actorType: "system",
+        actorId: "system",
+      });
+      logAgentEnvironmentTelemetry("runtime.hard_deadline_approaching", {
+        organizationId: session.organizationId,
+        sessionId: session.id,
+        sessionGroupId: session.sessionGroupId,
+        runtimeInstanceId: connection.runtimeInstanceId,
+        runtimeHardDeadlineAt: connection.runtimeHardDeadlineAt,
+        remainingMs: deadline - now,
+      });
+    }
+
+    return { scanned: sessions.length, warned, stopped };
+  }
+
   async cleanupIdleCloudSessionGroups(options: {
     idleAfterMs: number;
+    activeIdleAfterMs?: number;
     now?: number;
     batchSize?: number;
   }): Promise<{ scanned: number; cleaned: string[] }> {
     const idleAfterMs = Math.max(1, Math.floor(options.idleAfterMs));
+    const activeIdleAfterMs = Math.max(
+      idleAfterMs,
+      Math.floor(options.activeIdleAfterMs ?? 12 * 60 * 60 * 1000),
+    );
     const now = options.now ?? Date.now();
     const cutoff = new Date(now - idleAfterMs);
+    const activeCutoff = new Date(now - activeIdleAfterMs);
     const batchSize = Math.max(1, Math.min(options.batchSize ?? 25, 100));
 
     const groups: IdleCloudSessionGroupCandidate[] = await prisma.sessionGroup.findMany({
       where: {
         archivedAt: null,
         worktreeDeleted: false,
+        NOT: [
+          { connection: { path: ["state"], equals: "stopped" } },
+          { connection: { path: ["state"], equals: "deprovisioned" } },
+          {
+            AND: [
+              { connection: { path: ["state"], equals: "disconnected" } },
+              { connection: { path: ["deprovisionedAt"], not: Prisma.AnyNull } },
+            ],
+          },
+          { connection: { path: ["state"], equals: "stopping" } },
+          { connection: { path: ["state"], equals: "deprovision_failed" } },
+        ],
         sessions: {
           some: { hosting: "cloud" },
           none: {
             OR: [
-              { agentStatus: "active" },
               { lastMessageAt: { gt: cutoff } },
               { lastUserMessageAt: { gt: cutoff } },
               {
@@ -9649,6 +10795,24 @@ export class SessionService {
                 lastUserMessageAt: null,
                 createdAt: { gt: cutoff },
               },
+              // Actively running agents use the longer lease so a legitimate
+              // long-running task is not reclaimed mid-run. Once complete,
+              // the normal idle lease resumes from its most recent output.
+              {
+                agentStatus: "active",
+                OR: [
+                  { lastMessageAt: { gt: activeCutoff } },
+                  { lastMessageAt: null, lastUserMessageAt: { gt: activeCutoff } },
+                  {
+                    lastMessageAt: null,
+                    lastUserMessageAt: null,
+                    createdAt: { gt: activeCutoff },
+                  },
+                ],
+              },
+              // A local session can share the group, but its active process
+              // must never be interrupted by cloud-runtime cleanup.
+              { hosting: { not: "cloud" }, agentStatus: "active" },
             ],
           },
         },
@@ -9693,7 +10857,17 @@ export class SessionService {
         !!groupConnection.runtimeInstanceId ||
         !!groupConnection.providerRuntimeId;
       const cloudSessions = group.sessions.filter((session) => session.hosting === "cloud");
-      if (cloudSessions.some((session) => session.agentStatus === "active")) continue;
+      const activeSessions = group.sessions.filter((session) => session.agentStatus === "active");
+      const activeSessionHasRecentActivity = activeSessions.some((session) => {
+        const activity = session.lastMessageAt ?? session.lastUserMessageAt ?? session.createdAt;
+        return activity > activeCutoff;
+      });
+      if (
+        activeSessionHasRecentActivity ||
+        activeSessions.some((session) => session.hosting !== "cloud")
+      ) {
+        continue;
+      }
       const cloudSession =
         cloudSessions.find((session) => {
           const sessionConnection = this.parseConnection(session.connection);
@@ -9713,17 +10887,37 @@ export class SessionService {
       // Evaluated against the already-fetched candidate connection so dead
       // groups cost no extra query; the same predicate is re-checked
       // race-safely inside the conditional update below.
-      if (isRuntimeComputeGone(this.parseConnection(cloudSession.connection))) continue;
+      if (
+        isRuntimeComputeGone(this.parseConnection(cloudSession.connection)) ||
+        isRuntimeDeprovisionPending(this.parseConnection(cloudSession.connection))
+      ) {
+        continue;
+      }
 
       // Don't reap a runtime that's still starting up (or just connected): a
       // manual retry provisions a fresh container without posting a message,
       // so the activity check above still sees the group as idle. Reaping it
       // mid-boot is the "retry spins, then the same banner returns" bug.
-      if (isRuntimeStartInFlight(this.parseConnection(cloudSession.connection), cutoff)) continue;
+      const cloudConnection = this.parseConnection(cloudSession.connection);
+      if (isRuntimeStartInFlight(cloudConnection, cutoff)) continue;
+      if (
+        isRuntimeStartInFlight(groupConnection, cutoff) ||
+        isRuntimeDeprovisionPending(groupConnection)
+      ) {
+        continue;
+      }
+
+      // The bridge no longer reports these runs as complete, so settle their
+      // session state before reclaiming the runtime. This prevents a stale
+      // `active` row from blocking future cleanup or misleading the UI.
+      for (const session of activeSessions) {
+        await this.complete(session.id, { drainPending: false });
+      }
 
       const cleanedRuntime = await this.deprovisionIdleCloudSessionGroupRuntime(
         group,
         cloudSession,
+        cutoff,
       );
       if (!cleanedRuntime) continue;
 
@@ -9736,12 +10930,15 @@ export class SessionService {
   private async deprovisionIdleCloudSessionGroupRuntime(
     group: IdleCloudSessionGroupCandidate,
     cloudSession: IdleCloudSessionGroupCandidate["sessions"][number],
+    cutoff: Date,
   ): Promise<boolean> {
     const disconnectFlagged = await this.updateConnectionConditional(cloudSession.id, (conn) => {
       // The runtime's compute is already gone. Re-stopping it would just
       // re-emit stopping/stopped events on every idle sweep without ever
       // settling, since an idle group is re-selected each tick.
       if (isRuntimeComputeGone(conn)) return null;
+      if (isRuntimeDeprovisionPending(conn)) return null;
+      if (isRuntimeStartInFlight(conn, cutoff)) return null;
       return {
         ...conn,
         disconnectOnDeprovision: true,
@@ -9764,6 +10961,44 @@ export class SessionService {
     if (!session) return false;
 
     const runtimeSession = await this.withGroupRuntimeState(session);
+
+    // Final race guard: a restart can provision a fresh runtime between our flag
+    // above and this teardown. Flagging is version-checked, but the flag lands
+    // before the restart's start_requested, so it doesn't conflict — and killing
+    // the runtime now would reap what the user just started. Re-read immediately
+    // before destroying; if the session re-entered a startup state, bail out and
+    // clear the now-stale flag so a later sweep (or the restart itself) settles it.
+    const latest = await prisma.session.findUnique({
+      where: { id: cloudSession.id },
+      select: { connection: true },
+    });
+    const groupRuntimeConnection = this.parseConnection(runtimeSession.connection);
+    if (
+      isRuntimeStartInFlight(groupRuntimeConnection, cutoff) ||
+      (latest && isRuntimeStartInFlight(this.parseConnection(latest.connection), cutoff))
+    ) {
+      await this.updateConnectionConditional(cloudSession.id, (conn) => {
+        if (conn.disconnectOnDeprovision !== true) return null;
+        return { ...conn, disconnectOnDeprovision: false, disconnectReason: undefined };
+      });
+      return false;
+    }
+
+    const reapedConnection = this.parseConnection(latest?.connection ?? cloudSession.connection);
+    logAgentEnvironmentTelemetry("cloud_idle_cleanup.reaping_runtime", {
+      organizationId: session.organizationId,
+      sessionId: cloudSession.id,
+      sessionGroupId: group.id,
+      connectionState: reapedConnection.state ?? null,
+      requestedAt: reapedConnection.requestedAt ?? null,
+      provisioningAt: reapedConnection.provisioningAt ?? null,
+      connectingAt: reapedConnection.connectingAt ?? null,
+      groupConnectionState: groupRuntimeConnection.state ?? null,
+      groupRequestedAt: groupRuntimeConnection.requestedAt ?? null,
+      groupProvisioningAt: groupRuntimeConnection.provisioningAt ?? null,
+      groupConnectingAt: groupRuntimeConnection.connectingAt ?? null,
+    });
+
     terminalRelay.destroyAllForSessionGroup(group.id);
     try {
       await sessionRouter.destroyRuntime(
@@ -9930,6 +11165,10 @@ export class SessionService {
       where: { sessionGroupId, sessionStatus: { notIn: ["merged", "needs_input"] } },
       data: { sessionStatus: "in_review" },
     });
+    const sessionStatusUpdates = await prisma.session.findMany({
+      where: { sessionGroupId },
+      select: { id: true, sessionStatus: true },
+    });
 
     const sessionGroup = await this.syncGroupWorkspaceState(sessionGroupId, {
       prUrl,
@@ -9942,10 +11181,49 @@ export class SessionService {
       scopeType: "session",
       scopeId: eventSessionId,
       eventType: "session_pr_opened",
-      payload: { sessionId: eventSessionId, prUrl, sessionStatus: "in_review", sessionGroup },
+      payload: { sessionId: eventSessionId, prUrl, sessionStatusUpdates, sessionGroup },
       actorType: "system",
       actorId,
     });
+  }
+
+  /** Explicitly link a PR when a webhook cannot identify the session's current branch. */
+  async linkPullRequest(params: {
+    sessionId: string;
+    prUrl: string;
+    organizationId: string;
+    actorId?: string;
+  }) {
+    let url: URL;
+    try {
+      url = new URL(params.prUrl);
+    } catch {
+      throw new ValidationError("A valid pull request URL is required");
+    }
+    if (url.protocol !== "https:") {
+      throw new ValidationError("The pull request URL must use HTTPS");
+    }
+
+    const session = await prisma.session.findFirst({
+      where: { id: params.sessionId, organizationId: params.organizationId },
+      select: { id: true, sessionGroupId: true },
+    });
+    if (!session) throw new ValidationError("Session not found");
+    if (!session.sessionGroupId) {
+      throw new ValidationError("Session is not part of a session group");
+    }
+
+    await this.markPrOpened({
+      sessionGroupId: session.sessionGroupId,
+      eventSessionId: session.id,
+      prUrl: url.toString(),
+      organizationId: params.organizationId,
+      actorId: params.actorId ?? "trace-cli",
+    });
+
+    const group = await prisma.sessionGroup.findUnique({ where: { id: session.sessionGroupId } });
+    if (!group) throw new ValidationError("Session group not found");
+    return group;
   }
 
   async syncPrObservation(params: {
@@ -10091,6 +11369,14 @@ export class SessionService {
     });
     if (!group?.prUrl || group.prUrl !== prUrl) return;
 
+    await prisma.session.updateMany({
+      where: { sessionGroupId, sessionStatus: "in_review" },
+      data: { sessionStatus: "in_progress" },
+    });
+    const sessionStatusUpdates = await prisma.session.findMany({
+      where: { sessionGroupId },
+      select: { id: true, sessionStatus: true },
+    });
     const sessionGroup = await this.syncGroupWorkspaceState(sessionGroupId, {
       prUrl: null,
     });
@@ -10102,7 +11388,7 @@ export class SessionService {
       scopeType: "session",
       scopeId: eventSessionId,
       eventType: "session_pr_closed",
-      payload: { sessionId: eventSessionId, sessionGroup },
+      payload: { sessionId: eventSessionId, sessionStatusUpdates, sessionGroup },
       actorType: "system",
       actorId,
     });

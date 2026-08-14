@@ -39,6 +39,7 @@ const onSuccess = vi.fn();
 const uploadFileMock = vi.fn();
 const reconcileOptimisticSessionMessageMock = vi.fn();
 const removeOptimisticSessionMessageMock = vi.fn();
+const recreateClientMock = vi.fn();
 
 vi.mock("@trace/client-core", () => ({
   optimisticallyInsertSessionMessage: vi.fn(() => ({
@@ -72,6 +73,7 @@ vi.mock("@/lib/upload", () => ({
 }));
 
 vi.mock("@/lib/urql", () => ({
+  recreateClient: () => recreateClientMock(),
   getClient: () => ({
     mutation: (mutation: unknown, variables: Record<string, unknown>) => {
       mutationName = mutation;
@@ -115,6 +117,7 @@ describe("useComposerSubmit", () => {
     uploadFileMock.mockReset();
     reconcileOptimisticSessionMessageMock.mockClear();
     removeOptimisticSessionMessageMock.mockClear();
+    recreateClientMock.mockClear();
     draftState = {
       attachments: {
         "session-1": [
@@ -209,5 +212,6 @@ describe("useComposerSubmit", () => {
     expect(onSuccess).toHaveBeenCalledTimes(1);
     expect(onFailure).not.toHaveBeenCalled();
     expect(reconcileOptimisticSessionMessageMock).not.toHaveBeenCalled();
+    expect(recreateClientMock).toHaveBeenCalledTimes(1);
   });
 });

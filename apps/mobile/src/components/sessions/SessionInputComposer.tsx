@@ -14,10 +14,14 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { DISMISS_SESSION_MUTATION, generateUUID, useEntityField } from "@trace/client-core";
+import {
+  DISMISS_SESSION_MUTATION,
+  generateUUID,
+  hasSelectedSessionGroupRuntime,
+  useEntityField,
+} from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
-import { useClipboardImage } from "@/hooks/useClipboardImage";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useSlashCommands } from "@/hooks/useSlashCommands";
 import { extensionForMimeType } from "@/lib/attachment-utils";
@@ -101,6 +105,10 @@ export function SessionInputComposer({
     | SessionConnection
     | null
     | undefined;
+  const workdir = useEntityField("sessions", sessionId, "workdir") as
+    | string
+    | null
+    | undefined;
   const channel = useEntityField("sessions", sessionId, "channel") as
     | { id: string }
     | null
@@ -109,6 +117,21 @@ export function SessionInputComposer({
     | string
     | null
     | undefined;
+  const sessionGroupKind = useEntityField(
+    "sessionGroups",
+    sessionGroupId ?? "",
+    "kind",
+  ) as string | null | undefined;
+  const groupConnection = useEntityField(
+    "sessionGroups",
+    sessionGroupId ?? "",
+    "connection",
+  ) as SessionConnection | null | undefined;
+  const groupWorkdir = useEntityField(
+    "sessionGroups",
+    sessionGroupId ?? "",
+    "workdir",
+  ) as string | null | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic");
 
   const [text, setText] = useState("");
@@ -202,17 +225,9 @@ export function SessionInputComposer({
   const canStop = isActive && !stopping;
   const canAttach = canInteract && !pickingAttachment && attachments.length < MAX_ATTACHMENTS;
 
-  const {
-    hasImage: clipboardHasImage,
-    refresh: refreshClipboard,
-    dismiss: dismissClipboard,
-  } = useClipboardImage();
   const showPasteButton =
     canInteract &&
-    inputFocused &&
-    keyboardVisible &&
-    clipboardHasImage &&
-    attachments.length === 0 &&
+    attachments.length < MAX_ATTACHMENTS &&
     !pastingImage;
 
   // Expanded controls should only show while the input is focused and the
@@ -258,7 +273,13 @@ export function SessionInputComposer({
     sessionId,
     tool,
   });
-  const canChangeBridge = isNotStarted && !isOptimistic;
+  const groupHasSelectedBridge = hasSelectedSessionGroupRuntime(
+    groupConnection === undefined ? connection : groupConnection,
+    groupWorkdir === undefined ? workdir : groupWorkdir,
+  );
+  const cloudOnlyGeneratedSession = sessionGroupKind === "app";
+  const canChangeBridge =
+    isNotStarted && !isOptimistic && !cloudOnlyGeneratedSession && !groupHasSelectedBridge;
 
   const inputHeight = useSharedValue(MIN_INPUT_HEIGHT);
   useEffect(() => {
@@ -325,8 +346,7 @@ export function SessionInputComposer({
   const handleFocus = useCallback(() => {
     setFocused(true);
     setInputFocused(true);
-    refreshClipboard();
-  }, [refreshClipboard]);
+  }, []);
 
   const handleBlur = useCallback(() => {
     setFocused(false);
@@ -445,7 +465,6 @@ export function SessionInputComposer({
         if (prev.length >= MAX_ATTACHMENTS) return prev;
         return [...prev, attachment];
       });
-      dismissClipboard();
       void haptic.light();
     } catch (err) {
       void haptic.error();
@@ -453,7 +472,7 @@ export function SessionInputComposer({
     } finally {
       setPastingImage(false);
     }
-  }, [attachments.length, dismissClipboard, pastingImage, sessionId, setAttachments]);
+  }, [attachments.length, pastingImage, sessionId, setAttachments]);
 
   const launchImagePicker = useCallback(async () => {
     if (pickingAttachment || attachments.length >= MAX_ATTACHMENTS) return;

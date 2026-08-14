@@ -46,10 +46,19 @@ export class LocalStorageAdapter implements StorageAdapter {
     return { method: "PUT" as const, url: `${this.publicUrl}/uploads/local/put/${token}` };
   }
 
-  async putObject(key: string, body: Buffer): Promise<void> {
+  async putObject(
+    key: string,
+    body: Buffer,
+    _contentType?: string,
+    options?: { ifAbsent?: boolean },
+  ): Promise<void> {
     const filePath = this.resolvePath(key);
     await fsp.mkdir(path.dirname(filePath), { recursive: true });
-    await fsp.writeFile(filePath, body);
+    await fsp.writeFile(filePath, body, options?.ifAbsent ? { flag: "wx" } : undefined);
+  }
+
+  async getObject(key: string): Promise<Buffer> {
+    return fsp.readFile(this.resolvePath(key));
   }
 
   async getGetUrl(key: string, options?: { downloadFilename?: string }): Promise<string> {
@@ -59,6 +68,10 @@ export class LocalStorageAdapter implements StorageAdapter {
       { expiresIn: "1h" },
     );
     return `${this.publicUrl}/uploads/local/get/${token}`;
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    await fsp.rm(this.resolvePath(key), { force: true });
   }
 
   /** Resolve a key to its on-disk path, blocking path traversal. */

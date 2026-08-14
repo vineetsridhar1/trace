@@ -56,6 +56,10 @@ export const organizationMutations = {
     const orgId = requireOrgContext(ctx);
     return organizationService.updateRepo(args.id, orgId, args.input, ctx.actorType, ctx.userId);
   },
+  deleteRepo: (_: unknown, args: { id: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return organizationService.deleteRepo(args.id, orgId, ctx.actorType, ctx.userId);
+  },
   createProject: (_: unknown, args: { input: CreateProjectInput }, ctx: Context) => {
     assertOrgAccess(ctx, args.input.organizationId);
     return organizationService.createProject(args.input, ctx.actorType, ctx.userId);

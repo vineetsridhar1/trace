@@ -1,4 +1,15 @@
 import { GraphQLError } from "graphql";
+import type { ActionRequiredArtifact } from "@trace/shared";
+
+export class ActionRequiredError extends Error {
+  readonly artifact: ActionRequiredArtifact;
+
+  constructor(artifact: ActionRequiredArtifact) {
+    super(artifact.description);
+    this.name = "ActionRequiredError";
+    this.artifact = artifact;
+  }
+}
 
 export class NotFoundError extends Error {
   constructor(entity: string, id: string) {
@@ -37,9 +48,7 @@ export class ToolNotInstalledError extends Error {
   readonly tool: string;
   readonly runtimeLabel: string | null;
   constructor(tool: string, runtimeLabel: string | null) {
-    super(
-      `The selected coding tool is not installed on ${runtimeLabel ?? "this runtime"}.`,
-    );
+    super(`The selected coding tool is not installed on ${runtimeLabel ?? "this runtime"}.`);
     this.name = "ToolNotInstalledError";
     this.tool = tool;
     this.runtimeLabel = runtimeLabel;
@@ -51,6 +60,11 @@ export class ToolNotInstalledError extends Error {
  * Call this in resolvers to get consistent error codes in responses.
  */
 export function toGraphQLError(error: unknown): GraphQLError {
+  if (error instanceof ActionRequiredError) {
+    return new GraphQLError(error.message, {
+      extensions: { code: "ACTION_REQUIRED", artifact: error.artifact },
+    });
+  }
   if (error instanceof AuthenticationError) {
     return new GraphQLError(error.message, {
       extensions: { code: "UNAUTHENTICATED" },
@@ -72,6 +86,13 @@ export function toGraphQLError(error: unknown): GraphQLError {
         code: "TOOL_NOT_INSTALLED",
         tool: error.tool,
         runtimeLabel: error.runtimeLabel,
+        artifact: {
+          kind: "tool_not_installed",
+          tool: error.tool,
+          runtimeLabel: error.runtimeLabel,
+          title: "Install the selected coding tool",
+          description: `The selected coding tool is not installed on ${error.runtimeLabel ?? "this runtime"}.`,
+        } satisfies ActionRequiredArtifact,
       },
     });
   }

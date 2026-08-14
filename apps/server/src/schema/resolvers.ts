@@ -38,6 +38,7 @@ import {
 import { eventQueries, eventSubscriptions } from "./event.js";
 import { inboxQueries, inboxMutations } from "./inbox.js";
 import { apiTokenQueries, apiTokenMutations } from "./api-token.js";
+import { codexCredentialMutations, codexCredentialQueries } from "./codex-credential.js";
 import { orgSecretMutations, orgSecretQueries, orgSecretTypeResolvers } from "./org-secret.js";
 import { pushTokenMutations } from "./push-token.js";
 import { terminalQueries, terminalMutations } from "./terminal.js";
@@ -62,6 +63,60 @@ import {
 } from "./ai-conversation.js";
 import type { Context } from "../context.js";
 import { resolveActor } from "../services/actor.js";
+import { restrictAgentRootResolvers } from "../lib/agent-authorization.js";
+import { artifactQueries, artifactTypeResolvers } from "./artifact.js";
+
+const queries = {
+  ...organizationQueries,
+  ...agentEnvironmentQueries,
+  ...orgSecretQueries,
+  ...channelQueries,
+  ...channelGroupQueries,
+  ...sessionQueries,
+  ...bridgeAccessQueries,
+  ...ticketQueries,
+  ...eventQueries,
+  ...inboxQueries,
+  ...apiTokenQueries,
+  ...codexCredentialQueries,
+  ...terminalQueries,
+  ...sessionApplicationQueries,
+  ...connectionsQueries,
+  ...chatQueries,
+  ...participantQueries,
+  ...threadQueries,
+  ...aiConversationQueries,
+  ...artifactQueries,
+};
+
+const mutations = {
+  ...organizationMutations,
+  ...agentEnvironmentMutations,
+  ...orgSecretMutations,
+  ...channelMutations,
+  ...channelGroupMutations,
+  ...sessionMutations,
+  ...bridgeAccessMutations,
+  ...ticketMutations,
+  ...inboxMutations,
+  ...apiTokenMutations,
+  ...codexCredentialMutations,
+  ...pushTokenMutations,
+  ...terminalMutations,
+  ...sessionApplicationMutations,
+  ...chatMutations,
+  ...participantMutations,
+  ...aiConversationMutations,
+};
+
+const subscriptions = {
+  ...channelSubscriptions,
+  ...sessionSubscriptions,
+  ...ticketSubscriptions,
+  ...chatSubscriptions,
+  ...eventSubscriptions,
+  ...aiConversationSubscriptions,
+};
 
 export const resolvers = {
   DateTime: DateTimeScalar,
@@ -79,6 +134,7 @@ export const resolvers = {
   ...sessionApplicationTypeResolvers,
   ...bridgeAccessTypeResolvers,
   ...aiConversationTypeResolvers,
+  ...artifactTypeResolvers,
 
   User: {
     organizations: (user: { id: string }) => orgMemberService.getUserOrgs(user.id),
@@ -95,51 +151,14 @@ export const resolvers = {
   },
 
   Query: {
-    ...organizationQueries,
-    ...agentEnvironmentQueries,
-    ...orgSecretQueries,
-    ...channelQueries,
-    ...channelGroupQueries,
-    ...sessionQueries,
-    ...bridgeAccessQueries,
-    ...ticketQueries,
-    ...eventQueries,
-    ...inboxQueries,
-    ...apiTokenQueries,
-    ...terminalQueries,
-    ...sessionApplicationQueries,
-    ...connectionsQueries,
-    ...chatQueries,
-    ...participantQueries,
-    ...threadQueries,
-    ...aiConversationQueries,
+    ...restrictAgentRootResolvers("Query", queries),
   },
 
   Mutation: {
-    ...organizationMutations,
-    ...agentEnvironmentMutations,
-    ...orgSecretMutations,
-    ...channelMutations,
-    ...channelGroupMutations,
-    ...sessionMutations,
-    ...bridgeAccessMutations,
-    ...ticketMutations,
-    ...inboxMutations,
-    ...apiTokenMutations,
-    ...pushTokenMutations,
-    ...terminalMutations,
-    ...sessionApplicationMutations,
-    ...chatMutations,
-    ...participantMutations,
-    ...aiConversationMutations,
+    ...restrictAgentRootResolvers("Mutation", mutations),
   },
 
   Subscription: {
-    ...channelSubscriptions,
-    ...sessionSubscriptions,
-    ...ticketSubscriptions,
-    ...chatSubscriptions,
-    ...eventSubscriptions,
-    ...aiConversationSubscriptions,
+    ...restrictAgentRootResolvers("Subscription", subscriptions),
   },
 };

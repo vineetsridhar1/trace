@@ -1,7 +1,12 @@
 import { memo } from "react";
-import type { GitCheckpoint } from "@trace/gql";
-import { attachmentKeysFromPayload, asJsonObject, type JsonObject } from "@trace/shared";
-import { useScopedEventField } from "@trace/client-core";
+import {
+  attachmentKeysFromPayload,
+  actionRequiredArtifactForToolError,
+  asJsonObject,
+  isActionRequiredArtifact,
+  type JsonObject,
+} from "@trace/shared";
+import { useEntityField, useScopedEventField } from "@trace/client-core";
 import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
 import { AssistantText } from "./messages/AssistantText";
@@ -9,9 +14,11 @@ import { ToolCallRow } from "./messages/ToolCallRow";
 import { SubagentRow } from "./messages/SubagentRow";
 import { CompletionRow } from "./messages/CompletionRow";
 import { SystemBadge } from "./messages/SystemBadge";
-import { GitCheckpointChips } from "./messages/GitCheckpointChips";
+import { ActionRequiredArtifactCard } from "./messages/ActionRequiredArtifactCard";
+import { ArtifactUploadedCard } from "./messages/ArtifactUploadedCard";
 import { serializeUnknown } from "./messages/utils";
 import type { AgentToolResult } from "./groupReadGlob";
+import { structuredResponseSummary } from "./structuredResponseSummary";
 
 const AGENT_NAMES = new Set(["agent", "task"]);
 
@@ -23,6 +30,21 @@ function optionalAttachmentKeys(payload: JsonObject | null | undefined): string[
 /** Safely read a string from an unknown value, returning fallback if not a string */
 function str(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
+}
+
+function assistantText(payload: JsonObject | null | undefined): string | undefined {
+  if (payload?.type !== "assistant") return undefined;
+  const message = asJsonObject(payload.message);
+  const content = message?.content;
+  if (!Array.isArray(content)) return undefined;
+  const text = content
+    .map((block) => {
+      const value = asJsonObject(block);
+      return value?.type === "text" && typeof value.text === "string" ? value.text : "";
+    })
+    .join("\n")
+    .trim();
+  return text || undefined;
 }
 
 /** Narrow and unwrap tool result content for display in ToolCallRow */
@@ -58,7 +80,6 @@ function renderAssistantContent(
   scopeKey: string,
   completedAgentTools: Map<string, AgentToolResult>,
   toolResultByUseId: Map<string, unknown>,
-  gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
   sourceEventId: string,
   onForkSession: ((eventId: string) => void) | undefined,
   canForkSession: boolean,
@@ -111,7 +132,6 @@ function renderAssistantContent(
             scopeKey={scopeKey}
             completedAgentTools={completedAgentTools}
             toolResultByUseId={toolResultByUseId}
-            gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
           />,
         );
       } else {
@@ -136,11 +156,11 @@ function renderAssistantContent(
 
 function renderSessionOutput(
   payload: JsonObject,
+  sessionId: string | undefined,
   ts: string,
   scopeKey: string,
   completedAgentTools: Map<string, AgentToolResult>,
   toolResultByUseId: Map<string, unknown>,
-  gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
   sourceEventId: string,
   onForkSession: ((eventId: string) => void) | undefined,
   canForkSession: boolean,
@@ -149,6 +169,11 @@ function renderSessionOutput(
   const type = payload.type;
   if (typeof type !== "string") return null;
 
+  const artifact = asJsonObject(payload.artifact);
+  if (sessionId && isActionRequiredArtifact(artifact)) {
+    return <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />;
+  }
+
   if (type === "assistant" || type === "user") {
     return renderAssistantContent(
       payload,
@@ -156,7 +181,6 @@ function renderSessionOutput(
       scopeKey,
       completedAgentTools,
       toolResultByUseId,
-      gitCheckpointsByPromptEventId,
       sourceEventId,
       onForkSession,
       canForkSession,
@@ -185,6 +209,17 @@ function renderSessionOutput(
     if (message) return <SystemBadge text={message} />;
   }
 
+  if (type === "runtime_hard_deadline_warning") {
+    const warningBeforeMs =
+      typeof payload.warningBeforeMs === "number" ? payload.warningBeforeMs : 0;
+    const warningMinutes = Math.max(1, Math.round(warningBeforeMs / 60_000));
+    return (
+      <SystemBadge
+        text={`Cloud workspace reaches its safety deadline in about ${warningMinutes} minutes. Save your work before Trace stops it.`}
+      />
+    );
+  }
+
   return null;
 }
 
@@ -209,20 +244,20 @@ function runtimeMoveText(payload: JsonObject): string {
 
 export const SessionMessage = memo(function SessionMessage({
   id,
-  gitCheckpointsByPromptEventId,
   completedAgentTools,
   toolResultByUseId,
   onForkSession,
   canForkSession = false,
   showActions = false,
+  repeatCount = 1,
 }: {
   id: string;
-  gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
   completedAgentTools: Map<string, AgentToolResult>;
   toolResultByUseId: Map<string, unknown>;
   onForkSession?: (eventId: string) => void;
   canForkSession?: boolean;
   showActions?: boolean;
+  repeatCount?: number;
 }) {
   const scopeKey = useEventScopeKey();
   const eventType = useScopedEventField(scopeKey, id, "eventType");
@@ -231,8 +266,8 @@ export const SessionMessage = memo(function SessionMessage({
   const actor = useScopedEventField(scopeKey, id, "actor") as
     | { type: string; id: string; name?: string | null }
     | undefined;
-  const promptGitCheckpoints = gitCheckpointsByPromptEventId.get(id) ?? [];
-
+  const sessionId = useScopedEventField(scopeKey, id, "scopeId") as string | undefined;
+  const tool = useEntityField("sessions", sessionId ?? "", "tool") as string | undefined;
   if (!eventType || !timestamp) return null;
 
   switch (eventType) {
@@ -245,7 +280,6 @@ export const SessionMessage = memo(function SessionMessage({
           actorId={actor?.id}
           actorName={actor?.name}
           imageKeys={imageKeys}
-          footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       ) : payload?.type === "runtime_move" ? (
         <SystemBadge text={runtimeMoveText(payload)} />
@@ -255,32 +289,83 @@ export const SessionMessage = memo(function SessionMessage({
     }
 
     case "session_output":
-      return payload
-        ? renderSessionOutput(
-            payload,
-            timestamp,
-            scopeKey,
-            completedAgentTools,
-            toolResultByUseId,
-            gitCheckpointsByPromptEventId,
-            id,
-            onForkSession,
-            canForkSession,
-            showActions,
-          )
-        : null;
+      if (payload) {
+        const artifact =
+          asJsonObject(payload.artifact) ??
+          (() => {
+            const text = assistantText(payload);
+            return text ? actionRequiredArtifactForToolError(tool, text) : undefined;
+          })();
+        if (sessionId && isActionRequiredArtifact(artifact)) {
+          return (
+            <ActionRequiredArtifactCard
+              artifact={artifact}
+              sessionId={sessionId}
+              repeatCount={repeatCount}
+            />
+          );
+        }
+        return renderSessionOutput(
+          payload,
+          sessionId,
+          timestamp,
+          scopeKey,
+          completedAgentTools,
+          toolResultByUseId,
+          id,
+          onForkSession,
+          canForkSession,
+          showActions,
+        );
+      }
+      return null;
+
+    case "session_runtime_start_failed": {
+      const artifact = asJsonObject(payload?.artifact);
+      return sessionId && isActionRequiredArtifact(artifact) ? (
+        <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />
+      ) : null;
+    }
 
     case "message_sent":
       return (
         <UserBubble
-          text={str(payload?.text)}
+          text={structuredResponseSummary(str(payload?.text))}
           timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}
           imageKeys={optionalAttachmentKeys(payload)}
-          footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       );
+
+    case "artifact_created": {
+      const artifact = asJsonObject(payload?.artifact);
+      const manifest = asJsonObject(artifact?.manifest);
+      const files = Array.isArray(manifest?.files) ? manifest.files : [];
+      const artifactType = str(artifact?.type);
+      const artifactFile = files.map(asJsonObject).find((file) => {
+        if (!file || typeof file.path !== "string" || typeof file.mediaType !== "string") {
+          return false;
+        }
+        return file.mediaType.startsWith(artifactType === "trace.image.v1" ? "image/" : "video/");
+      });
+      return typeof artifact?.type === "string" && typeof artifact.id === "string" ? (
+        <ArtifactUploadedCard
+          artifactId={artifact.id}
+          artifactType={artifact.type}
+          filePath={str(artifactFile?.path) || undefined}
+          mediaType={str(artifactFile?.mediaType) || undefined}
+          byteSize={
+            typeof artifact.byteSize === "number"
+              ? artifact.byteSize
+              : typeof artifactFile?.size === "number"
+                ? artifactFile.size
+                : undefined
+          }
+          timestamp={timestamp}
+        />
+      ) : null;
+    }
 
     case "session_terminated": {
       if (payload?.reason === "bridge_complete") return null;

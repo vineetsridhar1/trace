@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { eventScopeKey, useScopedEventIds, useScopedEvents } from "@trace/client-core";
 import { findMostRecentPendingInput } from "@/lib/pending-input";
 import { PendingInputPlan } from "./PendingInputPlan";
-import { PendingInputQuestion } from "./PendingInputQuestion";
+import { PendingQuestionPrompt } from "./PendingQuestionPrompt";
 
 interface PendingInputBarProps {
   sessionId: string;
@@ -36,12 +36,5 @@ export function PendingInputBar({ sessionId, keyboardVisible = false }: PendingI
     );
   }
 
-  return (
-    <PendingInputQuestion
-      sessionId={sessionId}
-      questions={pending.questions}
-      hasActivePlan={pending.hasActivePlan}
-      keyboardVisible={keyboardVisible}
-    />
-  );
+  return <PendingQuestionPrompt sessionId={sessionId} questions={pending.questions} />;
 }

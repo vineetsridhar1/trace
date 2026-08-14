@@ -104,14 +104,17 @@ export function useAgentEnvironmentsSettings() {
         .toPromise();
       if (result.error) throw result.error;
       const testResult = result.data?.testAgentEnvironment as TestResult | undefined;
-      if (!testResult) return;
+      if (!testResult) return undefined;
       setTestResults((current) => ({ ...current, [environment.id]: testResult }));
       if (testResult.ok) toast.success(testResult.message ?? "Connection test passed");
       else toast.error(testResult.message ?? "Connection test failed");
+      return testResult;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Connection test failed";
-      setTestResults((current) => ({ ...current, [environment.id]: { ok: false, message } }));
+      const testResult = { ok: false, message };
+      setTestResults((current) => ({ ...current, [environment.id]: testResult }));
       toast.error(message);
+      return testResult;
     } finally {
       setPendingActionId(null);
     }

@@ -179,14 +179,12 @@ export async function refreshLinkedCheckoutStatus(
   const key = getStoreKey(repoId, runtimeInstanceId);
   if (!key) return null;
 
-  try {
-    const status = await queryLinkedCheckoutStatus(sessionGroupId, repoId, runtimeInstanceId);
-    useLinkedCheckoutStore.getState().setStatus(key, status);
-    return status;
-  } catch (error) {
-    useLinkedCheckoutStore.getState().setStatus(key, null);
-    throw error;
-  }
+  // A failed refresh says nothing about whether the checkout is still linked.
+  // Only replace the last successful status after a successful query so a
+  // transient network failure cannot make Spotlight flicker to Link.
+  const status = await queryLinkedCheckoutStatus(sessionGroupId, repoId, runtimeInstanceId);
+  useLinkedCheckoutStore.getState().setStatus(key, status);
+  return status;
 }
 
 export async function linkLinkedCheckoutRepo(

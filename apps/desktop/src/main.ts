@@ -11,6 +11,9 @@ import {
 import path from "path";
 import crypto from "crypto";
 import { readFileSync } from "node:fs";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { spawn } from "node:child_process";
 import { setTimeout } from "node:timers";
 import { makeUserNotifier, updateElectronApp, UpdateSourceType } from "update-electron-app";
 import {
@@ -24,15 +27,7 @@ import {
   getRepoPath,
   saveRepoPath,
   setBridgeLabel,
-  setRepoGitHooksEnabled,
 } from "./config.js";
-import {
-  disableRepoHooks,
-  getRepoHookStatus,
-  installOrRepairRepoHooks,
-  installOrRepairRepoHooksBestEffort,
-} from "./repo-hooks.js";
-import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
 import { getGitInfo } from "./git-info.js";
 import { createLocalProjectOnDisk } from "./local-project.js";
 import { hydrateLoginShellPath } from "./shell-path.js";
@@ -41,6 +36,8 @@ import {
   movePackagedMacAppToApplicationsFolder,
   shouldMovePackagedMacAppToApplicationsFolder,
 } from "./mac-install-location.js";
+import { getCodingToolStatuses, installOrUpdateCodingTool } from "./coding-tools.js";
+import { checkForAppUpdate, isTrustedReleaseUrl, type AppUpdateCheck } from "./app-update.js";
 
 let mainWindow: BrowserWindow | null = null;
 const PROJECT_PARENT_SELECTION_TTL_MS = 10 * 60 * 1000;
@@ -73,6 +70,7 @@ const defaultWebUrl =
 const serverUrl = process.env.TRACE_SERVER_URL ?? defaultServerUrl;
 const appName = "Trace";
 const appIconPath = path.join(__dirname, "../assets/icon.png");
+let appUpdateCheck: Promise<AppUpdateCheck> | null = null;
 
 app.setName(appName);
 hydrateLoginShellPath();
@@ -269,6 +267,15 @@ function configureMacAutoUpdates() {
   });
 }
 
+function getAppUpdateCheck(): Promise<AppUpdateCheck> {
+  appUpdateCheck ??= checkForAppUpdate({
+    currentVersion: app.getVersion(),
+    platform: process.platform,
+    arch: process.arch,
+  });
+  return appUpdateCheck;
+}
+
 ipcMain.handle("pick-folder", async () => {
   if (!mainWindow) return null;
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -321,9 +328,6 @@ ipcMain.handle(
 
 ipcMain.handle("save-repo-path", async (_event, repoId: string, localPath: string) => {
   const repoConfig = await saveRepoPath(repoId, localPath);
-  if (repoConfig.gitHooksEnabled) {
-    await installOrRepairRepoHooksBestEffort(localPath, "repo path save");
-  }
   // Notify the server that this bridge now has this repo registered
   bridge.send({ type: "repo_linked", repoId });
   return repoConfig;
@@ -337,40 +341,55 @@ ipcMain.handle("get-repo-config", (_event, repoId: string) => {
   return getRepoConfig(repoId);
 });
 
-ipcMain.handle("set-repo-git-hooks-enabled", async (_event, repoId: string, enabled: boolean) => {
-  const repoConfig = await setRepoGitHooksEnabled(repoId, enabled);
-  if (!repoConfig) {
-    return { config: null, status: null };
-  }
-
-  const status = enabled
-    ? await installOrRepairRepoHooks(repoConfig.path)
-    : await disableRepoHooks(repoConfig.path);
-
-  return {
-    config: repoConfig,
-    status,
-  };
-});
-
-ipcMain.handle("get-repo-git-hook-status", async (_event, repoId: string) => {
-  const repoConfig = getRepoConfig(repoId);
-  if (!repoConfig) return null;
-  return getRepoHookStatus(repoConfig.path);
-});
-
-ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
-  const repoConfig = getRepoConfig(repoId);
-  if (!repoConfig) return null;
-  return installOrRepairRepoHooks(repoConfig.path);
-});
-
 ipcMain.handle("get-github-cli-status", async () => {
   return getGithubCliStatus();
 });
 
 ipcMain.handle("get-github-auth-token", async () => {
   return getGithubAuthToken();
+});
+
+ipcMain.handle("login-codex-with-chatgpt", async () => {
+  const codexHome = await mkdtemp(path.join(tmpdir(), "trace-codex-login-"));
+  try {
+    await writeFile(
+      path.join(codexHome, "config.toml"),
+      'cli_auth_credentials_store = "file"\n',
+      { mode: 0o600 },
+    );
+    const exitCode = await new Promise<number | null>((resolve, reject) => {
+      const child = spawn("codex", ["login"], {
+        env: { ...process.env, CODEX_HOME: codexHome },
+        stdio: "pipe",
+      });
+      child.once("error", reject);
+      child.once("close", resolve);
+    });
+    if (exitCode !== 0) throw new Error("Codex login was cancelled or failed.");
+    return await readFile(path.join(codexHome, "auth.json"), "utf8");
+  } finally {
+    await rm(codexHome, { force: true, recursive: true });
+  }
+});
+
+ipcMain.handle("get-coding-tool-statuses", () => getCodingToolStatuses());
+ipcMain.handle("install-or-update-coding-tool", async (_event, toolId: string) => {
+  const status = await installOrUpdateCodingTool(toolId);
+  bridge.refreshCapabilities();
+  return status;
+});
+ipcMain.handle("get-app-update-status", async () => (await getAppUpdateCheck()).status);
+ipcMain.handle("open-app-update-download", async () => {
+  const update = await getAppUpdateCheck();
+  if (
+    update.status.state !== "update_available" ||
+    !update.openUrl ||
+    !isTrustedReleaseUrl(update.openUrl)
+  ) {
+    return false;
+  }
+  await shell.openExternal(update.openUrl);
+  return true;
 });
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
@@ -407,10 +426,6 @@ app.whenReady().then(() => {
   configureApplicationIdentity();
   configureMacAutoUpdates();
 
-  ensureHookRunnerEntrypoint({
-    electronBinaryPath: process.execPath,
-    runnerScriptPath: path.join(__dirname, "hook-runner.js"),
-  });
   bridge.onStatusChange((status) => {
     publishBridgeStatus(status);
   });

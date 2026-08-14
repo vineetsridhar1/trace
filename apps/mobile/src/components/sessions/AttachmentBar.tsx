@@ -115,7 +115,14 @@ const FILE_CHIP_WIDTH = 176;
 const REMOVE_BUTTON_SIZE = 28;
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", gap: 8, paddingHorizontal: 2, paddingBottom: 6 },
+  row: {
+    flexDirection: "row",
+    gap: 8,
+    paddingTop: 6,
+    paddingRight: 8,
+    paddingBottom: 6,
+    paddingLeft: 2,
+  },
   itemWrap: { position: "relative" },
   thumb: {
     width: THUMB_SIZE,

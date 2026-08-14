@@ -130,6 +130,7 @@ export function PeekOverlay({
                   channelsById={sidebarData.channelsById}
                   channelsLoading={sidebarData.channelsLoading}
                   groupIds={sidebarData.groupIds}
+                  linkedChannelId={sidebarData.linkedChannelId}
                   onChannelClick={handleChannelClick}
                   onSessionClick={handleSessionClick}
                   onDragActiveChange={handleDragActiveChange}
@@ -148,6 +149,7 @@ export function PeekOverlay({
                   channelsById={sidebarData.channelsById}
                   channelsLoading={sidebarData.channelsLoading}
                   groupIds={sidebarData.groupIds}
+                  linkedChannelId={sidebarData.linkedChannelId}
                   onChannelClick={handleChannelClick}
                   onSessionClick={handleSessionClick}
                   onDragActiveChange={handleDragActiveChange}

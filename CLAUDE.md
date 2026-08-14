@@ -18,7 +18,7 @@ No separate "agent mode." Agents operate through the exact same service layer as
 
 ### Service Layer Is the Product
 
-GraphQL is just the external interface. The agent runtime calls the service layer directly — it does not go through GraphQL. GraphQL resolvers must be thin wrappers: parse input, call a service, format output. Every new service method is automatically available to both clients and agents.
+GraphQL is the external interface. In-process agent orchestration calls the service layer directly; the managed CLI runs inside isolated local or cloud workspaces, so it uses a capability-restricted GraphQL surface to cross that process boundary. GraphQL resolvers must be thin wrappers: parse input, authorize the complete requested surface, call a service, and format output. Every new service method is automatically available to in-process clients and agents; explicitly allowlisted operations may also be exposed through the managed CLI.
 
 ```
 Web / Mobile / Electron  →  GraphQL  →  Service Layer  ←  Agent Runtime

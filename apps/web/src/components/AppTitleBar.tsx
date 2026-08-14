@@ -1,3 +1,4 @@
+import { AppHistoryControls } from "./AppHistoryControls";
 import { OrgSwitcher } from "./sidebar/OrgSwitcher";
 import { SidebarTrigger } from "./ui/sidebar";
 
@@ -11,12 +12,13 @@ export function AppTitleBar() {
       }`}
     >
       <div
-        className={`app-region-no-drag pointer-events-auto flex min-w-0 items-center gap-2.5 ${
+        className={`app-region-no-drag pointer-events-auto flex min-w-0 items-center gap-2 ${
           isDesktopShell ? "ml-[92px]" : "ml-3"
         }`}
       >
         <SidebarTrigger className="h-7 w-7 cursor-pointer rounded-md text-foreground hover:bg-white/10" />
-        <div className="w-44 min-w-0">
+        <AppHistoryControls />
+        <div className="min-w-0 flex-1">
           <OrgSwitcher compact />
         </div>
       </div>

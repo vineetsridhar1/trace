@@ -15,7 +15,7 @@ import {
 import { prisma } from "../lib/db.js";
 import { encryptSecret } from "../lib/encryption.js";
 import { resolveJwtSecret } from "../lib/jwt-secret.js";
-import { authenticateAccessToken, getRequestToken } from "../lib/auth.js";
+import { authenticateUserAccessToken, getRequestToken } from "../lib/auth.js";
 import { verifySlackSignature } from "../lib/slack/signature.js";
 import { getMissingSlackConfig, isSlackConfigured, slackSessionHosting } from "../lib/slack/config.js";
 import { getSlackBotToken, getSlackClient, invalidateSlackClient } from "../lib/slack/client.js";
@@ -164,7 +164,7 @@ function verifyBindState(token: string): BindStatePayload | null {
 async function readAuthenticatedUserId(req: Request): Promise<string | null> {
   const token = getRequestToken(req);
   if (!token) return null;
-  const subject = await authenticateAccessToken(token);
+  const subject = await authenticateUserAccessToken(token);
   return subject?.userId ?? null;
 }
 

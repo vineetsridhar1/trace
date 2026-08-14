@@ -1,4 +1,5 @@
 import fs from "fs";
+import os from "os";
 import path from "path";
 import {
   assertValidCommitSha,
@@ -13,13 +14,13 @@ import {
   setRepoLinkedCheckout,
   type LinkedCheckoutConfig,
 } from "./config.js";
-import { installOrRepairRepoHooksBestEffort } from "./repo-hooks.js";
 import {
   assertSafeGitRef,
   execFileAsync,
   formatGitError,
   getCurrentBranch,
   GIT_MAX_BUFFER,
+  gitEnv,
   isSafeGitRef,
   runGit,
 } from "./git-utils.js";
@@ -105,7 +106,6 @@ type CheckoutEntry =
 interface ChangedPathState {
   path: string;
   headEntry: CheckoutEntry;
-  rootEntry: CheckoutEntry;
 }
 
 const LINKED_CHECKOUT_COMMIT_MESSAGE = "Commit linked checkout changes";
@@ -463,28 +463,24 @@ async function listChangedFiles(repoPath: string): Promise<{
   ]);
   const untrackedPathSet = new Set(untrackedPaths);
 
-  const files = changedPaths
-    .slice(0, LINKED_CHECKOUT_STATUS_FILE_LIMIT)
-    .map((relativePath) => {
-      const untracked = untrackedPathSet.has(relativePath);
-      const lineCounts = untracked
-        ? readUntrackedFileLineCounts(repoPath, relativePath)
-        : trackedLineCounts.get(relativePath) ?? { additions: 0, deletions: 0 };
+  const files = changedPaths.slice(0, LINKED_CHECKOUT_STATUS_FILE_LIMIT).map((relativePath) => {
+    const untracked = untrackedPathSet.has(relativePath);
+    const lineCounts = untracked
+      ? readUntrackedFileLineCounts(repoPath, relativePath)
+      : (trackedLineCounts.get(relativePath) ?? { additions: 0, deletions: 0 });
 
-      return {
-        path: relativePath,
-        status: untracked
-          ? "A"
-          : resolveTrackedStatus(repoPath, relativePath, trackedStatuses),
-        additions: lineCounts.additions,
-        deletions: lineCounts.deletions,
-        diff: "",
-        truncated: false,
-        originalContent: "",
-        modifiedContent: "",
-        contentTruncated: false,
-      };
-    });
+    return {
+      path: relativePath,
+      status: untracked ? "A" : resolveTrackedStatus(repoPath, relativePath, trackedStatuses),
+      additions: lineCounts.additions,
+      deletions: lineCounts.deletions,
+      diff: "",
+      truncated: false,
+      originalContent: "",
+      modifiedContent: "",
+      contentTruncated: false,
+    };
+  });
   return {
     files,
     totalCount: changedPaths.length,
@@ -545,14 +541,6 @@ async function popStashedChanges(repoPath: string): Promise<void> {
     cwd: repoPath,
     maxBuffer: GIT_MAX_BUFFER,
   });
-}
-
-async function listStagedPaths(repoPath: string): Promise<string[]> {
-  const { stdout } = await execFileAsync("git", ["diff", "--name-only", "-z", "--cached", "HEAD"], {
-    cwd: repoPath,
-    maxBuffer: GIT_MAX_BUFFER,
-  });
-  return parseNullSeparated(stdout);
 }
 
 async function hasUncommittedChangesForPaths(
@@ -818,42 +806,6 @@ async function captureRestorePoint(repoPath: string): Promise<{
   };
 }
 
-function entriesEqual(left: CheckoutEntry, right: CheckoutEntry): boolean {
-  if (left === null || right === null) return left === right;
-  if (left.kind !== right.kind) return false;
-
-  if (left.kind === "symlink" && right.kind === "symlink") {
-    return left.target === right.target;
-  }
-
-  if (left.kind === "file" && right.kind === "file") {
-    return left.mode === right.mode && left.content.equals(right.content);
-  }
-
-  return false;
-}
-
-function readLocalEntry(absPath: string): CheckoutEntry {
-  if (!fs.existsSync(absPath)) return null;
-
-  const stat = fs.lstatSync(absPath);
-  if (stat.isSymbolicLink()) {
-    return {
-      kind: "symlink",
-      target: fs.readlinkSync(absPath),
-    };
-  }
-  if (stat.isFile()) {
-    return {
-      kind: "file",
-      content: fs.readFileSync(absPath),
-      mode: stat.mode & 0o777,
-    };
-  }
-
-  throw new Error(`Unsupported filesystem entry type at ${absPath}`);
-}
-
 async function readHeadEntry(repoPath: string, relativePath: string): Promise<CheckoutEntry> {
   const { stdout: lsTreeStdout } = await execFileAsync(
     "git",
@@ -906,32 +858,6 @@ function removeEmptyParentDirs(startDir: string, stopDir: string): void {
   }
 }
 
-function writeLocalEntry(absPath: string, entry: CheckoutEntry, rootDir: string): void {
-  if (entry === null) {
-    fs.rmSync(absPath, { force: true, recursive: true });
-    removeEmptyParentDirs(path.dirname(absPath), rootDir);
-    return;
-  }
-
-  fs.mkdirSync(path.dirname(absPath), { recursive: true });
-  if (fs.existsSync(absPath)) {
-    const stat = fs.lstatSync(absPath);
-    if (!stat.isFile() && !stat.isSymbolicLink()) {
-      fs.rmSync(absPath, { force: true, recursive: true });
-    } else if (entry.kind === "symlink" || stat.isSymbolicLink()) {
-      fs.rmSync(absPath, { force: true, recursive: true });
-    }
-  }
-
-  if (entry.kind === "symlink") {
-    fs.symlinkSync(entry.target, absPath);
-    return;
-  }
-
-  fs.writeFileSync(absPath, entry.content);
-  fs.chmodSync(absPath, entry.mode);
-}
-
 async function findWorktreePathForBranch(repoPath: string, branch: string): Promise<string | null> {
   assertSafeGitRef(branch);
 
@@ -966,44 +892,105 @@ async function loadChangedPathStates(
     changedPaths.map(async (relativePath) => ({
       path: relativePath,
       headEntry: await readHeadEntry(repoPath, relativePath),
-      rootEntry: readLocalEntry(path.join(repoPath, relativePath)),
     })),
   );
 }
 
-function findConflictingPaths(worktreePath: string, changedPaths: ChangedPathState[]): string[] {
-  const conflicts: string[] = [];
-
-  for (const changedPath of changedPaths) {
-    const worktreeEntry = readLocalEntry(path.join(worktreePath, changedPath.path));
-    if (
-      !entriesEqual(worktreeEntry, changedPath.headEntry) &&
-      !entriesEqual(worktreeEntry, changedPath.rootEntry)
-    ) {
-      conflicts.push(changedPath.path);
-    }
+function readWorkingTreeEntry(repoPath: string, relativePath: string): CheckoutEntry {
+  const absolutePath = path.join(repoPath, relativePath);
+  let stat: fs.Stats;
+  try {
+    stat = fs.lstatSync(absolutePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
   }
-
-  return conflicts;
+  if (stat.isSymbolicLink()) {
+    return { kind: "symlink", target: fs.readlinkSync(absolutePath) };
+  }
+  if (!stat.isFile()) throw new Error(`Unsupported working tree entry at ${relativePath}`);
+  return { kind: "file", content: fs.readFileSync(absolutePath), mode: stat.mode & 0o777 };
 }
 
-function applyChangedPathsToWorktree(
+function checkoutEntriesEqual(left: CheckoutEntry, right: CheckoutEntry): boolean {
+  if (left === null || right === null) return left === right;
+  if (left.kind !== right.kind) return false;
+  if (left.kind === "symlink" && right.kind === "symlink") return left.target === right.target;
+  return (
+    left.kind === "file" &&
+    right.kind === "file" &&
+    left.mode === right.mode &&
+    left.content.equals(right.content)
+  );
+}
+
+async function changedPathsAlreadyCommitted(
   repoPath: string,
   worktreePath: string,
-  changedPaths: ChangedPathState[],
-): void {
-  for (const changedPath of changedPaths) {
-    const targetPath = path.join(worktreePath, changedPath.path);
-    const worktreeEntry = readLocalEntry(targetPath);
-    if (entriesEqual(worktreeEntry, changedPath.rootEntry)) continue;
+  changedPaths: string[],
+): Promise<boolean> {
+  const targetEntries = await Promise.all(
+    changedPaths.map((relativePath) => readHeadEntry(worktreePath, relativePath)),
+  );
+  return changedPaths.every((relativePath, index) =>
+    checkoutEntriesEqual(
+      readWorkingTreeEntry(repoPath, relativePath),
+      targetEntries[index] ?? null,
+    ),
+  );
+}
 
-    const rootPath = path.join(repoPath, changedPath.path);
-    if (changedPath.rootEntry === null) {
-      writeLocalEntry(targetPath, null, worktreePath);
-      continue;
-    }
+async function applyChangedPathsToWorktree(
+  repoPath: string,
+  worktreePath: string,
+  changedPaths: string[],
+): Promise<void> {
+  const temporaryDir = fs.mkdtempSync(path.join(os.tmpdir(), "trace-linked-checkout-"));
+  const indexPath = path.join(temporaryDir, "index");
+  const patchPath = path.join(temporaryDir, "changes.patch");
+  const temporaryWorktreePath = path.join(temporaryDir, "worktree");
+  const env = { ...gitEnv(), GIT_INDEX_FILE: indexPath };
 
-    writeLocalEntry(targetPath, readLocalEntry(rootPath), worktreePath);
+  try {
+    await execFileAsync("git", ["read-tree", "HEAD"], {
+      cwd: repoPath,
+      env,
+      maxBuffer: GIT_MAX_BUFFER,
+    });
+    await execFileAsync("git", ["add", "-A", "--", ...changedPaths], {
+      cwd: repoPath,
+      env,
+      maxBuffer: GIT_MAX_BUFFER,
+    });
+    const { stdout } = await execFileAsync("git", ["diff", "--binary", "--cached"], {
+      cwd: repoPath,
+      env,
+      maxBuffer: GIT_MAX_BUFFER,
+    });
+    fs.writeFileSync(patchPath, stdout);
+    await execFileAsync("git", ["worktree", "add", "--detach", temporaryWorktreePath, "HEAD"], {
+      cwd: worktreePath,
+      maxBuffer: GIT_MAX_BUFFER,
+    });
+    await execFileAsync("git", ["apply", "--3way", "--index", patchPath], {
+      cwd: temporaryWorktreePath,
+      maxBuffer: GIT_MAX_BUFFER,
+    });
+    const { stdout: mergedPatch } = await execFileAsync("git", ["diff", "--binary", "--cached"], {
+      cwd: temporaryWorktreePath,
+      maxBuffer: GIT_MAX_BUFFER,
+    });
+    fs.writeFileSync(patchPath, mergedPatch);
+    await execFileAsync("git", ["apply", "--index", patchPath], {
+      cwd: worktreePath,
+      maxBuffer: GIT_MAX_BUFFER,
+    });
+  } finally {
+    await execFileAsync("git", ["worktree", "remove", "--force", temporaryWorktreePath], {
+      cwd: worktreePath,
+      maxBuffer: GIT_MAX_BUFFER,
+    }).catch(() => undefined);
+    fs.rmSync(temporaryDir, { force: true, recursive: true });
   }
 }
 
@@ -1014,28 +1001,21 @@ async function commitChangedPathsToWorktree(
   targetBranch: string,
   commitMessage: string,
 ): Promise<string> {
-  const overlappingStagedPaths = (await listStagedPaths(worktreePath)).filter((changedPath) =>
+  const overlappingUncommittedPaths = (await listChangedPaths(worktreePath)).filter((changedPath) =>
     changedPaths.includes(changedPath),
   );
-  if (overlappingStagedPaths.length > 0) {
+  if (overlappingUncommittedPaths.length > 0) {
     throw new Error(
-      `Cannot commit main worktree changes because the Trace worktree already has staged changes on the same paths: ${previewPaths(
-        overlappingStagedPaths,
+      `Cannot commit main worktree changes because the Trace worktree has uncommitted changes on the same paths: ${previewPaths(
+        overlappingUncommittedPaths,
       )}`,
     );
   }
 
   const changedPathStates = await loadChangedPathStates(repoPath, changedPaths);
-  const conflicts = findConflictingPaths(worktreePath, changedPathStates);
-  if (conflicts.length > 0) {
-    throw new Error(
-      `Cannot commit main worktree changes because the Trace worktree also changed: ${previewPaths(
-        conflicts,
-      )}`,
-    );
+  if (!(await changedPathsAlreadyCommitted(repoPath, worktreePath, changedPaths))) {
+    await applyChangedPathsToWorktree(repoPath, worktreePath, changedPaths);
   }
-
-  applyChangedPathsToWorktree(repoPath, worktreePath, changedPathStates);
 
   let targetCommitSha = await getCurrentCommitSha(worktreePath);
   const importedChangesDirty = await hasUncommittedChangesForPaths(worktreePath, changedPaths);
@@ -1249,9 +1229,6 @@ export function linkLinkedCheckoutRepo(
   return withRepoLock(repoId, async () => {
     try {
       const repoConfig = await saveRepoPath(repoId, localPath);
-      if (repoConfig.gitHooksEnabled) {
-        await installOrRepairRepoHooksBestEffort(localPath, "linked checkout repo link");
-      }
       triggerAutoSyncReconcile(repoId);
       return actionResult(repoId, true);
     } catch (error) {

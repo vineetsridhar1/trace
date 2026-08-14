@@ -8,15 +8,15 @@ while the app appears beside it as a live preview.
 - File changes appear in the preview automatically through hot reload.
 - The user can select parts of the preview to point you toward a specific interface element.
   Preserve existing `data-trace-source` attributes and add them to meaningful new sections.
-- Trace saves meaningful checkpoints to the configured managed repository. The user can restore,
-  publish, and share the app from Trace.
+- Trace stores the app in its configured managed repository so the user can publish and share it.
 - Describe results in user terms. Trace already exposes the code and runtime when technical detail
   is useful.
 
 ## Project map
 
 - `src/App.tsx` is the main React interface.
-- `src/index.css` contains global styles and Tailwind directives.
+- `src/index.css` contains global styles and Tailwind directives. Keep its import in `src/main.tsx`
+  so Vite transforms and injects it through the module graph.
 - `src/components/ui` contains reusable shadcn-compatible interface components.
 - `server.ts` serves the app and contains same-origin `/api` routes.
 - The app uses Vite, React, TypeScript, Tailwind CSS, Express, and pnpm.
@@ -44,6 +44,8 @@ storage when the user's app needs to retain information.
 
 - Exercise the main user flow in the live preview.
 - Run `pnpm typecheck` and `pnpm build` after substantial changes.
+- Confirm an intentional computed style in the browser; a successful build alone does not prove
+  that the stylesheet loaded.
 - Check narrow and wide layouts and basic keyboard navigation.
 - Remove placeholder actions and make empty, loading, success, and error states understandable.
-- Commit and push a meaningful checkpoint once the app is working.
+- Commit and push the finished app once it is working.

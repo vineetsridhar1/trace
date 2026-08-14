@@ -1,6 +1,9 @@
 import { EventEmitter } from "events";
 import { spawn } from "child_process";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("child_process", () => ({
   execFile: vi.fn(),
@@ -12,6 +15,7 @@ vi.mock("@trace/shared/adapters", () => ({
 }));
 
 const spawnMock = spawn as unknown as ReturnType<typeof vi.fn>;
+let codexHome: string;
 
 type FakeChild = EventEmitter & {
   stdin: {
@@ -44,8 +48,17 @@ async function importToolAuth() {
 describe("tool auth", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    codexHome = mkdtempSync(join(tmpdir(), "trace-codex-auth-test-"));
+    process.env.CODEX_HOME = codexHome;
+    delete process.env.CODEX_AUTH_METHOD;
     delete process.env.CODEX_ACCESS_TOKEN;
+    delete process.env.CODEX_API_KEY;
     delete process.env.OPENAI_API_KEY;
+  });
+
+  afterEach(() => {
+    delete process.env.CODEX_HOME;
+    rmSync(codexHome, { recursive: true, force: true });
   });
 
   it("prefers Codex access-token login over API-key login", async () => {
@@ -112,7 +125,7 @@ describe("tool auth", () => {
     const { ensureToolReady } = await importToolAuth();
 
     await expect(ensureToolReady("codex")).rejects.toThrow(
-      "Connect a Codex access token in Settings or provide OPENAI_API_KEY in the runtime environment.",
+      "add a ChatGPT session, Codex access token, or OpenAI API key in Settings",
     );
     expect(spawnMock).not.toHaveBeenCalled();
   });

@@ -1,17 +1,25 @@
 import { useState, useEffect, useCallback } from "react";
-import { Key, Trash2, Check, Eye, EyeOff, Github } from "lucide-react";
+import { Key, Trash2, Eye, EyeOff, Github, Shield } from "lucide-react";
 import { useAuthStore } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
+import { CodexIcon } from "../ui/tool-icons";
+import { CodexAuthenticationDialog } from "./CodexAuthenticationDialog";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
+import { SettingsStatusPill } from "./SettingsStatusPill";
 
 const API_TOKENS_QUERY = gql`
   query MyApiTokens {
     myApiTokens {
       provider
       isSet
+      updatedAt
+    }
+    myCodexCredential {
+      method
       updatedAt
     }
   }
@@ -33,6 +41,21 @@ const DELETE_API_TOKEN = gql`
   }
 `;
 
+const SET_CODEX_CREDENTIAL = gql`
+  mutation SetCodexCredential($input: SetCodexCredentialInput!) {
+    setCodexCredential(input: $input) {
+      method
+      updatedAt
+    }
+  }
+`;
+
+const DELETE_CODEX_CREDENTIAL = gql`
+  mutation DeleteCodexCredential {
+    deleteCodexCredential
+  }
+`;
+
 interface TokenStatus {
   provider: string;
   isSet: boolean;
@@ -50,24 +73,47 @@ const PROVIDER_META: Record<string, { label: string; placeholder: string; descri
     placeholder: "codex access token",
     description: "Used to authenticate Codex cloud sessions with your ChatGPT workspace access.",
   },
+  codex: {
+    label: "Codex",
+    placeholder: "",
+    description: "Authenticate with ChatGPT, a Codex access token, or an OpenAI API key.",
+  },
 };
+
+function ProviderIcon({ provider }: { provider: string }) {
+  if (provider === "codex") {
+    return <CodexIcon className="h-5 w-5" />;
+  }
+  if (provider === "github") {
+    return <Github size={20} />;
+  }
+  return <Key size={18} className="text-muted-foreground" />;
+}
 
 export function ApiTokensSection() {
   const user = useAuthStore((s: { user: { id: string } | null }) => s.user);
   const isDesktopShell = typeof window !== "undefined" && typeof window.trace !== "undefined";
   const [tokens, setTokens] = useState<TokenStatus[]>([]);
+  const [codexCredential, setCodexCredential] = useState<{
+    method: string;
+    updatedAt: string;
+  } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [showInput, setShowInput] = useState(false);
   const [saving, setSaving] = useState(false);
   const [importingGithubToken, setImportingGithubToken] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [codexAuthenticationOpen, setCodexAuthenticationOpen] = useState(false);
 
   const fetchTokens = useCallback(async () => {
     if (!user) return;
     const result = await client.query(API_TOKENS_QUERY, {}).toPromise();
     if (result.data?.myApiTokens) {
       setTokens(result.data.myApiTokens as TokenStatus[]);
+      setCodexCredential(
+        result.data.myCodexCredential as { method: string; updatedAt: string } | null,
+      );
     }
   }, [user]);
 
@@ -80,6 +126,17 @@ export function ApiTokensSection() {
     setInputValue("");
     setShowInput(false);
     setErrorMessage(null);
+  }
+
+  async function saveCodexCredential(
+    method: "chatgpt_session" | "access_token" | "api_key",
+    credential: string,
+  ) {
+    const result = await client
+      .mutation(SET_CODEX_CREDENTIAL, { input: { method, credential } })
+      .toPromise();
+    if (result.error) throw new Error(result.error.message);
+    await fetchTokens();
   }
 
   async function saveToken(provider: string, tokenValue: string) {
@@ -123,15 +180,21 @@ export function ApiTokensSection() {
       const token = await window.trace.getGithubAuthToken();
       await saveToken("github", token);
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to read GitHub CLI token",
-      );
+      setErrorMessage(error instanceof Error ? error.message : "Failed to read GitHub CLI token");
     } finally {
       setImportingGithubToken(false);
     }
   }
 
   async function handleDelete(provider: string) {
+    if (provider === "codex") {
+      await Promise.all([
+        client.mutation(DELETE_CODEX_CREDENTIAL, {}).toPromise(),
+        client.mutation(DELETE_API_TOKEN, { provider: "codex_access_token" }).toPromise(),
+      ]);
+      await fetchTokens();
+      return;
+    }
     await client.mutation(DELETE_API_TOKEN, { provider }).toPromise();
     // Refetch to get the updated state from the server
     fetchTokens();
@@ -139,41 +202,51 @@ export function ApiTokensSection() {
 
   return (
     <div>
-      <div className="mb-4">
-        <h2 className="text-base font-semibold text-foreground">API Keys</h2>
-        <p className="text-sm text-muted-foreground">
-          Tokens are encrypted and used only for integrations that need them.
-        </p>
-      </div>
+      <SettingsSectionHeader
+        title="API keys"
+        description="Your personal credentials. They are encrypted at rest and used only for sessions and integrations you start—never shared with other members."
+      />
 
       <div className="space-y-3">
-        {tokens.map((token: TokenStatus) => {
+        {[
+          ...tokens.filter((token) => token.provider === "github"),
+          {
+            provider: "codex",
+            isSet:
+              codexCredential !== null ||
+              tokens.some((token) => token.provider === "codex_access_token" && token.isSet),
+            updatedAt: codexCredential?.updatedAt ?? null,
+          },
+        ].map((token: TokenStatus) => {
           const meta = PROVIDER_META[token.provider];
           if (!meta) return null;
           const isEditing = editing === token.provider;
           const canShowGithubCliImport = token.provider === "github" && isDesktopShell;
+          const canAuthenticateCodex = token.provider === "codex";
 
           return (
             <div
               key={token.provider}
-              className="rounded-lg border border-border bg-surface-deep p-4"
+              className="overflow-hidden rounded-xl border border-border bg-card"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4 px-4 py-3.5">
                 <div className="flex items-center gap-3">
-                  <Key size={16} className="text-muted-foreground" />
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground">
+                    <ProviderIcon provider={token.provider} />
+                  </span>
                   <div>
-                    <p className="text-sm font-medium text-foreground">{meta.label}</p>
-                    <p className="text-xs text-muted-foreground">{meta.description}</p>
+                    <p className="text-[13px] font-medium text-foreground">{meta.label}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{meta.description}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   {token.isSet && !isEditing && (
                     <>
-                      <span className="flex items-center gap-1 text-xs text-emerald-500">
-                        <Check size={12} />
-                        Configured
-                      </span>
+                      <SettingsStatusPill
+                        tone="success"
+                        label={canAuthenticateCodex ? "Authenticated" : "Configured"}
+                      />
                       {canShowGithubCliImport && (
                         <Button
                           variant="outline"
@@ -186,14 +259,24 @@ export function ApiTokensSection() {
                           {importingGithubToken ? "Importing..." : "Import from CLI"}
                         </Button>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => startEditing(token.provider)}
-                      >
-                        <Key size={14} />
-                      </Button>
+                      {canAuthenticateCodex ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCodexAuthenticationOpen(true)}
+                        >
+                          Re-authenticate
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => startEditing(token.provider)}
+                        >
+                          <Key size={14} />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -206,6 +289,7 @@ export function ApiTokensSection() {
                   )}
                   {!token.isSet && !isEditing && (
                     <>
+                      <SettingsStatusPill tone="muted" label="Not set" />
                       {canShowGithubCliImport && (
                         <Button
                           variant="outline"
@@ -221,9 +305,13 @@ export function ApiTokensSection() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => startEditing(token.provider)}
+                        onClick={() =>
+                          canAuthenticateCodex
+                            ? setCodexAuthenticationOpen(true)
+                            : startEditing(token.provider)
+                        }
                       >
-                        Add key
+                        {canAuthenticateCodex ? "Authenticate Codex" : "Add key"}
                       </Button>
                     </>
                   )}
@@ -231,11 +319,18 @@ export function ApiTokensSection() {
               </div>
 
               {!isEditing && errorMessage && canShowGithubCliImport && (
-                <p className="mt-2 text-xs text-destructive">{errorMessage}</p>
+                <p className="border-t border-border px-4 py-2 text-xs text-destructive">
+                  {errorMessage}
+                </p>
               )}
 
               {isEditing && (
-                <div className="mt-3 space-y-2">
+                <div className="space-y-2 border-t border-border bg-background/30 px-4 py-3.5">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {token.isSet
+                      ? "Replace key — saving overwrites the current one"
+                      : `Add ${meta.label} credential`}
+                  </p>
                   {token.provider === "ssh_key" ? (
                     <Textarea
                       placeholder={meta.placeholder}
@@ -250,7 +345,7 @@ export function ApiTokensSection() {
                           setErrorMessage(null);
                         }
                       }}
-                      className="font-mono text-xs min-h-[120px]"
+                      className="min-h-[120px] bg-background font-mono text-xs"
                       autoFocus
                     />
                   ) : (
@@ -270,6 +365,7 @@ export function ApiTokensSection() {
                             setErrorMessage(null);
                           }
                         }}
+                        className="h-9 border-primary bg-background pr-9 font-mono text-xs ring-2 ring-primary/25"
                         autoFocus
                       />
                       <button
@@ -293,9 +389,7 @@ export function ApiTokensSection() {
                       {importingGithubToken ? "Importing..." : "Import from GitHub CLI"}
                     </Button>
                   )}
-                  {errorMessage && (
-                    <p className="text-xs text-destructive">{errorMessage}</p>
-                  )}
+                  {errorMessage && <p className="text-xs text-destructive">{errorMessage}</p>}
                   <div className="flex items-center gap-2">
                     <Button
                       size="sm"
@@ -322,6 +416,19 @@ export function ApiTokensSection() {
           );
         })}
       </div>
+      <div className="mt-5 flex items-start gap-2.5 rounded-lg border border-border bg-card/50 px-4 py-3">
+        <Shield size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
+        <p className="text-xs leading-5 text-muted-foreground">
+          Setting up keys for the whole team? Workspace-wide credentials such as{" "}
+          <code className="font-mono text-foreground">GITHUB_TOKEN</code> live under{" "}
+          <span className="text-foreground">Workspace → Secrets</span>.
+        </p>
+      </div>
+      <CodexAuthenticationDialog
+        open={codexAuthenticationOpen}
+        onOpenChange={setCodexAuthenticationOpen}
+        onSave={saveCodexCredential}
+      />
     </div>
   );
 }

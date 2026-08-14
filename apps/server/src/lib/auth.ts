@@ -3,10 +3,7 @@ import type { CookieOptions, Request, Response } from "express";
 import type { IncomingHttpHeaders } from "http";
 import jwt from "jsonwebtoken";
 import type { Context } from "../context.js";
-import {
-  authenticateMobileSecret,
-  type MobileAuthSubject,
-} from "../services/mobile-auth.js";
+import { authenticateMobileSecret, type MobileAuthSubject } from "../services/mobile-auth.js";
 import { getCanonicalLocalOrganizationId } from "../services/local-bootstrap.js";
 import { AuthenticationError } from "./errors.js";
 import { assertOrgMembership } from "./org-access-guard.js";
@@ -23,10 +20,16 @@ import {
   createTurnLoader,
   createChatMembersLoader,
   createSessionTicketsLoader,
+  createChannelProjectsLoader,
+  createSessionProjectsLoader,
   createChannelMembershipLoader,
   createChatMembershipLoader,
 } from "./dataloader.js";
 import { resolveJwtSecret } from "./jwt-secret.js";
+import {
+  authenticateAgentInvocationToken,
+  type AgentInvocationAuthSubject,
+} from "./agent-invocation-auth.js";
 
 const JWT_SECRET = resolveJwtSecret();
 const BRIDGE_AUTH_TOKEN_TTL_SECONDS = 5 * 60;
@@ -60,7 +63,10 @@ type SessionAuthSubject = {
   actorType?: "user" | "agent";
 };
 
-export type AccessTokenAuthSubject = SessionAuthSubject | MobileAuthSubject;
+export type AccessTokenAuthSubject =
+  | SessionAuthSubject
+  | MobileAuthSubject
+  | AgentInvocationAuthSubject;
 
 type RequestAuthSource = {
   headers: IncomingHttpHeaders;
@@ -277,7 +283,16 @@ export async function authenticateAccessToken(
     };
   }
 
-  return authenticateMobileSecret(token);
+  const device = await authenticateMobileSecret(token);
+  if (device) return device;
+  return authenticateAgentInvocationToken(token);
+}
+
+export async function authenticateUserAccessToken(
+  token: string,
+): Promise<Exclude<AccessTokenAuthSubject, AgentInvocationAuthSubject> | null> {
+  const subject = await authenticateAccessToken(token);
+  return subject?.kind === "agent" ? null : subject;
 }
 
 export function createBridgeAuthToken(input: {
@@ -386,7 +401,12 @@ async function buildAuthenticatedContext(input: ContextBuildInput): Promise<Cont
   }
   const sessionOrganizationId =
     authSubject.kind === "session" ? authSubject.organizationId : undefined;
-  const actorType = authSubject.kind === "session" ? (authSubject.actorType ?? "user") : "user";
+  const actorType =
+    authSubject.kind === "agent"
+      ? "agent"
+      : authSubject.kind === "session"
+        ? (authSubject.actorType ?? "user")
+        : "user";
 
   const user = await prisma.user.findUnique({
     where: { id: authSubject.userId },
@@ -406,7 +426,13 @@ async function buildAuthenticatedContext(input: ContextBuildInput): Promise<Cont
    * an arbitrary organization.
    */
   const localModeMembership = await getLocalModeOrgMembership(user.id);
-  if (localModeMembership) {
+  if (authSubject.kind === "agent") {
+    if (input.requestedOrgId && input.requestedOrgId !== authSubject.organizationId) {
+      throw new AuthenticationError("Agent credential is bound to another organization");
+    }
+    organizationId = authSubject.organizationId;
+    role = authSubject.role;
+  } else if (localModeMembership) {
     organizationId = localModeMembership.organizationId;
     role = localModeMembership.role;
   } else if (input.requestedOrgId ?? sessionOrganizationId) {
@@ -438,6 +464,8 @@ async function buildAuthenticatedContext(input: ContextBuildInput): Promise<Cont
     clientSource: input.clientSource,
     role,
     actorType,
+    agentSessionId: authSubject.kind === "agent" ? authSubject.sessionId : null,
+    agentCapabilities: authSubject.kind === "agent" ? authSubject.capabilities : [],
     userLoader: createUserLoader(),
     sessionLoader: createSessionLoader(),
     sessionGroupLoader: createSessionGroupLoader(),
@@ -448,6 +476,8 @@ async function buildAuthenticatedContext(input: ContextBuildInput): Promise<Cont
     turnLoader: createTurnLoader(),
     chatMembersLoader: createChatMembersLoader(),
     sessionTicketsLoader: createSessionTicketsLoader(organizationId),
+    channelProjectsLoader: createChannelProjectsLoader(organizationId),
+    sessionProjectsLoader: createSessionProjectsLoader(organizationId),
     channelMembershipLoader: createChannelMembershipLoader(user.id),
     chatMembershipLoader: createChatMembershipLoader(user.id),
   };

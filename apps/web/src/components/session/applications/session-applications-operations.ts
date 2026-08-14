@@ -18,6 +18,11 @@ export const APPLICATIONS_STATE_QUERY = gql`
               secretName
             }
           }
+          runScripts {
+            id
+            name
+            command
+          }
           applications {
             id
             name
@@ -189,6 +194,7 @@ export const CREATE_PREVIEW_MUTATION = gql`
 
 export const DEFAULT_APP_CONFIG: RepoApplicationConfig = {
   setupScripts: [],
+  runScripts: [],
   applications: [
     {
       id: "app",

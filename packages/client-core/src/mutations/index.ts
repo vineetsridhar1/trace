@@ -686,6 +686,12 @@ export const UPDATE_REPO_MUTATION = gql`
   }
 `;
 
+export const DELETE_REPO_MUTATION = gql`
+  mutation DeleteRepo($id: ID!) {
+    deleteRepo(id: $id)
+  }
+`;
+
 export const REGISTER_REPO_WEBHOOK_MUTATION = gql`
   mutation RegisterRepoWebhook($repoId: ID!) {
     registerRepoWebhook(repoId: $repoId) {

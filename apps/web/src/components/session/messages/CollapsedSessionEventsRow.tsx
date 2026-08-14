@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
-import type { Event, GitCheckpoint } from "@trace/gql";
+import type { Event } from "@trace/gql";
 import {
   upsertFetchedSessionEventsWithOptimisticResolution,
   useAuthStore,
@@ -24,7 +24,6 @@ const COLLAPSED_EXPANDED_EXCLUDE_PAYLOAD_TYPES = [...HIDDEN_SESSION_PAYLOAD_TYPE
 interface CollapsedSessionEventsRowProps {
   sessionId: string;
   collapsedRanges: CollapsedSessionEventsSummary[];
-  gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -41,7 +40,6 @@ function asFetchedEvent(value: unknown): (Event & { id: string }) | null {
 export function CollapsedSessionEventsRow({
   sessionId,
   collapsedRanges,
-  gitCheckpointsByPromptEventId,
 }: CollapsedSessionEventsRowProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -157,14 +155,7 @@ export function CollapsedSessionEventsRow({
     setCursor(nextCursor);
     setHasMore(nextHasMore);
     setLoading(false);
-  }, [
-    activeOrgId,
-    collapsedRanges,
-    cursor,
-    hasMore,
-    loading,
-    sessionId,
-  ]);
+  }, [activeOrgId, collapsedRanges, cursor, hasMore, loading, sessionId]);
 
   const handleToggle = useCallback(() => {
     const nextOpen = !open;
@@ -218,7 +209,6 @@ export function CollapsedSessionEventsRow({
                 <SessionNodeRenderer
                   key={node.kind === "readglob-group" ? `rg:${node.items[0].id}` : node.id}
                   node={node}
-                  gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
                   completedAgentTools={completedAgentTools}
                   toolResultByUseId={toolResultByUseId}
                 />

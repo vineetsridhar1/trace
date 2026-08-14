@@ -1,261 +1,322 @@
-import { useCallback, useState } from "react";
-import { Pressable, StyleSheet, TextInput, View } from "react-native";
-import { SEND_SESSION_MESSAGE_MUTATION, useQuestionState } from "@trace/client-core";
-import type { Question } from "@trace/shared";
-import { Glass, Text } from "@/components/design-system";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Keyboard, Platform, ScrollView, StyleSheet, View } from "react-native";
+import { KeyboardStickyView } from "react-native-keyboard-controller";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuthStore, useQuestionState, type AuthState } from "@trace/client-core";
+import type { Question, QuestionType } from "@trace/shared";
+import { Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
-import { getClient } from "@/lib/urql";
-import { alpha, useTheme } from "@/theme";
-import {
-  PendingInputPagerButton,
-  PendingInputShell,
-  pendingInputStyles,
-} from "./PendingInputShell";
-import { SessionComposerActionButton } from "./session-input-composer/SessionComposerActionButton";
-import { styles as composerStyles } from "./session-input-composer/styles";
+import { submitQuestionResponse } from "@/lib/question-response-submit";
+import { userFacingError } from "@/lib/requestError";
+import type { FileAttachment } from "@/stores/drafts";
+import { QuestionFlowControl } from "./question-flow/QuestionFlowControl";
+import { QuestionFlowFooter } from "./question-flow/QuestionFlowFooter";
+import { QuestionFlowHeader } from "./question-flow/QuestionFlowHeader";
+import { QuestionFlowOption } from "./question-flow/QuestionFlowOption";
+import { QuestionFlowReview } from "./question-flow/QuestionFlowReview";
+import { questionColors, questionMetrics } from "./question-flow/tokens";
 
 interface PendingInputQuestionProps {
   sessionId: string;
   questions: Question[];
-  keyboardVisible?: boolean;
-  /**
-   * True when an earlier assistant event in the session is a plan block.
-   * When set, the response is sent with `interactionMode: "plan"` so the
-   * agent stays in plan mode — matches web's `AskUserQuestionBar` usage.
-   */
   hasActivePlan: boolean;
+  onClose: () => void;
+  onSendingChange?: (sending: boolean) => void;
 }
 
-/** Question variant of the pending-input bar with the same visual system as plan review. */
+const EMPTY_ATTACHMENTS: readonly FileAttachment[] = [];
+
 export function PendingInputQuestion({
   sessionId,
   questions,
   hasActivePlan,
-  keyboardVisible = false,
+  onClose,
+  onSendingChange,
 }: PendingInputQuestionProps) {
-  const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const organizationId = useAuthStore((state: AuthState) => state.activeOrgId);
+  const [reviewing, setReviewing] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [referenceAttachments, setReferenceAttachments] = useState<
+    Record<number, FileAttachment[]>
+  >({});
+  const referenceValues = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(referenceAttachments).map(([index, attachments]) => [
+          Number(index),
+          attachments.map((attachment) => attachment.filename),
+        ]),
+      ),
+    [referenceAttachments],
+  );
+  const state = useQuestionState({ questions }, referenceValues);
   const {
     page,
     total,
     question,
     currentSelected,
     currentCustom,
+    currentRanking,
+    currentValid,
+    validationMessage,
     isFirstPage,
     isLastPage,
     hasAllAnswers,
-    toggleOption,
-    setCustomText,
-    goNext,
-    goPrev,
-    buildResponse,
-  } = useQuestionState({ questions });
+    answers,
+  } = state;
+  const currentAssumed = answers[page]?.assumed ?? false;
+  const currentReferenceAttachments = referenceAttachments[page] ?? EMPTY_ATTACHMENTS;
 
-  const [sending, setSending] = useState(false);
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const show = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
-  const handleSend = useCallback(async () => {
+  const updateUploadedAttachments = useCallback((uploaded: FileAttachment[]) => {
+    const uploadedById = new Map(uploaded.map((attachment) => [attachment.id, attachment]));
+    setReferenceAttachments((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([index, attachments]) => [
+          Number(index),
+          attachments.map((attachment) => uploadedById.get(attachment.id) ?? attachment),
+        ]),
+      ),
+    );
+  }, []);
+
+  const send = useCallback(async () => {
     if (sending || !hasAllAnswers) return;
-    const response = buildResponse();
+    const response = state.buildResponse();
     if (!response) return;
+    const attachments = Object.values(referenceAttachments).flat();
     setSending(true);
+    setSendError(null);
+    onSendingChange?.(true);
     void haptic.light();
     try {
-      await getClient()
-        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-          sessionId,
-          text: response,
-          interactionMode: hasActivePlan ? "plan" : undefined,
-        })
-        .toPromise();
+      await submitQuestionResponse({
+        sessionId,
+        text: response,
+        interactionMode: hasActivePlan ? "plan" : undefined,
+        attachments,
+        organizationId,
+        onAttachmentsUploaded: updateUploadedAttachments,
+      });
+      onClose();
+    } catch (error) {
+      setSendError(userFacingError(error, "Failed to send answers. Try again."));
+      void haptic.error();
     } finally {
       setSending(false);
+      onSendingChange?.(false);
     }
-  }, [buildResponse, hasActivePlan, hasAllAnswers, sending, sessionId]);
+  }, [
+    hasActivePlan,
+    hasAllAnswers,
+    onClose,
+    onSendingChange,
+    organizationId,
+    referenceAttachments,
+    sending,
+    sessionId,
+    state,
+    updateUploadedAttachments,
+  ]);
 
-  const handleSubmit = () => {
-    if (hasAllAnswers) void handleSend();
-    else if (!isLastPage) goNext();
+  const continueFlow = () => {
+    if (!currentValid) return;
+    setSendError(null);
+    if (isLastPage) setReviewing(true);
+    else state.goNext();
   };
-
-  const questionTitle = question.header || "Question";
-  const pageLabel = total > 1 ? `${page + 1}/${total}` : null;
+  const letAgentDecide = () => {
+    setReferenceAttachments((current) => {
+      if (!current[page]) return current;
+      const next = { ...current };
+      delete next[page];
+      return next;
+    });
+    void haptic.selection();
+    state.decideForMe();
+  };
+  const type: QuestionType =
+    question.type ?? (question.multiSelect ? "multi-select" : "single-select");
+  const primaryLabel = sending
+    ? "Sending…"
+    : sendError && reviewing
+      ? "Try again"
+      : reviewing
+        ? `Send ${total} answer${total === 1 ? "" : "s"}`
+        : isLastPage
+          ? "Review answers"
+          : validationMessage && question.min
+            ? `Choose ${Math.max(1, question.min - currentSelected.size)} more`
+            : "Continue";
 
   return (
-    <PendingInputShell
-      header={questionTitle}
-      background="transparent"
-      showHeader={false}
-      showTopBorder={false}
-      keyboardVisible={keyboardVisible}
-    >
-      <View style={[styles.menuContainer, theme.shadows.lg]}>
-        <Glass preset="card" interactive style={styles.menuSurface}>
-          <View style={styles.menuContent}>
-            <View style={styles.questionMetaRow}>
-              <Text variant="caption2" color="accent" style={styles.questionMetaLabel}>
-                {questionTitle}
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <QuestionFlowHeader
+        step={reviewing ? `${total} answers` : total > 1 ? `${page + 1} of ${total}` : "Question"}
+        onBack={onClose}
+      />
+      <ScrollView
+        automaticallyAdjustKeyboardInsets
+        contentContainerStyle={styles.content}
+        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+        keyboardShouldPersistTaps="handled"
+      >
+        {reviewing ? (
+          <QuestionFlowReview
+            questions={questions}
+            answers={answers}
+            onEdit={(index) => {
+              state.setPage(index);
+              setReviewing(false);
+              setSendError(null);
+            }}
+          />
+        ) : (
+          <>
+            <View style={styles.prompt}>
+              <View
+                style={[
+                  styles.dot,
+                  {
+                    backgroundColor: validationMessage
+                      ? questionColors.danger
+                      : questionColors.warning,
+                  },
+                ]}
+              />
+              <Text
+                variant="footnote"
+                style={[
+                  styles.label,
+                  { color: validationMessage ? questionColors.danger : questionColors.muted },
+                ]}
+              >
+                {validationMessage ? "Needs attention" : question.header || "Answer the agent"}
               </Text>
-              {pageLabel ? (
-                <Text variant="caption2" color="mutedForeground">
-                  {pageLabel}
+              <Text variant="title1" style={styles.title}>
+                {question.question}
+              </Text>
+              {question.context ? (
+                <Text variant="subheadline" style={styles.context}>
+                  {question.context}
                 </Text>
               ) : null}
             </View>
-            <Text variant="body" color="foreground" style={styles.questionText} numberOfLines={4}>
-              {question.question}
-            </Text>
-            {question.options.length > 0
-              ? question.options.map((opt, index) => {
-                  const selected = currentSelected.has(opt.label);
-                  return (
-                    <Pressable
-                      key={opt.label}
-                      accessibilityRole="button"
-                      accessibilityLabel={opt.label}
-                      accessibilityState={{ selected }}
-                      onPress={() => {
-                        void haptic.selection();
-                        toggleOption(opt.label);
-                      }}
-                      style={({ pressed }) => [
-                        styles.menuRow,
-                        {
-                          marginBottom: index < question.options.length - 1 ? 2 : 0,
-                          backgroundColor: selected
-                            ? "rgba(255, 255, 255, 0.08)"
-                            : pressed
-                              ? "rgba(255, 255, 255, 0.05)"
-                              : undefined,
-                        },
-                      ]}
-                    >
-                      <View style={styles.menuCopy}>
-                        <Text
-                          variant="subheadline"
-                          color={selected ? "accent" : "foreground"}
-                          style={styles.optionTitle}
-                        >
-                          {opt.label}
-                        </Text>
-                        <Text
-                          variant="caption1"
-                          style={{ color: alpha(theme.colors.foreground, 0.88) }}
-                        >
-                          {opt.description}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  );
-                })
-              : null}
-          </View>
-        </Glass>
-      </View>
-
-      <View style={pendingInputStyles.bottomRow}>
-        <Glass
-          preset="input"
-          interactive
-          style={[
-            composerStyles.inputCard,
-            styles.customInputCard,
-            {
-              borderColor: theme.colors.border,
-            },
-          ]}
-        >
-          <TextInput
-            value={currentCustom}
-            onChangeText={setCustomText}
-            onSubmitEditing={handleSubmit}
-            placeholder="Other…"
-            placeholderTextColor={theme.colors.dimForeground}
-            editable={!sending}
-            returnKeyType={hasAllAnswers ? "send" : "next"}
-            style={[composerStyles.input, styles.customInput, { color: theme.colors.foreground }]}
+            <QuestionFlowControl
+              question={question}
+              type={type}
+              selected={currentSelected}
+              custom={currentCustom}
+              ranking={currentRanking}
+              referenceAttachments={currentReferenceAttachments}
+              onToggle={(value) => {
+                void haptic.selection();
+                state.toggleOption(value);
+              }}
+              onCustom={state.setCustomText}
+              onMove={state.moveRankOption}
+              onAddReferenceAttachments={(attachments) =>
+                setReferenceAttachments((current) => ({
+                  ...current,
+                  [page]: [...(current[page] ?? []), ...attachments],
+                }))
+              }
+              onRemoveReferenceAttachment={(id) =>
+                setReferenceAttachments((current) => ({
+                  ...current,
+                  [page]: (current[page] ?? []).filter((attachment) => attachment.id !== id),
+                }))
+              }
+            />
+            {validationMessage ? (
+              <Text accessibilityRole="alert" variant="caption1" style={styles.error}>
+                {validationMessage}
+              </Text>
+            ) : null}
+            <View style={styles.decide}>
+              <QuestionFlowOption
+                label="You decide"
+                description="Choose the smallest useful next step."
+                selected={currentAssumed}
+                onPress={letAgentDecide}
+              />
+            </View>
+          </>
+        )}
+      </ScrollView>
+      <KeyboardStickyView
+        offset={{ opened: -8 }}
+        pointerEvents="box-none"
+        style={styles.overlayHost}
+      >
+        <View pointerEvents="box-none" style={styles.actionStack}>
+          {sendError ? (
+            <View accessibilityRole="alert" style={styles.sendError}>
+              <Text variant="caption1" style={styles.sendErrorText}>
+                {sendError}
+              </Text>
+            </View>
+          ) : null}
+          <QuestionFlowFooter
+            label={primaryLabel}
+            disabled={sending || (reviewing ? !hasAllAnswers : !currentValid)}
+            backVisible={!reviewing && !isFirstPage}
+            onBack={state.goPrev}
+            onPrimary={() => {
+              if (reviewing) void send();
+              else continueFlow();
+            }}
+            bottomInset={keyboardVisible ? 0 : insets.bottom}
           />
-        </Glass>
-        {total > 1 ? (
-          <View style={styles.pager}>
-            <PendingInputPagerButton
-              icon="chevron.left"
-              accessibilityLabel="Previous question"
-              disabled={isFirstPage || sending}
-              onPress={goPrev}
-            />
-            <PendingInputPagerButton
-              icon="chevron.right"
-              accessibilityLabel="Next question"
-              disabled={isLastPage || sending}
-              onPress={goNext}
-            />
-          </View>
-        ) : null}
-        <SessionComposerActionButton
-          accessibilityLabel="Send answer"
-          contentOpacity={hasAllAnswers && !sending ? 1 : 0.35}
-          disabled={!hasAllAnswers || sending}
-          glassStyle={{ borderColor: alpha(theme.colors.success, 0.28) }}
-          iconName="paperplane.fill"
-          iconSize={16}
-          iconTint={theme.colors.accentForeground}
-          onPress={() => void handleSend()}
-          tint={alpha(theme.colors.success, 0.18)}
-        />
-      </View>
-    </PendingInputShell>
+        </View>
+      </KeyboardStickyView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  questionMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-  },
-  questionMetaLabel: {
-    fontWeight: "700",
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-  },
-  questionText: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 12,
-    fontWeight: "600",
-  },
-  menuContainer: {
-    marginTop: 10,
-  },
-  menuSurface: {
-    borderRadius: 20,
-    overflow: "hidden",
-  },
-  menuContent: {
-    padding: 6,
-  },
-  menuRow: {
-    minHeight: 56,
-    borderRadius: 8,
+  root: { flex: 1, backgroundColor: questionColors.background },
+  content: { paddingHorizontal: questionMetrics.pagePadding, paddingTop: 32, paddingBottom: 124 },
+  prompt: { gap: 10 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  label: { fontWeight: "600" },
+  title: { color: questionColors.foreground, letterSpacing: -0.7 },
+  context: { color: questionColors.muted, lineHeight: 21 },
+  error: {
+    color: questionColors.foreground,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,69,58,0.5)",
+    backgroundColor: "rgba(255,69,58,0.1)",
+    borderRadius: questionMetrics.controlRadius,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  menuCopy: {
-    flex: 1,
-    gap: 3,
+  decide: { marginTop: 12 },
+  overlayHost: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end" },
+  actionStack: { backgroundColor: "transparent" },
+  sendError: {
+    marginHorizontal: 16,
+    marginBottom: 2,
+    borderWidth: 1,
+    borderColor: "rgba(255,69,58,0.5)",
+    backgroundColor: "rgba(12,12,14,0.94)",
+    borderRadius: questionMetrics.controlRadius,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  optionTitle: {
-    flexShrink: 1,
-  },
-  customInputCard: {
-    flex: 1,
-    height: 46,
-    justifyContent: "center",
-  },
-  customInput: {
-    height: 30,
-  },
-  pager: { flexDirection: "row", gap: 4 },
+  sendErrorText: { color: questionColors.foreground },
 });

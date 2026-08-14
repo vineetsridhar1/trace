@@ -24,13 +24,15 @@ export type RuntimeStartInput = {
   /** Named launcher runtime profile from the repo's setup config. */
   runtimeProfile?: string;
   branch?: string;
-  checkpointSha?: string;
+  baseCommitSha?: string;
   readOnly?: boolean;
   runtimeInstanceId?: string;
   runtimeToken?: string;
   bridgeUrl?: string;
   userGithubToken?: string;
   userCodexAccessToken?: string;
+  userCodexAuthMethod?: "chatgpt_session" | "access_token" | "api_key";
+  userCodexCredential?: string;
 };
 
 export type RuntimeStartResult = {
@@ -38,6 +40,8 @@ export type RuntimeStartResult = {
   runtimeLabel?: string;
   providerRuntimeId?: string;
   providerRuntimeUrl?: string;
+  runtimeHardDeadlineAt?: string;
+  providerDeadlineEnforcementId?: string;
   status: "selected" | "provisioning" | "booting" | "connecting" | "connected";
   metadata?: Record<string, unknown>;
 };

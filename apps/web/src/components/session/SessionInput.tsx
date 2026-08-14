@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Paperclip, Send, Square } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import {
   isSessionPreparing,
@@ -9,36 +8,22 @@ import {
   type SessionEntity,
 } from "@trace/client-core";
 import { client } from "../../lib/urql";
-import {
-  CREATE_TERMINAL_MUTATION,
-  SEND_SESSION_MESSAGE_MUTATION,
-  QUEUE_SESSION_MESSAGE_MUTATION,
-} from "@trace/client-core";
-import { type InteractionMode, MODE_CYCLE, MODE_CONFIG, wrapPrompt } from "./interactionModes";
+import { CREATE_TERMINAL_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
+import { type InteractionMode, MODE_CYCLE, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
-import { isDisconnected, canSendMessage, canQueueMessage } from "./sessionStatus";
-import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
+import { canSendMessage, canQueueMessage } from "./sessionStatus";
 import { getModelLabel } from "./modelOptions";
 import { getToolLabel } from "./picker/pickerShared";
 import { TraceLoader } from "../ui/trace-loader";
-import { cn } from "../../lib/utils";
 import { toast } from "sonner";
-import {
-  optimisticallyInsertSessionMessage,
-  reconcileOptimisticSessionMessage,
-  removeOptimisticSessionMessage,
-} from "@trace/client-core";
-import {
-  ChatEditor,
-  type ChatEditorHandle,
-  type ChatEditorSubmitOptions,
-} from "../chat/ChatEditor";
+import { type ChatEditorHandle, type ChatEditorSubmitOptions } from "../chat/ChatEditor";
+import { SessionComposer } from "./SessionComposer";
 import { useSlashCommands } from "./useSlashCommands";
 import { createQuickSession } from "../../lib/create-quick-session";
 import { showToolNotInstalledToast } from "../../lib/coding-tool-install";
 import { useUIStore } from "../../stores/ui";
-import { ImageAttachmentBar, type FileAttachment } from "./ImageAttachmentBar";
+import type { FileAttachment } from "./ImageAttachmentBar";
 import { uploadFile } from "../../lib/upload";
 import { useAddAttachments, MAX_ATTACHMENTS } from "./useAddAttachments";
 import { useAuthStore } from "@trace/client-core";
@@ -48,6 +33,7 @@ import { useTerminalStore } from "../../stores/terminal";
 import { useAttachmentOpen } from "./AttachmentOpenContext";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
+import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
 
 const EMPTY_ATTACHMENTS: FileAttachment[] = [];
 
@@ -104,11 +90,9 @@ export function SessionInput({
   const [isSending, setIsSending] = useState(false);
   const isSendingRef = useRef(false);
   const hasAutoFocusedRef = useRef(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<ChatEditorHandle>(null);
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
-  const disconnected = isDisconnected(connection);
   const preparing =
     isSessionPreparing({
       agentStatus,
@@ -186,14 +170,6 @@ export function SessionInput({
   }, []);
 
   const addAttachments = useAddAttachments(sessionId);
-
-  const handleFileInputChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      addAttachments(Array.from(event.currentTarget.files ?? []));
-      event.currentTarget.value = "";
-    },
-    [addAttachments],
-  );
 
   const handleOpenAttachment = useCallback(
     (attachment: FileAttachment) => {
@@ -320,6 +296,7 @@ export function SessionInput({
 
             setDraftImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
             for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
+            useComposerStore.getState().requestScrollToBottom(sessionId);
             shouldRefocusAfterQueue = true;
           } catch (error) {
             setDraftImages(sessionId, (prev) =>
@@ -353,43 +330,22 @@ export function SessionInput({
           };
         }
 
-        const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
+        const sendPromise = sendOptimisticSessionMessage({
           sessionId,
-          wrappedText,
-          imageKeys.length > 0 || startsDeferredRuntime
-            ? {
-                ...(startsDeferredRuntime ? { deliveryStatus: "pending_runtime" as const } : {}),
-                ...(imageKeys.length > 0 ? { imageKeys, imagePreviewUrls } : {}),
-              }
-            : undefined,
-        );
+          text: wrappedText,
+          imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
+          imagePreviewUrls: imageKeys.length > 0 ? imagePreviewUrls : undefined,
+          interactionMode: mode === "code" ? undefined : mode,
+          deliveryStatus: startsDeferredRuntime ? "pending_runtime" : undefined,
+        });
+        useComposerStore.getState().requestScrollToBottom(sessionId);
 
         setDraftImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
 
         try {
-          const result = await client
-            .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-              sessionId,
-              text: wrappedText,
-              attachmentKeys: imageKeys.length > 0 ? imageKeys : undefined,
-              interactionMode: mode === "code" ? undefined : mode,
-              clientMutationId,
-            })
-            .toPromise();
-
-          if (result.error) {
-            throw result.error;
-          }
-
-          const realEventId = result.data?.sendSessionMessage?.id;
-          if (!realEventId) {
-            throw new Error("Failed to send message");
-          }
-
-          reconcileOptimisticSessionMessage(sessionId, tempEventId, realEventId);
+          await sendPromise;
           for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
         } catch (error) {
-          removeOptimisticSessionMessage(sessionId, tempEventId);
           rollbackStartupPatch?.();
           setDraftImages(sessionId, (prev) => [
             ...savedImages.map((img) => ({ ...img, uploading: false })),
@@ -426,14 +382,6 @@ export function SessionInput({
   const handleQueueSubmit = useCallback(() => {
     void editorRef.current?.submit();
   }, []);
-
-  // If the user has bridge access (owner or granted), a disconnected session
-  // belongs to the recovery panel — not the permission prompt. Non-owners
-  // without access always see the permission prompt so they can request
-  // access, whether the bridge is online or offline.
-  if (bridgeInteractionAllowed && disconnected && !isNotStarted) {
-    return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
-  }
 
   if (!bridgeInteractionAllowed && !isNotStarted) {
     return (
@@ -474,82 +422,45 @@ export function SessionInput({
             />
           )}
         </AnimatePresence>
-        <div
-          className={cn(
-            "relative rounded-2xl border bg-surface-mid px-2 pt-2 shadow-sm transition-colors focus-within:ring-1 focus-within:ring-border",
-            MODE_CONFIG[mode as InteractionMode].inputBorder,
-          )}
-        >
-        {!hasContent && (
-          <span className="pointer-events-none absolute right-3 top-2 text-[11px] text-muted-foreground">
-            <kbd className="font-sans">⌘L</kbd> to focus
-          </span>
-        )}
-        <ImageAttachmentBar
+        <SessionComposer
+          editorRef={editorRef}
+          mode={mode}
+          initialHtml={initialDraftHtml}
+          placeholder={placeholder}
+          disabled={!canSend || isSending}
+          submitDisabled={(!hasContent && images.length === 0) || !canSend || isSending}
+          attachmentDisabled={images.length >= MAX_ATTACHMENTS}
           attachments={images}
-          onRemove={handleRemoveImage}
+          slashCommands={slashCommands.commands}
+          onSubmit={handleSubmit}
+          onShiftTab={cycleMode}
+          onPasteFiles={addAttachments}
+          onFilesSelected={addAttachments}
+          onRemoveAttachment={handleRemoveImage}
           onOpenAttachment={handleOpenAttachment}
+          onChange={(text: string, html: string) => {
+            setHasContent(text.trim().length > 0);
+            setDraftText(sessionId, text, html);
+          }}
+          emptyHint={
+            !hasContent ? (
+              <span className="pointer-events-none absolute right-3 top-2 text-[11px] text-muted-foreground">
+                <kbd className="font-sans">⌘L</kbd> to focus
+              </span>
+            ) : null
+          }
+          controls={
+            <SessionInputOptions
+              sessionId={sessionId}
+              mode={mode}
+              onModeChange={cycleMode}
+              isActive={isActive}
+            />
+          }
+          isActive={isActive}
+          onStop={onStop}
+          onSend={handleQueueSubmit}
         />
-        <div className="session-editor">
-          <ChatEditor
-            ref={editorRef}
-            initialHtml={initialDraftHtml}
-            onSubmit={handleSubmit}
-            placeholder={placeholder}
-            disabled={!canSend || isSending}
-            slashCommands={slashCommands.commands}
-            onShiftTab={cycleMode}
-            onPasteFiles={addAttachments}
-            hasAttachments={images.length > 0}
-            onChange={(text: string, html: string) => {
-              setHasContent(text.trim().length > 0);
-              setDraftText(sessionId, text, html);
-            }}
-          />
-        </div>
-        <div className="flex items-center gap-1 pb-2 pl-1 pr-2 pt-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={handleFileInputChange}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={!canSend || isSending || images.length >= MAX_ATTACHMENTS}
-            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-            title="Attach files"
-          >
-            <Paperclip size={16} />
-          </button>
-          <SessionInputOptions
-            sessionId={sessionId}
-            mode={mode}
-            onModeChange={cycleMode}
-            isActive={isActive}
-          />
-          <div className="flex-1" />
-          {isActive ? (
-            <button
-              onClick={onStop}
-              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
-              title="Stop"
-            >
-              <Square size={15} />
-            </button>
-          ) : (
-            <button
-              onClick={handleQueueSubmit}
-              disabled={(!hasContent && images.length === 0) || !canSend || isSending}
-              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-white text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
-              title="Send"
-            >
-              <Send size={15} />
-            </button>
-          )}
-        </div>
-        </div>
       </div>
     </div>
   );

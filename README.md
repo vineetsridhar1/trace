@@ -32,7 +32,7 @@
 
 Trace is a self-hosted workspace for running, monitoring, and collaborating on
 AI coding sessions. It gives every session a durable home: status, files,
-terminal output, branch state, checkpoints, runtime access, and history.
+terminal output, branch state, runtime access, and history.
 
 Instead of keeping AI coding work scattered across terminal tabs and local
 folders, Trace makes each session visible to the team. Start a session on a repo,
@@ -41,12 +41,12 @@ check in from your phone.
 
 **Run many coding sessions without losing track of any of them.**
 
-|        | Flow            | Example                                                                 |
-| ------ | --------------- | ----------------------------------------------------------------------- |
-| **01** | Connect a repo  | Register a local checkout or a hosted repository.                       |
-| **02** | Start a session | Launch Claude Code, Codex, or another coding tool against a branch.     |
-| **03** | Follow along    | Watch status, terminal output, file changes, checkpoints, and runtimes. |
-| **04** | Collaborate     | Review, hand off, resume, archive, or continue from mobile.             |
+|        | Flow            | Example                                                             |
+| ------ | --------------- | ------------------------------------------------------------------- |
+| **01** | Connect a repo  | Register a local checkout or a hosted repository.                   |
+| **02** | Start a session | Launch Claude Code, Codex, or another coding tool against a branch. |
+| **03** | Follow along    | Watch status, terminal output, file changes, and runtimes.          |
+| **04** | Collaborate     | Review, hand off, resume, archive, or continue from mobile.         |
 
 <br/>
 
@@ -74,7 +74,7 @@ check in from your phone.
 - You run multiple AI coding sessions and need a clear view of what each one is doing.
 - You want coding sessions to be shared, resumable, and inspectable by a team.
 - You want local sessions through a desktop bridge and cloud sessions through containers.
-- You want to review branches, files, terminals, and checkpoints from one place.
+- You want to review branches, files, and terminals from one place.
 - You want mobile access for checking progress and responding while away from your desk.
 - You want a pluggable runtime layer instead of hardcoding one coding tool or host.
 
@@ -140,14 +140,14 @@ core session layer.
 
 ## Problems Trace solves
 
-| Without Trace                                                                            | With Trace                                                                                       |
-| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| You have several Claude Code or Codex terminals open and cannot tell which one did what. | Every session has status, branch state, files, terminal output, and history in one place.        |
-| Work disappears when a terminal closes or a machine reboots.                             | Sessions are durable workspace entities that can be resumed, reviewed, archived, or forked.      |
-| Teammates cannot inspect what a coding tool is doing without screen sharing.             | The session surface is multiplayer and visible from web, desktop, and mobile.                    |
-| Local and cloud coding runs behave like different products.                              | Local desktop sessions and cloud container sessions share the same lifecycle and data model.     |
-| File changes, checkpoints, and runtime logs live in separate places.                     | Trace keeps files, diffs, terminal state, checkpoints, and runtime metadata attached to session. |
-| Adding a new coding tool requires product-specific plumbing everywhere.                  | Coding tools plug in through adapters around a stable session model.                             |
+| Without Trace                                                                            | With Trace                                                                                   |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| You have several Claude Code or Codex terminals open and cannot tell which one did what. | Every session has status, branch state, files, terminal output, and history in one place.    |
+| Work disappears when a terminal closes or a machine reboots.                             | Sessions are durable workspace entities that can be resumed, reviewed, archived, or forked.  |
+| Teammates cannot inspect what a coding tool is doing without screen sharing.             | The session surface is multiplayer and visible from web, desktop, and mobile.                |
+| Local and cloud coding runs behave like different products.                              | Local desktop sessions and cloud container sessions share the same lifecycle and data model. |
+| File changes and runtime logs live in separate places.                                   | Trace keeps files, diffs, terminal state, and runtime metadata attached to the session.      |
+| Adding a new coding tool requires product-specific plumbing everywhere.                  | Coding tools plug in through adapters around a stable session model.                         |
 
 <br/>
 

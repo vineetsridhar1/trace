@@ -1,4 +1,4 @@
-import { formatCostUsd, formatSessionUsageDateRange, formatTokens } from "./usage-format";
+import { formatSessionUsageDateRange, formatTokens } from "./usage-format";
 
 export const usageTooltipContentClassName =
   "!block w-[260px] max-w-[calc(100vw-24px)] overflow-hidden rounded-lg border border-white/10 !bg-zinc-900/75 px-0 py-0 text-foreground shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-2xl [&>div:last-child]:!bg-zinc-900/75 [&>div:last-child]:!fill-zinc-900/75";
@@ -13,7 +13,6 @@ interface UsageTooltipCardProps {
   outputTokens: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
-  costUsd?: number;
 }
 
 export function UsageTooltipCard({
@@ -26,7 +25,6 @@ export function UsageTooltipCard({
   outputTokens,
   cacheReadTokens,
   cacheCreationTokens,
-  costUsd,
 }: UsageTooltipCardProps) {
   const dateRange = formatSessionUsageDateRange(startedAt, endedAt);
   const rows = [
@@ -50,14 +48,6 @@ export function UsageTooltipCard({
               <span className="font-medium tabular-nums text-zinc-100">{formatTokens(value)}</span>
             </div>
           ) : null,
-        )}
-        {costUsd != null && costUsd > 0 && (
-          <div className="mt-1 grid w-full grid-cols-[1fr_auto] gap-4 border-t border-white/10 pt-1.5 text-zinc-300">
-            <span>Cost</span>
-            <span className="font-medium tabular-nums text-zinc-100">
-              {formatCostUsd(costUsd)}
-            </span>
-          </div>
         )}
       </div>
     </div>

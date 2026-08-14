@@ -111,6 +111,38 @@ export async function assertSessionAccess(
   return session;
 }
 
+/**
+ * Read access for a session shared through a channel link. Channel membership
+ * grants participation; any member of the organization may read a linked
+ * channel's session history.
+ */
+export async function assertSessionReadable(
+  sessionId: string,
+  userId: string,
+  organizationId: string,
+) {
+  const session = await prisma.session.findFirst({
+    where: { id: sessionId, organizationId },
+    select: {
+      id: true,
+      sessionGroup: {
+        select: { channelId: true, visibility: true, ownerUserId: true },
+      },
+    },
+  });
+
+  if (
+    !session ||
+    (session.sessionGroup &&
+      !session.sessionGroup.channelId &&
+      !canViewSessionGroup(session.sessionGroup, userId))
+  ) {
+    throw new Error("Not authorized for this session");
+  }
+
+  return session;
+}
+
 export async function isActiveChatMember(chatId: string, userId: string) {
   const member = await prisma.chatMember.findFirst({
     where: { chatId, userId, leftAt: null },

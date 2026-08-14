@@ -7,6 +7,7 @@ interface TracePubSub {
   init(): void;
   publish<T>(topic: string, payload: T): void;
   asyncIterator<T>(topic: string): AsyncIterableIterator<T>;
+  waitForSubscription(topic: string): Promise<void>;
 }
 
 abstract class BasePubSub implements TracePubSub {
@@ -15,6 +16,10 @@ abstract class BasePubSub implements TracePubSub {
   publish<T>(_topic: string, _payload: T): void {}
 
   init(): void {}
+
+  waitForSubscription(_topic: string): Promise<void> {
+    return Promise.resolve();
+  }
 
   asyncIterator<T>(topic: string): AsyncIterableIterator<T> {
     const pullQueue: Array<(value: IteratorResult<T>) => void> = [];
@@ -119,8 +124,12 @@ class RedisPubSub extends BasePubSub {
     redisSub.on("message", this.messageHandler);
   }
 
+  override async waitForSubscription(topic: string): Promise<void> {
+    await redisSub.subscribe(topic);
+  }
+
   protected override onFirstSubscriber(topic: string): void {
-    redisSub.subscribe(topic).catch((err: Error) => {
+    this.waitForSubscription(topic).catch((err: Error) => {
       console.error(`[pubsub] subscribe error on topic ${topic}:`, err.message);
     });
   }

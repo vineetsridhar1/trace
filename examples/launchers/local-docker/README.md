@@ -83,19 +83,15 @@ you don't, the image entrypoint starts a local Postgres and exports a default `D
 - The session appears under the sidebar **Apps** section; reloading and clicking it returns you to
   the running app.
 
-Checkpoint **revert/resume is intentionally out of scope** right now — don't QA the restore-into-a-
-new-session path yet.
-
 ## 6. Scripted smoke (optional)
 
 The hosted smoke can also run against this local setup. It defaults to Chrome at the standard macOS
-path; override with `TRACE_CHROMIUM_EXECUTABLE`. Skip the restore leg (out of scope):
+path; override with `TRACE_CHROMIUM_EXECUTABLE`:
 
 ```bash
 TRACE_SMOKE_SERVER_URL=http://localhost:4000 \
 TRACE_SMOKE_AUTH_TOKEN=<your session/bearer token> \
 TRACE_SMOKE_ORG_ID=<your org id> \
-TRACE_SMOKE_SKIP_RESTORE=1 \
 pnpm smoke:cloud-app-session
 ```
 
@@ -120,3 +116,6 @@ docker ps --filter name=trace-rt- -q | xargs -r docker rm -f
   `localhost`.
 - **Bridge URL rejected at start** — the server refuses `localhost`/private-IP bridge URLs; use the
   `host.docker.internal` public URL as above, or set `TRACE_CLOUD_BRIDGE_URL` explicitly.
+- **`TRACE_SKILLS_DIR` is unset** — rebuild `trace-agent-runtime:dev` using step 1 and start a new
+  session. Updating the local Trace server does not rebuild an existing runtime image, and running
+  containers keep the bridge and environment from the image they started with.

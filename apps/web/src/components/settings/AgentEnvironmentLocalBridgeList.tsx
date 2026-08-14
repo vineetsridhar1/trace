@@ -10,9 +10,9 @@ export function AgentEnvironmentLocalBridgeList({ localBridges }: Props) {
   return (
     <section className="mb-6">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-foreground">Local Bridges</h3>
+        <h3 className="text-sm font-semibold text-foreground">Local bridges</h3>
         <p className="text-xs text-muted-foreground">
-          Local environments are created automatically when desktop bridges connect.
+          Desktop apps connected under members' accounts. Manage sharing under Devices &amp; access.
         </p>
       </div>
 
@@ -21,24 +21,23 @@ export function AgentEnvironmentLocalBridgeList({ localBridges }: Props) {
           No local bridges are connected for this organization.
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
           {localBridges.map((bridge) => (
-            <div key={bridge.id} className="rounded-lg border border-border bg-surface-deep p-3">
+            <div key={bridge.id} className="border-b border-border px-4 py-3 last:border-b-0">
               <div className="flex items-start gap-3">
-                <Laptop size={16} className="mt-0.5 shrink-0 text-muted-foreground" />
+                <Laptop size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h4 className="truncate text-sm font-medium text-foreground">
-                      {bridge.label}
-                    </h4>
+                    <h4 className="truncate text-sm font-medium text-foreground">{bridge.label}</h4>
                     <span
                       className={cn(
-                        "rounded-md px-1.5 py-0.5 text-[11px] font-medium",
+                        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
                         bridge.connected
-                          ? "bg-green-500/10 text-green-600 dark:text-green-400"
-                          : "bg-muted text-muted-foreground",
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                          : "border-border bg-surface-deep text-muted-foreground",
                       )}
                     >
+                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
                       {bridge.connected ? "Connected" : "Offline"}
                     </span>
                   </div>

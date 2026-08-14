@@ -6,34 +6,51 @@ describe("deriveSessionGroupStatus", () => {
     expect(
       deriveSessionGroupStatus(
         [{ agentStatus: "active", sessionStatus: "in_progress" }],
-        "https://github.com/trace/trace/pull/123",
         "2024-01-03T00:00:00.000Z",
       ),
     ).toBe("archived");
   });
 
-  it("prioritizes needs_input over review and in_progress", () => {
+  it("uses the pipeline status even while another agent is active", () => {
     expect(
       deriveSessionGroupStatus(
         [
           { agentStatus: "done", sessionStatus: "needs_input" },
           { agentStatus: "active", sessionStatus: "in_progress" },
         ],
-        "https://github.com/trace/trace/pull/123",
       ),
     ).toBe("needs_input");
   });
 
-  it("prioritizes in_review over in_progress when no session needs input", () => {
+  it("keeps a group in review while an agent is active", () => {
     expect(
       deriveSessionGroupStatus(
-        [{ agentStatus: "active", sessionStatus: "in_progress" }],
+        [{ agentStatus: "active", sessionStatus: "in_review" }],
+      ),
+    ).toBe("in_review");
+  });
+
+  it("uses review status whenever the group has an attached PR", () => {
+    expect(
+      deriveSessionGroupStatus(
+        [{ agentStatus: "done", sessionStatus: "in_progress" }],
+        null,
         "https://github.com/trace/trace/pull/123",
       ),
     ).toBe("in_review");
   });
 
-  it("falls back to in_progress before failed and stopped", () => {
+  it("keeps needs input ahead of an attached PR", () => {
+    expect(
+      deriveSessionGroupStatus(
+        [{ agentStatus: "done", sessionStatus: "needs_input" }],
+        null,
+        "https://github.com/trace/trace/pull/123",
+      ),
+    ).toBe("needs_input");
+  });
+
+  it("keeps the pipeline status separate from failed and stopped agents", () => {
     expect(
       deriveSessionGroupStatus(
         [
@@ -41,8 +58,17 @@ describe("deriveSessionGroupStatus", () => {
           { agentStatus: "failed", sessionStatus: "in_progress" },
           { agentStatus: "stopped", sessionStatus: "in_progress" },
         ],
-        null,
       ),
     ).toBe("in_progress");
+  });
+
+  it("keeps review lifecycle state separate from a failed agent", () => {
+    expect(
+      deriveSessionGroupStatus(
+        [
+          { agentStatus: "failed", sessionStatus: "in_review" },
+        ],
+      ),
+    ).toBe("in_review");
   });
 });

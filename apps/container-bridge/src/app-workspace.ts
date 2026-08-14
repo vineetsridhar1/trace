@@ -3,13 +3,22 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "util";
-import { assertValidCommitSha } from "@trace/shared";
 import { generateAnimalSlug } from "@trace/shared/animal-names";
 
 const execFileAsync = promisify(execFile);
 const WORKSPACES_DIR = process.env.TRACE_WORKSPACES_DIR ?? "/workspaces";
 const IMAGE_APP_STARTER_DIR = "/opt/trace/app-starter";
 const SOURCE_APP_STARTER_DIR = fileURLToPath(new URL("../app-starter", import.meta.url));
+
+async function remoteDefaultBranchExists(repoRemoteUrl: string, defaultBranch: string): Promise<boolean> {
+  const { stdout } = await execFileAsync("git", [
+    "ls-remote",
+    "--heads",
+    repoRemoteUrl,
+    `refs/heads/${defaultBranch}`,
+  ]);
+  return stdout.trim().length > 0;
+}
 
 function appStarterDir(): string {
   const configured = process.env.TRACE_APP_STARTER_DIR;
@@ -39,14 +48,14 @@ export async function createAppWorkspace({
   slug,
   repoRemoteUrl,
   defaultBranch,
-  checkpointSha,
+  baseCommitSha,
 }: {
   sessionId: string;
   sessionGroupId?: string;
   slug?: string;
   repoRemoteUrl: string;
   defaultBranch: string;
-  checkpointSha?: string;
+  baseCommitSha?: string;
 }): Promise<{ workdir: string; slug: string }> {
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
   const usedSlugs = new Set(
@@ -58,18 +67,22 @@ export async function createAppWorkspace({
   const workspaceSlug = slug ?? sessionGroupId ?? generateAnimalSlug(usedSlugs);
   const workdir = `${WORKSPACES_DIR}/${workspaceSlug}`;
 
-  if (!fs.existsSync(workdir) && checkpointSha) {
-    assertValidCommitSha(checkpointSha);
-    await execFileAsync("git", ["clone", "--no-checkout", repoRemoteUrl, workdir]);
-    await execFileAsync("git", ["checkout", "-B", defaultBranch, checkpointSha], { cwd: workdir });
-  } else if (!fs.existsSync(workdir)) {
-    fs.mkdirSync(workdir, { recursive: true });
-    fs.cpSync(appStarterDir(), workdir, {
-      recursive: true,
-      force: false,
-      errorOnExist: false,
-      filter: (source) => !source.includes("/node_modules/") && !source.endsWith("/node_modules"),
-    });
+  if (!fs.existsSync(workdir)) {
+    // Cloud runtimes are disposable. Restore from the managed remote whenever
+    // it has a default branch, including ordinary container expiry retries
+    // that have no base commit SHA. A new managed repo has no branch yet, so
+    // seed it from the appropriate starter instead.
+    if (baseCommitSha || (await remoteDefaultBranchExists(repoRemoteUrl, defaultBranch))) {
+      await execFileAsync("git", ["clone", "--branch", defaultBranch, repoRemoteUrl, workdir]);
+    } else {
+      fs.mkdirSync(workdir, { recursive: true });
+      fs.cpSync(appStarterDir(), workdir, {
+        recursive: true,
+        force: false,
+        errorOnExist: false,
+        filter: (source) => !source.includes("/node_modules/") && !source.endsWith("/node_modules"),
+      });
+    }
   }
 
   if (!fs.existsSync(`${workdir}/.git`)) {

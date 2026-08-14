@@ -106,6 +106,35 @@ export type ApplicationProcessStatus =
   | "stopped"
   | "stopping";
 
+export type Artifact = {
+  __typename?: "Artifact";
+  bundleDigest: Scalars["String"]["output"];
+  byteSize: Scalars["Int"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  createdBy: User;
+  id: Scalars["ID"]["output"];
+  key: Scalars["String"]["output"];
+  manifest: ArtifactManifest;
+  organizationId: Scalars["ID"]["output"];
+  session: Session;
+  sessionId: Scalars["ID"]["output"];
+  type: Scalars["String"]["output"];
+};
+
+export type ArtifactFile = {
+  __typename?: "ArtifactFile";
+  digest: Scalars["String"]["output"];
+  mediaType: Scalars["String"]["output"];
+  path: Scalars["String"]["output"];
+  size: Scalars["Int"]["output"];
+};
+
+export type ArtifactManifest = {
+  __typename?: "ArtifactManifest";
+  files: Array<ArtifactFile>;
+  schemaVersion: Scalars["Int"]["output"];
+};
+
 export type Branch = {
   __typename?: "Branch";
   childBranches: Array<Branch>;
@@ -273,6 +302,14 @@ export type ChatMember = {
 
 export type ChatType = "dm" | "group";
 
+export type CodexAuthMethod = "access_token" | "api_key" | "chatgpt_session";
+
+export type CodexCredentialStatus = {
+  __typename?: "CodexCredentialStatus";
+  method: CodexAuthMethod;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type CodingTool =
   | "antigravity"
   | "claude_code"
@@ -305,6 +342,17 @@ export type ConnectionsRepoEntry = {
   linkedCheckout?: Maybe<LinkedCheckoutStatus>;
   repo: Repo;
   runScripts?: Maybe<Scalars["JSON"]["output"]>;
+};
+
+export type ConvertSessionGroupInput = {
+  channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  kind: SessionGroupKind;
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  projectId?: InputMaybe<Scalars["ID"]["input"]>;
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
+  tool?: InputMaybe<CodingTool>;
 };
 
 export type CreateAgentEnvironmentInput = {
@@ -375,6 +423,8 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignPreviewStatus = "captured" | "failed" | "pending" | "publishing" | "unavailable";
+
 export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
 
 export type EndpointTrafficEntry = {
@@ -419,6 +469,7 @@ export type EventType =
   | "agent_environment_deleted"
   | "agent_environment_updated"
   | "application_config_updated"
+  | "artifact_created"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
   | "bridge_access_revoked"
@@ -452,6 +503,7 @@ export type EventType =
   | "queued_messages_drained"
   | "queued_messages_reordered"
   | "repo_created"
+  | "repo_deleted"
   | "repo_updated"
   | "session_application_log_appended"
   | "session_application_process_failed"
@@ -461,6 +513,7 @@ export type EventType =
   | "session_application_workflow_failed"
   | "session_application_workflow_started"
   | "session_application_workflow_updated"
+  | "session_converted"
   | "session_deleted"
   | "session_endpoint_access_updated"
   | "session_endpoint_created"
@@ -493,6 +546,8 @@ export type EventType =
   | "session_setup_script_started"
   | "session_started"
   | "session_terminated"
+  | "terminal_created"
+  | "terminal_destroyed"
   | "ticket_assigned"
   | "ticket_commented"
   | "ticket_created"
@@ -500,33 +555,6 @@ export type EventType =
   | "ticket_unassigned"
   | "ticket_unlinked"
   | "ticket_updated";
-
-export type GitCheckpoint = {
-  __typename?: "GitCheckpoint";
-  author: Scalars["String"]["output"];
-  captureContentType?: Maybe<Scalars["String"]["output"]>;
-  captureStatus?: Maybe<GitCheckpointCaptureStatus>;
-  captureUrl?: Maybe<Scalars["String"]["output"]>;
-  capturedAt?: Maybe<Scalars["DateTime"]["output"]>;
-  commitSha: Scalars["String"]["output"];
-  committedAt: Scalars["DateTime"]["output"];
-  createdAt: Scalars["DateTime"]["output"];
-  filesChanged: Scalars["Int"]["output"];
-  id: Scalars["ID"]["output"];
-  parentShas: Array<Scalars["String"]["output"]>;
-  promptEvent?: Maybe<Event>;
-  promptEventId: Scalars["ID"]["output"];
-  repo?: Maybe<Repo>;
-  repoId: Scalars["ID"]["output"];
-  session?: Maybe<Session>;
-  sessionGroup?: Maybe<SessionGroup>;
-  sessionGroupId: Scalars["ID"]["output"];
-  sessionId: Scalars["ID"]["output"];
-  subject: Scalars["String"]["output"];
-  treeSha: Scalars["String"]["output"];
-};
-
-export type GitCheckpointCaptureStatus = "captured" | "failed" | "pending" | "unavailable";
 
 export type HostingMode = "cloud" | "local";
 
@@ -650,6 +678,7 @@ export type Mutation = {
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
   commitSessionGroupFileChanges: Scalars["String"]["output"];
+  convertSessionGroup: Session;
   createAgentEnvironment: AgentEnvironment;
   createAiConversation: AiConversation;
   createChannel: Channel;
@@ -667,7 +696,9 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
+  deleteCodexCredential: Scalars["Boolean"]["output"];
   deleteOrgSecret: Scalars["Boolean"]["output"];
+  deleteRepo: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
@@ -686,6 +717,7 @@ export type Mutation = {
   leaveChat: Chat;
   linkEntityToProject: Project;
   linkLinkedCheckoutRepo: LinkedCheckoutActionResult;
+  linkSessionPullRequest: SessionGroup;
   linkTicket: Ticket;
   moveChannel: Channel;
   moveSessionToCloud: Session;
@@ -703,6 +735,7 @@ export type Mutation = {
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
   requestBridgeAccess: BridgeAccessRequest;
+  resizeTerminal: Scalars["Boolean"]["output"];
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
@@ -717,8 +750,10 @@ export type Mutation = {
   sendChatMessage: Message;
   sendMessage: Event;
   sendSessionMessage: Event;
+  sendTerminalInput: Scalars["Boolean"]["output"];
   sendTurn: Turn;
   setApiToken: ApiTokenStatus;
+  setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
@@ -809,6 +844,10 @@ export type MutationCommitSessionGroupFileChangesArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationConvertSessionGroupArgs = {
+  input: ConvertSessionGroupInput;
+};
+
 export type MutationCreateAgentEnvironmentArgs = {
   input: CreateAgentEnvironmentInput;
 };
@@ -888,6 +927,10 @@ export type MutationDeleteOrgSecretArgs = {
   orgId: Scalars["ID"]["input"];
 };
 
+export type MutationDeleteRepoArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationDeleteSessionArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -964,6 +1007,11 @@ export type MutationLinkLinkedCheckoutRepoArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationLinkSessionPullRequestArgs = {
+  prUrl: Scalars["String"]["input"];
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationLinkTicketArgs = {
@@ -1051,6 +1099,12 @@ export type MutationRequestBridgeAccessArgs = {
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
+export type MutationResizeTerminalArgs = {
+  cols: Scalars["Int"]["input"];
+  rows: Scalars["Int"]["input"];
+  terminalId: Scalars["ID"]["input"];
+};
+
 export type MutationRestartSessionProcessArgs = {
   appConfigId: Scalars["ID"]["input"];
   processConfigId: Scalars["ID"]["input"];
@@ -1131,6 +1185,11 @@ export type MutationSendSessionMessageArgs = {
   text: Scalars["String"]["input"];
 };
 
+export type MutationSendTerminalInputArgs = {
+  data: Scalars["String"]["input"];
+  terminalId: Scalars["ID"]["input"];
+};
+
 export type MutationSendTurnArgs = {
   branchId: Scalars["ID"]["input"];
   content: Scalars["String"]["input"];
@@ -1138,6 +1197,10 @@ export type MutationSendTurnArgs = {
 
 export type MutationSetApiTokenArgs = {
   input: SetApiTokenInput;
+};
+
+export type MutationSetCodexCredentialArgs = {
+  input: SetCodexCredentialInput;
 };
 
 export type MutationSetLinkedCheckoutAutoSyncArgs = {
@@ -1385,6 +1448,7 @@ export type Query = {
    * listing surface (the sidebar Apps section).
    */
   appSessionGroups: Array<SessionGroup>;
+  artifacts: Array<Artifact>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   branch?: Maybe<Branch>;
@@ -1404,6 +1468,7 @@ export type Query = {
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
+  myCodexCredential?: Maybe<CodexCredentialStatus>;
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
@@ -1442,6 +1507,7 @@ export type Query = {
   sessionTerminals: Array<Terminal>;
   sessionTimeline: SessionTimelinePage;
   sessions: Array<Session>;
+  terminalCapture: TerminalCapture;
   threadReplies: Array<Message>;
   threadSummary?: Maybe<ThreadSummary>;
   ticket?: Maybe<Ticket>;
@@ -1462,7 +1528,15 @@ export type QueryAiConversationsArgs = {
 };
 
 export type QueryAppSessionGroupsArgs = {
+  includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryArtifactsArgs = {
+  key?: InputMaybe<Scalars["String"]["input"]>;
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+  sessionId?: InputMaybe<Scalars["ID"]["input"]>;
+  type?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type QueryAvailableRuntimesArgs = {
@@ -1728,6 +1802,12 @@ export type QuerySessionsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
+export type QueryTerminalCaptureArgs = {
+  maxBytes?: InputMaybe<Scalars["Int"]["input"]>;
+  plainText?: InputMaybe<Scalars["Boolean"]["input"]>;
+  terminalId: Scalars["ID"]["input"];
+};
+
 export type QueryThreadRepliesArgs = {
   after?: InputMaybe<Scalars["DateTime"]["input"]>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
@@ -1786,11 +1866,13 @@ export type Repo = {
 export type RepoApplicationConfig = {
   __typename?: "RepoApplicationConfig";
   applications: Array<RepoApplicationDefinition>;
+  runScripts: Array<RepoRunScript>;
   setupScripts: Array<RepoSetupScript>;
 };
 
 export type RepoApplicationConfigInput = {
   applications?: InputMaybe<Array<RepoApplicationDefinitionInput>>;
+  runScripts?: InputMaybe<Array<RepoRunScriptInput>>;
   setupScripts?: InputMaybe<Array<RepoSetupScriptInput>>;
 };
 
@@ -1862,6 +1944,19 @@ export type RepoProcessDefinitionInput = {
 
 export type RepoProvider = "github" | "managed";
 
+export type RepoRunScript = {
+  __typename?: "RepoRunScript";
+  command: Scalars["String"]["output"];
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+};
+
+export type RepoRunScriptInput = {
+  command: Scalars["String"]["input"];
+  id: Scalars["ID"]["input"];
+  name: Scalars["String"]["input"];
+};
+
 export type RepoSetupScript = {
   __typename?: "RepoSetupScript";
   command: Scalars["String"]["output"];
@@ -1902,6 +1997,7 @@ export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
 export type Session = {
   __typename?: "Session";
   agentStatus: AgentStatus;
+  artifacts: Array<Artifact>;
   branch?: Maybe<Scalars["String"]["output"]>;
   cacheCreationTokens: Scalars["Float"]["output"];
   cacheReadTokens: Scalars["Float"]["output"];
@@ -1910,8 +2006,8 @@ export type Session = {
   costUsd: Scalars["Float"]["output"];
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
+  createdById: Scalars["ID"]["output"];
   endpoints?: Maybe<SessionEndpoints>;
-  gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars["ID"]["output"];
   inputTokens: Scalars["Float"]["output"];
@@ -2087,7 +2183,6 @@ export type SessionGroup = {
   createdAt: Scalars["DateTime"]["output"];
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
-  gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
   kind: SessionGroupKind;
   name: Scalars["String"]["output"];
@@ -2128,16 +2223,14 @@ export type SessionGroupFileTree = {
   truncated: Scalars["Boolean"]["output"];
 };
 
-export type SessionGroupKind = "app" | "coding" | "design";
+export type SessionGroupKind = "app" | "coding" | "design" | "general";
 
 export type SessionGroupStatus =
   | "archived"
-  | "failed"
   | "in_progress"
   | "in_review"
   | "merged"
-  | "needs_input"
-  | "stopped";
+  | "needs_input";
 
 export type SessionGroupVisibility = "private" | "public";
 
@@ -2211,6 +2304,11 @@ export type SetApiTokenInput = {
   token: Scalars["String"]["input"];
 };
 
+export type SetCodexCredentialInput = {
+  credential: Scalars["String"]["input"];
+  method: CodexAuthMethod;
+};
+
 export type SetOrgSecretInput = {
   name: Scalars["String"]["input"];
   orgId: Scalars["ID"]["input"];
@@ -2234,8 +2332,10 @@ export type SlashCommandCategory = "passthrough" | "special" | "terminal";
 export type SlashCommandSource = "builtin" | "project_skill" | "user_skill";
 
 export type StartSessionInput = {
+  attachmentKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
@@ -2246,7 +2346,6 @@ export type StartSessionInput = {
   prompt?: InputMaybe<Scalars["String"]["input"]>;
   reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
-  restoreCheckpointId?: InputMaybe<Scalars["ID"]["input"]>;
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
   sourceSessionId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -2296,6 +2395,8 @@ export type SubscriptionOrgEventsArgs = {
 };
 
 export type SubscriptionSessionEventsArgs = {
+  after?: InputMaybe<Scalars["DateTime"]["input"]>;
+  afterEventId?: InputMaybe<Scalars["ID"]["input"]>;
   organizationId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
 };
@@ -2321,8 +2422,23 @@ export type SubscriptionUserNotificationsArgs = {
 
 export type Terminal = {
   __typename?: "Terminal";
+  cols?: Maybe<Scalars["Int"]["output"]>;
+  connected: Scalars["Boolean"]["output"];
   id: Scalars["ID"]["output"];
+  rows?: Maybe<Scalars["Int"]["output"]>;
   sessionId: Scalars["ID"]["output"];
+  status: Scalars["String"]["output"];
+};
+
+export type TerminalCapture = {
+  __typename?: "TerminalCapture";
+  byteCount: Scalars["Int"]["output"];
+  capturedAt: Scalars["DateTime"]["output"];
+  closed: Scalars["Boolean"]["output"];
+  connected: Scalars["Boolean"]["output"];
+  output: Scalars["String"]["output"];
+  terminalId: Scalars["ID"]["output"];
+  truncated: Scalars["Boolean"]["output"];
 };
 
 export type TerminalEndpoint = {
@@ -2415,7 +2531,6 @@ export type UpdateRepoInput = {
   applicationConfig?: InputMaybe<RepoApplicationConfigInput>;
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
-  /** Associate a remote URL with a repo that does not have one yet. */
   remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
   /**
    * Named launcher runtime profile for cloud sessions on this repo (e.g. a
@@ -2469,6 +2584,15 @@ export type WorktreeChangesResult = {
   truncated: Scalars["Boolean"]["output"];
 };
 
+export type AddChannelMemberMutationVariables = Exact<{
+  input: AddChannelMemberInput;
+}>;
+
+export type AddChannelMemberMutation = {
+  __typename?: "Mutation";
+  addChannelMember: { __typename?: "Channel"; id: string };
+};
+
 export type SendChannelMessageMutationVariables = Exact<{
   channelId: Scalars["ID"]["input"];
   html?: InputMaybe<Scalars["String"]["input"]>;
@@ -2478,37 +2602,6 @@ export type SendChannelMessageMutationVariables = Exact<{
 export type SendChannelMessageMutation = {
   __typename?: "Mutation";
   sendChannelMessage: { __typename?: "Message"; id: string };
-};
-
-export type ChannelMembersQueryVariables = Exact<{
-  id: Scalars["ID"]["input"];
-}>;
-
-export type ChannelMembersQuery = {
-  __typename?: "Query";
-  channel?: {
-    __typename?: "Channel";
-    id: string;
-    members: Array<{
-      __typename?: "ChannelMember";
-      user: {
-        __typename?: "User";
-        id: string;
-        name: string;
-        email: string;
-        avatarUrl?: string | null;
-      };
-    }>;
-  } | null;
-};
-
-export type AddChannelMemberMutationVariables = Exact<{
-  input: AddChannelMemberInput;
-}>;
-
-export type AddChannelMemberMutation = {
-  __typename?: "Mutation";
-  addChannelMember: { __typename?: "Channel"; id: string };
 };
 
 export type SessionGroupsQueryVariables = Exact<{
@@ -2556,7 +2649,6 @@ export type SessionGroupsQuery = {
       outputTokens: number;
       cacheReadTokens: number;
       cacheCreationTokens: number;
-      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -2622,7 +2714,6 @@ export type FilteredSessionGroupsQuery = {
       outputTokens: number;
       cacheReadTokens: number;
       cacheCreationTokens: number;
-      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -2641,6 +2732,28 @@ export type FilteredSessionGroupsQuery = {
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   }>;
+};
+
+export type ChannelMembersQueryVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type ChannelMembersQuery = {
+  __typename?: "Query";
+  channel?: {
+    __typename?: "Channel";
+    id: string;
+    members: Array<{
+      __typename?: "ChannelMember";
+      user: {
+        __typename?: "User";
+        id: string;
+        name: string;
+        email: string;
+        avatarUrl?: string | null;
+      };
+    }>;
+  } | null;
 };
 
 export type AddChatMemberMutationVariables = Exact<{
@@ -2712,6 +2825,48 @@ export type ThreadRepliesQuery = {
     };
   }>;
 };
+
+export type HomeCreationsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type HomeCreationsQuery = {
+  __typename?: "Query";
+  appSessionGroups: Array<
+    { __typename?: "SessionGroup" } & {
+      " $fragmentRefs"?: { CreationGroupFragment: CreationGroupFragment };
+    }
+  >;
+};
+
+export type CreationGroupFragment = {
+  __typename?: "SessionGroup";
+  id: string;
+  name: string;
+  slug?: string | null;
+  kind: SessionGroupKind;
+  status: SessionGroupStatus;
+  visibility: SessionGroupVisibility;
+  archivedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
+  connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
+  sessions: Array<{
+    __typename?: "Session";
+    id: string;
+    sessionGroupId?: string | null;
+    createdById: string;
+    agentStatus: AgentStatus;
+    sessionStatus: SessionStatus;
+    prUrl?: string | null;
+    worktreeDeleted: boolean;
+    lastMessageAt?: string | null;
+    lastUserMessageAt?: string | null;
+    updatedAt: string;
+    createdAt: string;
+  }>;
+} & { " $fragmentName"?: "CreationGroupFragment" };
 
 export type SessionGroupBranchDiffQueryVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
@@ -2853,7 +3008,6 @@ export type SessionDetailQuery = {
     outputTokens: number;
     cacheReadTokens: number;
     cacheCreationTokens: number;
-    costUsd: number;
     sessionGroupId?: string | null;
     createdAt: string;
     updatedAt: string;
@@ -2882,21 +3036,6 @@ export type SessionDetailQuery = {
       updatedAt: string;
       setupStatus: SetupStatus;
       setupError?: string | null;
-      gitCheckpoints: Array<{
-        __typename?: "GitCheckpoint";
-        id: string;
-        sessionId: string;
-        promptEventId: string;
-        commitSha: string;
-        subject: string;
-        author: string;
-        committedAt: string;
-        filesChanged: number;
-        captureStatus?: GitCheckpointCaptureStatus | null;
-        captureUrl?: string | null;
-        capturedAt?: string | null;
-        createdAt: string;
-      }>;
       channel?: { __typename?: "Channel"; id: string } | null;
       repo?: {
         __typename?: "Repo";
@@ -2950,21 +3089,6 @@ export type SessionDetailQuery = {
         autoRetryable?: boolean | null;
       } | null;
     } | null;
-    gitCheckpoints: Array<{
-      __typename?: "GitCheckpoint";
-      id: string;
-      sessionId: string;
-      promptEventId: string;
-      commitSha: string;
-      subject: string;
-      author: string;
-      committedAt: string;
-      filesChanged: number;
-      captureStatus?: GitCheckpointCaptureStatus | null;
-      captureUrl?: string | null;
-      capturedAt?: string | null;
-      createdAt: string;
-    }>;
     channel?: { __typename?: "Channel"; id: string } | null;
     queuedMessages: Array<{
       __typename?: "QueuedMessage";
@@ -3005,21 +3129,6 @@ export type SessionGroupDetailQuery = {
     createdAt: string;
     updatedAt: string;
     owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
-    gitCheckpoints: Array<{
-      __typename?: "GitCheckpoint";
-      id: string;
-      sessionId: string;
-      promptEventId: string;
-      commitSha: string;
-      subject: string;
-      author: string;
-      committedAt: string;
-      filesChanged: number;
-      captureStatus?: GitCheckpointCaptureStatus | null;
-      captureUrl?: string | null;
-      capturedAt?: string | null;
-      createdAt: string;
-    }>;
     repo?: {
       __typename?: "Repo";
       id: string;
@@ -3059,7 +3168,6 @@ export type SessionGroupDetailQuery = {
       outputTokens: number;
       cacheReadTokens: number;
       cacheCreationTokens: number;
-      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -3205,6 +3313,12 @@ export type SessionApplicationsStateQuery = {
           command: string;
           workingDirectory?: string | null;
           env: Array<{ __typename?: "RepoEnvVar"; key: string; secretName: string }>;
+        }>;
+        runScripts: Array<{
+          __typename?: "RepoRunScript";
+          id: string;
+          name: string;
+          command: string;
         }>;
         applications: Array<{
           __typename?: "RepoApplicationDefinition";
@@ -3388,6 +3502,28 @@ export type CreateSessionEndpointPreviewMutation = {
   createSessionEndpointPreview: { __typename?: "SessionEndpointPreview"; url: string };
 };
 
+export type SetApiTokenFromRecoveryCardMutationVariables = Exact<{
+  input: SetApiTokenInput;
+}>;
+
+export type SetApiTokenFromRecoveryCardMutation = {
+  __typename?: "Mutation";
+  setApiToken: { __typename?: "ApiTokenStatus"; provider: ApiTokenProvider; isSet: boolean };
+};
+
+export type SetCodexCredentialFromRecoveryCardMutationVariables = Exact<{
+  input: SetCodexCredentialInput;
+}>;
+
+export type SetCodexCredentialFromRecoveryCardMutation = {
+  __typename?: "Mutation";
+  setCodexCredential: {
+    __typename?: "CodexCredentialStatus";
+    method: CodexAuthMethod;
+    updatedAt: string;
+  };
+};
+
 export type SessionGroupFileTreeQueryVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
 }>;
@@ -3433,6 +3569,11 @@ export type MyApiTokensQuery = {
     isSet: boolean;
     updatedAt?: string | null;
   }>;
+  myCodexCredential?: {
+    __typename?: "CodexCredentialStatus";
+    method: CodexAuthMethod;
+    updatedAt: string;
+  } | null;
 };
 
 export type SetApiTokenMutationVariables = Exact<{
@@ -3454,6 +3595,26 @@ export type DeleteApiTokenMutationVariables = Exact<{
 }>;
 
 export type DeleteApiTokenMutation = { __typename?: "Mutation"; deleteApiToken: boolean };
+
+export type SetCodexCredentialMutationVariables = Exact<{
+  input: SetCodexCredentialInput;
+}>;
+
+export type SetCodexCredentialMutation = {
+  __typename?: "Mutation";
+  setCodexCredential: {
+    __typename?: "CodexCredentialStatus";
+    method: CodexAuthMethod;
+    updatedAt: string;
+  };
+};
+
+export type DeleteCodexCredentialMutationVariables = Exact<{ [key: string]: never }>;
+
+export type DeleteCodexCredentialMutation = {
+  __typename?: "Mutation";
+  deleteCodexCredential: boolean;
+};
 
 export type AddOrgMemberMutationVariables = Exact<{
   organizationId: Scalars["ID"]["input"];
@@ -3537,6 +3698,12 @@ export type SettingsReposQuery = {
         command: string;
         workingDirectory?: string | null;
         env: Array<{ __typename?: "RepoEnvVar"; key: string; secretName: string }>;
+      }>;
+      runScripts: Array<{
+        __typename?: "RepoRunScript";
+        id: string;
+        name: string;
+        command: string;
       }>;
       applications: Array<{
         __typename?: "RepoApplicationDefinition";
@@ -3751,10 +3918,12 @@ export type AppSessionGroupsQuery = {
     kind: SessionGroupKind;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
+    owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
     sessions: Array<{
       __typename?: "Session";
       id: string;
+      createdById: string;
       sessionGroupId?: string | null;
       agentStatus: AgentStatus;
       sessionStatus: SessionStatus;
@@ -4296,6 +4465,60 @@ export type ReposQuery = {
     remoteUrl?: string | null;
     defaultBranch: string;
     webhookActive: boolean;
+    applicationConfig: {
+      __typename?: "RepoApplicationConfig";
+      setupScripts: Array<{
+        __typename?: "RepoSetupScript";
+        id: string;
+        name: string;
+        command: string;
+        workingDirectory?: string | null;
+        env: Array<{ __typename?: "RepoEnvVar"; key: string; secretName: string }>;
+      }>;
+      runScripts: Array<{
+        __typename?: "RepoRunScript";
+        id: string;
+        name: string;
+        command: string;
+      }>;
+      applications: Array<{
+        __typename?: "RepoApplicationDefinition";
+        id: string;
+        name: string;
+        processes: Array<{
+          __typename?: "RepoProcessDefinition";
+          id: string;
+          name: string;
+          command: string;
+          workingDirectory?: string | null;
+          required: boolean;
+          env: Array<{ __typename?: "RepoEnvVar"; key: string; secretName: string }>;
+          ports: Array<{
+            __typename?: "RepoPortDefinition";
+            id: string;
+            label: string;
+            port: number;
+            protocol: string;
+            defaultForwardingEnabled: boolean;
+            healthPath?: string | null;
+          }>;
+        }>;
+      }>;
+    };
+  }>;
+};
+
+export type ProjectsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type ProjectsQuery = {
+  __typename?: "Query";
+  projects: Array<{
+    __typename?: "Project";
+    id: string;
+    name: string;
+    repo?: { __typename?: "Repo"; id: string; name: string } | null;
   }>;
 };
 
@@ -4399,7 +4622,6 @@ export type SidebarSessionGroupsQuery = {
       outputTokens: number;
       cacheReadTokens: number;
       cacheCreationTokens: number;
-      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -4418,6 +4640,37 @@ export type SidebarSessionGroupsQuery = {
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   }>;
+};
+
+export type JoinProjectMutationVariables = Exact<{
+  channelId: Scalars["ID"]["input"];
+}>;
+
+export type JoinProjectMutation = {
+  __typename?: "Mutation";
+  joinChannel: { __typename?: "Channel"; id: string };
+};
+
+export type SharedChannelQueryVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type SharedChannelQuery = {
+  __typename?: "Query";
+  channel?: {
+    __typename?: "Channel";
+    id: string;
+    name: string;
+    type: ChannelType;
+    visibility: ChannelVisibility;
+    position: number;
+    groupId?: string | null;
+    baseBranch?: string | null;
+    setupScript?: string | null;
+    runScripts?: JsonValue | null;
+    viewerIsMember: boolean;
+    repo?: { __typename?: "Repo"; id: string; name: string } | null;
+  } | null;
 };
 
 export type OnboardingReposQueryVariables = Exact<{
@@ -4446,6 +4699,110 @@ export type OnboardingSessionsQuery = {
   sessions: Array<{ __typename?: "Session"; id: string }>;
 };
 
+export const CreationGroupFragmentDoc = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "CreationGroup" },
+      typeCondition: { kind: "NamedType", name: { kind: "Name", value: "SessionGroup" } },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "name" } },
+          { kind: "Field", name: { kind: "Name", value: "slug" } },
+          { kind: "Field", name: { kind: "Name", value: "kind" } },
+          { kind: "Field", name: { kind: "Name", value: "status" } },
+          { kind: "Field", name: { kind: "Name", value: "visibility" } },
+          { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "owner" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "connection" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessions" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<CreationGroupFragment, unknown>;
+export const AddChannelMemberDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "AddChannelMember" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "AddChannelMemberInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "addChannelMember" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<AddChannelMemberMutation, AddChannelMemberMutationVariables>;
 export const SendChannelMessageDocument = {
   kind: "Document",
   definitions: [
@@ -4506,110 +4863,6 @@ export const SendChannelMessageDocument = {
     },
   ],
 } as unknown as DocumentNode<SendChannelMessageMutation, SendChannelMessageMutationVariables>;
-export const ChannelMembersDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "ChannelMembers" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "channel" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "id" },
-                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "members" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "user" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            { kind: "Field", name: { kind: "Name", value: "id" } },
-                            { kind: "Field", name: { kind: "Name", value: "name" } },
-                            { kind: "Field", name: { kind: "Name", value: "email" } },
-                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<ChannelMembersQuery, ChannelMembersQueryVariables>;
-export const AddChannelMemberDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "AddChannelMember" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "AddChannelMemberInput" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "addChannelMember" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "input" },
-                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<AddChannelMemberMutation, AddChannelMemberMutationVariables>;
 export const SessionGroupsDocument = {
   kind: "Document",
   definitions: [
@@ -4711,7 +4964,6 @@ export const SessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -4884,7 +5136,6 @@ export const FilteredSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -4947,6 +5198,70 @@ export const FilteredSessionGroupsDocument = {
     },
   ],
 } as unknown as DocumentNode<FilteredSessionGroupsQuery, FilteredSessionGroupsQueryVariables>;
+export const ChannelMembersDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "ChannelMembers" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "channel" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "members" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "user" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "email" } },
+                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ChannelMembersQuery, ChannelMembersQueryVariables>;
 export const AddChatMemberDocument = {
   kind: "Document",
   definitions: [
@@ -5203,6 +5518,112 @@ export const ThreadRepliesDocument = {
     },
   ],
 } as unknown as DocumentNode<ThreadRepliesQuery, ThreadRepliesQueryVariables>;
+export const HomeCreationsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "HomeCreations" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "appSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "includeArchived" },
+                value: { kind: "BooleanValue", value: true },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "FragmentSpread", name: { kind: "Name", value: "CreationGroup" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "CreationGroup" },
+      typeCondition: { kind: "NamedType", name: { kind: "Name", value: "SessionGroup" } },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "name" } },
+          { kind: "Field", name: { kind: "Name", value: "slug" } },
+          { kind: "Field", name: { kind: "Name", value: "kind" } },
+          { kind: "Field", name: { kind: "Name", value: "status" } },
+          { kind: "Field", name: { kind: "Name", value: "visibility" } },
+          { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "owner" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "connection" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessions" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<HomeCreationsQuery, HomeCreationsQueryVariables>;
 export const SessionGroupBranchDiffDocument = {
   kind: "Document",
   definitions: [
@@ -5753,7 +6174,6 @@ export const SessionDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
                 { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
                 { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
-                { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "connection" },
@@ -5796,27 +6216,6 @@ export const SessionDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "workdir" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "gitCheckpoints" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            { kind: "Field", name: { kind: "Name", value: "id" } },
-                            { kind: "Field", name: { kind: "Name", value: "sessionId" } },
-                            { kind: "Field", name: { kind: "Name", value: "promptEventId" } },
-                            { kind: "Field", name: { kind: "Name", value: "commitSha" } },
-                            { kind: "Field", name: { kind: "Name", value: "subject" } },
-                            { kind: "Field", name: { kind: "Name", value: "author" } },
-                            { kind: "Field", name: { kind: "Name", value: "committedAt" } },
-                            { kind: "Field", name: { kind: "Name", value: "filesChanged" } },
-                            { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
-                            { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
-                            { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
-                            { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                          ],
-                        },
-                      },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "channel" },
@@ -5998,27 +6397,6 @@ export const SessionDetailDocument = {
                 },
                 {
                   kind: "Field",
-                  name: { kind: "Name", value: "gitCheckpoints" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "sessionId" } },
-                      { kind: "Field", name: { kind: "Name", value: "promptEventId" } },
-                      { kind: "Field", name: { kind: "Name", value: "commitSha" } },
-                      { kind: "Field", name: { kind: "Name", value: "subject" } },
-                      { kind: "Field", name: { kind: "Name", value: "author" } },
-                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "filesChanged" } },
-                      { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
-                      { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                    ],
-                  },
-                },
-                {
-                  kind: "Field",
                   name: { kind: "Name", value: "channel" },
                   selectionSet: {
                     kind: "SelectionSet",
@@ -6115,27 +6493,6 @@ export const SessionGroupDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "worktreeAdopted" } },
                 {
                   kind: "Field",
-                  name: { kind: "Name", value: "gitCheckpoints" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "sessionId" } },
-                      { kind: "Field", name: { kind: "Name", value: "promptEventId" } },
-                      { kind: "Field", name: { kind: "Name", value: "commitSha" } },
-                      { kind: "Field", name: { kind: "Name", value: "subject" } },
-                      { kind: "Field", name: { kind: "Name", value: "author" } },
-                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "filesChanged" } },
-                      { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
-                      { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                    ],
-                  },
-                },
-                {
-                  kind: "Field",
                   name: { kind: "Name", value: "repo" },
                   selectionSet: {
                     kind: "SelectionSet",
@@ -6200,7 +6557,6 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -6632,6 +6988,18 @@ export const SessionApplicationsStateDocument = {
                                       ],
                                     },
                                   },
+                                ],
+                              },
+                            },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "runScripts" },
+                              selectionSet: {
+                                kind: "SelectionSet",
+                                selections: [
+                                  { kind: "Field", name: { kind: "Name", value: "id" } },
+                                  { kind: "Field", name: { kind: "Name", value: "name" } },
+                                  { kind: "Field", name: { kind: "Name", value: "command" } },
                                 ],
                               },
                             },
@@ -7284,6 +7652,98 @@ export const CreateSessionEndpointPreviewDocument = {
   CreateSessionEndpointPreviewMutation,
   CreateSessionEndpointPreviewMutationVariables
 >;
+export const SetApiTokenFromRecoveryCardDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "SetApiTokenFromRecoveryCard" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "SetApiTokenInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "setApiToken" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "provider" } },
+                { kind: "Field", name: { kind: "Name", value: "isSet" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  SetApiTokenFromRecoveryCardMutation,
+  SetApiTokenFromRecoveryCardMutationVariables
+>;
+export const SetCodexCredentialFromRecoveryCardDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "SetCodexCredentialFromRecoveryCard" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "SetCodexCredentialInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "setCodexCredential" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "method" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  SetCodexCredentialFromRecoveryCardMutation,
+  SetCodexCredentialFromRecoveryCardMutationVariables
+>;
 export const SessionGroupFileTreeDocument = {
   kind: "Document",
   definitions: [
@@ -7455,6 +7915,17 @@ export const MyApiTokensDocument = {
               ],
             },
           },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "myCodexCredential" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "method" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
         ],
       },
     },
@@ -7540,6 +8011,63 @@ export const DeleteApiTokenDocument = {
     },
   ],
 } as unknown as DocumentNode<DeleteApiTokenMutation, DeleteApiTokenMutationVariables>;
+export const SetCodexCredentialDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "SetCodexCredential" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "SetCodexCredentialInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "setCodexCredential" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "method" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SetCodexCredentialMutation, SetCodexCredentialMutationVariables>;
+export const DeleteCodexCredentialDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "DeleteCodexCredential" },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [{ kind: "Field", name: { kind: "Name", value: "deleteCodexCredential" } }],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DeleteCodexCredentialMutation, DeleteCodexCredentialMutationVariables>;
 export const AddOrgMemberDocument = {
   kind: "Document",
   definitions: [
@@ -7855,6 +8383,18 @@ export const SettingsReposDocument = {
                                 ],
                               },
                             },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "runScripts" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "command" } },
                           ],
                         },
                       },
@@ -8538,6 +9078,18 @@ export const AppSessionGroupsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "visibility" } },
                 {
                   kind: "Field",
+                  name: { kind: "Name", value: "owner" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
                   name: { kind: "Name", value: "connection" },
                   selectionSet: {
                     kind: "SelectionSet",
@@ -8551,6 +9103,7 @@ export const AppSessionGroupsDocument = {
                     kind: "SelectionSet",
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdById" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
                       { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
@@ -10345,6 +10898,117 @@ export const ReposDocument = {
                 { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "defaultBranch" } },
                 { kind: "Field", name: { kind: "Name", value: "webhookActive" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "applicationConfig" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "setupScripts" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "command" } },
+                            { kind: "Field", name: { kind: "Name", value: "workingDirectory" } },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "env" },
+                              selectionSet: {
+                                kind: "SelectionSet",
+                                selections: [
+                                  { kind: "Field", name: { kind: "Name", value: "key" } },
+                                  { kind: "Field", name: { kind: "Name", value: "secretName" } },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "runScripts" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "command" } },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "applications" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "processes" },
+                              selectionSet: {
+                                kind: "SelectionSet",
+                                selections: [
+                                  { kind: "Field", name: { kind: "Name", value: "id" } },
+                                  { kind: "Field", name: { kind: "Name", value: "name" } },
+                                  { kind: "Field", name: { kind: "Name", value: "command" } },
+                                  {
+                                    kind: "Field",
+                                    name: { kind: "Name", value: "workingDirectory" },
+                                  },
+                                  {
+                                    kind: "Field",
+                                    name: { kind: "Name", value: "env" },
+                                    selectionSet: {
+                                      kind: "SelectionSet",
+                                      selections: [
+                                        { kind: "Field", name: { kind: "Name", value: "key" } },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "secretName" },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                  { kind: "Field", name: { kind: "Name", value: "required" } },
+                                  {
+                                    kind: "Field",
+                                    name: { kind: "Name", value: "ports" },
+                                    selectionSet: {
+                                      kind: "SelectionSet",
+                                      selections: [
+                                        { kind: "Field", name: { kind: "Name", value: "id" } },
+                                        { kind: "Field", name: { kind: "Name", value: "label" } },
+                                        { kind: "Field", name: { kind: "Name", value: "port" } },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "protocol" },
+                                        },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "defaultForwardingEnabled" },
+                                        },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "healthPath" },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
               ],
             },
           },
@@ -10353,6 +11017,60 @@ export const ReposDocument = {
     },
   ],
 } as unknown as DocumentNode<ReposQuery, ReposQueryVariables>;
+export const ProjectsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "Projects" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "projects" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "repo" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ProjectsQuery, ProjectsQueryVariables>;
 export const ChatsDocument = {
   kind: "Document",
   definitions: [
@@ -10596,7 +11314,6 @@ export const SidebarSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -10658,6 +11375,108 @@ export const SidebarSessionGroupsDocument = {
     },
   ],
 } as unknown as DocumentNode<SidebarSessionGroupsQuery, SidebarSessionGroupsQueryVariables>;
+export const JoinProjectDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "JoinProject" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "channelId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "joinChannel" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "channelId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "channelId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<JoinProjectMutation, JoinProjectMutationVariables>;
+export const SharedChannelDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SharedChannel" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "channel" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "type" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                { kind: "Field", name: { kind: "Name", value: "position" } },
+                { kind: "Field", name: { kind: "Name", value: "groupId" } },
+                { kind: "Field", name: { kind: "Name", value: "baseBranch" } },
+                { kind: "Field", name: { kind: "Name", value: "setupScript" } },
+                { kind: "Field", name: { kind: "Name", value: "runScripts" } },
+                { kind: "Field", name: { kind: "Name", value: "viewerIsMember" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "repo" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SharedChannelQuery, SharedChannelQueryVariables>;
 export const OnboardingReposDocument = {
   kind: "Document",
   definitions: [

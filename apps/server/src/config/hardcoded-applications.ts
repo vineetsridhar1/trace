@@ -3,6 +3,7 @@ import type {
   RepoEnvVar,
   RepoPortDefinition,
   RepoProcessDefinition,
+  RepoRunScript,
   RepoSetupScript,
 } from "@trace/gql";
 
@@ -31,11 +32,13 @@ export type AppDefinition = Omit<RepoApplicationDefinition, "processes"> & {
 
 export interface HardcodedApplicationConfig {
   setupScripts: AppSetupScript[];
+  runScripts: RepoRunScript[];
   applications: AppDefinition[];
 }
 
 export const DEFAULT_APP_SESSION_CONFIG: HardcodedApplicationConfig = {
   setupScripts: [],
+  runScripts: [],
   applications: [
     {
       id: "app",
@@ -183,6 +186,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
       env: [...MORTGAGES_NPM_ENV],
     },
   ],
+  runScripts: [],
   applications: [
     {
       id: "mortgages",
@@ -278,6 +282,7 @@ const CODE_APPLICATION_CONFIG: HardcodedApplicationConfig = {
       ],
     },
   ],
+  runScripts: [],
   applications: [
     {
       id: "localdev",

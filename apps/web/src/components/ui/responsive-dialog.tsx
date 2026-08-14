@@ -59,8 +59,9 @@ function ResponsiveDialogContent({
   className,
   children,
   showCloseButton,
+  overlayClassName,
   ...props
-}: React.ComponentProps<typeof DialogContent>) {
+}: React.ComponentProps<typeof DialogContent> & { overlayClassName?: string }) {
   const isMobile = useIsMobile();
   if (isMobile) {
     return (
@@ -76,7 +77,12 @@ function ResponsiveDialogContent({
     );
   }
   return (
-    <DialogContent className={className} showCloseButton={showCloseButton} {...props}>
+    <DialogContent
+      className={className}
+      showCloseButton={showCloseButton}
+      overlayClassName={overlayClassName}
+      {...props}
+    >
       {children}
     </DialogContent>
   );

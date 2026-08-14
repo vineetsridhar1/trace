@@ -28,6 +28,8 @@ import { localStorageRouter } from "./lib/storage/index.js";
 import webhookRouter from "./routes/webhook.js";
 import { slackRouter } from "./routes/slack.js";
 import { gitRouter } from "./routes/git.js";
+import { agentArtifactRouter } from "./routes/agent-artifact.js";
+import { artifactContentRouter } from "./routes/artifact-content.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -35,6 +37,7 @@ import { handleBridgeConnection, type BridgeConnectionRequest } from "./lib/brid
 import { sessionRouter } from "./lib/session-router.js";
 import { authenticateProvisionedRuntimeToken } from "./lib/runtime-adapters.js";
 import { sessionService } from "./services/session.js";
+import { codexCredentialService } from "./services/codex-credential.js";
 import { runtimeDebug } from "./lib/runtime-debug.js";
 import { handleTerminalConnection } from "./lib/terminal-handler.js";
 import { connectRedis, disconnectRedis, redis } from "./lib/redis.js";
@@ -65,9 +68,12 @@ const BRIDGE_WS_MAX_PAYLOAD_BYTES = 64 * 1024 * 1024;
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
 const SAFE_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS = 2 * 60 * 60 * 1000;
+const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS = 60 * 60 * 1000;
+const DEFAULT_CLOUD_SESSION_GROUP_ACTIVE_IDLE_CLEANUP_AFTER_MS = 12 * 60 * 60 * 1000;
 const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY = "trace:jobs:cloud-session-group-idle-cleanup";
+const RUNTIME_HARD_DEADLINE_RECONCILE_INTERVAL_MS = 60 * 1000;
+const RUNTIME_HARD_DEADLINE_RECONCILE_LOCK_KEY = "trace:jobs:runtime-hard-deadline-reconcile";
 const ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
 const ENDPOINT_TRAFFIC_CLEANUP_LOCK_KEY = "trace:jobs:endpoint-traffic-cleanup";
 
@@ -225,8 +231,28 @@ async function main() {
   // Managed git smart-HTTP streams binary pack bodies and reads the request
   // stream directly — register BEFORE express.json() so the body is untouched.
   app.use("/git", gitRouter);
+  app.use(agentArtifactRouter);
+  app.use(artifactContentRouter);
 
   app.use(express.json());
+  app.post("/runtime/codex-auth", async (req: express.Request, res: express.Response) => {
+    const token = readBearerToken(req);
+    const runtime = token ? authenticateProvisionedRuntimeToken(token) : null;
+    const authJson = (req.body as { authJson?: unknown }).authJson;
+    if (!runtime || runtime.tool !== "codex") {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    if (typeof authJson !== "string" || authJson.length > 64 * 1024) {
+      return res.status(400).json({ error: "Invalid Codex session credential" });
+    }
+    try {
+      JSON.parse(authJson) as unknown;
+      await codexCredentialService.set(runtime.userId, "chatgpt_session", authJson);
+      return res.status(204).end();
+    } catch {
+      return res.status(400).json({ error: "Invalid Codex session credential" });
+    }
+  });
   app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (
       SAFE_HTTP_METHODS.has(req.method) ||
@@ -376,6 +402,10 @@ async function main() {
     "TRACE_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS",
     DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS,
   );
+  const cloudActiveIdleCleanupAfterMs = readDurationEnv(
+    "TRACE_CLOUD_SESSION_GROUP_ACTIVE_IDLE_CLEANUP_AFTER_MS",
+    DEFAULT_CLOUD_SESSION_GROUP_ACTIVE_IDLE_CLEANUP_AFTER_MS,
+  );
   const cloudIdleCleanupLockTtlMs = Math.max(cloudIdleCleanupIntervalMs * 2, 5 * 60 * 1000);
   let cloudIdleCleanupRunning = false;
   const cloudIdleCleanup =
@@ -396,7 +426,10 @@ async function main() {
             key: CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY,
             ttlMs: cloudIdleCleanupLockTtlMs,
             run: () =>
-              sessionService.cleanupIdleCloudSessionGroups({ idleAfterMs: cloudIdleCleanupAfterMs }),
+              sessionService.cleanupIdleCloudSessionGroups({
+                idleAfterMs: cloudIdleCleanupAfterMs,
+                activeIdleAfterMs: cloudActiveIdleCleanupAfterMs,
+              }),
           })
             .then((result) => {
               if (!result) {
@@ -416,6 +449,7 @@ async function main() {
                 scannedCount: result.scanned,
                 cleanedCount: result.cleaned.length,
                 idleAfterMs: cloudIdleCleanupAfterMs,
+                activeIdleAfterMs: cloudActiveIdleCleanupAfterMs,
                 durationMs: Date.now() - startedAt,
               });
             })
@@ -433,6 +467,33 @@ async function main() {
             });
         }, cloudIdleCleanupIntervalMs)
       : null;
+
+  const runtimeHardDeadlineReconciler = setInterval(() => {
+    const startedAt = Date.now();
+    void withRedisJobLock({
+      enabled: !localMode,
+      key: RUNTIME_HARD_DEADLINE_RECONCILE_LOCK_KEY,
+      ttlMs: RUNTIME_HARD_DEADLINE_RECONCILE_INTERVAL_MS * 2,
+      run: () => sessionService.reconcileRuntimeHardDeadlines(),
+    })
+      .then((result) => {
+        if (!result) return;
+        logAgentEnvironmentTelemetry("runtime.hard_deadline_reconciler_iteration", {
+          scannedCount: result.scanned,
+          warnedCount: result.warned.length,
+          stoppedCount: result.stopped.length,
+          durationMs: Date.now() - startedAt,
+        });
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[runtime-hard-deadline-reconciler] iteration failed: ${message}`);
+        logAgentEnvironmentTelemetry("runtime.hard_deadline_reconciler_failed", {
+          durationMs: Date.now() - startedAt,
+          error: message,
+        });
+      });
+  }, RUNTIME_HARD_DEADLINE_RECONCILE_INTERVAL_MS);
 
   const endpointTrafficCleanup = setInterval(() => {
     const startedAt = Date.now();
@@ -504,6 +565,7 @@ async function main() {
             environmentId: bridge.environmentId,
             allowedScope: bridge.allowedScope,
             tool: bridge.tool,
+            leaseRequired: bridge.leaseRequired,
           };
         } else if (bridgeAuthToken) {
           const payload = verifyBridgeAuthToken(bridgeAuthToken);
@@ -549,6 +611,7 @@ async function main() {
               clearInterval(staleRuntimeMonitor);
               clearInterval(deprovisionReconciler);
               if (cloudIdleCleanup) clearInterval(cloudIdleCleanup);
+              clearInterval(runtimeHardDeadlineReconciler);
               clearInterval(endpointTrafficCleanup);
               bridgeWss.close();
               terminalWss.close();

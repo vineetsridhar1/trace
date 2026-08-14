@@ -1,5 +1,6 @@
 import DataLoader from "dataloader";
 import { prisma } from "./db.js";
+import { organizationService } from "../services/organization.js";
 
 export function createUserLoader() {
   return new DataLoader<
@@ -164,6 +165,34 @@ export function createSessionTicketsLoader(organizationId: string | null) {
       bySession.set(link.entityId, list);
     }
     return sessionIds.map((id: string) => bySession.get(id) ?? []);
+  });
+}
+
+export function createChannelProjectsLoader(organizationId: string | null) {
+  return new DataLoader<string, unknown[]>(async (channelIds: readonly string[]) => {
+    if (!organizationId) return channelIds.map(() => []);
+    const links = await organizationService.listProjectsForChannels(channelIds, organizationId);
+    const byChannel = new Map<string, unknown[]>();
+    for (const link of links) {
+      const projects = byChannel.get(link.channelId) ?? [];
+      projects.push(link.project);
+      byChannel.set(link.channelId, projects);
+    }
+    return channelIds.map((id) => byChannel.get(id) ?? []);
+  });
+}
+
+export function createSessionProjectsLoader(organizationId: string | null) {
+  return new DataLoader<string, unknown[]>(async (sessionIds: readonly string[]) => {
+    if (!organizationId) return sessionIds.map(() => []);
+    const links = await organizationService.listProjectsForSessions(sessionIds, organizationId);
+    const bySession = new Map<string, unknown[]>();
+    for (const link of links) {
+      const projects = bySession.get(link.sessionId) ?? [];
+      projects.push(link.project);
+      bySession.set(link.sessionId, projects);
+    }
+    return sessionIds.map((id) => bySession.get(id) ?? []);
   });
 }
 

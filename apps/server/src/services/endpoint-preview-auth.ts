@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import { resolveJwtSecret } from "../lib/jwt-secret.js";
-import { endpointPreviewScheme } from "./endpoint-utils.js";
+import { endpointPreviewBaseHost, endpointPreviewScheme } from "./endpoint-utils.js";
 
 const JWT_SECRET = resolveJwtSecret();
 const TOKEN_TTL_SECONDS = 5 * 60;
@@ -64,13 +64,18 @@ export function endpointPreviewTokenFromCookie(cookieHeader: string | undefined)
 }
 
 export function endpointPreviewCookieHeader(token: string, expiresAt: Date): string {
-  const secure = endpointPreviewScheme() === "https";
+  const hostname = endpointPreviewBaseHost().split(":")[0]?.toLowerCase();
+  const secure =
+    endpointPreviewScheme() === "https" ||
+    hostname === "localhost" ||
+    hostname?.endsWith(".localhost");
   return [
     `${ENDPOINT_PREVIEW_COOKIE}=${encodeURIComponent(token)}`,
     "Path=/",
     "HttpOnly",
     secure ? "Secure" : null,
     secure ? "SameSite=None" : "SameSite=Lax",
+    secure ? "Partitioned" : null,
     `Expires=${expiresAt.toUTCString()}`,
   ]
     .filter((part): part is string => Boolean(part))

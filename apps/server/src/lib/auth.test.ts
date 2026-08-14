@@ -18,6 +18,8 @@ vi.mock("./dataloader.js", () => ({
   createTurnLoader: vi.fn(() => ({ kind: "turnLoader" })),
   createChatMembersLoader: vi.fn(() => ({ kind: "chatMembersLoader" })),
   createSessionTicketsLoader: vi.fn(() => ({ kind: "sessionTicketsLoader" })),
+  createChannelProjectsLoader: vi.fn(() => ({ kind: "channelProjectsLoader" })),
+  createSessionProjectsLoader: vi.fn(() => ({ kind: "sessionProjectsLoader" })),
   createChannelMembershipLoader: vi.fn(() => ({ kind: "channelMembershipLoader" })),
   createChatMembershipLoader: vi.fn(() => ({ kind: "chatMembershipLoader" })),
 }));
@@ -26,6 +28,7 @@ import { prisma } from "./db.js";
 import { createSessionTicketsLoader, createUserLoader } from "./dataloader.js";
 import {
   authenticateAccessToken,
+  authenticateUserAccessToken,
   buildContext,
   buildWsContext,
   createBridgeAuthToken,
@@ -35,6 +38,7 @@ import {
   verifyBridgeAuthToken,
   verifyToken,
 } from "./auth.js";
+import { createAgentInvocationToken } from "./agent-invocation-auth.js";
 
 const OLD_IAT_SECONDS = () => Math.floor(Date.now() / 1000) - 2 * 24 * 60 * 60;
 
@@ -153,6 +157,21 @@ describe("auth helpers", () => {
     });
   });
 
+  it("rejects session invocation credentials from user-only endpoints", async () => {
+    const token = createAgentInvocationToken({
+      organizationId: "org-1",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      invocationId: "invocation-1",
+    });
+    prismaMock.session.findFirst.mockResolvedValueOnce({
+      createdById: "user-1",
+      createdBy: { orgMemberships: [{ role: "member" }] },
+    } as never);
+
+    await expect(authenticateUserAccessToken(token)).resolves.toBeNull();
+  });
+
   it("re-issues the session cookie for tokens older than the refresh threshold", () => {
     const token = jwt.sign({ userId: "user-1", iat: OLD_IAT_SECONDS() }, JWT_SECRET);
     const cookie = vi.fn();
@@ -246,6 +265,38 @@ describe("auth helpers", () => {
     expect(context.actorType).toBe("user");
     expect(createUserLoaderMock).toHaveBeenCalled();
     expect(createSessionTicketsLoaderMock).toHaveBeenCalledWith("org-1");
+  });
+
+  it("builds agent context with the owner's current organization role", async () => {
+    const token = createAgentInvocationToken({
+      organizationId: "org-1",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      invocationId: "invocation-1",
+    });
+    prismaMock.session.findFirst.mockResolvedValueOnce({
+      createdById: "user-1",
+      createdBy: { orgMemberships: [{ role: "observer" }] },
+    } as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
+
+    const context = await buildContext({
+      req: {
+        headers: {
+          authorization: `Bearer ${token}`,
+          "x-organization-id": "org-1",
+        },
+        cookies: {},
+      },
+    } as unknown as Parameters<typeof buildContext>[0]);
+
+    expect(context).toMatchObject({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "observer",
+      actorType: "agent",
+      agentSessionId: "session-1",
+    });
   });
 
   it("reads the client source header into HTTP context", async () => {

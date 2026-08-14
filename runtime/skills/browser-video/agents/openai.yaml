@@ -1,0 +1,4 @@
+interface:
+  display_name: "Browser Video"
+  short_description: "Test and record safe browser flows"
+  default_prompt: "Use $browser-video to test this web flow and upload a safe proof video when eligible."

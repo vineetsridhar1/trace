@@ -1,11 +1,9 @@
 import { memo, useCallback, useMemo } from "react";
 import { StyleSheet, View, type NativeSyntheticEvent } from "react-native";
 import ContextMenu, { type ContextMenuOnPressNativeEvent } from "react-native-context-menu-view";
-import type { GitCheckpoint } from "@trace/gql";
-import { useAuthStore, type AuthState } from "@trace/client-core";
+import { structuredResponseSummary, useAuthStore, type AuthState } from "@trace/client-core";
 import { Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
-import { CheckpointMarker } from "./CheckpointMarker";
 import { COPY_ACTION_INDEX, COPY_CONTEXT_MENU, copyTextToClipboard } from "./copy-menu";
 import { MessageImageGallery } from "./MessageImageGallery";
 import { Markdown } from "./Markdown";
@@ -17,14 +15,12 @@ interface UserMessageBubbleProps {
   actorName?: string | null;
   imageKeys?: string[];
   imagePreviewUrls?: string[];
-  checkpoints?: GitCheckpoint[];
 }
 
 /**
  * Right-aligned user prompt bubble. Long-press targets the full bubble so the
  * native context-menu preview highlights the blue rounded bubble instead of
- * a transparent markdown text child. Git-checkpoint chips render as a footer
- * below the bubble when the prompt produced one or more commits.
+ * a transparent markdown text child.
  */
 export const UserMessageBubble = memo(function UserMessageBubble({
   text,
@@ -32,13 +28,14 @@ export const UserMessageBubble = memo(function UserMessageBubble({
   actorName,
   imageKeys,
   imagePreviewUrls,
-  checkpoints,
 }: UserMessageBubbleProps) {
   const theme = useTheme();
   const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
   const isMe = !actorId || actorId === currentUserId;
   const displayName = isMe ? "You" : (actorName ?? "Someone");
-  const displayText = useMemo(() => stripPromptWrapping(text), [text]);
+  const unwrappedText = useMemo(() => stripPromptWrapping(text), [text]);
+  const displayText = useMemo(() => structuredResponseSummary(unwrappedText), [unwrappedText]);
+  const isStructuredResponse = displayText !== unwrappedText;
 
   const handleContextMenuPress = useCallback(
     (event: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) => {
@@ -52,6 +49,7 @@ export const UserMessageBubble = memo(function UserMessageBubble({
       collapsable={false}
       style={[
         styles.bubble,
+        isStructuredResponse && styles.structuredBubble,
         {
           backgroundColor: alpha(theme.colors.accent, 0.18),
           borderColor: alpha(theme.colors.accent, 0.32),
@@ -75,22 +73,16 @@ export const UserMessageBubble = memo(function UserMessageBubble({
 
   return (
     <View style={styles.wrapper}>
-      <View style={styles.column}>
+      <View style={[styles.column, isStructuredResponse && styles.structuredColumn]}>
         <ContextMenu
           actions={COPY_CONTEXT_MENU}
           borderRadius={theme.radius.lg}
           onPress={handleContextMenuPress}
           previewBackgroundColor="transparent"
+          style={isStructuredResponse ? styles.structuredMenu : undefined}
         >
           {bubble}
         </ContextMenu>
-        {checkpoints && checkpoints.length > 0 ? (
-          <View style={[styles.footer, { gap: theme.spacing.xs, marginTop: theme.spacing.xs }]}>
-            {checkpoints.map((c) => (
-              <CheckpointMarker key={c.id} checkpoint={c} />
-            ))}
-          </View>
-        ) : null}
       </View>
     </View>
   );
@@ -106,8 +98,17 @@ const styles = StyleSheet.create({
     maxWidth: "88%",
     alignItems: "flex-end",
   },
+  structuredColumn: {
+    width: "88%",
+  },
+  structuredMenu: {
+    width: "100%",
+  },
   bubble: {
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  structuredBubble: {
+    width: "100%",
   },
   meta: {
     flexDirection: "row",

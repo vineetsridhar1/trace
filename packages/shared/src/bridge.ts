@@ -3,7 +3,8 @@
  * Defines the wire protocol between bridge clients and the server's /bridge WebSocket.
  */
 
-import type { GitCheckpointBridgePayload, GitCheckpointContext } from "./git-checkpoint.js";
+export const BRIDGE_PROTOCOL_VERSION = 5;
+export const GENERAL_WORKSPACE_PROTOCOL_VERSION = 3;
 
 // --- Server → Bridge commands ---
 
@@ -19,8 +20,8 @@ export interface BridgeRunCommand {
   enableClaudeInChrome?: boolean;
   interactionMode?: string;
   toolSessionId?: string;
-  checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];
+  runtimeEnv?: Record<string, string>;
 }
 
 export interface BridgeSendCommand {
@@ -35,8 +36,8 @@ export interface BridgeSendCommand {
   enableClaudeInChrome?: boolean;
   interactionMode?: string;
   toolSessionId?: string;
-  checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];
+  runtimeEnv?: Record<string, string>;
 }
 
 export interface BridgePrepareCommand {
@@ -52,7 +53,7 @@ export interface BridgePrepareCommand {
   defaultBranch: string;
   branch?: string;
   preserveBranchName?: boolean;
-  checkpointSha?: string;
+  baseCommitSha?: string;
   readOnly?: boolean;
   /**
    * Absolute path to an existing on-disk worktree of this repo to adopt as the
@@ -61,6 +62,25 @@ export interface BridgePrepareCommand {
    * branch, and never resets or removes it. Takes precedence over readOnly.
    */
   adoptWorktreePath?: string;
+}
+
+export interface BridgePrepareGeneralCommand {
+  type: "prepare_general";
+  sessionId: string;
+  sessionGroupId?: string;
+}
+
+export interface BridgeCleanupGeneralWorkspaceCommand {
+  type: "cleanup_general_workspace";
+  sessionId: string;
+  sessionGroupId?: string;
+}
+
+export interface BridgeCleanupGeneralWorkspaceResult {
+  type: "cleanup_general_workspace_result";
+  sessionId: string;
+  success: boolean;
+  error?: string;
 }
 
 export interface BridgePrepareAppCommand {
@@ -72,7 +92,7 @@ export interface BridgePrepareAppCommand {
   repoId: string;
   repoRemoteUrl: string;
   defaultBranch: string;
-  checkpointSha?: string;
+  baseCommitSha?: string;
 }
 
 export interface BridgeUpgradeWorkspaceCommand {
@@ -113,6 +133,20 @@ export interface BridgeDeleteCommand {
   // Present for app sessions so the bridge can stop managed dev-server processes
   // and remove the standalone app workspace on delete.
   sessionGroupId?: string;
+}
+
+/**
+ * Renewable control-plane lease for provisioned runtimes. Cloud bridges exit
+ * when this deadline passes without a newer lease from an authenticated server.
+ */
+export interface BridgeRuntimeLeaseCommand {
+  type: "runtime_lease";
+  /**
+   * Renewable control-plane lease duration. The bridge applies this to its
+   * local monotonic clock so host clock skew cannot invalidate a healthy
+   * runtime.
+   */
+  ttlMs: number;
 }
 
 export interface BridgeListBranchesCommand {
@@ -394,12 +428,15 @@ export type BridgeCommand =
   | BridgeRunCommand
   | BridgeSendCommand
   | BridgePrepareCommand
+  | BridgePrepareGeneralCommand
+  | BridgeCleanupGeneralWorkspaceCommand
   | BridgePrepareAppCommand
   | BridgeUpgradeWorkspaceCommand
   | BridgeTerminateCommand
   | BridgePauseCommand
   | BridgeResumeCommand
   | BridgeDeleteCommand
+  | BridgeRuntimeLeaseCommand
   | BridgeListBranchesCommand
   | BridgeListWorkspaceSlugsCommand
   | BridgeListWorktreesCommand
@@ -445,6 +482,8 @@ export interface BridgeRuntimeHello {
   protocolVersion?: number;
   /** Required for provisioned cloud runtimes. */
   agentVersion?: string;
+  /** Optional protocol features this bridge has actively enabled. */
+  capabilities?: string[];
   supportedTools: string[];
   /** Repo IDs this bridge has locally registered (device bridges only). Empty for cloud. */
   registeredRepoIds: string[];
@@ -510,14 +549,7 @@ export interface BridgeToolSessionMissing {
   toolSessionId: string;
   message?: string;
   interactionMode?: string;
-  checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];
-}
-
-export interface BridgeGitCheckpoint {
-  type: "git_checkpoint";
-  sessionId: string;
-  checkpoint: GitCheckpointBridgePayload;
 }
 
 /** Sent when a device bridge links a new repo (e.g. via saveRepoPath). Updates server-side registeredRepoIds. */
@@ -857,9 +889,9 @@ export type BridgeMessage =
   | BridgeSessionComplete
   | BridgeWorkspaceReady
   | BridgeWorkspaceFailed
+  | BridgeCleanupGeneralWorkspaceResult
   | BridgeToolSessionId
   | BridgeToolSessionMissing
-  | BridgeGitCheckpoint
   | BridgeRepoLinked
   | BridgeLinkedCheckoutStatusResult
   | BridgeLinkedCheckoutChangedFileResult

@@ -54,6 +54,9 @@ function startRequest(): StartSessionRequest {
     runtimeToken: "runtime-token",
     runtimeTokenExpiresAt: "2026-01-01T00:00:00.000Z",
     runtimeTokenScope: "session",
+    runtimeLeaseTtlMs: 900_000,
+    runtimeHardDeadlineTtlMs: 86_400_000,
+    runtimeHardDeadlineAt: "2026-01-02T00:00:00.000Z",
     bridgeUrl: "wss://trace.example/bridge",
     repo: {
       id: "repo-1",
@@ -61,7 +64,7 @@ function startRequest(): StartSessionRequest {
       remoteUrl: "https://github.com/example/repo.git",
       defaultBranch: "main",
       branch: "feature/test",
-      checkpointSha: null,
+      baseCommitSha: null,
       readOnly: false,
     },
     tool: "codex",

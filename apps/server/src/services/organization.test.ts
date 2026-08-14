@@ -400,12 +400,13 @@ describe("OrganizationService", () => {
     expect(eventServiceMock.create).not.toHaveBeenCalled();
   });
 
-  it("does not replace an existing repo remote URL", async () => {
+  it("does not replace a remote URL while its webhook is connected", async () => {
     prismaMock.repo.findFirstOrThrow.mockResolvedValueOnce({
       id: "repo-1",
       name: "trace",
       remoteUrl: "https://github.com/acme/trace.git",
       setupConfig: {},
+      webhookId: "webhook-1",
     });
 
     const service = new OrganizationService();
@@ -417,10 +418,57 @@ describe("OrganizationService", () => {
         "user",
         "user-1",
       ),
-    ).rejects.toThrow("This repo already has a remote URL.");
+    ).rejects.toThrow("Disconnect the repository webhook before changing its remote URL");
 
     expect(prismaMock.repo.findUnique).not.toHaveBeenCalled();
     expect(prismaMock.repo.update).not.toHaveBeenCalled();
+  });
+
+  it("deletes a repo while detaching records that should be retained", async () => {
+    prismaMock.repo.findFirstOrThrow.mockResolvedValueOnce({
+      id: "repo-1",
+      channels: [{ id: "channel-1" }],
+      projects: [{ id: "project-1" }],
+      sessions: [{ id: "session-1" }],
+      sessionGroups: [{ id: "group-1" }],
+    });
+    prismaMock.repo.delete.mockResolvedValueOnce({ id: "repo-1" });
+    eventServiceMock.create.mockResolvedValueOnce({ id: "event-delete" });
+
+    const service = new OrganizationService();
+    await expect(service.deleteRepo("repo-1", "org-1", "user", "user-1")).resolves.toBe(true);
+
+    expect(prismaMock.channel.updateMany).toHaveBeenCalledWith({
+      where: { repoId: "repo-1" },
+      data: { repoId: null },
+    });
+    expect(prismaMock.project.updateMany).toHaveBeenCalledWith({
+      where: { repoId: "repo-1" },
+      data: { repoId: null },
+    });
+    expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+      where: { repoId: "repo-1" },
+      data: { repoId: null },
+    });
+    expect(prismaMock.sessionGroup.updateMany).toHaveBeenCalledWith({
+      where: { repoId: "repo-1" },
+      data: { repoId: null },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "repo_deleted",
+        payload: {
+          repoId: "repo-1",
+          channelIds: ["channel-1"],
+          projectIds: ["project-1"],
+          sessionIds: ["session-1"],
+          sessionGroupIds: ["group-1"],
+        },
+        deferPublish: true,
+      }),
+      prismaMock,
+    );
+    expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "event-delete" });
   });
 
   it("requires project repos to belong to the project organization", async () => {

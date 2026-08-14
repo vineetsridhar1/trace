@@ -27,3 +27,9 @@ export function textToEditorHtml(text: string): string {
   const withBreaks = safe.replace(/\n/g, "<br />");
   return `<p>${withBreaks || "<br />"}</p>`;
 }
+
+export function cleanMessageHtml(html: string): string {
+  return html
+    .replace(/^(\s*<p>\s*<br\s*\/?>\s*<\/p>)+/i, "")
+    .replace(/(<p>\s*<br\s*\/?>\s*<\/p>\s*)+$/i, "");
+}

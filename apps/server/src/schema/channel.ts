@@ -29,7 +29,7 @@ export const channelQueries = {
     args: { channelId: string; after?: string; before?: string; limit?: number },
     ctx: Context,
   ) => {
-    return channelService.getChannelMessages(args.channelId, ctx.userId, {
+    return channelService.getChannelMessages(args.channelId, ctx.userId, requireOrgContext(ctx), {
       after: args.after ? new Date(args.after) : undefined,
       before: args.before ? new Date(args.before) : undefined,
       limit: args.limit ?? undefined,
@@ -136,6 +136,10 @@ export const channelSubscriptions = {
 
 export const channelTypeResolvers = {
   Channel: {
+    projects: async (channel: { id: string }, _args: unknown, ctx: Context) => {
+      requireOrgContext(ctx);
+      return ctx.channelProjectsLoader.load(channel.id);
+    },
     members: (channel: { id: string }) => channelService.getMembers(channel.id),
     memberCount: (channel: { id: string; _count?: { members?: number } }) =>
       channel._count?.members ?? channelService.getMemberCount(channel.id),

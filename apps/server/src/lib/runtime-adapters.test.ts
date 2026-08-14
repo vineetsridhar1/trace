@@ -18,6 +18,7 @@ const provisionedConfig = {
   auth: { type: "bearer" },
   startupTimeoutSeconds: 120,
   deprovisionPolicy: "on_session_end",
+  runtimeLeaseEnforcement: "required",
 };
 
 function makeResponse(body: Record<string, unknown>, status = 200): Response {
@@ -254,6 +255,9 @@ describe("ProvisionedRuntimeAdapter", () => {
       expect(body.runtimeToken).not.toBe("runtime-token");
       expect(body.runtimeTokenScope).toBe("session");
       expect(body.runtimeTokenExpiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(body.runtimeLeaseTtlMs).toEqual(expect.any(Number));
+      expect(body.runtimeHardDeadlineTtlMs).toEqual(expect.any(Number));
+      expect(body.runtimeHardDeadlineAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
       expect(body.reasoningEffort).toBe("xhigh");
       expect(body.bootstrapEnv).toEqual(
         expect.objectContaining({
@@ -262,6 +266,9 @@ describe("ProvisionedRuntimeAdapter", () => {
           TRACE_RUNTIME_INSTANCE_ID: result.runtimeInstanceId,
           TRACE_RUNTIME_TOKEN: body.runtimeToken,
           TRACE_BRIDGE_URL: "wss://trace.example/bridge",
+          TRACE_RUNTIME_LEASE_REQUIRED: "true",
+          TRACE_RUNTIME_LEASE_TTL_MS: String(body.runtimeLeaseTtlMs),
+          TRACE_RUNTIME_HARD_DEADLINE_TTL_MS: String(body.runtimeHardDeadlineTtlMs),
         }),
       );
 
@@ -273,6 +280,7 @@ describe("ProvisionedRuntimeAdapter", () => {
         environmentId: "env-1",
         allowedScope: "session",
         tool: "codex",
+        leaseRequired: true,
       });
       const logged = logSpy.mock.calls.map((call) => call.join(" ")).join("\n");
       expect(logged).not.toContain("launcher-secret");
@@ -302,6 +310,77 @@ describe("ProvisionedRuntimeAdapter", () => {
     ).rejects.toThrow("Provisioned runtime bridge URL must be publicly reachable");
 
     expect(fetchMock()).not.toHaveBeenCalled();
+  });
+
+  it("requires and persists exact provider hard-deadline enforcement when configured", async () => {
+    fetchMock().mockImplementation(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(init.body as string) as Record<string, unknown>;
+      return makeResponse({
+        runtimeId: "provider-runtime-1",
+        deadlineEnforcement: {
+          deadlineAt: body.runtimeHardDeadlineAt,
+          enforcementId: "deadline-rule-1",
+        },
+      });
+    });
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    const result = await adapter.startSession({
+      sessionId: "session-1",
+      organizationId: "org-1",
+      actorId: "user-1",
+      environment: {
+        id: "env-1",
+        name: "Company Launcher",
+        adapterType: "provisioned",
+        config: {
+          ...provisionedConfig,
+          providerHardDeadlineEnforcement: "required",
+        },
+      },
+      tool: "codex",
+      bridgeUrl: "wss://trace.example/bridge",
+    });
+
+    expect(result.providerDeadlineEnforcementId).toBe("deadline-rule-1");
+    expect(result.runtimeHardDeadlineAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("stops a new provider runtime that cannot prove required hard-deadline enforcement", async () => {
+    fetchMock()
+      .mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }))
+      .mockResolvedValueOnce(makeResponse({ ok: true, status: "stopping" }));
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await expect(
+      adapter.startSession({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        actorId: "user-1",
+        environment: {
+          id: "env-1",
+          name: "Company Launcher",
+          adapterType: "provisioned",
+          config: {
+            ...provisionedConfig,
+            providerHardDeadlineEnforcement: "required",
+          },
+        },
+        tool: "codex",
+        bridgeUrl: "wss://trace.example/bridge",
+      }),
+    ).rejects.toThrow("did not prove independent hard-deadline enforcement");
+
+    expect(fetchMock()).toHaveBeenCalledTimes(2);
+    const stopBody = JSON.parse(fetchMock().mock.calls[1][1].body as string) as Record<
+      string,
+      unknown
+    >;
+    expect(stopBody).toEqual({
+      sessionId: "session-1",
+      runtimeId: "provider-runtime-1",
+      reason: "missing_provider_hard_deadline_enforcement",
+    });
   });
 
   it("allows an explicit public cloud bridge URL override", async () => {

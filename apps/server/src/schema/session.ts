@@ -2,6 +2,7 @@ import type { Context } from "../context.js";
 import type {
   AgentStatus,
   CodingTool,
+  ConvertSessionGroupInput,
   SessionFilters,
   StartSessionInput,
   UpdateSessionDefaultsInput,
@@ -20,7 +21,6 @@ import {
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
 import { assertScopeAccess, canViewSessionGroup } from "../services/access.js";
-import { storage } from "../lib/storage/index.js";
 
 export const sessionQueries = {
   sessionGroups: (
@@ -39,9 +39,17 @@ export const sessionQueries = {
       includeActiveMerged: args.includeActiveMerged ?? undefined,
     });
   },
-  appSessionGroups: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+  appSessionGroups: (
+    _: unknown,
+    args: { organizationId: string; includeArchived?: boolean | null },
+    ctx: Context,
+  ) => {
     assertOrgAccess(ctx, args.organizationId);
-    return sessionService.listAppGroups(args.organizationId, ctx.userId);
+    return sessionService.listAppGroups(
+      args.organizationId,
+      ctx.userId,
+      args.includeArchived ?? false,
+    );
   },
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx), ctx.userId);
@@ -312,10 +320,21 @@ export const sessionMutations = {
     const orgId = requireOrgContext(ctx);
     return sessionService.start({
       ...args.input,
+      imageKeys: args.input.attachmentKeys ?? undefined,
       organizationId: orgId,
       createdById: ctx.userId,
       actorType: ctx.actorType,
       clientSource: ctx.clientSource,
+    });
+  },
+  convertSessionGroup: (_: unknown, args: { input: ConvertSessionGroupInput }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    if (!ctx.userId) throw new AuthenticationError();
+    return sessionService.convertGroup({
+      ...args.input,
+      organizationId: orgId,
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
     });
   },
   importWorktree: (
@@ -373,6 +392,20 @@ export const sessionMutations = {
   },
   archiveSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.archiveGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);
+  },
+  linkSessionPullRequest: async (
+    _: unknown,
+    args: { sessionId: string; prUrl: string },
+    ctx: Context,
+  ) => {
+    const organizationId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, organizationId);
+    return sessionService.linkPullRequest({
+      sessionId: args.sessionId,
+      prUrl: args.prUrl,
+      organizationId,
+      actorId: ctx.userId,
+    });
   },
   renameSessionGroup: (_: unknown, args: { id: string; name: string }, ctx: Context) => {
     return sessionService.renameGroup(
@@ -745,7 +778,7 @@ export const sessionTypeResolvers = {
               sessions?: SessionGroupStatusSource[];
             } | null
           )?.sessions ?? []);
-      return deriveSessionGroupStatus(sessions, group.prUrl ?? null, group.archivedAt ?? null);
+      return deriveSessionGroupStatus(sessions, group.archivedAt ?? null, group.prUrl ?? null);
     },
     sessions: async (group: { id: string; sessions?: unknown[] }, _args: unknown, ctx: Context) => {
       if (Array.isArray(group.sessions)) return group.sessions;
@@ -753,9 +786,6 @@ export const sessionTypeResolvers = {
         ((await ctx.sessionGroupLoader.load(group.id)) as { sessions?: unknown[] } | null)
           ?.sessions ?? []
       );
-    },
-    gitCheckpoints: async (group: { id: string }) => {
-      return sessionService.listGitCheckpointsForGroup(group.id);
     },
     owner: async (
       group: { owner?: unknown; ownerUser?: unknown; ownerUserId?: string },
@@ -790,6 +820,10 @@ export const sessionTypeResolvers = {
     },
   },
   Session: {
+    projects: async (session: { id: string }, _args: unknown, ctx: Context) => {
+      requireOrgContext(ctx);
+      return ctx.sessionProjectsLoader.load(session.id);
+    },
     inputTokens: (session: { inputTokens?: bigint | number | null }) =>
       typeof session.inputTokens === "bigint"
         ? Number(session.inputTokens)
@@ -808,36 +842,21 @@ export const sessionTypeResolvers = {
         : (session.cacheCreationTokens ?? 0),
     tickets: (session: { id: string }, _args: unknown, ctx: Context) =>
       ctx.sessionTicketsLoader.load(session.id),
-    gitCheckpoints: async (session: { id: string }) => {
-      return sessionService.listGitCheckpointsForSession(session.id);
-    },
     queuedMessages: async (session: { id: string }) => {
       return prisma.queuedMessage.findMany({
         where: { sessionId: session.id },
         orderBy: { position: "asc" },
       });
     },
+    artifacts: async (session: { id: string }) => {
+      return prisma.artifact.findMany({
+        where: { sessionId: session.id },
+        orderBy: { createdAt: "asc" },
+      });
+    },
   },
   QueuedMessage: {
     attachmentKeys: (message: { imageKeys: string[] }) => message.imageKeys,
-  },
-  GitCheckpoint: {
-    captureUrl: (checkpoint: { captureKey?: string | null; captureUrl?: string | null }) =>
-      checkpoint.captureKey
-        ? storage.getGetUrl(checkpoint.captureKey, { downloadFilename: "app-checkpoint.png" })
-        : (checkpoint.captureUrl ?? null),
-    session: async (checkpoint: { sessionId: string }, _args: unknown, ctx: Context) => {
-      return ctx.sessionLoader.load(checkpoint.sessionId);
-    },
-    sessionGroup: async (checkpoint: { sessionGroupId: string }, _args: unknown, ctx: Context) => {
-      return ctx.sessionGroupLoader.load(checkpoint.sessionGroupId);
-    },
-    repo: async (checkpoint: { repoId: string }, _args: unknown, ctx: Context) => {
-      return ctx.repoLoader.load(checkpoint.repoId);
-    },
-    promptEvent: async (checkpoint: { promptEventId: string }, _args: unknown, ctx: Context) => {
-      return ctx.eventLoader.load(checkpoint.promptEventId);
-    },
   },
 };
 

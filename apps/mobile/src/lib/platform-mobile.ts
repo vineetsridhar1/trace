@@ -6,6 +6,14 @@ import { getActiveApiUrl, hasHostedApiUrlConfigured } from "@/lib/connection-tar
 const storage = createMMKV({ id: "trace" });
 const TOKEN_KEY = "trace_token";
 
+type NativeWebSocketConstructor = new (
+  url: string,
+  protocols?: string | string[],
+  options?: { headers?: Record<string, string> },
+) => WebSocket;
+
+const NativeWebSocket = WebSocket as unknown as NativeWebSocketConstructor;
+
 if (__DEV__ && !hasHostedApiUrlConfigured()) {
   console.warn(
     "[trace] EXPO_PUBLIC_API_URL is not set — hosted GitHub sign-in is disabled until you restart Metro " +
@@ -32,5 +40,8 @@ setPlatform({
     clearToken: () => SecureStore.deleteItemAsync(TOKEN_KEY),
   },
   fetch: global.fetch,
-  createWebSocket: (url, protocols) => new WebSocket(url, protocols),
+  createWebSocket: (url, protocols) =>
+    new NativeWebSocket(url, protocols, {
+      headers: { "User-Agent": "TraceMobile" },
+    }),
 });

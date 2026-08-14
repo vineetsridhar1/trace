@@ -11,7 +11,7 @@ export type ToolOptionValue = Extract<
   CodingTool,
   "claude_code" | "codex" | "cursor_composer" | "pi" | "antigravity"
 >;
-export type PickerLayer = "tools" | "providers" | "models";
+export type PickerLayer = "tools" | "providers" | "models" | "thinking";
 
 export const TOOL_OPTIONS: readonly { value: ToolOptionValue; label: string }[] = [
   { value: "claude_code", label: "Claude Code" },

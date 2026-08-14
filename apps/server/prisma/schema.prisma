@@ -44,6 +44,7 @@ enum SessionGroupVisibility {
 }
 
 enum SessionGroupKind {
+  general
   coding
   design
   app
@@ -139,6 +140,12 @@ enum ApiTokenProvider {
   ssh_key
 }
 
+enum CodexAuthMethod {
+  chatgpt_session
+  access_token
+  api_key
+}
+
 enum PushPlatform {
   ios
   android
@@ -164,6 +171,8 @@ enum TurnRole {
 }
 
 enum EventType {
+  artifact_created
+  session_converted
   message_sent
   message_edited
   message_deleted
@@ -176,6 +185,8 @@ enum EventType {
   session_resumed
   session_terminated
   session_deleted
+  terminal_created
+  terminal_destroyed
   session_output
   ticket_created
   ticket_updated
@@ -184,6 +195,7 @@ enum EventType {
   organization_created
   repo_created
   repo_updated
+  repo_deleted
   managed_git_token_minted
   channel_created
   channel_updated
@@ -306,6 +318,7 @@ model Organization {
   channels                    Channel[]
   sessionGroups               SessionGroup[]
   sessions                    Session[]
+  artifacts                   Artifact[]
   tickets                     Ticket[]
   events                      Event[]
   inboxItems                  InboxItem[]
@@ -398,6 +411,7 @@ model User {
   channelMemberships           ChannelMember[]
   participants                 Participant[]
   apiTokens                    ApiToken[]
+  codexCredential              CodexCredential?
   oauthRefreshTokens           OAuthRefreshToken[]
   pushTokens                   PushToken[]
   aiConversations              AiConversation[]       @relation("AiConversationCreator")
@@ -406,6 +420,7 @@ model User {
   slackInstalls                SlackInstall[]        @relation("SlackInstallInstaller")
   slackAccounts                SlackAccount[]
   slackChannelBindings         SlackChannelBinding[]
+  createdArtifacts             Artifact[]            @relation("ArtifactCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -425,7 +440,6 @@ model Repo {
   sessions                    Session[]
   sessionGroups               SessionGroup[]
   channels                    Channel[]
-  gitCheckpoints              GitCheckpoint[]
   sessionSetupScriptRuns      SessionSetupScriptRun[]
   sessionApplicationProcesses SessionApplicationProcess[]
   sessionEndpoints            SessionEndpoint[]
@@ -560,7 +574,6 @@ model SessionGroup {
   setupError               String?
 
   sessions             Session[]
-  gitCheckpoints       GitCheckpoint[]
   bridgeAccessGrants   BridgeAccessGrant[]
   bridgeAccessRequests BridgeAccessRequest[]
   setupScriptRuns      SessionSetupScriptRun[]
@@ -605,11 +618,13 @@ model Session {
   workdir           String?
   toolSessionId     String?
   pendingRun        Json?
+  pendingGeneralWorkspaceCleanupRuntimeId String?
   endpoints         Json?
   connection        Json?
   prUrl             String?
   worktreeDeleted   Boolean       @default(false)
   readOnlyWorkspace Boolean       @default(false)
+  activeInvocationId String?
 
   inputTokens         BigInt @default(0)
   outputTokens        BigInt @default(0)
@@ -620,6 +635,7 @@ model Session {
   projects       SessionProject[]
   queuedMessages QueuedMessage[]
   slackThread    SlackThreadSession?
+  artifacts      Artifact[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -627,6 +643,29 @@ model Session {
   @@index([sessionGroupId, updatedAt])
   @@index([organizationId, agentStatus])
   @@index([channelId, updatedAt])
+  @@index([pendingGeneralWorkspaceCleanupRuntimeId])
+}
+
+model Artifact {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionId      String
+  session        Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type           String
+  key            String
+  bundleDigest   String
+  manifest       Json
+  storageKey     String
+  byteSize       Int
+  createdById    String
+  createdBy      User         @relation("ArtifactCreator", fields: [createdById], references: [id])
+  idempotencyKey String       @unique
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([sessionId, type, key, createdAt])
+  @@index([bundleDigest])
 }
 
 model SessionSetupScriptRun {
@@ -899,6 +938,17 @@ model ApiToken {
   @@unique([userId, provider])
 }
 
+model CodexCredential {
+  id                  String          @id @default(uuid())
+  userId              String          @unique
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  method              CodexAuthMethod
+  encryptedCredential String
+  iv                  String
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
 // Dynamically-registered OAuth clients (RFC 7591) for the hosted MCP endpoint.
 // One row per MCP client that registers itself; metadata is stored verbatim so
 // the SDK's registration response can be reconstructed faithfully.
@@ -960,45 +1010,13 @@ model Event {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  timestamp      DateTime        @default(now())
-  gitCheckpoints GitCheckpoint[] @relation("GitCheckpointPromptEvent")
+  timestamp DateTime @default(now())
 
   @@index([organizationId, scopeType, scopeId])
   @@index([organizationId, scopeType, scopeId, timestamp])
   @@index([organizationId, eventType])
   @@index([organizationId, timestamp])
   @@index([parentId])
-}
-
-model GitCheckpoint {
-  id             String   @id @default(uuid())
-  sessionId      String
-  sessionGroupId String
-  repoId         String
-  promptEventId  String
-  commitSha      String
-  parentShas     String[]
-  treeSha        String
-  subject        String
-  author         String
-  committedAt    DateTime
-  filesChanged   Int
-  captureStatus      String?
-  captureKey         String?
-  captureUrl         String?
-  captureContentType String?
-  capturedAt         DateTime?
-  createdAt      DateTime @default(now())
-
-  sessionGroup SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repo         Repo         @relation(fields: [repoId], references: [id], onDelete: Cascade)
-  promptEvent  Event        @relation("GitCheckpointPromptEvent", fields: [promptEventId], references: [id], onDelete: Restrict)
-
-  @@unique([sessionGroupId, commitSha])
-  @@index([sessionId, committedAt])
-  @@index([sessionGroupId, committedAt])
-  @@index([repoId, committedAt])
-  @@index([promptEventId])
 }
 
 model BridgeRuntime {

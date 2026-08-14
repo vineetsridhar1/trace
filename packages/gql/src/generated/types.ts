@@ -104,6 +104,35 @@ export type ApplicationProcessStatus =
   | "stopped"
   | "stopping";
 
+export type Artifact = {
+  __typename?: "Artifact";
+  bundleDigest: Scalars["String"]["output"];
+  byteSize: Scalars["Int"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  createdBy: User;
+  id: Scalars["ID"]["output"];
+  key: Scalars["String"]["output"];
+  manifest: ArtifactManifest;
+  organizationId: Scalars["ID"]["output"];
+  session: Session;
+  sessionId: Scalars["ID"]["output"];
+  type: Scalars["String"]["output"];
+};
+
+export type ArtifactFile = {
+  __typename?: "ArtifactFile";
+  digest: Scalars["String"]["output"];
+  mediaType: Scalars["String"]["output"];
+  path: Scalars["String"]["output"];
+  size: Scalars["Int"]["output"];
+};
+
+export type ArtifactManifest = {
+  __typename?: "ArtifactManifest";
+  files: Array<ArtifactFile>;
+  schemaVersion: Scalars["Int"]["output"];
+};
+
 export type Branch = {
   __typename?: "Branch";
   childBranches: Array<Branch>;
@@ -271,6 +300,14 @@ export type ChatMember = {
 
 export type ChatType = "dm" | "group";
 
+export type CodexAuthMethod = "access_token" | "api_key" | "chatgpt_session";
+
+export type CodexCredentialStatus = {
+  __typename?: "CodexCredentialStatus";
+  method: CodexAuthMethod;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type CodingTool =
   | "antigravity"
   | "claude_code"
@@ -303,6 +340,17 @@ export type ConnectionsRepoEntry = {
   linkedCheckout?: Maybe<LinkedCheckoutStatus>;
   repo: Repo;
   runScripts?: Maybe<Scalars["JSON"]["output"]>;
+};
+
+export type ConvertSessionGroupInput = {
+  channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  kind: SessionGroupKind;
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  projectId?: InputMaybe<Scalars["ID"]["input"]>;
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
+  tool?: InputMaybe<CodingTool>;
 };
 
 export type CreateAgentEnvironmentInput = {
@@ -373,6 +421,8 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignPreviewStatus = "captured" | "failed" | "pending" | "publishing" | "unavailable";
+
 export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
 
 export type EndpointTrafficEntry = {
@@ -417,6 +467,7 @@ export type EventType =
   | "agent_environment_deleted"
   | "agent_environment_updated"
   | "application_config_updated"
+  | "artifact_created"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
   | "bridge_access_revoked"
@@ -450,6 +501,7 @@ export type EventType =
   | "queued_messages_drained"
   | "queued_messages_reordered"
   | "repo_created"
+  | "repo_deleted"
   | "repo_updated"
   | "session_application_log_appended"
   | "session_application_process_failed"
@@ -459,6 +511,7 @@ export type EventType =
   | "session_application_workflow_failed"
   | "session_application_workflow_started"
   | "session_application_workflow_updated"
+  | "session_converted"
   | "session_deleted"
   | "session_endpoint_access_updated"
   | "session_endpoint_created"
@@ -491,6 +544,8 @@ export type EventType =
   | "session_setup_script_started"
   | "session_started"
   | "session_terminated"
+  | "terminal_created"
+  | "terminal_destroyed"
   | "ticket_assigned"
   | "ticket_commented"
   | "ticket_created"
@@ -498,33 +553,6 @@ export type EventType =
   | "ticket_unassigned"
   | "ticket_unlinked"
   | "ticket_updated";
-
-export type GitCheckpoint = {
-  __typename?: "GitCheckpoint";
-  author: Scalars["String"]["output"];
-  captureContentType?: Maybe<Scalars["String"]["output"]>;
-  captureStatus?: Maybe<GitCheckpointCaptureStatus>;
-  captureUrl?: Maybe<Scalars["String"]["output"]>;
-  capturedAt?: Maybe<Scalars["DateTime"]["output"]>;
-  commitSha: Scalars["String"]["output"];
-  committedAt: Scalars["DateTime"]["output"];
-  createdAt: Scalars["DateTime"]["output"];
-  filesChanged: Scalars["Int"]["output"];
-  id: Scalars["ID"]["output"];
-  parentShas: Array<Scalars["String"]["output"]>;
-  promptEvent?: Maybe<Event>;
-  promptEventId: Scalars["ID"]["output"];
-  repo?: Maybe<Repo>;
-  repoId: Scalars["ID"]["output"];
-  session?: Maybe<Session>;
-  sessionGroup?: Maybe<SessionGroup>;
-  sessionGroupId: Scalars["ID"]["output"];
-  sessionId: Scalars["ID"]["output"];
-  subject: Scalars["String"]["output"];
-  treeSha: Scalars["String"]["output"];
-};
-
-export type GitCheckpointCaptureStatus = "captured" | "failed" | "pending" | "unavailable";
 
 export type HostingMode = "cloud" | "local";
 
@@ -648,6 +676,7 @@ export type Mutation = {
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
   commitSessionGroupFileChanges: Scalars["String"]["output"];
+  convertSessionGroup: Session;
   createAgentEnvironment: AgentEnvironment;
   createAiConversation: AiConversation;
   createChannel: Channel;
@@ -665,7 +694,9 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
+  deleteCodexCredential: Scalars["Boolean"]["output"];
   deleteOrgSecret: Scalars["Boolean"]["output"];
+  deleteRepo: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
@@ -684,6 +715,7 @@ export type Mutation = {
   leaveChat: Chat;
   linkEntityToProject: Project;
   linkLinkedCheckoutRepo: LinkedCheckoutActionResult;
+  linkSessionPullRequest: SessionGroup;
   linkTicket: Ticket;
   moveChannel: Channel;
   moveSessionToCloud: Session;
@@ -701,6 +733,7 @@ export type Mutation = {
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
   requestBridgeAccess: BridgeAccessRequest;
+  resizeTerminal: Scalars["Boolean"]["output"];
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
@@ -715,8 +748,10 @@ export type Mutation = {
   sendChatMessage: Message;
   sendMessage: Event;
   sendSessionMessage: Event;
+  sendTerminalInput: Scalars["Boolean"]["output"];
   sendTurn: Turn;
   setApiToken: ApiTokenStatus;
+  setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
@@ -807,6 +842,10 @@ export type MutationCommitSessionGroupFileChangesArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationConvertSessionGroupArgs = {
+  input: ConvertSessionGroupInput;
+};
+
 export type MutationCreateAgentEnvironmentArgs = {
   input: CreateAgentEnvironmentInput;
 };
@@ -886,6 +925,10 @@ export type MutationDeleteOrgSecretArgs = {
   orgId: Scalars["ID"]["input"];
 };
 
+export type MutationDeleteRepoArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationDeleteSessionArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -962,6 +1005,11 @@ export type MutationLinkLinkedCheckoutRepoArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationLinkSessionPullRequestArgs = {
+  prUrl: Scalars["String"]["input"];
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationLinkTicketArgs = {
@@ -1049,6 +1097,12 @@ export type MutationRequestBridgeAccessArgs = {
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
+export type MutationResizeTerminalArgs = {
+  cols: Scalars["Int"]["input"];
+  rows: Scalars["Int"]["input"];
+  terminalId: Scalars["ID"]["input"];
+};
+
 export type MutationRestartSessionProcessArgs = {
   appConfigId: Scalars["ID"]["input"];
   processConfigId: Scalars["ID"]["input"];
@@ -1129,6 +1183,11 @@ export type MutationSendSessionMessageArgs = {
   text: Scalars["String"]["input"];
 };
 
+export type MutationSendTerminalInputArgs = {
+  data: Scalars["String"]["input"];
+  terminalId: Scalars["ID"]["input"];
+};
+
 export type MutationSendTurnArgs = {
   branchId: Scalars["ID"]["input"];
   content: Scalars["String"]["input"];
@@ -1136,6 +1195,10 @@ export type MutationSendTurnArgs = {
 
 export type MutationSetApiTokenArgs = {
   input: SetApiTokenInput;
+};
+
+export type MutationSetCodexCredentialArgs = {
+  input: SetCodexCredentialInput;
 };
 
 export type MutationSetLinkedCheckoutAutoSyncArgs = {
@@ -1383,6 +1446,7 @@ export type Query = {
    * listing surface (the sidebar Apps section).
    */
   appSessionGroups: Array<SessionGroup>;
+  artifacts: Array<Artifact>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   branch?: Maybe<Branch>;
@@ -1402,6 +1466,7 @@ export type Query = {
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
+  myCodexCredential?: Maybe<CodexCredentialStatus>;
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
@@ -1440,6 +1505,7 @@ export type Query = {
   sessionTerminals: Array<Terminal>;
   sessionTimeline: SessionTimelinePage;
   sessions: Array<Session>;
+  terminalCapture: TerminalCapture;
   threadReplies: Array<Message>;
   threadSummary?: Maybe<ThreadSummary>;
   ticket?: Maybe<Ticket>;
@@ -1460,7 +1526,15 @@ export type QueryAiConversationsArgs = {
 };
 
 export type QueryAppSessionGroupsArgs = {
+  includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryArtifactsArgs = {
+  key?: InputMaybe<Scalars["String"]["input"]>;
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+  sessionId?: InputMaybe<Scalars["ID"]["input"]>;
+  type?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type QueryAvailableRuntimesArgs = {
@@ -1726,6 +1800,12 @@ export type QuerySessionsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
+export type QueryTerminalCaptureArgs = {
+  maxBytes?: InputMaybe<Scalars["Int"]["input"]>;
+  plainText?: InputMaybe<Scalars["Boolean"]["input"]>;
+  terminalId: Scalars["ID"]["input"];
+};
+
 export type QueryThreadRepliesArgs = {
   after?: InputMaybe<Scalars["DateTime"]["input"]>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
@@ -1784,11 +1864,13 @@ export type Repo = {
 export type RepoApplicationConfig = {
   __typename?: "RepoApplicationConfig";
   applications: Array<RepoApplicationDefinition>;
+  runScripts: Array<RepoRunScript>;
   setupScripts: Array<RepoSetupScript>;
 };
 
 export type RepoApplicationConfigInput = {
   applications?: InputMaybe<Array<RepoApplicationDefinitionInput>>;
+  runScripts?: InputMaybe<Array<RepoRunScriptInput>>;
   setupScripts?: InputMaybe<Array<RepoSetupScriptInput>>;
 };
 
@@ -1860,6 +1942,19 @@ export type RepoProcessDefinitionInput = {
 
 export type RepoProvider = "github" | "managed";
 
+export type RepoRunScript = {
+  __typename?: "RepoRunScript";
+  command: Scalars["String"]["output"];
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+};
+
+export type RepoRunScriptInput = {
+  command: Scalars["String"]["input"];
+  id: Scalars["ID"]["input"];
+  name: Scalars["String"]["input"];
+};
+
 export type RepoSetupScript = {
   __typename?: "RepoSetupScript";
   command: Scalars["String"]["output"];
@@ -1900,6 +1995,7 @@ export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
 export type Session = {
   __typename?: "Session";
   agentStatus: AgentStatus;
+  artifacts: Array<Artifact>;
   branch?: Maybe<Scalars["String"]["output"]>;
   cacheCreationTokens: Scalars["Float"]["output"];
   cacheReadTokens: Scalars["Float"]["output"];
@@ -1908,8 +2004,8 @@ export type Session = {
   costUsd: Scalars["Float"]["output"];
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
+  createdById: Scalars["ID"]["output"];
   endpoints?: Maybe<SessionEndpoints>;
-  gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars["ID"]["output"];
   inputTokens: Scalars["Float"]["output"];
@@ -2085,7 +2181,6 @@ export type SessionGroup = {
   createdAt: Scalars["DateTime"]["output"];
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
-  gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
   kind: SessionGroupKind;
   name: Scalars["String"]["output"];
@@ -2126,16 +2221,14 @@ export type SessionGroupFileTree = {
   truncated: Scalars["Boolean"]["output"];
 };
 
-export type SessionGroupKind = "app" | "coding" | "design";
+export type SessionGroupKind = "app" | "coding" | "design" | "general";
 
 export type SessionGroupStatus =
   | "archived"
-  | "failed"
   | "in_progress"
   | "in_review"
   | "merged"
-  | "needs_input"
-  | "stopped";
+  | "needs_input";
 
 export type SessionGroupVisibility = "private" | "public";
 
@@ -2209,6 +2302,11 @@ export type SetApiTokenInput = {
   token: Scalars["String"]["input"];
 };
 
+export type SetCodexCredentialInput = {
+  credential: Scalars["String"]["input"];
+  method: CodexAuthMethod;
+};
+
 export type SetOrgSecretInput = {
   name: Scalars["String"]["input"];
   orgId: Scalars["ID"]["input"];
@@ -2232,8 +2330,10 @@ export type SlashCommandCategory = "passthrough" | "special" | "terminal";
 export type SlashCommandSource = "builtin" | "project_skill" | "user_skill";
 
 export type StartSessionInput = {
+  attachmentKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
@@ -2244,7 +2344,6 @@ export type StartSessionInput = {
   prompt?: InputMaybe<Scalars["String"]["input"]>;
   reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
-  restoreCheckpointId?: InputMaybe<Scalars["ID"]["input"]>;
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
   sourceSessionId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -2294,6 +2393,8 @@ export type SubscriptionOrgEventsArgs = {
 };
 
 export type SubscriptionSessionEventsArgs = {
+  after?: InputMaybe<Scalars["DateTime"]["input"]>;
+  afterEventId?: InputMaybe<Scalars["ID"]["input"]>;
   organizationId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
 };
@@ -2319,8 +2420,23 @@ export type SubscriptionUserNotificationsArgs = {
 
 export type Terminal = {
   __typename?: "Terminal";
+  cols?: Maybe<Scalars["Int"]["output"]>;
+  connected: Scalars["Boolean"]["output"];
   id: Scalars["ID"]["output"];
+  rows?: Maybe<Scalars["Int"]["output"]>;
   sessionId: Scalars["ID"]["output"];
+  status: Scalars["String"]["output"];
+};
+
+export type TerminalCapture = {
+  __typename?: "TerminalCapture";
+  byteCount: Scalars["Int"]["output"];
+  capturedAt: Scalars["DateTime"]["output"];
+  closed: Scalars["Boolean"]["output"];
+  connected: Scalars["Boolean"]["output"];
+  output: Scalars["String"]["output"];
+  terminalId: Scalars["ID"]["output"];
+  truncated: Scalars["Boolean"]["output"];
 };
 
 export type TerminalEndpoint = {
@@ -2413,7 +2529,6 @@ export type UpdateRepoInput = {
   applicationConfig?: InputMaybe<RepoApplicationConfigInput>;
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
-  /** Associate a remote URL with a repo that does not have one yet. */
   remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
   /**
    * Named launcher runtime profile for cloud sessions on this repo (e.g. a

@@ -34,6 +34,7 @@ vi.mock("@trace/shared", () => ({
   getDefaultModel: (tool: string) =>
     tool === "claude_code" ? "claude-default" : tool === "codex" ? "codex-default" : "pi-default",
   getDefaultReasoningEffort: (tool: string) => (tool === "codex" ? "medium" : null),
+  getModelProviderGroupsForTool: () => [],
 }));
 
 vi.mock("@/components/design-system", () => ({
@@ -45,9 +46,9 @@ vi.mock("@/components/design-system", () => ({
     title: string;
     trailing?: React.ReactNode;
     onPress?: () => void;
-  }) =>
-    React.createElement("ListRow", { title, trailing, onPress }),
-  Text: ({ children }: { children?: React.ReactNode }) => React.createElement("Text", null, children),
+  }) => React.createElement("ListRow", { title, trailing, onPress }),
+  Text: ({ children }: { children?: React.ReactNode }) =>
+    React.createElement("Text", null, children),
 }));
 
 vi.mock("@/theme", () => ({

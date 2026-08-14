@@ -4,6 +4,7 @@ import { homedir } from "os";
 import { join } from "path";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput, TokenUsage } from "./coding-tool.js";
+import { buildChildProcessEnv } from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 /** Generous cap so long agent runs aren't cut short by agy's default 5m print timeout. */
@@ -43,7 +44,12 @@ function parseAntigravityUsage(data: Record<string, unknown>): TokenUsage | unde
 
   const normalized: TokenUsage = {
     inputTokens: num(usage.inputTokens, usage.input_tokens, usage.input, usage.prompt_tokens),
-    outputTokens: num(usage.outputTokens, usage.output_tokens, usage.output, usage.completion_tokens),
+    outputTokens: num(
+      usage.outputTokens,
+      usage.output_tokens,
+      usage.output,
+      usage.completion_tokens,
+    ),
     cacheReadTokens: num(
       usage.cacheReadTokens,
       usage.cacheRead,
@@ -71,24 +77,6 @@ function parseAntigravityUsage(data: Record<string, unknown>): TokenUsage | unde
   return normalized;
 }
 
-function parseAntigravityCost(data: Record<string, unknown>): number | undefined {
-  const usage =
-    asRecord(data.usage) ??
-    asRecord(data.tokenUsage) ??
-    asRecord(data.token_usage) ??
-    asRecord(data.tokens);
-  const cost = asRecord(usage?.cost) ?? asRecord(data.cost);
-  const total = num(
-    data.costUsd,
-    data.cost_usd,
-    data.totalCostUsd,
-    data.total_cost_usd,
-    cost?.total,
-    cost?.usd,
-  );
-  return total > 0 ? total : undefined;
-}
-
 /**
  * Adapter for running Google's Antigravity CLI (`agy`) sessions.
  *
@@ -112,11 +100,17 @@ export class AntigravityAdapter implements CodingToolAdapter {
   private conversationId: string | null = null;
   private processGeneration = 0;
   private lastUsage: TokenUsage | undefined;
-  private lastCostUsd: number | undefined;
 
-  run({ prompt, cwd, onOutput, onComplete, interactionMode, toolSessionId }: RunOptions) {
+  run({
+    prompt,
+    cwd,
+    onOutput,
+    onComplete,
+    interactionMode,
+    toolSessionId,
+    runtimeEnv,
+  }: RunOptions) {
     this.lastUsage = undefined;
-    this.lastCostUsd = undefined;
 
     // Restore resume capability after a bridge restart.
     if (toolSessionId && !this.conversationId) {
@@ -136,7 +130,7 @@ export class AntigravityAdapter implements CodingToolAdapter {
     const child = spawn("agy", args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),
       detached: true,
     });
     this.process = child;
@@ -204,7 +198,6 @@ export class AntigravityAdapter implements CodingToolAdapter {
         type: "result",
         subtype: isError ? "error" : "success",
         ...(this.lastUsage ? { usage: this.lastUsage } : {}),
-        ...(this.lastCostUsd != null ? { costUsd: this.lastCostUsd } : {}),
       });
       onComplete();
       this.process = null;
@@ -284,8 +277,6 @@ export class AntigravityAdapter implements CodingToolAdapter {
     if (!usage) return false;
 
     this.lastUsage = usage;
-    const costUsd = parseAntigravityCost(data);
-    if (costUsd != null) this.lastCostUsd = costUsd;
     return true;
   }
 

@@ -36,6 +36,32 @@ describe("validateStartSessionRequest", () => {
 
     expect(request.tool).toBe("pi");
   });
+
+  it("accepts the base commit field sent for repository sessions", () => {
+    const request = validateStartSessionRequest({
+      ...startRequest(),
+      repo: {
+        id: "repo-1",
+        name: "trace",
+        remoteUrl: "https://github.com/trace/trace.git",
+        defaultBranch: "main",
+        branch: "trace/test",
+        baseCommitSha: "a".repeat(40),
+        readOnly: false,
+      },
+    });
+
+    expect(request.repo?.baseCommitSha).toBe("a".repeat(40));
+  });
+
+  it("rejects invalid runtime lease deadlines", () => {
+    expect(() =>
+      validateStartSessionRequest({
+        ...startRequest(),
+        runtimeHardDeadlineAt: "not-a-timestamp",
+      }),
+    ).toThrow("runtimeHardDeadlineAt must be an ISO-8601 timestamp");
+  });
 });
 
 function startRequest(): StartSessionRequest {
@@ -47,6 +73,9 @@ function startRequest(): StartSessionRequest {
     runtimeToken: "runtime-token",
     runtimeTokenExpiresAt: "2026-01-01T00:00:00.000Z",
     runtimeTokenScope: "session",
+    runtimeLeaseTtlMs: 900_000,
+    runtimeHardDeadlineTtlMs: 86_400_000,
+    runtimeHardDeadlineAt: "2026-01-02T00:00:00.000Z",
     bridgeUrl: "wss://trace.example/bridge",
     repo: null,
     tool: "codex",

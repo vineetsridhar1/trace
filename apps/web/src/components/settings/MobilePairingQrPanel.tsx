@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { Button } from "../ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { formatMobilePairingDate } from "./mobile-pairing-utils";
 
@@ -29,92 +31,105 @@ export function MobilePairingQrPanel({
   onGenerateQr,
   onCopyPayload,
 }: MobilePairingQrPanelProps) {
+  const [qrOpen, setQrOpen] = useState(false);
+
+  useEffect(() => {
+    if (qrDataUrl) setQrOpen(true);
+  }, [qrDataUrl]);
+
   return (
-    <div className="mt-4 grid min-w-0 gap-4">
-      <div className="min-w-0 space-y-4">
-        <div className="space-y-2">
-          {requiresReachableUrl ? (
-            <>
-              <label
-                htmlFor="mobile-pairing-public-url"
-                className="text-sm font-medium text-foreground"
-              >
+    <div className="mt-4 min-w-0">
+      {requiresReachableUrl ? (
+        <div className="mb-4">
+          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-end">
+            <label htmlFor="mobile-pairing-public-url" className="min-w-0 flex-1">
+              <span className="mb-1.5 block text-xs font-medium text-muted-foreground">
                 Reachable Trace URL
-              </label>
-              <div className="flex min-w-0 flex-col gap-3 md:flex-row">
-                <Input
-                  id="mobile-pairing-public-url"
-                  value={publicUrl}
-                  onChange={(event) => onPublicUrlChange(event.target.value)}
-                  placeholder="http://192.168.1.20:3000 or https://your-trace.ngrok-free.app"
-                  className="min-w-0 flex-1"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                />
-                <Button
-                  className="w-full md:w-auto"
-                  onClick={onGenerateQr}
-                  disabled={generating || !publicUrl.trim()}
-                >
-                  {generating ? "Generating..." : "Generate QR"}
-                </Button>
-              </div>
-            </>
-          ) : (
-            <Button className="w-full md:w-auto" onClick={onGenerateQr} disabled={generating}>
-              {generating ? "Generating..." : "Generate QR"}
+              </span>
+              <Input
+                id="mobile-pairing-public-url"
+                value={publicUrl}
+                onChange={(event) => onPublicUrlChange(event.target.value)}
+                placeholder="http://192.168.1.20:3000"
+                className="h-8 w-full text-xs"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            </label>
+            <Button size="sm" onClick={onGenerateQr} disabled={generating || !publicUrl.trim()}>
+              {generating ? "Generating..." : qrDataUrl ? "New code" : "Generate QR"}
             </Button>
-          )}
-          <div className="text-xs text-muted-foreground">
-            {requiresReachableUrl ? (
-              isLocal ? (
-                "This should be the public URL that your phone can reach. The generated QR expires in 5 minutes and can only be used once."
-              ) : (
-                "Your current Trace URL is localhost, which your phone cannot reach. Enter the LAN or tunnel URL for this Trace window."
-              )
-            ) : (
-              <>
-                The generated QR expires in 5 minutes and can only be used once. Mobile will connect
-                to <span className="font-mono">{hostedPairingBaseUrl}</span>.
-              </>
-            )}
           </div>
+          <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
+            {isLocal
+              ? "Use a LAN or tunnel URL your phone can reach."
+              : "Localhost cannot be reached from your phone. Enter a LAN or tunnel URL."}
+          </p>
         </div>
+      ) : null}
 
-        {qrPayload ? (
-          <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-background p-3">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <div className="text-sm font-medium text-foreground">Pairing payload</div>
-                <div className="text-xs text-muted-foreground">
-                  Expires {formatMobilePairingDate(expiresAt)}
-                </div>
-              </div>
-              <Button variant="secondary" onClick={onCopyPayload}>
-                Copy JSON
-              </Button>
-            </div>
-            <pre className="max-h-40 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface px-3 py-2 text-xs text-muted-foreground">
-              {qrPayload}
-            </pre>
-          </div>
-        ) : null}
+      <div className="grid min-w-0 grid-cols-[96px_minmax(0,1fr)] items-start gap-4">
+        <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-lg border border-border bg-background p-2">
+          {qrDataUrl ? (
+            <button
+              type="button"
+              onClick={() => setQrOpen(true)}
+              aria-label="Open pairing QR code"
+              className="h-full w-full cursor-zoom-in rounded bg-white p-1"
+            >
+              <img src={qrDataUrl} alt="Trace mobile pairing QR code" className="h-full w-full" />
+            </button>
+          ) : (
+            <span className="text-center text-[11px] leading-4 text-muted-foreground">
+              QR appears here
+            </span>
+          )}
+        </div>
+        <div className="min-w-0">
+          {!requiresReachableUrl ? (
+            <Button size="sm" onClick={onGenerateQr} disabled={generating}>
+              {generating ? "Generating..." : qrDataUrl ? "New code" : "Generate QR"}
+            </Button>
+          ) : null}
+          <p className="text-[11px] leading-4 text-muted-foreground">
+            {qrDataUrl
+              ? `Code expires ${formatMobilePairingDate(expiresAt)} and can only be used once.`
+              : "Generate a one-time pairing code, then scan it with the Trace mobile app."}
+          </p>
+          {!requiresReachableUrl ? (
+            <p className="mt-1 truncate text-[11px] text-muted-foreground">
+              Connects to <span className="font-mono">{hostedPairingBaseUrl}</span>
+            </p>
+          ) : null}
+          {qrPayload ? (
+            <Button variant="ghost" size="xs" onClick={onCopyPayload} className="mt-2">
+              Copy pairing code
+            </Button>
+          ) : null}
+        </div>
       </div>
 
-      <div className="flex min-h-64 min-w-0 items-center justify-center overflow-hidden rounded-xl border border-dashed border-border bg-background p-4">
-        {qrDataUrl ? (
-          <img
-            src={qrDataUrl}
-            alt="Trace mobile pairing QR code"
-            className="box-border h-auto w-full max-w-[min(18rem,100%)] rounded-lg bg-white p-3"
-          />
-        ) : (
-          <div className="max-w-56 text-center text-sm text-muted-foreground">
-            Generate a pairing code to show the QR here.
-          </div>
-        )}
-      </div>
+      <Dialog open={qrOpen} onOpenChange={setQrOpen}>
+        <DialogContent className="w-auto max-w-[calc(100%-2rem)] gap-3 p-5 sm:max-w-md">
+          <DialogHeader className="pr-8">
+            <DialogTitle>Scan to pair your phone</DialogTitle>
+            <DialogDescription>
+              Open the Trace mobile app and scan this one-time code.
+            </DialogDescription>
+          </DialogHeader>
+          {qrDataUrl ? (
+            <img
+              src={qrDataUrl}
+              alt="Trace mobile pairing QR code"
+              className="mx-auto aspect-square w-[min(78vw,360px)] rounded-xl bg-white p-3"
+            />
+          ) : null}
+          <p className="text-center text-xs text-muted-foreground">
+            Expires {formatMobilePairingDate(expiresAt)} and can only be used once.
+          </p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

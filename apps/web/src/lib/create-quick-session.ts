@@ -4,6 +4,7 @@ import { START_SESSION_MUTATION, useEntityStore } from "@trace/client-core";
 import { navigateToSession, navigateToSessionGroup } from "../stores/ui";
 
 const pendingQuickSessionChannels = new Set<string>();
+let appCreationPending = false;
 
 export function getChannelRepoId(channelId: string): string | undefined {
   const channel = useEntityStore.getState().channels[channelId];
@@ -26,7 +27,7 @@ export function getChannelRepoId(channelId: string): string | undefined {
  */
 export async function createQuickSession(
   channelId: string,
-  options: { visibility?: "public" | "private" } = {},
+  options: { visibility?: "public" | "private"; tool?: string } = {},
 ): Promise<void> {
   if (pendingQuickSessionChannels.has(channelId)) return;
   pendingQuickSessionChannels.add(channelId);
@@ -41,6 +42,7 @@ export async function createQuickSession(
           channelId,
           repoId: channelRepoId ?? undefined,
           visibility: options.visibility,
+          tool: options.tool,
         },
       })
       .toPromise();
@@ -75,9 +77,9 @@ export async function createQuickSession(
   }
 }
 
-export async function createAppSession(prompt: string): Promise<boolean> {
-  const trimmed = prompt.trim();
-  if (!trimmed) return false;
+export async function createAppSession(): Promise<boolean> {
+  if (appCreationPending) return false;
+  appCreationPending = true;
 
   try {
     const result = await client
@@ -85,7 +87,6 @@ export async function createAppSession(prompt: string): Promise<boolean> {
         input: {
           kind: "app",
           hosting: "cloud",
-          prompt: trimmed,
         },
       })
       .toPromise();
@@ -109,5 +110,7 @@ export async function createAppSession(prompt: string): Promise<boolean> {
     const message = err instanceof Error ? err.message : "Unknown error";
     toast.error("Failed to create app session", { description: message });
     return false;
+  } finally {
+    appCreationPending = false;
   }
 }

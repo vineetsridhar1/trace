@@ -21,6 +21,7 @@ import type {
   SessionApplicationLogEntry,
   SessionEndpoint,
   SessionSetupScriptRun,
+  Artifact,
 } from "@trace/gql";
 
 /** Client-side session entity with extra fields not in the GQL schema */
@@ -56,6 +57,7 @@ export type EntityTableMap = {
   sessionApplicationLogs: SessionApplicationLogEntry;
   sessionEndpoints: SessionEndpoint;
   sessionSetupScriptRuns: SessionSetupScriptRun;
+  artifacts: Artifact;
 };
 
 export type EntityType = keyof EntityTableMap;
@@ -139,6 +141,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   sessionApplicationLogs: {},
   sessionEndpoints: {},
   sessionSetupScriptRuns: {},
+  artifacts: {},
   eventsByScope: {},
   _eventIdsByScope: {},
   _sessionIdsByGroup: {},
@@ -383,6 +386,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       sessionApplicationLogs: {},
       sessionEndpoints: {},
       sessionSetupScriptRuns: {},
+      artifacts: {},
       eventsByScope: {},
       _eventIdsByScope: {},
       _sessionIdsByGroup: {},
@@ -722,6 +726,7 @@ const ENTITY_KEYS: EntityType[] = [
   "sessionApplicationLogs",
   "sessionEndpoints",
   "sessionSetupScriptRuns",
+  "artifacts",
 ];
 
 function getMessageEntityScopeKey(

@@ -122,6 +122,7 @@ function handleSessionStatusChange(event: Event): void {
   const payload = asJsonObject(event.payload);
   const newStatus = (payload?.agentStatus ?? payload?.sessionStatus) as string | undefined;
   if (!newStatus) return;
+  if (newStatus === "active") return;
 
   // Look up the session to check ownership and get the name
   const session = useEntityStore.getState().sessions[event.scopeId];

@@ -1,6 +1,6 @@
 FROM node:22.14.0-slim AS base
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends openssl ca-certificates && \
+    apt-get install -y --no-install-recommends openssl ca-certificates git && \
     rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@11.10.0 --activate
 WORKDIR /app
@@ -23,6 +23,7 @@ COPY packages/client-core/ packages/client-core/
 COPY apps/mcp/ apps/mcp/
 COPY apps/server/ apps/server/
 COPY apps/web/ apps/web/
+COPY runtime/ runtime/
 COPY tsconfig.base.json ./
 RUN cd apps/server && npx prisma generate
 RUN node packages/gql/scripts/codegen.cjs
@@ -33,6 +34,8 @@ RUN pnpm --filter @trace/mcp build
 RUN pnpm --filter @trace/server build
 ARG VITE_API_URL=""
 ENV VITE_API_URL=${VITE_API_URL}
+ARG VITE_AG_GRID_LICENSE_KEY=""
+ENV VITE_AG_GRID_LICENSE_KEY=${VITE_AG_GRID_LICENSE_KEY}
 RUN pnpm --filter @trace/web build
 
 FROM base AS production

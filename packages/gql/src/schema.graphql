@@ -22,6 +22,7 @@ enum SessionGroupVisibility {
 }
 
 enum SessionGroupKind {
+  general
   coding
   design
   app
@@ -31,8 +32,6 @@ enum SessionGroupStatus {
   in_progress
   needs_input
   in_review
-  failed
-  stopped
   merged
   archived
 }
@@ -238,8 +237,9 @@ enum RepoProvider {
   managed
 }
 
-enum GitCheckpointCaptureStatus {
+enum DesignPreviewStatus {
   pending
+  publishing
   captured
   unavailable
   failed
@@ -265,6 +265,12 @@ enum ApiTokenProvider {
   ssh_key
 }
 
+enum CodexAuthMethod {
+  chatgpt_session
+  access_token
+  api_key
+}
+
 enum PushPlatform {
   ios
   android
@@ -281,6 +287,7 @@ enum TurnRole {
 }
 
 enum EventType {
+  artifact_created
   message_sent
   message_edited
   message_deleted
@@ -293,6 +300,8 @@ enum EventType {
   session_resumed
   session_terminated
   session_deleted
+  terminal_created
+  terminal_destroyed
   session_output
   ticket_created
   ticket_updated
@@ -305,6 +314,7 @@ enum EventType {
   organization_created
   repo_created
   repo_updated
+  repo_deleted
   managed_git_token_minted
   channel_created
   channel_updated
@@ -348,6 +358,7 @@ enum EventType {
   session_runtime_disconnected
   session_runtime_reconnected
   session_group_visibility_updated
+  session_converted
   application_config_updated
   session_setup_script_started
   session_setup_script_completed
@@ -440,7 +451,14 @@ type Repo {
 
 type RepoApplicationConfig {
   setupScripts: [RepoSetupScript!]!
+  runScripts: [RepoRunScript!]!
   applications: [RepoApplicationDefinition!]!
+}
+
+type RepoRunScript {
+  id: ID!
+  name: String!
+  command: String!
 }
 
 type RepoSetupScript {
@@ -537,13 +555,14 @@ type SessionGroup {
   channel: Channel
   repo: Repo
   branch: String
-  gitCheckpoints: [GitCheckpoint!]!
   sessions: [Session!]!
   workdir: String
   connection: SessionConnection
   prUrl: String
   worktreeDeleted: Boolean!
-  """True when the workspace is a user-owned worktree imported into Trace."""
+  """
+  True when the workspace is a user-owned worktree imported into Trace.
+  """
   worktreeAdopted: Boolean!
   archivedAt: DateTime
   setupStatus: SetupStatus!
@@ -552,13 +571,17 @@ type SessionGroup {
   updatedAt: DateTime!
 }
 
-"""An existing git worktree of a repo on a local runtime, offered for import."""
+"""
+An existing git worktree of a repo on a local runtime, offered for import.
+"""
 type RepoWorktree {
   path: String!
   branch: String
   head: String
   isMain: Boolean!
-  """True when the worktree is already managed by Trace (not a candidate for import)."""
+  """
+  True when the worktree is already managed by Trace (not a candidate for import).
+  """
   isTraceManaged: Boolean!
 }
 
@@ -571,6 +594,7 @@ type Session {
   model: String
   reasoningEffort: String
   hosting: HostingMode!
+  createdById: ID!
   createdBy: User!
   repo: Repo
   branch: String
@@ -579,7 +603,6 @@ type Session {
   channel: Channel
   sessionGroupId: ID
   sessionGroup: SessionGroup
-  gitCheckpoints: [GitCheckpoint!]!
   projects: [Project!]!
   tickets: [Ticket!]!
   endpoints: SessionEndpoints
@@ -594,8 +617,35 @@ type Session {
   cacheCreationTokens: Float!
   costUsd: Float!
   queuedMessages: [QueuedMessage!]!
+  artifacts: [Artifact!]!
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+type ArtifactFile {
+  path: String!
+  mediaType: String!
+  size: Int!
+  digest: String!
+}
+
+type ArtifactManifest {
+  schemaVersion: Int!
+  files: [ArtifactFile!]!
+}
+
+type Artifact {
+  id: ID!
+  organizationId: ID!
+  sessionId: ID!
+  type: String!
+  key: String!
+  bundleDigest: String!
+  manifest: ArtifactManifest!
+  byteSize: Int!
+  createdBy: User!
+  session: Session!
+  createdAt: DateTime!
 }
 
 type QueuedMessage {
@@ -612,30 +662,6 @@ type QueuedMessage {
 type SessionSearchResults {
   sessions: [Session!]!
   sessionGroups: [SessionGroup!]!
-}
-
-type GitCheckpoint {
-  id: ID!
-  sessionId: ID!
-  session: Session
-  sessionGroupId: ID!
-  sessionGroup: SessionGroup
-  repoId: ID!
-  repo: Repo
-  promptEventId: ID!
-  promptEvent: Event
-  commitSha: String!
-  parentShas: [String!]!
-  treeSha: String!
-  subject: String!
-  author: String!
-  committedAt: DateTime!
-  filesChanged: Int!
-  captureStatus: GitCheckpointCaptureStatus
-  captureUrl: String
-  captureContentType: String
-  capturedAt: DateTime
-  createdAt: DateTime!
 }
 
 type Ticket {
@@ -962,6 +988,11 @@ type ApiTokenStatus {
   updatedAt: DateTime
 }
 
+type CodexCredentialStatus {
+  method: CodexAuthMethod!
+  updatedAt: DateTime!
+}
+
 type SessionRuntimeInstance {
   id: ID!
   label: String!
@@ -1184,6 +1215,7 @@ input ReorderChannelsInput {
 }
 
 input StartSessionInput {
+  clientMutationId: String
   kind: SessionGroupKind
   tool: CodingTool
   model: String
@@ -1199,14 +1231,26 @@ input StartSessionInput {
   channelId: ID
   sessionGroupId: ID
   sourceSessionId: ID
-  restoreCheckpointId: ID
   projectId: ID
   prompt: String
+  attachmentKeys: [String!]
   interactionMode: String
-  """Absolute path to an existing local worktree to adopt instead of creating one. Local hosting only."""
+  """
+  Absolute path to an existing local worktree to adopt instead of creating one. Local hosting only.
+  """
   worktreePath: String
 }
 
+input ConvertSessionGroupInput {
+  sessionGroupId: ID!
+  kind: SessionGroupKind!
+  channelId: ID
+  repoId: ID
+  projectId: ID
+  tool: CodingTool
+  model: String
+  reasoningEffort: String
+}
 input UpdateSessionDefaultsInput {
   tool: CodingTool
   model: String
@@ -1259,7 +1303,6 @@ input CreateRepoInput {
 
 input UpdateRepoInput {
   name: String
-  """Associate a remote URL with a repo that does not have one yet."""
   remoteUrl: String
   defaultBranch: String
   applicationConfig: RepoApplicationConfigInput
@@ -1272,7 +1315,14 @@ input UpdateRepoInput {
 
 input RepoApplicationConfigInput {
   setupScripts: [RepoSetupScriptInput!]
+  runScripts: [RepoRunScriptInput!]
   applications: [RepoApplicationDefinitionInput!]
+}
+
+input RepoRunScriptInput {
+  id: ID!
+  name: String!
+  command: String!
 }
 
 input RepoSetupScriptInput {
@@ -1346,6 +1396,11 @@ input SetApiTokenInput {
   token: String!
 }
 
+input SetCodexCredentialInput {
+  method: CodexAuthMethod!
+  credential: String!
+}
+
 input CreateAiConversationInput {
   title: String
   visibility: AiConversationVisibility
@@ -1399,10 +1454,11 @@ type Query {
   App-kind session groups for the org. Apps have no channel, so this is their
   listing surface (the sidebar Apps section).
   """
-  appSessionGroups(organizationId: ID!): [SessionGroup!]!
+  appSessionGroups(organizationId: ID!, includeArchived: Boolean): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
+  artifacts(sessionId: ID, sessionGroupId: ID, type: String, key: String): [Artifact!]!
   mySessions(
     organizationId: ID!
     agentStatus: AgentStatus
@@ -1445,7 +1501,9 @@ type Query {
   myConnections: [ConnectionsBridge!]!
   bridgeRuntimeAccess(runtimeInstanceId: ID!, sessionGroupId: ID): BridgeRuntimeAccess!
   repoBranches(repoId: ID!, runtimeInstanceId: ID, sessionGroupId: ID): [String!]!
-  """Existing on-disk worktrees of a repo on a local runtime, available to import."""
+  """
+  Existing on-disk worktrees of a repo on a local runtime, available to import.
+  """
   repoWorktrees(repoId: ID!, runtimeInstanceId: ID): [RepoWorktree!]!
   sessionGroupFiles(sessionGroupId: ID!): [String!]!
   sessionGroupFileTree(sessionGroupId: ID!): SessionGroupFileTree!
@@ -1484,7 +1542,9 @@ type Query {
   threadSummary(rootMessageId: ID!): ThreadSummary
   participants(scopeType: String!, scopeId: ID!): [Participant!]!
   myApiTokens: [ApiTokenStatus!]!
+  myCodexCredential: CodexCredentialStatus
   sessionTerminals(sessionId: ID!): [Terminal!]!
+  terminalCapture(terminalId: ID!, maxBytes: Int, plainText: Boolean): TerminalCapture!
   channelTerminals(channelId: ID!, bridgeRuntimeId: ID!): [Terminal!]!
   sessionSetupScriptRuns(sessionGroupId: ID!): [SessionSetupScriptRun!]!
   sessionApplicationProcesses(sessionGroupId: ID!): [SessionApplicationProcess!]!
@@ -1505,6 +1565,20 @@ type Query {
 type Terminal {
   id: ID!
   sessionId: ID!
+  status: String!
+  cols: Int
+  rows: Int
+  connected: Boolean!
+}
+
+type TerminalCapture {
+  terminalId: ID!
+  output: String!
+  byteCount: Int!
+  truncated: Boolean!
+  capturedAt: DateTime!
+  closed: Boolean!
+  connected: Boolean!
 }
 
 type LinkedCheckoutStatus {
@@ -1580,7 +1654,10 @@ type Mutation {
   reorderChannels(input: ReorderChannelsInput!): [Channel!]!
   sendMessage(channelId: ID!, text: String!, parentId: ID): Event!
   startSession(input: StartSessionInput!): Session!
-  """Adopt an existing local worktree into a not-yet-started session's group (local hosting only)."""
+  convertSessionGroup(input: ConvertSessionGroupInput!): Session!
+  """
+  Adopt an existing local worktree into a not-yet-started session's group (local hosting only).
+  """
   importWorktree(sessionId: ID!, worktreePath: String!, branch: String): SessionGroup!
   forkSession(eventId: ID!): Session!
   runSession(id: ID!, prompt: String, interactionMode: String): Session!
@@ -1588,6 +1665,7 @@ type Mutation {
   dismissSession(id: ID!): Session!
   deleteSession(id: ID!): Session!
   archiveSessionGroup(id: ID!): SessionGroup
+  linkSessionPullRequest(sessionId: ID!, prUrl: String!): SessionGroup!
   renameSessionGroup(id: ID!, name: String!): SessionGroup!
   updateSessionGroupVisibility(id: ID!, visibility: SessionGroupVisibility!): SessionGroup!
   deleteSessionGroup(id: ID!): Boolean!
@@ -1690,18 +1768,26 @@ type Mutation {
   linkEntityToProject(entityType: EntityType!, entityId: ID!, projectId: ID!): Project!
   createRepo(input: CreateRepoInput!): Repo!
   updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
+  deleteRepo(id: ID!): Boolean!
   createProject(input: CreateProjectInput!): Project!
   dismissInboxItem(id: ID!): InboxItem!
   setApiToken(input: SetApiTokenInput!): ApiTokenStatus!
   deleteApiToken(provider: ApiTokenProvider!): Boolean!
+  setCodexCredential(input: SetCodexCredentialInput!): CodexCredentialStatus!
+  deleteCodexCredential: Boolean!
   registerPushToken(token: String!, platform: PushPlatform!): Boolean!
   unregisterPushToken(token: String!): Boolean!
   createTerminal(sessionId: ID!, cols: Int!, rows: Int!): Terminal!
   createChannelTerminal(channelId: ID!, bridgeRuntimeId: ID!, cols: Int!, rows: Int!): Terminal!
   destroyTerminal(terminalId: ID!): Boolean!
+  sendTerminalInput(terminalId: ID!, data: String!): Boolean!
+  resizeTerminal(terminalId: ID!, cols: Int!, rows: Int!): Boolean!
   runSessionGroupSetupScript(sessionGroupId: ID!, scriptId: ID!): Boolean!
   startSessionApplication(sessionGroupId: ID!, appConfigId: ID!): [SessionApplicationProcess!]!
-  startSessionApplicationWorkflow(sessionGroupId: ID!, appConfigId: ID!): SessionApplicationWorkflowRun!
+  startSessionApplicationWorkflow(
+    sessionGroupId: ID!
+    appConfigId: ID!
+  ): SessionApplicationWorkflowRun!
   stopSessionApplication(sessionGroupId: ID!, appConfigId: ID!): [SessionApplicationProcess!]!
   startSessionProcess(
     sessionGroupId: ID!
@@ -1779,6 +1865,6 @@ type Subscription {
   sessionStatusChanged(sessionId: ID!, organizationId: ID!): Session!
   chatEvents(chatId: ID!, types: [String!]): Event!
   branchTurns(branchId: ID!): Turn!
-  sessionEvents(sessionId: ID!, organizationId: ID!): Event!
+  sessionEvents(sessionId: ID!, organizationId: ID!, after: DateTime, afterEventId: ID): Event!
   conversationEvents(conversationId: ID!): AiConversationEvent!
 }

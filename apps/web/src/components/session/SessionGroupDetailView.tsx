@@ -23,24 +23,29 @@ import { FileCommandPalette } from "./FileCommandPalette";
 import { ForkSessionDialog } from "./ForkSessionDialog";
 import { SessionGroupContentArea } from "./SessionGroupContentArea";
 import { AppSessionWorkspace } from "./AppSessionWorkspace";
-import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { AttachmentOpenContext, UploadedAttachmentOpenContext } from "./AttachmentOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
 import { SessionApplicationsPanel } from "./applications/SessionApplicationsPanel";
 import { AppSessionPreviewPanel } from "./applications/AppSessionPreviewPanel";
+import { ArtifactOpenContext } from "../artifact/ArtifactOpenContext";
+import { ArtifactTabContent } from "../artifact/ArtifactTabContent";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useSessionGroupSessions } from "./useSessionGroupSessions";
 import { useTerminalActions } from "./useTerminalActions";
 import { useFileActions } from "./useFileActions";
 import { useSessionGroupFiles } from "./useSessionGroupFiles";
 import { useSessionGroupDirectoryTree } from "./useSessionGroupDirectoryTree";
-import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
+import { getSessionGroupDisplayStatus, isTerminalStatus } from "./sessionStatus";
 import { isAppCanvasReady } from "./app-session-readiness";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { toast } from "sonner";
-import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
+import {
+  CLOUD_REPO_REMOTE_REQUIRED,
+  repoRemoteKnownMissing,
+  resolveSupportedHostingForRepo,
+} from "../../lib/repo-capabilities";
 import { useRegisterCommands } from "../../hooks/useRegisterCommands";
 import type { RegisteredCommand } from "../../stores/command-registry";
 
@@ -84,20 +89,6 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       workdir
       worktreeDeleted
       worktreeAdopted
-      gitCheckpoints {
-        id
-        sessionId
-        promptEventId
-        commitSha
-        subject
-        author
-        committedAt
-        filesChanged
-        captureStatus
-        captureUrl
-        capturedAt
-        createdAt
-      }
       repo {
         id
         name
@@ -140,7 +131,6 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         outputTokens
         cacheReadTokens
         cacheCreationTokens
-        costUsd
         connection {
           state
           runtimeInstanceId
@@ -240,6 +230,24 @@ export function SessionGroupDetailView({
   const initSessionTabs = useUIStore(
     (s: { initSessionTabs: (groupId: string, sessionIds: string[]) => void }) => s.initSessionTabs,
   );
+  const openArtifactIds = useUIStore(
+    (s: { openArtifactTabsByGroup: Record<string, string[]> }) =>
+      s.openArtifactTabsByGroup[sessionGroupId] ?? [],
+  );
+  const activeArtifactId = useUIStore(
+    (s: { activeArtifactIdsByGroup: Record<string, string | null> }) =>
+      s.activeArtifactIdsByGroup[sessionGroupId] ?? null,
+  );
+  const openArtifactTab = useUIStore(
+    (s: { openArtifactTab: (groupId: string, artifactId: string) => void }) => s.openArtifactTab,
+  );
+  const closeArtifactTab = useUIStore(
+    (s: { closeArtifactTab: (groupId: string, artifactId: string) => void }) => s.closeArtifactTab,
+  );
+  const setGroupActiveArtifactId = useUIStore(
+    (s: { setActiveArtifactId: (groupId: string, artifactId: string | null) => void }) =>
+      s.setActiveArtifactId,
+  );
   const toggleFullscreen = useDetailPanelStore(
     (s: { toggleFullscreen: () => void }) => s.toggleFullscreen,
   );
@@ -259,11 +267,11 @@ export function SessionGroupDetailView({
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [trafficEndpointId, setTrafficEndpointId] = useState<string | null>(null);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<"session" | "traffic">("session");
-  const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
   const [forkDialogOpen, setForkDialogOpen] = useState(false);
   const [forkEventId, setForkEventId] = useState<string | null>(null);
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
+  const [groupLoadError, setGroupLoadError] = useState<string | null>(null);
   const sidebarResizeCleanupRef = useRef<(() => void) | null>(null);
   const handleOpenForkDialog = useCallback((eventId: string) => {
     setForkEventId(eventId);
@@ -279,6 +287,7 @@ export function SessionGroupDetailView({
 
   const {
     handleOpenTerminal,
+    handleCreateTerminal,
     handleCloseTerminal,
     handleSelectTerminal: selectTerminal,
   } = useTerminalActions({
@@ -313,13 +322,33 @@ export function SessionGroupDetailView({
     handleCloseFile,
   } = useFileActions();
 
+  const setActiveArtifactId = useCallback(
+    (artifactId: string | null) => setGroupActiveArtifactId(sessionGroupId, artifactId),
+    [sessionGroupId, setGroupActiveArtifactId],
+  );
+
+  const handleCloseArtifact = useCallback(
+    (artifactId: string) => closeArtifactTab(sessionGroupId, artifactId),
+    [closeArtifactTab, sessionGroupId],
+  );
+
+  useEffect(() => {
+    if (activeFilePath || activeTerminalId || activeWorkflowTab === "traffic") {
+      setActiveArtifactId(null);
+    }
+  }, [activeFilePath, activeTerminalId, activeWorkflowTab, setActiveArtifactId]);
+
   // Fetch full group detail and merge into store
   useEffect(() => {
-    client
-      .query(SESSION_GROUP_DETAIL_QUERY, { id: sessionGroupId })
+    setGroupLoadError(null);
+    void client
+      .query(SESSION_GROUP_DETAIL_QUERY, { id: sessionGroupId }, { requestPolicy: "network-only" })
       .toPromise()
-      .then((result: { data?: Record<string, unknown> }) => {
-        if (!result.data?.sessionGroup) return;
+      .then((result: { data?: Record<string, unknown>; error?: { message?: string } }) => {
+        if (!result.data?.sessionGroup) {
+          setGroupLoadError(result.error?.message ?? "This shared project could not be found.");
+          return;
+        }
         const fetchedGroup = result.data.sessionGroup as SessionGroupEntity & {
           sessions?: unknown[];
         };
@@ -342,7 +371,8 @@ export function SessionGroupDetailView({
             })) as Array<SessionEntity & { id: string }>,
           );
         }
-      });
+      })
+      .catch(() => setGroupLoadError("Unable to load this shared project. Please try again."));
   }, [sessionGroupId, upsert, upsertMany]);
 
   // Auto-select the most recent session if none is selected
@@ -450,14 +480,11 @@ export function SessionGroupDetailView({
     }
   }, [showApplicationsSidebar, showApplicationsSidebarTab]);
 
-  const selectedSessionStatus = selectedSession
-    ? getDisplaySessionStatus(
-        selectedSession.sessionStatus,
-        groupPrUrl ?? null,
-        selectedSession.agentStatus,
-        groupArchivedAt ?? null,
-      )
-    : "in_progress";
+  const selectedSessionStatus = getSessionGroupDisplayStatus(
+    groupSessions.map((session) => session.sessionStatus),
+    groupArchivedAt ?? null,
+    groupPrUrl,
+  );
   const selectedSessionMergedUnavailable =
     selectedSession?.sessionStatus === "merged" && groupWorktreeDeleted !== false;
   const canMoveSelectedSession =
@@ -515,28 +542,10 @@ export function SessionGroupDetailView({
     );
   })();
 
-  const handleOpenCheckpointPanel = useCallback((checkpointId?: string) => {
-    setShowSidebar(true);
-    setSidebarTab("git");
-    setHighlightCheckpointId(checkpointId ?? null);
-  }, []);
-
-  const handleCheckpointClick = useCallback(
-    (sessionId: string, promptEventId: string) => {
-      openSessionTab(sessionGroupId, sessionId);
-      setActiveSessionId(sessionId);
-      setActiveTerminalId(null);
-      setActiveFilePath(null);
-      setScrollToEventId(promptEventId);
-    },
-    [sessionGroupId, openSessionTab, setActiveSessionId, setActiveTerminalId, setActiveFilePath],
-  );
-
   const handleScrollComplete = useCallback(() => setScrollToEventId(null), []);
 
   const handleSidebarTabChange = useCallback((tab: SidebarTab) => {
     setSidebarTab(tab);
-    if (tab !== "git") setHighlightCheckpointId(null);
   }, []);
 
   const handleOpenTrafficTab = useCallback(
@@ -545,8 +554,9 @@ export function SessionGroupDetailView({
       setActiveWorkflowTab("traffic");
       setActiveTerminalId(null);
       setActiveFilePath(null);
+      setActiveArtifactId(null);
     },
-    [setActiveFilePath, setActiveTerminalId],
+    [setActiveArtifactId, setActiveFilePath, setActiveTerminalId],
   );
 
   const handleSelectTrafficTab = useCallback(() => {
@@ -554,7 +564,8 @@ export function SessionGroupDetailView({
     setActiveWorkflowTab("traffic");
     setActiveTerminalId(null);
     setActiveFilePath(null);
-  }, [setActiveFilePath, setActiveTerminalId, trafficEndpointId]);
+    setActiveArtifactId(null);
+  }, [setActiveArtifactId, setActiveFilePath, setActiveTerminalId, trafficEndpointId]);
 
   const handleCloseTrafficTab = useCallback(() => {
     setTrafficEndpointId(null);
@@ -564,22 +575,24 @@ export function SessionGroupDetailView({
   const handleSelectTerminalTab = useCallback(
     (sessionId: string | null, terminalId: string) => {
       setActiveWorkflowTab("session");
+      setActiveFilePath(null);
+      setActiveArtifactId(null);
       selectTerminal(sessionId, terminalId);
     },
-    [selectTerminal],
+    [selectTerminal, setActiveArtifactId, setActiveFilePath],
   );
 
   const handleSelectFileTab = useCallback(
     (filePath: string) => {
       setActiveWorkflowTab("session");
+      setActiveArtifactId(null);
       handleSelectFile(filePath);
     },
-    [handleSelectFile],
+    [handleSelectFile, setActiveArtifactId],
   );
 
   const handleToggleSidebar = useCallback(() => {
     setShowSidebar((prev: boolean) => {
-      if (prev) setHighlightCheckpointId(null);
       const next = !prev;
       if (next) setShowApplicationsSidebar(false);
       return next;
@@ -591,7 +604,6 @@ export function SessionGroupDetailView({
       const next = !prev;
       if (next) {
         setShowSidebar(false);
-        setHighlightCheckpointId(null);
       }
       return next;
     });
@@ -607,14 +619,20 @@ export function SessionGroupDetailView({
 
   const handleOpenTerminalCmd = useCallback(() => {
     setActiveWorkflowTab("session");
+    setActiveFilePath(null);
     void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
-  }, [handleOpenTerminal, selectedSession, terminalAllowed]);
+  }, [handleOpenTerminal, selectedSession, setActiveFilePath, terminalAllowed]);
+
+  const handleCreateTerminalTab = useCallback(() => {
+    setActiveWorkflowTab("session");
+    setActiveFilePath(null);
+    void handleCreateTerminal(selectedSession ?? null, terminalAllowed);
+  }, [handleCreateTerminal, selectedSession, setActiveFilePath, terminalAllowed]);
 
   const showSidebarTab = useCallback((tab: SidebarTab) => {
     setShowApplicationsSidebar(false);
     setShowSidebar(true);
     setSidebarTab(tab);
-    if (tab !== "git") setHighlightCheckpointId(null);
   }, []);
 
   const canInteract = !selectedSessionIsOptimistic;
@@ -676,6 +694,12 @@ export function SessionGroupDetailView({
     const selectedRepo =
       groupRepo ??
       (selectedSession.repo as { id: string; remoteUrl?: string | null } | null | undefined);
+    if (selectedSession.hosting === "cloud" && repoRemoteKnownMissing(selectedRepo)) {
+      toast.error("Cloud is unavailable for this repo", {
+        description: CLOUD_REPO_REMOTE_REQUIRED,
+      });
+      return null;
+    }
     const selectedHosting = resolveSupportedHostingForRepo(selectedSession.hosting, selectedRepo);
     const result = await client
       .mutation(START_SESSION_MUTATION, {
@@ -716,6 +740,7 @@ export function SessionGroupDetailView({
     });
     openSessionTab(sessionGroupId, newSessionId);
     setActiveSessionId(newSessionId);
+    setActiveArtifactId(null);
     return newSessionId;
   }, [
     groupSessions,
@@ -725,12 +750,17 @@ export function SessionGroupDetailView({
     openSessionTab,
     selectedSession,
     sessionGroupId,
+    setActiveArtifactId,
     setActiveSessionId,
   ]);
 
   // Close whatever tab is currently shown. Files/terminals/traffic reveal the
   // session beneath them; closing the last session tab returns to the table.
   const handleCloseCurrentTab = useCallback(() => {
+    if (activeArtifactId) {
+      handleCloseArtifact(activeArtifactId);
+      return;
+    }
     if (activeWorkflowTab === "traffic" && trafficEndpointId) {
       handleCloseTrafficTab();
       return;
@@ -750,12 +780,14 @@ export function SessionGroupDetailView({
     setActiveSessionGroupId(null);
   }, [
     activeWorkflowTab,
+    activeArtifactId,
     trafficEndpointId,
     activeFilePath,
     activeTerminalId,
     activeSessionId,
     openTabIds,
     handleCloseTrafficTab,
+    handleCloseArtifact,
     handleCloseFile,
     handleCloseTerminal,
     closeSessionTab,
@@ -798,13 +830,6 @@ export function SessionGroupDetailView({
           group: "Session",
           keywords: "file tree explorer sidebar",
           run: () => showSidebarTab("files"),
-        },
-        {
-          id: "session.show-git",
-          title: "Show git",
-          group: "Session",
-          keywords: "git checkpoints history sidebar",
-          run: () => showSidebarTab("git"),
         },
         {
           id: "session.show-changes",
@@ -868,8 +893,9 @@ export function SessionGroupDetailView({
       setActiveSessionId(sessionId);
       setActiveTerminalId(null);
       setActiveFilePath(null);
+      setActiveArtifactId(null);
     },
-    [setActiveSessionId, setActiveTerminalId, setActiveFilePath],
+    [setActiveArtifactId, setActiveSessionId, setActiveTerminalId, setActiveFilePath],
   );
 
   const handleCloseSession = useCallback(
@@ -877,9 +903,39 @@ export function SessionGroupDetailView({
     [closeSessionTab, sessionGroupId],
   );
 
+  const handleOpenArtifact = useCallback(
+    (artifactId: string) => {
+      openArtifactTab(sessionGroupId, artifactId);
+      setActiveWorkflowTab("session");
+      setActiveTerminalId(null);
+      setActiveFilePath(null);
+    },
+    [openArtifactTab, sessionGroupId, setActiveFilePath, setActiveTerminalId],
+  );
+
+  const handleSelectArtifact = useCallback(
+    (artifactId: string) => {
+      setActiveArtifactId(artifactId);
+      setActiveWorkflowTab("session");
+      setActiveTerminalId(null);
+      setActiveFilePath(null);
+    },
+    [setActiveArtifactId, setActiveFilePath, setActiveTerminalId],
+  );
+
+  if (groupLoadError) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <div className="max-w-md rounded-xl border border-border bg-surface-deep p-5 text-center">
+          <h1 className="text-base font-semibold text-foreground">Project unavailable</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{groupLoadError}</p>
+        </div>
+      </div>
+    );
+  }
   return (
-    <CheckpointOpenContext.Provider value={handleOpenCheckpointPanel}>
-      <FileOpenContext.Provider value={handleFileClick}>
+    <FileOpenContext.Provider value={handleFileClick}>
+      <ArtifactOpenContext.Provider value={handleOpenArtifact}>
         <AttachmentOpenContext.Provider value={handleDraftAttachmentClick}>
           <UploadedAttachmentOpenContext.Provider value={handleUploadedAttachmentClick}>
             <div className="flex h-full flex-col overflow-hidden">
@@ -918,7 +974,7 @@ export function SessionGroupDetailView({
                 }
               />
 
-              {!isAppGroup ? (
+              {!isAppGroup || openArtifactIds.length > 0 ? (
                 <GroupTabStrip
                   sessionTabs={sessionTabs}
                   terminals={terminals}
@@ -927,6 +983,8 @@ export function SessionGroupDetailView({
                   activeTerminalId={activeTerminalId}
                   openFiles={openFiles}
                   activeFilePath={activeFilePath}
+                  openArtifactIds={openArtifactIds}
+                  activeArtifactId={activeArtifactId}
                   trafficTabOpen={trafficEndpointId !== null}
                   trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
                   onSelectSession={handleSelectSession}
@@ -937,13 +995,12 @@ export function SessionGroupDetailView({
                   onRenameTerminal={renameTerminal}
                   onSelectFile={handleSelectFileTab}
                   onCloseFile={handleCloseFile}
+                  onSelectArtifact={handleSelectArtifact}
+                  onCloseArtifact={handleCloseArtifact}
                   onSelectTraffic={handleSelectTrafficTab}
                   onCloseTraffic={handleCloseTrafficTab}
                   onNewChat={handleNewChat}
-                  onOpenTerminal={() => {
-                    setActiveWorkflowTab("session");
-                    void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
-                  }}
+                  onOpenTerminal={handleCreateTerminalTab}
                   onOpenFilePalette={handleOpenFilePalette}
                   canNewChat={
                     !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
@@ -954,7 +1011,9 @@ export function SessionGroupDetailView({
 
               <div className="flex min-h-0 flex-1 overflow-hidden">
                 <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-                  {isAppGroup ? (
+                  {activeArtifactId ? (
+                    <ArtifactTabContent artifactId={activeArtifactId} />
+                  ) : isAppGroup ? (
                     <AppSessionWorkspace
                       sessionId={selectedSession?.id ?? null}
                       scrollToEventId={scrollToEventId}
@@ -1032,7 +1091,6 @@ export function SessionGroupDetailView({
                     ) : (
                       <SidebarPanel
                         sessionGroupId={sessionGroupId}
-                        activeSessionId={selectedSession?.id ?? null}
                         activeTab={sidebarTab}
                         fileTree={sessionGroupFileTree}
                         filesLoading={sessionGroupFileTreeLoading}
@@ -1042,8 +1100,6 @@ export function SessionGroupDetailView({
                         onRefreshFiles={refreshTree}
                         onLoadDirectory={loadDirectory}
                         onDiffFileClick={handleDiffFileClick}
-                        highlightCheckpointId={highlightCheckpointId}
-                        onCheckpointClick={handleCheckpointClick}
                         bridgeAccess={bridgeAccess}
                         onBridgeAccessRequested={refreshBridgeAccess}
                       />
@@ -1069,7 +1125,7 @@ export function SessionGroupDetailView({
             </div>
           </UploadedAttachmentOpenContext.Provider>
         </AttachmentOpenContext.Provider>
-      </FileOpenContext.Provider>
-    </CheckpointOpenContext.Provider>
+      </ArtifactOpenContext.Provider>
+    </FileOpenContext.Provider>
   );
 }

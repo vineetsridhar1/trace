@@ -61,7 +61,7 @@ function managedGitBaseUrl(): string {
   const port = process.env.PORT ?? "4000";
   console.warn(
     `[managed-git] TRACE_SERVER_PUBLIC_URL is unset; managed git origins fall back to http://localhost:${port}. ` +
-      "Cloud runtimes cannot reach this and their checkpoint pushes will fail. Set TRACE_SERVER_PUBLIC_URL to a URL the runtime can reach back on.",
+      "Cloud runtimes cannot reach this and their pushes will fail. Set TRACE_SERVER_PUBLIC_URL to a URL the runtime can reach back on.",
   );
   return `http://localhost:${port}`;
 }
@@ -302,6 +302,14 @@ class ManagedGitService {
     const hasWrite = auth.capabilities.includes("write");
     const hasRead = auth.capabilities.includes("read") || hasWrite;
     if (needsWrite ? !hasWrite : !hasRead) {
+      console.warn("[managed-git] authorize denied: missing capability", {
+        service: input.service,
+        needsWrite,
+        scope: auth.scope,
+        subject: auth.subject,
+        capabilities: auth.capabilities,
+        repoId: input.repoId,
+      });
       throw new AuthorizationError("Managed git token lacks the required capability");
     }
     if (auth.scope === "runtime" && !(await this.isLiveRuntimeBinding(auth))) {
@@ -334,13 +342,26 @@ class ManagedGitService {
       return false;
     }
     const connection = session.connection as Record<string, unknown>;
-    return connection.runtimeInstanceId === auth.subject && connection.state === "connected";
+    const live =
+      connection.runtimeInstanceId === auth.subject && connection.state === "connected";
+    if (!live) {
+      // Diagnostic for push 403s: shows exactly which side is stale — the
+      // token's runtime instance vs. the session's current live runtime/state.
+      console.warn("[managed-git] runtime binding mismatch (push will 403)", {
+        sessionId: auth.sessionId,
+        repoId: auth.repoId,
+        tokenSubject: auth.subject,
+        connectionRuntimeInstanceId: connection.runtimeInstanceId,
+        connectionState: connection.state,
+      });
+    }
+    return live;
   }
 
   /**
    * Post-receive hook: record that refs were pushed to a managed repo and emit
    * a `repo_updated` event so downstream services/clients can react. Consumers
-   * (design artifact, app checkpoint flows) layer their own event handling on
+   * Higher-level services layer their own event handling on
    * top of the managed remote; this is the shared transport-level signal.
    */
   async recordPush(input: {
