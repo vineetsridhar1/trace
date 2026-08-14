@@ -9,7 +9,11 @@ import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
-import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
+import {
+  isBridgeInteractionAllowed,
+  useBridgeRuntimeAccess,
+  type BridgeRuntimeAccessInfo,
+} from "./useBridgeRuntimeAccess";
 import { TraceLoader } from "../ui/trace-loader";
 
 /** Max number of automatic retry attempts before giving up */
@@ -18,6 +22,13 @@ const MAX_AUTO_RETRIES = 5;
 /** Base delay in ms for exponential backoff (doubles each attempt: 2s, 4s, 8s, 16s, 32s) */
 const BASE_DELAY_MS = 2_000;
 const PI_INSTALL_DOCS_URL = "https://pi.dev/docs/latest/quickstart";
+
+export function shouldRetryOwnedLocalBridgeOnOpen(
+  canRetry: boolean,
+  access: BridgeRuntimeAccessInfo | null,
+): boolean {
+  return canRetry && access?.hostingMode === "local" && access.isOwner;
+}
 
 function ConnectionErrorText({ message }: { message: string }) {
   if (!message.includes(PI_INSTALL_DOCS_URL)) {
@@ -51,6 +62,7 @@ export function SessionRecoveryPanel({
   const [showPicker, setShowPicker] = useState(false);
   const [autoRetryCount, setAutoRetryCount] = useState(0);
   const autoRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openRetrySessionId = useRef<string | null>(null);
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | undefined;
@@ -123,6 +135,14 @@ export function SessionRecoveryPanel({
     setAutoRetryCount(0);
     await doRetry();
   }, [doRetry]);
+
+  useEffect(() => {
+    if (openRetrySessionId.current === sessionId) return;
+    if (!shouldRetryOwnedLocalBridgeOnOpen(canRetry, moveBridgeAccess)) return;
+
+    openRetrySessionId.current = sessionId;
+    void handleManualRetry().catch(() => {});
+  }, [canRetry, handleManualRetry, moveBridgeAccess, sessionId]);
 
   const autoRetrying = canRetry && autoRetryable && autoRetryCount < MAX_AUTO_RETRIES;
   const autoRetriesExhausted = canRetry && autoRetryable && autoRetryCount >= MAX_AUTO_RETRIES;
