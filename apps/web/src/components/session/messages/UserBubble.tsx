@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { FileText, Image as ImageIcon } from "lucide-react";
 import { formatMessageTimestamp } from "./utils";
 import { stripPromptWrapping } from "../interactionModes";
@@ -28,19 +28,8 @@ function AttachmentChip({ imageKey, label }: { imageKey: string; label: string }
   const isText = isTextKey(imageKey);
   const openUploadedAttachment = useUploadedAttachmentOpen();
 
-  const handleClick = async () => {
-    if (isText && openUploadedAttachment) {
-      openUploadedAttachment({ attachmentKey: imageKey, label });
-      return;
-    }
-    if (!isImage) {
-      setDownloadDialogOpen(true);
-      return;
-    }
-    if (src && isImage) {
-      setLightboxOpen(true);
-      return;
-    }
+  const loadImage = useCallback(async () => {
+    if (!isImage || src) return;
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/uploads/url?key=${encodeURIComponent(imageKey)}`, {
@@ -56,6 +45,29 @@ function AttachmentChip({ imageKey, label }: { imageKey: string; label: string }
       console.warn("Failed to load image URL:", err);
     } finally {
       setLoading(false);
+    }
+  }, [imageKey, isImage, src]);
+
+  // Render uploaded images inline instead of as file chips. Besides making
+  // conversations easier to scan, this preserves the browser's native
+  // right-click actions, including "Copy image".
+  useEffect(() => {
+    void loadImage();
+  }, [loadImage]);
+
+  const handleClick = () => {
+    if (isText && openUploadedAttachment) {
+      openUploadedAttachment({ attachmentKey: imageKey, label });
+      return;
+    }
+    if (!isImage) {
+      setDownloadDialogOpen(true);
+      return;
+    }
+    if (src) {
+      setLightboxOpen(true);
+    } else {
+      void loadImage();
     }
   };
 
@@ -89,13 +101,29 @@ function AttachmentChip({ imageKey, label }: { imageKey: string; label: string }
 
   return (
     <>
-      <button
-        onClick={() => void handleClick()}
-        className="inline-flex items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs text-white transition-colors hover:bg-white/20 cursor-pointer"
-      >
-        {isImage ? <ImageIcon size={12} /> : <FileText size={12} />}
-        {loading ? "Loading…" : label}
-      </button>
+      {isImage && src ? (
+        <button
+          type="button"
+          onClick={handleClick}
+          className="block cursor-zoom-in overflow-hidden rounded-md border border-white/20"
+          title="Open image"
+        >
+          <img
+            src={src}
+            alt={label}
+            className="max-h-56 max-w-80 object-contain"
+          />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={handleClick}
+          className="inline-flex items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs text-white transition-colors hover:bg-white/20 cursor-pointer"
+        >
+          {isImage ? <ImageIcon size={12} /> : <FileText size={12} />}
+          {loading ? "Loading…" : label}
+        </button>
+      )}
       {src && isImage && (
         <ImageLightbox
           src={src}
