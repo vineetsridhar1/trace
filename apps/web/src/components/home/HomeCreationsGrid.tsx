@@ -1,192 +1,62 @@
-import { useMemo, useState } from "react";
-import { MoreHorizontal, Search, Trash2 } from "lucide-react";
-import { useEntityStore, type SessionGroupEntity } from "@trace/client-core";
-import { Input } from "../ui/input";
-import { cn, timeAgo } from "../../lib/utils";
-import { navigateToSessionGroup } from "../../stores/ui";
-import { HomeKindIcon, homeKindLabel } from "./HomeKindIcon";
-import type { GeneratedProjectKind } from "../sidebar/generated-project-types";
-import { designPreviewModeUrl } from "../session/applications/saved-design-preview";
-import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
-import { Button } from "../ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
-
-const CREATION_TYPES: Array<{ id: "all" | GeneratedProjectKind; label: string }> = [
-  { id: "all", label: "All" },
-  { id: "app", label: "Apps" },
-  { id: "design", label: "Designs" },
-  { id: "design_system", label: "Design systems" },
-  { id: "pdf", label: "Documents" },
-  { id: "animation", label: "Animations" },
-];
+import { useMemo } from "react";
+import { Figma, Plus } from "lucide-react";
+import { useEntityStore } from "@trace/client-core";
+import { useCommandPaletteStore } from "../../stores/command-palette";
+import { useUIStore } from "../../stores/ui";
+import { GeneratedProjectSessionItem } from "../sidebar/GeneratedProjectSessionItem";
 
 export function HomeCreationsGrid() {
-  const [type, setType] = useState<(typeof CREATION_TYPES)[number]["id"]>("all");
-  const [search, setSearch] = useState("");
   const sessionGroups = useEntityStore((state) => state.sessionGroups);
-  const sessions = useEntityStore((state) => state.sessions);
-  const creations = useMemo(() => {
-    const normalizedSearch = search.trim().toLocaleLowerCase();
-    return Object.values(sessionGroups)
-      .filter(
-        (group) =>
-          isCreation(group) &&
-          (type === "all" || group.kind === type) &&
-          (!normalizedSearch ||
-            `${group.name ?? ""} ${group.slug ?? ""}`.toLocaleLowerCase().includes(normalizedSearch)),
-      )
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-  }, [search, sessionGroups, type]);
-  const sessionCountByGroup = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const session of Object.values(sessions)) {
-      if (session.sessionGroupId) {
-        counts[session.sessionGroupId] = (counts[session.sessionGroupId] ?? 0) + 1;
-      }
-    }
-    return counts;
-  }, [sessions]);
+  const activeSessionGroupId = useUIStore((state) => state.activeSessionGroupId);
+  const openGeneratedProjectDialog = useCommandPaletteStore(
+    (state) => state.openGeneratedProjectDialog,
+  );
+  const designs = useMemo(
+    () =>
+      Object.values(sessionGroups)
+        .filter((group) => group.kind === "design" && !group.archivedAt)
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
+    [sessionGroups],
+  );
 
   return (
     <section className="mx-auto mt-10 w-full max-w-[720px]">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="mb-2.5 flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-[var(--th-heading)]">Your creations</h2>
-          <p className="mt-0.5 text-xs text-[var(--th-muted)]">Browse and continue previous work.</p>
+          <h2 className="text-sm font-semibold text-[var(--th-heading)]">Your designs</h2>
+          <p className="mt-0.5 text-xs text-[var(--th-muted)]">Browse and continue design work.</p>
         </div>
-        <div className="relative sm:ml-auto sm:w-56">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--th-muted)]" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search creations"
-            aria-label="Search creations"
-            className="h-8 border-[var(--th-edge)] bg-[var(--th-surface)] pl-8 text-xs"
-          />
-        </div>
+        <button
+          type="button"
+          onClick={() => openGeneratedProjectDialog("design")}
+          className="flex size-8 items-center justify-center rounded-md text-[var(--th-muted)] transition-colors hover:bg-white/10 hover:text-[var(--th-heading)] focus-visible:ring-2 focus-visible:ring-ring"
+          title="New design"
+          aria-label="New design"
+        >
+          <Plus className="size-4" />
+        </button>
       </div>
-      <div className="no-scrollbar mt-3 flex gap-1.5 overflow-x-auto pb-1">
-        {CREATION_TYPES.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            onClick={() => setType(option.id)}
-            className={cn(
-              "shrink-0 rounded-full border px-2.5 py-1 text-[11px] transition-colors",
-              type === option.id
-                ? "border-transparent bg-white/10 text-[var(--th-heading)]"
-                : "border-[var(--th-edge)] text-[var(--th-muted)] hover:text-[var(--th-primary)]",
-            )}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-      {creations.length === 0 ? (
-        <div className="mt-3 flex h-28 items-center justify-center rounded-[10px] border border-dashed border-[var(--th-edge)] text-xs text-[var(--th-muted)]">
-          No creations match your search.
-        </div>
+      {designs.length === 0 ? (
+        <button
+          type="button"
+          onClick={() => openGeneratedProjectDialog("design")}
+          className="flex h-28 w-full items-center justify-center gap-2 rounded-[10px] border border-dashed border-[var(--th-edge)] text-xs text-[var(--th-muted)] transition-colors hover:bg-white/[0.025] hover:text-[var(--th-heading)]"
+        >
+          <Figma className="size-4" />
+          Create your first design
+        </button>
       ) : (
-        <div className="mt-3 grid grid-cols-2 gap-3 pb-3">
-          {creations.map((group) => (
-            <CreationCard
+        <div className="space-y-0.5 overflow-hidden rounded-[10px] border border-[var(--th-edge)] bg-[var(--th-surface)] p-1.5">
+          {designs.map((group) => (
+            <GeneratedProjectSessionItem
               key={group.id}
-              group={group}
-              sessionCount={sessionCountByGroup[group.id] ?? 0}
+              groupId={group.id}
+              isActive={group.id === activeSessionGroupId}
+              kind="design"
             />
           ))}
         </div>
       )}
     </section>
-  );
-}
-
-function CreationCard({ group, sessionCount }: { group: SessionGroupEntity; sessionCount: number }) {
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const title = group.name || group.slug || "Untitled creation";
-  const designPreviewUrl = group.designPreviewUrl as string | null | undefined;
-  const animationPreviewUrl = group.animationPreviewUrl as string | null | undefined;
-  const previewUrl = designPreviewUrl
-    ? designPreviewModeUrl(designPreviewUrl)
-    : (animationPreviewUrl ?? null);
-  return (
-    <>
-      <div className="group relative min-h-24 overflow-hidden rounded-[10px] border border-[var(--th-edge)] bg-[var(--th-surface)] transition-colors hover:border-[var(--th-edge-hover)] hover:bg-white/[0.025]">
-        <button
-          type="button"
-          onClick={() => navigateToSessionGroup(group.channel?.id ?? null, group.id)}
-          className="flex size-full min-h-24 flex-col text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--th-accent-light)]"
-        >
-          {previewUrl ? (
-            <div className="h-28 overflow-hidden border-b border-[var(--th-edge-faint)] bg-[var(--th-surface-mid)]">
-              <iframe
-                src={previewUrl}
-                title={`${title} preview`}
-                inert
-                loading="lazy"
-                tabIndex={-1}
-                sandbox={designPreviewUrl ? "allow-forms allow-modals allow-popups allow-scripts" : "allow-scripts"}
-                className="pointer-events-none size-full border-0"
-              />
-            </div>
-          ) : null}
-          <div className="flex min-h-24 flex-col p-4 pr-10">
-            <div className="flex items-center gap-2 text-xs text-[var(--th-muted)]">
-              <HomeKindIcon kind={group.kind} className="size-4" />
-              <span>{homeKindLabel(group.kind)}</span>
-            </div>
-            <span className="mt-3 truncate text-sm font-medium text-[var(--th-heading)]">{title}</span>
-            <span className="mt-auto pt-2 text-[11px] text-[var(--th-muted)]">
-              Updated {timeAgo(group.updatedAt)}
-            </span>
-          </div>
-        </button>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-2 top-2 size-7 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                aria-label={`More actions for ${title}`}
-              />
-            }
-          >
-            <MoreHorizontal className="size-4" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-              <Trash2 />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      <DeleteSessionGroupDialog
-        groupId={group.id}
-        groupName={title}
-        sessionCount={sessionCount}
-        entityLabel="creation"
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-      />
-    </>
-  );
-}
-
-function isCreation(
-  group: SessionGroupEntity,
-): group is SessionGroupEntity & { kind: GeneratedProjectKind } {
-  return (
-    group.kind === "app" ||
-    group.kind === "design" ||
-    group.kind === "design_system" ||
-    group.kind === "pdf" ||
-    group.kind === "animation"
   );
 }
