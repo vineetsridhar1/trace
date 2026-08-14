@@ -7,6 +7,7 @@ import { navigateToSessionGroup } from "../../stores/ui";
 import { HomeKindIcon, homeKindLabel } from "./HomeKindIcon";
 import type { GeneratedProjectKind } from "../sidebar/generated-project-types";
 import { designPreviewModeUrl } from "../session/applications/saved-design-preview";
+import { DeferredDesignPreview } from "../session/applications/DeferredDesignPreview";
 import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
 import { Button } from "../ui/button";
 import {
@@ -124,15 +125,23 @@ function CreationCard({ group, sessionCount }: { group: SessionGroupEntity; sess
         >
           {previewUrl ? (
             <div className="h-28 overflow-hidden border-b border-[var(--th-edge-faint)] bg-[var(--th-surface-mid)]">
-              <iframe
-                src={previewUrl}
-                title={`${title} preview`}
-                inert
-                loading="lazy"
-                tabIndex={-1}
-                sandbox={designPreviewUrl ? "allow-forms allow-modals allow-popups allow-scripts" : "allow-scripts"}
-                className="pointer-events-none size-full border-0"
-              />
+              {designPreviewUrl ? (
+                <DeferredDesignPreview
+                  url={previewUrl}
+                  title={`${title} preview`}
+                  className="text-[var(--th-muted)]"
+                />
+              ) : (
+                <iframe
+                  src={previewUrl}
+                  title={`${title} preview`}
+                  inert
+                  loading="lazy"
+                  tabIndex={-1}
+                  sandbox="allow-scripts"
+                  className="pointer-events-none size-full border-0"
+                />
+              )}
             </div>
           ) : null}
           <div className="flex min-h-24 flex-col p-4 pr-10">

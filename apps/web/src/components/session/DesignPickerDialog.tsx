@@ -11,6 +11,7 @@ import {
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
 import { designPreviewModeUrl, savedDesignPreviewUrl } from "./applications/saved-design-preview";
+import { DeferredDesignPreview } from "./applications/DeferredDesignPreview";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -173,12 +174,9 @@ function DesignPickerCard({
       </div>
       <div className="aspect-[16/10] overflow-hidden bg-surface-deep">
         {previewUrl ? (
-          <iframe
-            src={designPreviewModeUrl(previewUrl)}
+          <DeferredDesignPreview
+            url={designPreviewModeUrl(previewUrl)}
             title={`${group.name} preview`}
-            loading="lazy"
-            className="pointer-events-none size-full border-0 bg-background"
-            sandbox="allow-forms allow-modals allow-popups allow-scripts"
           />
         ) : (
           <div className="flex size-full items-center justify-center text-muted-foreground">
