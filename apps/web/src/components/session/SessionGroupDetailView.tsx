@@ -53,6 +53,7 @@ const SESSION_SIDEBAR_WIDTH_KEY = "trace:session-sidebar-width";
 const DEFAULT_SESSION_SIDEBAR_WIDTH = 300;
 const MIN_SESSION_SIDEBAR_WIDTH = 240;
 const MAX_SESSION_SIDEBAR_WIDTH = 560;
+const EMPTY_ARTIFACT_TAB_IDS: string[] = [];
 
 function clampSessionSidebarWidth(width: number): number {
   return Math.min(MAX_SESSION_SIDEBAR_WIDTH, Math.max(MIN_SESSION_SIDEBAR_WIDTH, width));
@@ -232,7 +233,7 @@ export function SessionGroupDetailView({
   );
   const openArtifactIds = useUIStore(
     (s: { openArtifactTabsByGroup: Record<string, string[]> }) =>
-      s.openArtifactTabsByGroup[sessionGroupId] ?? [],
+      s.openArtifactTabsByGroup[sessionGroupId] ?? EMPTY_ARTIFACT_TAB_IDS,
   );
   const activeArtifactId = useUIStore(
     (s: { activeArtifactIdsByGroup: Record<string, string | null> }) =>
