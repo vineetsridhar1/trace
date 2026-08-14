@@ -53,7 +53,7 @@ service startup.
 
 The launcher should treat the runtime image as configuration.
 
-For Fly, this is already:
+For a provider-hosted runtime, this can be:
 
 ```bash
 TRACE_RUNTIME_IMAGE=ghcr.io/<trace-owner>/trace-agent-runtime:runtime-v1.2.3

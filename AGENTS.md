@@ -38,7 +38,7 @@ All entities (channels, sessions, tickets, repos, projects) are peers scoped to 
 
 Three interfaces define Trace's pluggable boundaries:
 
-- **SessionAdapter** — where the session runs (cloud via Fly, local via Electron)
+- **SessionAdapter** — where the session runs (cloud or local via Electron)
 - **CodingToolAdapter** — what coding tool runs (Claude Code, Cursor, etc.)
 - **LLMAdapter** — what model powers AI features (Anthropic, OpenAI, etc.)
 

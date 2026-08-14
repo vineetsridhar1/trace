@@ -128,7 +128,7 @@ function managedGitBaseUrl(): string {
   const explicit = process.env.TRACE_SERVER_PUBLIC_URL?.trim();
   if (explicit) return explicit.replace(/\/$/, "");
   // Local/dev fallback so managed remotes resolve without extra config. A
-  // remote runtime (cloud/Fly) cannot reach the server's own localhost, so the
+  // remote runtime cannot reach the server's own localhost, so the
   // origin it's given would be dead — warn loudly rather than fail silently at
   // push time with a confusing "repository not found".
   const port = process.env.PORT ?? "4000";
