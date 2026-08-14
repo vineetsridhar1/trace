@@ -5,6 +5,7 @@ import { useAuthStore } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
 import { cn } from "../../lib/utils";
+import { sidebarRootLeftEdgeRowClass } from "./sidebarItemStyles";
 
 export const ChatItem = memo(function ChatItem({
   id,
@@ -36,7 +37,9 @@ export const ChatItem = memo(function ChatItem({
         onClick={onClick}
         tooltip={displayName}
         className={cn(
-          "h-8 cursor-pointer rounded-lg px-2.5 text-foreground/80 hover:bg-white/[0.07] hover:text-foreground data-[active=true]:bg-white/[0.1] data-[active=true]:text-foreground",
+          "cursor-pointer text-foreground hover:bg-white/10 data-[active=true]:bg-white/10 data-[active=true]:text-foreground",
+          sidebarRootLeftEdgeRowClass,
+          "pl-4",
         )}
       >
         <div className="relative">

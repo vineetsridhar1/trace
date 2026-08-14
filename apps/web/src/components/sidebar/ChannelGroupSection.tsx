@@ -11,6 +11,7 @@ import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { groupContainerId, groupSortableIds } from "../../hooks/useChannelDnd";
+import { sidebarRootLeftEdgeRowClass } from "./sidebarItemStyles";
 import type { SidebarSessionScope } from "./ChannelOwnedSessions";
 
 const UPDATE_GROUP_MUTATION = gql`
@@ -92,16 +93,17 @@ export function ChannelGroupSection({
   const sortableIds = groupSortableIds(channelIds);
 
   return (
-    <div ref={setSortableRef} style={style} className="rounded-md transition-colors">
+    <div ref={setSortableRef} style={style} className="ml-3 rounded-md transition-colors">
       <div
         className={cn(
-          "group/group-header flex items-center justify-between rounded-lg pr-1 transition-colors hover:bg-white/[0.07]",
+          "flex items-center justify-between rounded-md pr-1 transition-colors hover:bg-white/10 group/group-header",
+          sidebarRootLeftEdgeRowClass,
         )}
         {...attributes}
         {...listeners}
       >
         <button
-          className="flex flex-1 cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+          className="flex flex-1 cursor-pointer items-center gap-1 rounded-md px-0 py-1 pl-2 text-xs font-semibold uppercase tracking-wider text-foreground transition-colors"
           onClick={toggleCollapse}
           onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
         >

@@ -23,14 +23,10 @@ function SidebarTabButton({
       aria-label={label}
       aria-pressed={isPressed}
       onClick={onClick}
-      className={cn(
-        "flex h-8 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20",
-        isPressed && "bg-white/[0.09] shadow-sm shadow-black/20",
-      )}
+      className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
       style={{ color: `color-mix(in srgb, #ffffff ${mix}%, #71717a)` }}
     >
       <Icon size={14} strokeWidth={2.15} />
-      <span>{label}</span>
     </button>
   );
 }
@@ -45,22 +41,17 @@ export function SidebarTabSwitcher({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "flex items-center justify-center gap-1 rounded-xl border border-white/[0.08] bg-white/[0.04] p-1",
-        className,
-      )}
-    >
+    <div className={cn("flex items-center justify-center gap-1", className)}>
       <SidebarTabButton
         icon={MessageCircleMore}
-        label="Messages"
+        label="Direct messages"
         selectedness={1 - tabProgress}
         isPressed={tabProgress < 0.5}
         onClick={() => onTabClick("dm")}
       />
       <SidebarTabButton
         icon={Building2}
-        label="Channels"
+        label="Organization channels"
         selectedness={tabProgress}
         isPressed={tabProgress >= 0.5}
         onClick={() => onTabClick("main")}

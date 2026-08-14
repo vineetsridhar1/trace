@@ -11,9 +11,9 @@ export function UserMenu() {
   const setActivePage = useUIStore((s) => s.setActivePage);
 
   return (
-    <div className="flex items-stretch overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.04]">
+    <div className="flex items-stretch">
       <Popover>
-        <PopoverTrigger className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 px-2.5 py-2 transition-colors hover:bg-white/[0.07]">
+        <PopoverTrigger className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-3 py-2 transition-colors hover:bg-white/10">
           <motion.div
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.97 }}
@@ -23,7 +23,7 @@ export function UserMenu() {
             {user?.avatarUrl ? (
               <img src={user.avatarUrl} alt={user.name} className="h-7 w-7 rounded-full" />
             ) : (
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-elevated text-[10px] font-semibold text-foreground ring-1 ring-white/[0.08]">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-elevated text-[10px] font-semibold text-foreground">
                 {getInitials(user?.name ?? "")}
               </div>
             )}
@@ -47,7 +47,7 @@ export function UserMenu() {
       <button
         type="button"
         onClick={() => setActivePage("settings")}
-        className="flex h-11 w-11 shrink-0 items-center justify-center border-l border-white/[0.08] text-muted-foreground transition-colors hover:bg-white/[0.07] hover:text-foreground"
+        className="flex h-11 w-11 shrink-0 items-center justify-center border-l border-white/10 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
         aria-label="Settings"
       >
         <Settings size={18} />

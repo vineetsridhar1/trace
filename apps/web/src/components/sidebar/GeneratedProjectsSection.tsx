@@ -21,13 +21,14 @@ export function GeneratedProjectsSection() {
       type="button"
       onClick={openCreate}
       className={cn(
-        "flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 text-left text-sm font-medium transition-colors",
+        "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors",
+        "pl-4",
         activePage === "create"
-          ? "bg-white/[0.1] text-foreground shadow-sm shadow-black/20"
-          : "text-foreground/80 hover:bg-white/[0.07] hover:text-foreground",
+          ? "bg-white/10 text-foreground"
+          : "text-foreground hover:bg-white/10",
       )}
     >
-      <Sparkles size={16} className="shrink-0 text-muted-foreground" />
+      <Sparkles size={16} className="shrink-0" />
       <span>Creations</span>
     </button>
   );

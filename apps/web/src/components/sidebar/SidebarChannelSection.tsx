@@ -48,7 +48,7 @@ export function SidebarChannelSection({
   }, [channelId]);
 
   return (
-    <div className="py-0.5">
+    <div className={groupId === null ? "py-0.5 pl-3" : "py-0.5"}>
       <SidebarMenu>
         <ChannelItem
           id={channelId}
