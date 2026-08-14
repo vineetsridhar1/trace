@@ -61,30 +61,41 @@ export function TraceLoader({
             }
 
             .trace-loader-cursor {
-              opacity: .9;
               animation: trace-loader-cursor 1.6s linear infinite;
               transform-box: view-box;
               transform-origin: center;
             }
 
+            .trace-loader-trail-far {
+              opacity: .16;
+            }
+
+            .trace-loader-trail-near {
+              opacity: .38;
+            }
+
+            .trace-loader-head {
+              opacity: .92;
+            }
+
             @keyframes trace-loader-cursor {
-              0% { transform: translate(-18.333%, -18.333%); }
-              6.25% { transform: translate(0, -18.333%); }
-              12.5% { transform: translate(18.333%, -18.333%); }
-              18.75% { transform: translate(18.333%, 0); }
-              25% { transform: translate(0, 0); }
-              31.25% { transform: translate(-18.333%, 0); }
-              37.5% { transform: translate(-18.333%, 18.333%); }
-              43.75% { transform: translate(0, 18.333%); }
-              50% { transform: translate(18.333%, 18.333%); }
-              56.25% { transform: translate(18.333%, 0); }
-              62.5% { transform: translate(18.333%, -18.333%); }
-              68.75% { transform: translate(0, -18.333%); }
-              75% { transform: translate(0, 0); }
-              81.25% { transform: translate(0, 18.333%); }
-              87.5% { transform: translate(-18.333%, 18.333%); }
-              93.75% { transform: translate(-18.333%, 0); }
-              100% { transform: translate(-18.333%, -18.333%); }
+              0% { transform: translate(-18.333%, -18.333%) rotate(0deg); }
+              6.25% { transform: translate(0, -18.333%) rotate(0deg); }
+              12.5% { transform: translate(18.333%, -18.333%) rotate(90deg); }
+              18.75% { transform: translate(18.333%, 0) rotate(180deg); }
+              25% { transform: translate(0, 0) rotate(180deg); }
+              31.25% { transform: translate(-18.333%, 0) rotate(90deg); }
+              37.5% { transform: translate(-18.333%, 18.333%) rotate(0deg); }
+              43.75% { transform: translate(0, 18.333%) rotate(0deg); }
+              50% { transform: translate(18.333%, 18.333%) rotate(-90deg); }
+              56.25% { transform: translate(18.333%, 0) rotate(-90deg); }
+              62.5% { transform: translate(18.333%, -18.333%) rotate(-180deg); }
+              68.75% { transform: translate(0, -18.333%) rotate(-270deg); }
+              75% { transform: translate(0, 0) rotate(-270deg); }
+              81.25% { transform: translate(0, 18.333%) rotate(-180deg); }
+              87.5% { transform: translate(-18.333%, 18.333%) rotate(-90deg); }
+              93.75% { transform: translate(-18.333%, 0) rotate(-90deg); }
+              100% { transform: translate(-18.333%, -18.333%) rotate(0deg); }
             }
 
             @media (prefers-reduced-motion: reduce) {
@@ -111,13 +122,33 @@ export function TraceLoader({
           );
         })}
 
-        <circle
-          className="trace-loader-cursor"
-          cx={GRID_ORIGIN + DOT_SPACING}
-          cy={GRID_ORIGIN + DOT_SPACING}
-          r="6"
-          fill="currentColor"
-        />
+        <g className="trace-loader-cursor">
+          <rect
+            className="trace-loader-trail-far"
+            x={GRID_ORIGIN + DOT_SPACING - 17}
+            y={GRID_ORIGIN + DOT_SPACING - 2.5}
+            width="9"
+            height="5"
+            rx="2.5"
+            fill="currentColor"
+          />
+          <rect
+            className="trace-loader-trail-near"
+            x={GRID_ORIGIN + DOT_SPACING - 10}
+            y={GRID_ORIGIN + DOT_SPACING - 3.5}
+            width="10"
+            height="7"
+            rx="3.5"
+            fill="currentColor"
+          />
+          <circle
+            className="trace-loader-head"
+            cx={GRID_ORIGIN + DOT_SPACING}
+            cy={GRID_ORIGIN + DOT_SPACING}
+            r="6"
+            fill="currentColor"
+          />
+        </g>
       </svg>
 
       {showLabel ? (
