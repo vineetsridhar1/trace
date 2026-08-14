@@ -34,6 +34,7 @@ import {
 import { eventService } from "./event.js";
 import { sessionApplicationService } from "./session-applications.js";
 import { sessionApplicationWorkflowService } from "./session-application-workflow.js";
+import { DEFAULT_APP_SESSION_CONFIG } from "../config/hardcoded-applications.js";
 import {
   sessionRouter,
   type DeliveryResult,
@@ -7214,27 +7215,34 @@ export class SessionService {
       }
     }
 
-    if (session.sessionGroup?.kind === "app" && session.sessionGroupId) {
+    const applications =
+      session.sessionGroup?.kind === "app"
+        ? DEFAULT_APP_SESSION_CONFIG.applications
+        : repoApplicationConfigService.resolveApplicationConfig(session.repo).applications;
+    if (session.hosting === "cloud" && session.sessionGroupId) {
       const appGroupId = session.sessionGroupId;
-      // Fire-and-forget: the dev server boot must not delay the agent's first
-      // run. Failures surface as an app_preview_start_failed event.
-      void sessionApplicationWorkflowService
-        .startWorkflow(appGroupId, "app", session.organizationId, session.createdById)
-        .catch(async (error: unknown) => {
-          await eventService.create({
-            organizationId: session.organizationId,
-            scopeType: "session",
-            scopeId: sessionId,
-            eventType: "session_output",
-            payload: {
-              type: "app_preview_start_failed",
-              sessionGroupId: appGroupId,
-              error: error instanceof Error ? error.message : String(error),
-            } as Prisma.InputJsonValue,
-            actorType: "system",
-            actorId: "system",
+      // Fire-and-forget: application boot must not delay the agent's first run.
+      // Each configured application owns its workflow and failure event.
+      for (const application of applications) {
+        void sessionApplicationWorkflowService
+          .startWorkflow(appGroupId, application.id, session.organizationId, session.createdById)
+          .catch(async (error: unknown) => {
+            await eventService.create({
+              organizationId: session.organizationId,
+              scopeType: "session",
+              scopeId: sessionId,
+              eventType: "session_output",
+              payload: {
+                type: "application_auto_start_failed",
+                sessionGroupId: appGroupId,
+                appConfigId: application.id,
+                error: error instanceof Error ? error.message : String(error),
+              } as Prisma.InputJsonValue,
+              actorType: "system",
+              actorId: "system",
+            });
           });
-        });
+      }
     }
   }
 

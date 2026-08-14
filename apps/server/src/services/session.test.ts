@@ -7392,6 +7392,96 @@ describe("SessionService", () => {
       });
     });
 
+    it("auto-starts every configured application after a cloud repo is ready", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        pendingRun: null,
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        readOnlyWorkspace: false,
+        workdir: null,
+      });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          workdir: "/tmp/trace/repo",
+          repo: {
+            id: "repo-1",
+            name: "trace",
+            remoteUrl: "git@github.com:trace/trace.git",
+            defaultBranch: "main",
+            setupConfig: {
+              applications: {
+                setupScripts: [],
+                runScripts: [],
+                applications: [
+                  { id: "web", name: "Web", processes: [] },
+                  { id: "worker", name: "Worker", processes: [] },
+                ],
+              },
+            },
+          },
+        }),
+      );
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ workdir: "/tmp/trace/repo" }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await service.workspaceReady("session-1", "/tmp/trace/repo");
+
+      await vi.waitFor(() => {
+        expect(sessionApplicationWorkflowServiceMock.startWorkflow).toHaveBeenCalledTimes(2);
+      });
+      expect(sessionApplicationWorkflowServiceMock.startWorkflow).toHaveBeenCalledWith(
+        "group-1",
+        "web",
+        "org-1",
+        "user-1",
+      );
+      expect(sessionApplicationWorkflowServiceMock.startWorkflow).toHaveBeenCalledWith(
+        "group-1",
+        "worker",
+        "org-1",
+        "user-1",
+      );
+    });
+
+    it("does not auto-start configured applications for a local workspace", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        pendingRun: null,
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        readOnlyWorkspace: false,
+        workdir: null,
+      });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          workdir: "/tmp/trace/repo",
+          repo: {
+            id: "repo-1",
+            name: "trace",
+            remoteUrl: "git@github.com:trace/trace.git",
+            defaultBranch: "main",
+            setupConfig: {
+              applications: {
+                setupScripts: [],
+                runScripts: [],
+                applications: [{ id: "web", name: "Web", processes: [] }],
+              },
+            },
+          },
+        }),
+      );
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ workdir: "/tmp/trace/repo" }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await service.workspaceReady("session-1", "/tmp/trace/repo");
+
+      expect(sessionApplicationWorkflowServiceMock.startWorkflow).not.toHaveBeenCalled();
+    });
+
     it("only mirrors the ready workdir to sessions on the same runtime", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
         pendingRun: null,
