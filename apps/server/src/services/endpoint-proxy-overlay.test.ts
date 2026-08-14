@@ -37,6 +37,20 @@ describe("endpoint authoring overlay", () => {
     expect(() => new Function(injectedScript(html))).not.toThrow();
   });
 
+  it("starts canvas instrumentation only after edit mode is enabled", () => {
+    const result = injectAuthoringOverlay(
+      { "content-type": "text/html" },
+      Buffer.from('<!doctype html><html><body><div id="root"></div></body></html>'),
+      ["https://app.trace.test"],
+    );
+    const script = injectedScript(result.body.toString("utf8"));
+
+    expect(script).toContain("else{startAuthoring();postDomTree()}");
+    expect(script).not.toContain(
+      'var root=document.getElementById("root")||document.body;\nannotateTargets();',
+    );
+  });
+
   it("leaves encoded responses untouched", () => {
     const body = Buffer.from("<html><body>Compressed upstream payload</body></html>");
     const result = injectAuthoringOverlay(
