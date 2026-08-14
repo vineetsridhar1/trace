@@ -128,6 +128,7 @@ export function AppPreview({
           onReload={reload}
           iframeRef={activeFrameRef}
           bare={projectKind === "pdf"}
+          nativeCanvas={projectKind === "design"}
           loadingKind={projectKind}
           manualEdit={
             manualSessionGroupId

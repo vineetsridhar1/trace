@@ -20,6 +20,7 @@ export function AppPreviewCanvas({
   onReload,
   iframeRef,
   bare = false,
+  nativeCanvas = false,
   loadingKind,
   pdfFormat,
   pdfContentHeight,
@@ -38,6 +39,8 @@ export function AppPreviewCanvas({
   onReload: () => void;
   iframeRef: RefObject<HTMLIFrameElement | null>;
   bare?: boolean;
+  /** The embedded runtime owns its own pan and zoom surface. */
+  nativeCanvas?: boolean;
   loadingKind?: "design" | "pdf";
   pdfFormat?: PdfPageFormat;
   pdfContentHeight?: number;
@@ -63,6 +66,38 @@ export function AppPreviewCanvas({
       : undefined,
     frameMargin,
   );
+
+  if (nativeCanvas) {
+    return (
+      <div className="relative h-full bg-[#111113]">
+        {manualEdit ? (
+          <ManualEditActions
+            enabled={manualEdit.enabled}
+            frameReady={manualEdit.frameReady}
+            saving={manualEdit.saving}
+            onPrimaryAction={manualEdit.primaryAction}
+            onDiscard={manualEdit.discard}
+            className="absolute right-3 top-1.5 z-30"
+          />
+        ) : null}
+        {!loaded && loadingKind ? (
+          <SavedPreviewSkeleton kind={loadingKind} className="absolute inset-0 z-10" />
+        ) : null}
+        {url ? (
+          <iframe
+            ref={iframeRef}
+            key={frameRevision}
+            src={url}
+            title={title}
+            onLoad={onLoad}
+            className={cn("size-full border-0 bg-background", !loaded && "opacity-0")}
+            sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
+          />
+        ) : null}
+      </div>
+    );
+  }
+
   const canvasTranslation = {
     x: (viewport.canvasSize.width - viewport.displayedWidth) / 2 + viewport.pan.x,
     y: (viewport.canvasSize.height - viewport.displayedHeight) / 2 + viewport.pan.y,

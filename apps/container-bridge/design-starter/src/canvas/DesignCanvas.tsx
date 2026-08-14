@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { DesignArtboard } from "./DesignArtboard";
 import { DesignSectionLabel, SECTION_LABEL_GAP } from "./DesignSectionLabel";
-import { placeScreens } from "./layout";
+import { isPlacedScreenVisible, placeScreens } from "./layout";
 import type { DesignManifest } from "./manifest";
 import { resolveScreenComponent } from "./screen-modules";
 import { useCanvasViewport } from "./useCanvasViewport";
+
+const ARTBOARD_OVERSCAN_PX = 480;
 
 export function DesignCanvas({
   manifest,
@@ -53,7 +55,18 @@ export function DesignCanvas({
     return () => cancelAnimationFrame(frame);
   }, [fit]);
 
-  const visible = placed;
+  const visible = useMemo(() => {
+    const container = containerRef.current;
+    if (!container) return placed;
+    return placed.filter((item) =>
+      isPlacedScreenVisible(
+        item,
+        viewport,
+        { width: container.clientWidth, height: container.clientHeight },
+        ARTBOARD_OVERSCAN_PX,
+      ),
+    );
+  }, [placed, viewport]);
   const sectionLabels = Array.from(
     visible.reduce((labels, item) => {
       const existing = labels.get(item.sectionId);

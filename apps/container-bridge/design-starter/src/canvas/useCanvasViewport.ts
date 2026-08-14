@@ -37,6 +37,8 @@ const PINCH_ZOOM_EXPONENT = 1.5;
 export function useCanvasViewport(containerRef: RefObject<HTMLDivElement | null>) {
   const [viewport, setViewportState] = useState(INITIAL_VIEWPORT);
   const viewportRef = useRef(viewport);
+  const pendingViewportRef = useRef<CanvasViewport | null>(null);
+  const viewportFrameRef = useRef<number | null>(null);
   const dragRef = useRef<{
     pointerId: number;
     x: number;
@@ -50,11 +52,25 @@ export function useCanvasViewport(containerRef: RefObject<HTMLDivElement | null>
 
   const setViewport = useCallback(
     (update: CanvasViewport | ((current: CanvasViewport) => CanvasViewport)) => {
-      setViewportState((current) => {
-        const next = typeof update === "function" ? update(current) : update;
-        viewportRef.current = next;
-        return next;
+      const current = pendingViewportRef.current ?? viewportRef.current;
+      const next = typeof update === "function" ? update(current) : update;
+      viewportRef.current = next;
+      pendingViewportRef.current = next;
+
+      if (viewportFrameRef.current !== null) return;
+      viewportFrameRef.current = requestAnimationFrame(() => {
+        viewportFrameRef.current = null;
+        const pending = pendingViewportRef.current;
+        pendingViewportRef.current = null;
+        if (pending) setViewportState(pending);
       });
+    },
+    [],
+  );
+
+  useEffect(
+    () => () => {
+      if (viewportFrameRef.current !== null) cancelAnimationFrame(viewportFrameRef.current);
     },
     [],
   );
