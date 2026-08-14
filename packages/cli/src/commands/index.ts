@@ -4,6 +4,7 @@ import { appCommands } from "./app/index.js";
 import { channelListCommand } from "./channel/list.js";
 import { contextCommand } from "./context.js";
 import { integrationCommands } from "./integration/index.js";
+import { portCommands } from "./port/index.js";
 import { repoListCommand } from "./repo/list.js";
 import { sessionCommands } from "./session/index.js";
 import { terminalCommands } from "./terminal/index.js";
@@ -12,6 +13,7 @@ export const commands: readonly CommandDefinition[] = [
   contextCommand,
   ...appCommands,
   ...integrationCommands,
+  ...portCommands,
   channelListCommand,
   repoListCommand,
   ...sessionCommands,
@@ -22,8 +24,10 @@ export const commands: readonly CommandDefinition[] = [
 export const commandGroups: readonly CommandGroupDefinition[] = [
   {
     name: "app",
-    description: "Deploy the current Trace app from explicit AI-supplied facts",
+    description: "Control live cloud-session applications and durable deployments",
     workflow: [
+      'Run "$TRACE_CLI" app list --json to discover configured applications, processes, and preview URLs.',
+      'Use "$TRACE_CLI" app start, stop, restart, and logs to control live cloud-session servers.',
       "Inspect the project and verify its production build before invoking the CLI.",
       'Choose static hosting or a running service, then run "$TRACE_CLI" app deploy with every required fact.',
       'Run "$TRACE_CLI" app status --json to monitor the backend-owned workflow after the session ends.',
@@ -33,8 +37,27 @@ export const commandGroups: readonly CommandGroupDefinition[] = [
       '"$TRACE_CLI" app status --json',
     ],
     notes: [
+      "Live application controls require a connected cloud session and fail for local sessions.",
       "The CLI never analyzes code or chooses infrastructure.",
       "The latest pushed app commit is the immutable deployment source.",
+    ],
+  },
+  {
+    name: "port",
+    description: "Forward arbitrary cloud-session ports independently of applications",
+    workflow: [
+      'Run "$TRACE_CLI" port list --json to inspect configured and arbitrary endpoints.',
+      'Run "$TRACE_CLI" port forward <port> --json after starting any HTTP server on the cloud runtime.',
+      'Use "$TRACE_CLI" port disable or port enable without stopping or restarting the server.',
+    ],
+    examples: [
+      '"$TRACE_CLI" port forward 5173 --json',
+      '"$TRACE_CLI" port disable <endpoint-id> --json',
+    ],
+    notes: [
+      "Port forwarding is independent of repo application commands and configured application ports.",
+      "Public is the default for newly forwarded arbitrary ports; use --access private when required.",
+      "All port controls require a connected cloud session and fail for local sessions.",
     ],
   },
   {

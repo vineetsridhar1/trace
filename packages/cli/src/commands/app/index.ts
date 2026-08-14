@@ -10,6 +10,7 @@ import {
 } from "../../runtime.js";
 import { usage } from "../../errors.js";
 import { requireCurrentAppGroup } from "./shared.js";
+import { appRuntimeCommands } from "./runtime.js";
 
 type DeploymentView = Pick<
   AppDeployment,
@@ -157,4 +158,8 @@ const statusCommand = defineCommand({
   },
 });
 
-export const appCommands: readonly CommandDefinition[] = [deployCommand, statusCommand];
+export const appCommands: readonly CommandDefinition[] = [
+  ...appRuntimeCommands,
+  deployCommand,
+  statusCommand,
+];

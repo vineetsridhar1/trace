@@ -42,6 +42,7 @@ describe("EndpointProxyService application integrations", () => {
       status: "enabled",
       accessMode: "public",
       expiresAt: null,
+      currentRuntimeInstanceId: "runtime-1",
     });
   });
 
@@ -114,11 +115,6 @@ describe("EndpointProxyService application integrations", () => {
       ownerUserId: "owner-1",
       visibility: "public",
     });
-    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValue({
-      id: "process-1",
-      status: "running",
-      runtimeInstanceId: "runtime-1",
-    });
     prismaMock.endpointTrafficEntry.create.mockResolvedValue({ id: "traffic-1" });
     sessionRouterMock.getRuntimeDescriptor.mockReturnValue({
       key: "runtime-key",
@@ -154,5 +150,6 @@ describe("EndpointProxyService application integrations", () => {
       }),
     );
     expect(message.headers.cookie).toBeUndefined();
+    expect(prismaMock.sessionApplicationProcess.findUnique).not.toHaveBeenCalled();
   });
 });

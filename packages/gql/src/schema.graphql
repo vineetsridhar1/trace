@@ -1031,6 +1031,12 @@ type SessionApplicationLogEntry {
   timestamp: DateTime!
 }
 
+type SessionApplicationState {
+  applications: [RepoApplicationDefinition!]!
+  processes: [SessionApplicationProcess!]!
+  endpoints: [SessionEndpoint!]!
+}
+
 type SessionEndpoint {
   id: ID!
   key: String!
@@ -1933,6 +1939,7 @@ type Query {
   channelTerminals(channelId: ID!, bridgeRuntimeId: ID!): [Terminal!]!
   sessionSetupScriptRuns(sessionGroupId: ID!): [SessionSetupScriptRun!]!
   sessionApplicationProcesses(sessionGroupId: ID!): [SessionApplicationProcess!]!
+  sessionApplicationState(sessionGroupId: ID!): SessionApplicationState!
   sessionApplicationLogs(
     processId: ID!
     limit: Int
@@ -2238,6 +2245,12 @@ type Mutation {
     accessMode: SessionEndpointAccessMode
   ): SessionEndpoint!
   disableSessionEndpointForwarding(endpointId: ID!): SessionEndpoint!
+  forwardSessionPort(
+    sessionGroupId: ID!
+    port: Int!
+    label: String
+    accessMode: SessionEndpointAccessMode
+  ): SessionEndpoint!
   rotateSessionEndpoint(endpointId: ID!): SessionEndpoint!
   updateSessionEndpointTrafficCapture(
     endpointId: ID!

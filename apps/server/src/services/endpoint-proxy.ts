@@ -598,20 +598,11 @@ export class EndpointProxyService {
       res.writeHead(410).end("Endpoint expired");
       return;
     }
-    const process = await prisma.sessionApplicationProcess.findUnique({
-      where: {
-        sessionGroupId_appConfigId_processConfigId: {
-          sessionGroupId: endpoint.sessionGroupId,
-          appConfigId: endpoint.appConfigId,
-          processConfigId: endpoint.processConfigId,
-        },
-      },
-    });
-    if (!process || process.status !== "running" || !process.runtimeInstanceId) {
-      res.writeHead(503).end("Process is not running");
+    if (!endpoint.currentRuntimeInstanceId) {
+      res.writeHead(503).end("Endpoint runtime is not available");
       return;
     }
-    const runtime = runtimeDescriptor(process.runtimeInstanceId, endpoint.organizationId);
+    const runtime = runtimeDescriptor(endpoint.currentRuntimeInstanceId, endpoint.organizationId);
     if (!runtime) {
       res.writeHead(503).end("Runtime disconnected");
       return;
@@ -707,7 +698,6 @@ export class EndpointProxyService {
         type: "endpoint_http_request",
         requestId,
         endpointId: endpoint.id,
-        processInstanceId: process.id,
         port: endpoint.targetPort,
         method: req.method ?? "GET",
         path: `${path}${query ? `?${query}` : ""}`,
@@ -846,20 +836,11 @@ export class EndpointProxyService {
         return;
       }
     }
-    const process = await prisma.sessionApplicationProcess.findUnique({
-      where: {
-        sessionGroupId_appConfigId_processConfigId: {
-          sessionGroupId: endpoint.sessionGroupId,
-          appConfigId: endpoint.appConfigId,
-          processConfigId: endpoint.processConfigId,
-        },
-      },
-    });
-    if (!process?.runtimeInstanceId || process.status !== "running") {
+    if (!endpoint.currentRuntimeInstanceId) {
       client.close();
       return;
     }
-    const runtime = runtimeDescriptor(process.runtimeInstanceId, endpoint.organizationId);
+    const runtime = runtimeDescriptor(endpoint.currentRuntimeInstanceId, endpoint.organizationId);
     if (!runtime) {
       client.close();
       return;

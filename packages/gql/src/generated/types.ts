@@ -1074,6 +1074,7 @@ export type Mutation = {
   editChatMessage: Message;
   enableSessionEndpointForwarding: SessionEndpoint;
   forkSession: Session;
+  forwardSessionPort: SessionEndpoint;
   /** Adopt an existing local worktree into a not-yet-started session's group (local hosting only). */
   importWorktree: SessionGroup;
   joinChannel: Channel;
@@ -1381,6 +1382,13 @@ export type MutationEnableSessionEndpointForwardingArgs = {
 
 export type MutationForkSessionArgs = {
   eventId: Scalars["ID"]["input"];
+};
+
+export type MutationForwardSessionPortArgs = {
+  accessMode?: InputMaybe<SessionEndpointAccessMode>;
+  label?: InputMaybe<Scalars["String"]["input"]>;
+  port: Scalars["Int"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationImportWorktreeArgs = {
@@ -1948,6 +1956,7 @@ export type Query = {
   session?: Maybe<Session>;
   sessionApplicationLogs: Array<SessionApplicationLogEntry>;
   sessionApplicationProcesses: Array<SessionApplicationProcess>;
+  sessionApplicationState: SessionApplicationState;
   sessionEndpoints: Array<SessionEndpoint>;
   sessionEventsAroundEvent: Array<Event>;
   sessionGroup?: Maybe<SessionGroup>;
@@ -2211,6 +2220,10 @@ export type QuerySessionApplicationLogsArgs = {
 };
 
 export type QuerySessionApplicationProcessesArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionApplicationStateArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -2555,6 +2568,13 @@ export type SessionApplicationProcess = {
   startedAt?: Maybe<Scalars["DateTime"]["output"]>;
   status: ApplicationProcessStatus;
   stoppedAt?: Maybe<Scalars["DateTime"]["output"]>;
+};
+
+export type SessionApplicationState = {
+  __typename?: "SessionApplicationState";
+  applications: Array<RepoApplicationDefinition>;
+  endpoints: Array<SessionEndpoint>;
+  processes: Array<SessionApplicationProcess>;
 };
 
 export type SessionConnection = {

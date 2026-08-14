@@ -5,6 +5,8 @@ export const TRACE_CLI_CAPABILITIES = [
   "integration:connect",
   "integration:configure",
   "app:deploy",
+  "app:control",
+  "port:control",
   "session:list",
   "session:create",
   "session:convert",
@@ -47,8 +49,129 @@ const APP_DEPLOYMENT_FIELDS = `
   externalJobId imageDigest staticPrefix serviceName url errorMessage
   queuedAt startedAt completedAt createdAt updatedAt
 `;
+const SESSION_APPLICATION_PROCESS_FIELDS = `
+  id sessionGroupId appConfigId processConfigId label status runtimeInstanceId
+  startedAt stoppedAt exitCode lastError
+  endpoints { id url label targetPort status accessMode }
+`;
+const SESSION_ENDPOINT_FIELDS = `
+  id key url sessionGroupId appConfigId processConfigId portConfigId label targetPort
+  status accessMode trafficCaptureMode enabledAt disabledAt revokedAt
+`;
+const REPO_APPLICATION_FIELDS = `
+  id name processes {
+    id name command workingDirectory required
+    ports { id label port protocol defaultForwardingEnabled healthPath }
+  }
+`;
 
 export const traceCliOperations = {
+  sessionApplicationState: operation({
+    name: "TraceCliSessionApplicationState",
+    type: "query",
+    rootField: "sessionApplicationState",
+    capability: "app:control",
+    argumentPaths: ["sessionGroupId"],
+    document: `query TraceCliSessionApplicationState($sessionGroupId: ID!) {
+      sessionApplicationState(sessionGroupId: $sessionGroupId) {
+        applications { ${REPO_APPLICATION_FIELDS} }
+        processes { ${SESSION_APPLICATION_PROCESS_FIELDS} }
+        endpoints { ${SESSION_ENDPOINT_FIELDS} }
+      }
+    }`,
+  }),
+  sessionApplicationLogs: operation({
+    name: "TraceCliSessionApplicationLogs",
+    type: "query",
+    rootField: "sessionApplicationLogs",
+    capability: "app:control",
+    argumentPaths: ["processId", "limit"],
+    document: `query TraceCliSessionApplicationLogs($processId: ID!, $limit: Int) {
+      sessionApplicationLogs(processId: $processId, limit: $limit) {
+        id processId stream data sequence timestamp
+      }
+    }`,
+  }),
+  startSessionApplication: operation({
+    name: "TraceCliStartSessionApplication",
+    type: "mutation",
+    rootField: "startSessionApplication",
+    capability: "app:control",
+    argumentPaths: ["sessionGroupId", "appConfigId"],
+    document: `mutation TraceCliStartSessionApplication($sessionGroupId: ID!, $appConfigId: ID!) {
+      startSessionApplication(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId) { ${SESSION_APPLICATION_PROCESS_FIELDS} }
+    }`,
+  }),
+  stopSessionApplication: operation({
+    name: "TraceCliStopSessionApplication",
+    type: "mutation",
+    rootField: "stopSessionApplication",
+    capability: "app:control",
+    argumentPaths: ["sessionGroupId", "appConfigId"],
+    document: `mutation TraceCliStopSessionApplication($sessionGroupId: ID!, $appConfigId: ID!) {
+      stopSessionApplication(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId) { ${SESSION_APPLICATION_PROCESS_FIELDS} }
+    }`,
+  }),
+  startSessionProcess: operation({
+    name: "TraceCliStartSessionProcess",
+    type: "mutation",
+    rootField: "startSessionProcess",
+    capability: "app:control",
+    argumentPaths: ["sessionGroupId", "appConfigId", "processConfigId"],
+    document: `mutation TraceCliStartSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {
+      startSessionProcess(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId, processConfigId: $processConfigId) { ${SESSION_APPLICATION_PROCESS_FIELDS} }
+    }`,
+  }),
+  stopSessionProcess: operation({
+    name: "TraceCliStopSessionProcess",
+    type: "mutation",
+    rootField: "stopSessionProcess",
+    capability: "app:control",
+    argumentPaths: ["sessionGroupId", "appConfigId", "processConfigId"],
+    document: `mutation TraceCliStopSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {
+      stopSessionProcess(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId, processConfigId: $processConfigId) { ${SESSION_APPLICATION_PROCESS_FIELDS} }
+    }`,
+  }),
+  restartSessionProcess: operation({
+    name: "TraceCliRestartSessionProcess",
+    type: "mutation",
+    rootField: "restartSessionProcess",
+    capability: "app:control",
+    argumentPaths: ["sessionGroupId", "appConfigId", "processConfigId"],
+    document: `mutation TraceCliRestartSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {
+      restartSessionProcess(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId, processConfigId: $processConfigId) { ${SESSION_APPLICATION_PROCESS_FIELDS} }
+    }`,
+  }),
+  forwardSessionPort: operation({
+    name: "TraceCliForwardSessionPort",
+    type: "mutation",
+    rootField: "forwardSessionPort",
+    capability: "port:control",
+    argumentPaths: ["sessionGroupId", "port", "label", "accessMode"],
+    document: `mutation TraceCliForwardSessionPort($sessionGroupId: ID!, $port: Int!, $label: String, $accessMode: SessionEndpointAccessMode) {
+      forwardSessionPort(sessionGroupId: $sessionGroupId, port: $port, label: $label, accessMode: $accessMode) { ${SESSION_ENDPOINT_FIELDS} }
+    }`,
+  }),
+  enableSessionEndpointForwarding: operation({
+    name: "TraceCliEnableSessionEndpointForwarding",
+    type: "mutation",
+    rootField: "enableSessionEndpointForwarding",
+    capability: "port:control",
+    argumentPaths: ["endpointId", "accessMode"],
+    document: `mutation TraceCliEnableSessionEndpointForwarding($endpointId: ID!, $accessMode: SessionEndpointAccessMode) {
+      enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: $accessMode) { ${SESSION_ENDPOINT_FIELDS} }
+    }`,
+  }),
+  disableSessionEndpointForwarding: operation({
+    name: "TraceCliDisableSessionEndpointForwarding",
+    type: "mutation",
+    rootField: "disableSessionEndpointForwarding",
+    capability: "port:control",
+    argumentPaths: ["endpointId"],
+    document: `mutation TraceCliDisableSessionEndpointForwarding($endpointId: ID!) {
+      disableSessionEndpointForwarding(endpointId: $endpointId) { ${SESSION_ENDPOINT_FIELDS} }
+    }`,
+  }),
   appDeployments: operation({
     name: "TraceCliAppDeployments",
     type: "query",

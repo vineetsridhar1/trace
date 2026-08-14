@@ -169,6 +169,82 @@ describe("SessionApplicationService", () => {
     ).rejects.toThrow("Application forwarding is currently only available for cloud sessions");
   });
 
+  it("rejects arbitrary port forwarding for non-cloud runtimes", async () => {
+    sessionRouterMock.getRuntime.mockReturnValueOnce({
+      key: "runtime-1",
+      id: "runtime-1",
+      hostingMode: "local",
+      ws: { readyState: 1, OPEN: 1 },
+    });
+
+    await expect(
+      new SessionApplicationService().forwardPort("group-1", 4321, "org-1", "user-1"),
+    ).rejects.toThrow("Application forwarding is currently only available for cloud sessions");
+    expect(prismaMock.sessionEndpoint.create).not.toHaveBeenCalled();
+  });
+
+  it("forwards an arbitrary port without an application process", async () => {
+    prismaMock.sessionEndpoint.create.mockImplementationOnce(async ({ data }) => ({
+      id: "endpoint-manual",
+      ...data,
+      repoId: data.repoId ?? null,
+      status: "disabled",
+      accessMode: "private",
+      trafficCaptureMode: "metadata",
+      enabledAt: null,
+      disabledAt: null,
+      revokedAt: null,
+    }));
+    prismaMock.sessionEndpoint.update.mockImplementationOnce(async ({ data }) => ({
+      id: "endpoint-manual",
+      key: "endpointkey1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: "repo-1",
+      appConfigId: "__trace_manual_port__",
+      processConfigId: "__trace_manual_port__",
+      portConfigId: "4321",
+      targetPort: 4321,
+      protocol: "http",
+      trafficCaptureMode: "metadata",
+      revokedAt: null,
+      ...data,
+    }));
+
+    const endpoint = await new SessionApplicationService().forwardPort(
+      "group-1",
+      4321,
+      "org-1",
+      "user-1",
+      { label: "Arbitrary server", accessMode: "public" },
+    );
+
+    expect(endpoint).toEqual(
+      expect.objectContaining({
+        id: "endpoint-manual",
+        targetPort: 4321,
+        status: "enabled",
+        accessMode: "public",
+        currentRuntimeInstanceId: "runtime-1",
+      }),
+    );
+    expect(prismaMock.sessionApplicationProcess.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.sessionEndpoint.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        appConfigId: "__trace_manual_port__",
+        processConfigId: "__trace_manual_port__",
+        portConfigId: "4321",
+        targetPort: 4321,
+      }),
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "session_endpoint_created" }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "session_endpoint_forwarding_enabled" }),
+    );
+  });
+
   it("starts a process and creates missing endpoint records for configured ports", async () => {
     const process = await new SessionApplicationService().startProcess(
       "group-1",
@@ -338,7 +414,6 @@ describe("SessionApplicationService", () => {
       processConfigId: "dev",
       accessMode: "private",
     });
-    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({ ownerUserId: "user-1" });
     prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
       id: "process-1",
       status: "stopped",

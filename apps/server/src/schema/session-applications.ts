@@ -27,6 +27,12 @@ export const sessionApplicationQueries = {
       requireOrgContext(ctx),
       requireUser(ctx),
     ),
+  sessionApplicationState: (_parent: unknown, args: { sessionGroupId: string }, ctx: Context) =>
+    sessionApplicationService.getApplicationState(
+      args.sessionGroupId,
+      requireOrgContext(ctx),
+      requireUser(ctx),
+    ),
   sessionApplicationLogs: (
     _parent: unknown,
     args: { processId: string; limit?: number | null; beforeSequence?: number | null },
@@ -148,6 +154,23 @@ export const sessionApplicationMutations = {
       args.endpointId,
       requireOrgContext(ctx),
       requireUser(ctx),
+    ),
+  forwardSessionPort: (
+    _parent: unknown,
+    args: {
+      sessionGroupId: string;
+      port: number;
+      label?: string | null;
+      accessMode?: SessionEndpointAccessMode | null;
+    },
+    ctx: Context,
+  ) =>
+    sessionApplicationService.forwardPort(
+      args.sessionGroupId,
+      args.port,
+      requireOrgContext(ctx),
+      requireUser(ctx),
+      { label: args.label, accessMode: args.accessMode },
     ),
   rotateSessionEndpoint: (_parent: unknown, args: { endpointId: string }, ctx: Context) =>
     sessionApplicationService.rotateEndpoint(

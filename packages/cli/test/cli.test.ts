@@ -148,7 +148,9 @@ describe("Trace CLI", () => {
     await expect(
       run(["session", "link-pr", "https://github.com/acme/app/pull/42", "--self", "--json"]),
     ).resolves.toBe(0);
-    expect(stdout.mock.calls.flat().join("")).toContain('"prUrl":"https://github.com/acme/app/pull/42"');
+    expect(stdout.mock.calls.flat().join("")).toContain(
+      '"prUrl":"https://github.com/acme/app/pull/42"',
+    );
   });
 
   it("documents every command and group with actionable help metadata", () => {
@@ -227,6 +229,91 @@ describe("Trace CLI", () => {
     ).resolves.toBe(0);
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(stdout.mock.calls.flat().join("")).toContain('"status":"queued"');
+  });
+
+  it("forwards an arbitrary cloud-session port independently of application config", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-app");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: URL, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as {
+          operationName: string;
+          variables: Record<string, unknown>;
+        };
+        expect(request.operationName).toBe("TraceCliForwardSessionPort");
+        expect(request.variables).toEqual({
+          sessionGroupId: "group-app",
+          port: 4321,
+          label: "Arbitrary server",
+          accessMode: "public",
+        });
+        return new Response(
+          JSON.stringify({
+            data: {
+              forwardSessionPort: {
+                id: "endpoint-1",
+                url: "https://endpoint.example.test",
+                label: "Arbitrary server",
+                targetPort: 4321,
+                status: "enabled",
+                accessMode: "public",
+                appConfigId: "__trace_manual_port__",
+                processConfigId: "__trace_manual_port__",
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    await expect(
+      run(["port", "forward", "4321", "--label", "Arbitrary server", "--json"]),
+    ).resolves.toBe(0);
+    expect(stdout.mock.calls.flat().join("")).toContain("https://endpoint.example.test");
+  });
+
+  it("controls a configured cloud-session application process", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-app");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: URL, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as {
+          operationName: string;
+          variables: Record<string, unknown>;
+        };
+        expect(request.operationName).toBe("TraceCliStartSessionProcess");
+        expect(request.variables).toEqual({
+          sessionGroupId: "group-app",
+          appConfigId: "web",
+          processConfigId: "dev",
+        });
+        return new Response(
+          JSON.stringify({
+            data: {
+              startSessionProcess: {
+                id: "process-1",
+                appConfigId: "web",
+                processConfigId: "dev",
+                label: "Dev server",
+                status: "starting",
+                endpoints: [],
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    await expect(run(["app", "start", "web", "dev", "--json"])).resolves.toBe(0);
+    expect(stdout.mock.calls.flat().join("")).toContain('"status":"starting"');
   });
 
   it("prints complete deployment failure details from app status", async () => {
