@@ -117,7 +117,11 @@ describe("endpoint utils", () => {
     ).toBe("https://www--abcdef.preview.example.test");
   });
 
-  it("rewrites Host and a present Origin to the internal host", () => {
+  it("rewrites Host always, and Origin only for the endpoint's own same-sub traffic", () => {
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "preview.localhost");
+
+    // The endpoint's own sub calling itself (e.g. a dev server's HMR
+    // same-origin check) gets Origin rewritten to match Host.
     expect(
       applyInternalHostHeaders(
         {
@@ -126,14 +130,49 @@ describe("endpoint utils", () => {
           accept: "text/html",
         },
         "www.5000.localhost",
+        { key: "abcdef", sub: "www" },
       ),
     ).toEqual({
       host: "www.5000.localhost",
       origin: "http://www.5000.localhost",
       accept: "text/html",
     });
+    // A different sub of the same session (e.g. www's browser JS calling
+    // consumer's API) is genuinely cross-origin: Host is still rewritten for
+    // internal routing, but the real Origin must reach the app unchanged so
+    // its own CORS logic sees the true caller.
+    expect(
+      applyInternalHostHeaders(
+        {
+          host: "consumer--abcdef.preview.localhost",
+          origin: "https://www--abcdef.preview.localhost",
+        },
+        "consumer.5000.localhost",
+        { key: "abcdef", sub: "consumer" },
+      ),
+    ).toEqual({
+      host: "consumer.5000.localhost",
+      origin: "https://www--abcdef.preview.localhost",
+    });
+    // An origin from an unrelated session (or any other non-matching origin)
+    // is preserved as-is too.
+    expect(
+      applyInternalHostHeaders(
+        { host: "www--abcdef.preview.localhost", origin: "https://evil.test" },
+        "www.5000.localhost",
+        { key: "abcdef", sub: "www" },
+      ),
+    ).toEqual({
+      host: "www.5000.localhost",
+      origin: "https://evil.test",
+    });
     // No Origin on the request means none is fabricated.
-    expect(applyInternalHostHeaders({ accept: "text/html" }, "www.5000.localhost")).toEqual({
+    expect(
+      applyInternalHostHeaders({ accept: "text/html" }, "www.5000.localhost", {
+        key: "abcdef",
+        sub: "www",
+      }),
+    ).toEqual({
       accept: "text/html",
       host: "www.5000.localhost",
     });

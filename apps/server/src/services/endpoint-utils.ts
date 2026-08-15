@@ -89,7 +89,7 @@ export function extractEndpointHost(
   // The endpoint must be exactly one label under the base host. Reject deeper
   // subdomains (`evil.<key>.<baseHost>`) so one endpoint isn't reachable from
   // unbounded origins that could script/set cookies across the isolation seam.
-  const prefix = host.slice(0, -1 * (`.${baseHost}`).length);
+  const prefix = host.slice(0, -1 * `.${baseHost}`.length);
   const separator = prefix.lastIndexOf("--");
   if (separator === -1) {
     return /^[a-z0-9-]+$/.test(prefix) ? { key: prefix, sub: null } : null;
@@ -246,30 +246,54 @@ export function forwardableRequestHeaders(
   return forwarded;
 }
 
-// Host-mode endpoints route by hostname inside the container. Rewrite Host
-// (and Origin, when the browser sent one) to the endpoint's internal host so
-// the container's name-based edge picks the right upstream and the app's own
-// origin checks see a hostname they recognize. Applied after
-// forwardableRequestHeaders so the credential/hop-by-hop filtering is
-// unaffected.
+function originEndpointIdentity(
+  origin: string | undefined,
+): { key: string; sub: string | null } | null {
+  if (!origin) return null;
+  try {
+    return extractEndpointHost(new URL(origin).host);
+  } catch {
+    return null;
+  }
+}
+
+// Host-mode endpoints route by hostname inside the container, so Host is
+// always rewritten to the endpoint's internal host to pick the right
+// upstream. Origin is only rewritten to match when the browser's Origin is
+// this exact endpoint+sub's own preview origin (same-origin app traffic,
+// e.g. a dev server's own HMR same-origin check) — otherwise the request is
+// genuinely cross-origin (one sub's browser JS calling another sub's API, or
+// an external caller), and the real Origin must reach the app unchanged so
+// its own CORS logic can validate it. Applied after forwardableRequestHeaders
+// so the credential/hop-by-hop filtering is unaffected.
 export function applyInternalHostHeaders(
   headers: Record<string, string | string[]>,
   internalHost: string | null,
+  endpointIdentity?: { key: string; sub: string | null } | null,
 ): Record<string, string | string[]> {
   if (!internalHost) return headers;
   const rewritten: Record<string, string | string[]> = {};
-  let hadOrigin = false;
   for (const [rawName, value] of Object.entries(headers)) {
     const name = rawName.toLowerCase();
     if (name === "host") continue;
     if (name === "origin") {
-      hadOrigin = true;
+      const origin = Array.isArray(value) ? value[0] : value;
+      const originIdentity = originEndpointIdentity(origin);
+      const isSameOrigin =
+        endpointIdentity != null &&
+        originIdentity != null &&
+        originIdentity.key === endpointIdentity.key &&
+        originIdentity.sub === endpointIdentity.sub;
+      if (isSameOrigin) {
+        rewritten.origin = `http://${internalHost}`;
+      } else if (origin) {
+        rewritten.origin = origin;
+      }
       continue;
     }
     rewritten[rawName] = value;
   }
   rewritten.host = internalHost;
-  if (hadOrigin) rewritten.origin = `http://${internalHost}`;
   return rewritten;
 }
 

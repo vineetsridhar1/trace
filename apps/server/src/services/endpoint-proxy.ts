@@ -437,6 +437,7 @@ export class EndpointProxyService {
             disableCache: authenticatedPreview,
           }),
           routing.internalHost,
+          { key: endpointKey, sub },
         ),
         bodyBase64: requestBody.byteLength ? requestBody.toString("base64") : undefined,
       },
@@ -631,6 +632,7 @@ export class EndpointProxyService {
         headers: applyInternalHostHeaders(
           forwardableRequestHeaders(req.headers, { websocket: true }),
           routing.internalHost,
+          { key: endpointKey, sub },
         ),
         protocols: webSocketProtocols(req.headers),
       },
