@@ -16,7 +16,15 @@ import {
 import { cn } from "../../lib/utils";
 import type { Terminal } from "@trace/gql";
 
-export function TerminalPanel({ sessionId, onClose }: { sessionId: string; onClose: () => void }) {
+export function TerminalPanel({
+  sessionId,
+  onClose,
+  fill = false,
+}: {
+  sessionId: string;
+  onClose: () => void;
+  fill?: boolean;
+}) {
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | undefined;
@@ -102,7 +110,13 @@ export function TerminalPanel({ sessionId, onClose }: { sessionId: string; onClo
   }, [addTerminal, createNewTerminal, sessionGroupId, sessionId]);
 
   return (
-    <div className="flex flex-col border-t border-border bg-[#0a0a0a]" style={{ height: 300 }}>
+    <div
+      className={cn(
+        "flex flex-col bg-[#0a0a0a]",
+        fill ? "h-full min-h-0" : "border-t border-border",
+      )}
+      style={fill ? undefined : { height: 300 }}
+    >
       <div className="flex shrink-0 items-center gap-0.5 border-b border-border bg-surface-deep px-2 py-1">
         <TerminalSquare size={14} className="mr-1.5 text-muted-foreground" />
 

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Search } from "lucide-react";
 import { TraceLoader } from "../ui/trace-loader";
 import type { FileTreeNode } from "./file-explorer-utils";
 import { FileTreeItem } from "./FileTreeItem";
 
 export function FileExplorer({
   tree,
+  activeFilePath,
   loading,
   error,
   onRefresh,
@@ -13,6 +14,7 @@ export function FileExplorer({
   onFileClick,
 }: {
   tree: FileTreeNode[];
+  activeFilePath?: string | null;
   loading: boolean;
   error: string | null;
   onRefresh: () => Promise<void>;
@@ -20,6 +22,7 @@ export function FileExplorer({
   onFileClick: (filePath: string) => void;
 }) {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
   const didAutoExpandRef = useRef(false);
   const loadedDirectoryPaths = useMemo(() => {
     const paths = new Set<string>();
@@ -40,6 +43,17 @@ export function FileExplorer({
     for (const node of tree) visit(node);
     return count;
   }, [tree]);
+  const visibleTree = useMemo(() => filterFileTree(tree, search), [search, tree]);
+  const visibleExpandedPaths = useMemo(() => {
+    if (!search.trim()) return expandedPaths;
+    const paths = new Set(expandedPaths);
+    const visit = (node: FileTreeNode) => {
+      if (node.isDirectory) paths.add(node.path);
+      for (const child of node.children) visit(child);
+    };
+    for (const node of visibleTree) visit(node);
+    return paths;
+  }, [expandedPaths, search, visibleTree]);
 
   // Auto-expand first level + single-child directory chains on initial load
   useEffect(() => {
@@ -114,36 +128,64 @@ export function FileExplorer({
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#1e1e1e]">
-      <div className="flex shrink-0 items-center justify-between border-b border-[#2d2d2d] px-3 py-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-[#bbbbbb]">
-          Explorer
+    <div className="flex h-full flex-col bg-transparent">
+      <div className="px-3 pb-3">
+        <label className="flex h-9 items-center gap-2 rounded-lg border border-white/[0.1] bg-black/20 px-3 text-muted-foreground focus-within:border-white/20">
+          <Search size={13} />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="min-w-0 flex-1 bg-transparent text-[11px] text-foreground outline-none placeholder:text-muted-foreground"
+            placeholder="Search files"
+            aria-label="Search files"
+          />
+          <span className="rounded bg-white/[0.07] px-1.5 py-0.5 text-[8px]">⌘P</span>
+        </label>
+      </div>
+      <div className="flex h-8 shrink-0 items-center px-4">
+        <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          Workspace
         </span>
+        <span className="ml-auto text-[8px] text-muted-foreground">{loadedItemCount} loaded</span>
         <button
           onClick={() => void onRefresh()}
-          className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+          className="ml-2 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-white/[0.07] hover:text-foreground"
           title="Refresh"
         >
           <RefreshCw size={12} />
         </button>
       </div>
-      <div className="native-scrollbar min-h-0 flex-1 overflow-y-auto py-0.5">
-        {tree.map((node: FileTreeNode) => (
+      <div className="native-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        {visibleTree.map((node: FileTreeNode) => (
           <FileTreeItem
             key={node.path}
             node={node}
+            activeFilePath={activeFilePath}
             depth={0}
-            expandedPaths={expandedPaths}
+            expandedPaths={visibleExpandedPaths}
             onToggle={handleToggle}
             onFileClick={onFileClick}
           />
         ))}
-      </div>
-      <div className="shrink-0 border-t border-[#2d2d2d] px-3 py-1">
-        <span className="text-[11px] text-muted-foreground">
-          {loadedItemCount} item{loadedItemCount !== 1 ? "s" : ""} loaded
-        </span>
+        {visibleTree.length === 0 && search.trim() ? (
+          <p className="px-3 py-5 text-center text-[10px] text-muted-foreground">
+            No matching files
+          </p>
+        ) : null}
       </div>
     </div>
   );
+}
+
+function filterFileTree(tree: FileTreeNode[], search: string): FileTreeNode[] {
+  const query = search.trim().toLowerCase();
+  if (!query) return tree;
+
+  return tree.flatMap((node) => {
+    const children = filterFileTree(node.children, query);
+    if (node.name.toLowerCase().includes(query) || children.length > 0) {
+      return [{ ...node, children }];
+    }
+    return [];
+  });
 }

@@ -6,6 +6,7 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import { SESSION_TERMINALS_QUERY, START_SESSION_MUTATION } from "@trace/client-core";
@@ -27,7 +28,6 @@ import { AttachmentOpenContext, UploadedAttachmentOpenContext } from "./Attachme
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
-import { SessionApplicationsPanel } from "./applications/SessionApplicationsPanel";
 import { AppSessionPreviewPanel } from "./applications/AppSessionPreviewPanel";
 import { AnimationSessionPreviewPanel } from "./applications/AnimationSessionPreviewPanel";
 import { GeneratedProjectPreviewPanel } from "./applications/GeneratedProjectPreviewPanel";
@@ -58,9 +58,9 @@ import type { RegisteredCommand } from "../../stores/command-registry";
 import { ArtifactOpenContext } from "../artifact/ArtifactOpenContext";
 import { ArtifactTabContent } from "../artifact/ArtifactTabContent";
 
-const SESSION_SIDEBAR_WIDTH_KEY = "trace:session-sidebar-width";
-const DEFAULT_SESSION_SIDEBAR_WIDTH = 300;
-const MIN_SESSION_SIDEBAR_WIDTH = 240;
+const SESSION_SIDEBAR_WIDTH_KEY = "trace:session-workbench-sidebar-width";
+const DEFAULT_SESSION_SIDEBAR_WIDTH = 404;
+const MIN_SESSION_SIDEBAR_WIDTH = 320;
 const MAX_SESSION_SIDEBAR_WIDTH = 560;
 const EMPTY_ARTIFACT_IDS: string[] = [];
 const EMPTY_HIDDEN_SESSION_TABS: Record<string, string> = {};
@@ -323,10 +323,10 @@ export function SessionGroupDetailView({
   const terminals = useSessionGroupTerminals(sessionGroupId);
 
   const [showSidebar, setShowSidebar] = useState(false);
-  const [showApplicationsSidebar, setShowApplicationsSidebar] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [sidebarWidth, setSidebarWidth] = useState(() => getStoredSessionSidebarWidth());
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
   const [trafficEndpointId, setTrafficEndpointId] = useState<string | null>(null);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<"session" | "traffic">("session");
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
@@ -465,13 +465,7 @@ export function SessionGroupDetailView({
     if (activeSessionId && sessionTabs.some((s: SessionEntity) => s.id === activeSessionId))
       return;
     setActiveSessionId(sessionTabs[0].id);
-  }, [
-    activeSessionGroupId,
-    activeSessionId,
-    sessionGroupId,
-    sessionTabs,
-    setActiveSessionId,
-  ]);
+  }, [activeSessionGroupId, activeSessionId, sessionGroupId, sessionTabs, setActiveSessionId]);
 
   const activeSessionBelongsToGroup = groupSessions.some(
     (session: SessionEntity) => session.id === activeSessionId,
@@ -566,16 +560,13 @@ export function SessionGroupDetailView({
     if (selectedSessionIsOptimistic && showSidebar) {
       setShowSidebar(false);
     }
-    if (selectedSessionIsOptimistic && showApplicationsSidebar) {
-      setShowApplicationsSidebar(false);
-    }
-  }, [selectedSessionIsOptimistic, showApplicationsSidebar, showSidebar]);
+  }, [selectedSessionIsOptimistic, showSidebar]);
 
   useEffect(() => {
-    if (!showApplicationsSidebarTab && showApplicationsSidebar) {
-      setShowApplicationsSidebar(false);
+    if (!showApplicationsSidebarTab && sidebarTab === "applications") {
+      setSidebarTab("files");
     }
-  }, [showApplicationsSidebar, showApplicationsSidebarTab]);
+  }, [showApplicationsSidebarTab, sidebarTab]);
 
   const selectedSessionStatus = getSessionGroupDisplayStatus(
     groupSessions.map((session) => session.sessionStatus),
@@ -693,22 +684,17 @@ export function SessionGroupDetailView({
   );
 
   const handleToggleSidebar = useCallback(() => {
-    setShowSidebar((prev: boolean) => {
-      const next = !prev;
-      if (next) setShowApplicationsSidebar(false);
-      return next;
-    });
+    setShowSidebar((open) => !open);
   }, []);
 
   const handleToggleApplicationsSidebar = useCallback(() => {
-    setShowApplicationsSidebar((prev: boolean) => {
-      const next = !prev;
-      if (next) {
-        setShowSidebar(false);
-      }
-      return next;
-    });
-  }, []);
+    if (showSidebar && sidebarTab === "applications") {
+      setShowSidebar(false);
+      return;
+    }
+    setSidebarTab("applications");
+    setShowSidebar(true);
+  }, [showSidebar, sidebarTab]);
 
   const handleOpenFilePalette = useCallback(() => {
     setFilePaletteOpen(true);
@@ -745,7 +731,6 @@ export function SessionGroupDetailView({
   ]);
 
   const showSidebarTab = useCallback((tab: SidebarTab) => {
-    setShowApplicationsSidebar(false);
     setShowSidebar(true);
     setSidebarTab(tab);
   }, []);
@@ -1084,7 +1069,7 @@ export function SessionGroupDetailView({
               panelMode={panelMode}
               isFullscreen={isFullscreen}
               showSidebar={showSidebar}
-              showApplicationsSidebar={showApplicationsSidebar}
+              showApplicationsSidebar={showSidebar && sidebarTab === "applications"}
               canShowApplications={showApplicationsSidebarTab}
               compactCanvasMode={isCanvasWorkspace}
               onToggleFullscreen={toggleFullscreen}
@@ -1279,40 +1264,47 @@ export function SessionGroupDetailView({
                   </ArtifactOpenContext.Provider>
                 )}
               </div>
-              {(showSidebar || showApplicationsSidebar) && !selectedSessionIsOptimistic && (
-                <div
-                  className={`relative h-full shrink-0 border-l border-[#2d2d2d] ${
-                    isResizingSidebar ? "" : "transition-[width] duration-150 ease-in-out"
-                  }`}
-                  style={{ width: sidebarWidth }}
-                >
-                  <div
-                    onMouseDown={handleSidebarResizeStart}
-                    className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize hover:bg-ring active:bg-ring"
-                  />
-                  {showApplicationsSidebar ? (
-                    <SessionApplicationsPanel
-                      sessionGroupId={sessionGroupId}
-                      onOpenTraffic={handleOpenTrafficTab}
+              <AnimatePresence initial={false}>
+                {showSidebar && !selectedSessionIsOptimistic ? (
+                  <motion.div
+                    key="session-sidebar"
+                    initial={{ width: 0, x: 64, opacity: 0 }}
+                    animate={{ width: sidebarWidth, x: 0, opacity: 1 }}
+                    exit={{ width: 0, x: 64, opacity: 0 }}
+                    transition={{
+                      duration: prefersReducedMotion || isResizingSidebar ? 0 : 0.3,
+                      ease: [0.16, 1, 0.3, 1],
+                    }}
+                    className="relative h-full shrink-0 overflow-hidden border-l border-[#2d2d2d]"
+                  >
+                    <div
+                      onMouseDown={handleSidebarResizeStart}
+                      className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize hover:bg-ring active:bg-ring"
                     />
-                  ) : (
-                    <SidebarPanel
-                      sessionGroupId={sessionGroupId}
-                      activeTab={sidebarTab}
-                      fileTree={sessionGroupFileTree}
-                      filesLoading={sessionGroupFileTreeLoading}
-                      filesError={sessionGroupFileTreeError}
-                      onTabChange={handleSidebarTabChange}
-                      onFileClick={handleFileClick}
-                      onRefreshFiles={refreshTree}
-                      onLoadDirectory={loadDirectory}
-                      onDiffFileClick={handleDiffFileClick}
-                      bridgeAccess={bridgeAccess}
-                      onBridgeAccessRequested={refreshBridgeAccess}
-                    />
-                  )}
-                </div>
-              )}
+                    <div className="h-full" style={{ width: sidebarWidth }}>
+                      <SidebarPanel
+                        sessionGroupId={sessionGroupId}
+                        activeTab={sidebarTab}
+                        activeSessionId={selectedSession?.id ?? null}
+                        activeFilePath={activeFilePath}
+                        fileTree={sessionGroupFileTree}
+                        filesLoading={sessionGroupFileTreeLoading}
+                        filesError={sessionGroupFileTreeError}
+                        canShowApplications={showApplicationsSidebarTab}
+                        onTabChange={handleSidebarTabChange}
+                        onClose={() => setShowSidebar(false)}
+                        onFileClick={handleFileClick}
+                        onRefreshFiles={refreshTree}
+                        onLoadDirectory={loadDirectory}
+                        onDiffFileClick={handleDiffFileClick}
+                        onOpenTraffic={handleOpenTrafficTab}
+                        bridgeAccess={bridgeAccess}
+                        onBridgeAccessRequested={refreshBridgeAccess}
+                      />
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
             </div>
             <ForkSessionDialog
               eventId={selectedSessionIsOptimistic ? null : forkEventId}
