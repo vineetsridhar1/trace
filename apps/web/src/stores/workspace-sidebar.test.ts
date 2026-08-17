@@ -26,6 +26,14 @@ describe("workspace sidebar", () => {
     expect(useWorkspaceSidebarStore.getState().view).toBe("files");
   });
 
+  it("toggles files for the active session group", () => {
+    useWorkspaceSidebarStore.getState().toggleFiles("group-1");
+    expect(useWorkspaceSidebarStore.getState().filesSessionGroupId).toBe("group-1");
+
+    useWorkspaceSidebarStore.getState().toggleFiles("group-1");
+    expect(useWorkspaceSidebarStore.getState().filesSessionGroupId).toBeNull();
+  });
+
   it("clears only the file request that was consumed", () => {
     useWorkspaceSidebarStore.getState().requestFileOpen("group-1", "src/App.tsx");
     const request = useWorkspaceSidebarStore.getState().fileOpenRequest;

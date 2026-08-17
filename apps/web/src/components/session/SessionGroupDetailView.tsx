@@ -364,7 +364,11 @@ export function SessionGroupDetailView({
     (s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany,
   );
   const terminals = useSessionGroupTerminals(sessionGroupId);
+  const filesSidebarOpen = useWorkspaceSidebarStore(
+    (state) => state.filesSessionGroupId === sessionGroupId,
+  );
   const openFilesSidebar = useWorkspaceSidebarStore((state) => state.openFiles);
+  const toggleFilesSidebar = useWorkspaceSidebarStore((state) => state.toggleFiles);
   const sidebarFileOpenRequest = useWorkspaceSidebarStore((state) => state.fileOpenRequest);
   const consumeSidebarFileOpenRequest = useWorkspaceSidebarStore(
     (state) => state.consumeFileOpenRequest,
@@ -1456,7 +1460,8 @@ export function SessionGroupDetailView({
               panelMode={panelMode}
               isFullscreen={isFullscreen}
               compactCanvasMode={isCanvasWorkspace}
-              onOpenFiles={() => openFilesSidebar(sessionGroupId)}
+              filesOpen={filesSidebarOpen}
+              onToggleFiles={() => toggleFilesSidebar(sessionGroupId)}
               onToggleFullscreen={toggleFullscreen}
             />
             <div className="min-h-0 flex-1 overflow-hidden">

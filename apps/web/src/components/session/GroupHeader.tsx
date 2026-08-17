@@ -47,7 +47,8 @@ interface GroupHeaderProps {
   panelMode?: boolean;
   isFullscreen: boolean;
   compactCanvasMode?: boolean;
-  onOpenFiles: () => void;
+  filesOpen: boolean;
+  onToggleFiles: () => void;
   onToggleFullscreen: () => void;
 }
 
@@ -78,7 +79,8 @@ export function GroupHeader({
   panelMode,
   isFullscreen,
   compactCanvasMode = false,
-  onOpenFiles,
+  filesOpen,
+  onToggleFiles,
   onToggleFullscreen,
 }: GroupHeaderProps) {
   const [showArtifacts, setShowArtifacts] = useState(false);
@@ -147,8 +149,13 @@ export function GroupHeader({
 
       <LinkedCheckoutActions state={linkedCheckout} />
 
-      <ActionTooltip label="Files and changes">
-        <button onClick={onOpenFiles} className={headerIconButtonClass} aria-label="Files and changes">
+      <ActionTooltip label={filesOpen ? "Close files and changes" : "Files and changes"}>
+        <button
+          onClick={onToggleFiles}
+          className={cn(headerIconButtonClass, filesOpen && "bg-white/10 text-foreground")}
+          aria-label={filesOpen ? "Close files and changes" : "Files and changes"}
+          aria-pressed={filesOpen}
+        >
           <FolderTree size={13} />
         </button>
       </ActionTooltip>

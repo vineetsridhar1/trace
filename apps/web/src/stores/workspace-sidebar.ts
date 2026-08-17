@@ -15,6 +15,7 @@ interface WorkspaceSidebarState {
   view: WorkspaceSidebarView;
   fileOpenRequest: SidebarFileOpenRequest | null;
   openFiles: (sessionGroupId: string, view?: WorkspaceSidebarView) => void;
+  toggleFiles: (sessionGroupId: string) => void;
   closeFiles: () => void;
   setView: (view: WorkspaceSidebarView) => void;
   requestFileOpen: (sessionGroupId: string, filePath: string) => void;
@@ -27,6 +28,11 @@ export const useWorkspaceSidebarStore = create<WorkspaceSidebarState>((set) => (
   view: "files",
   fileOpenRequest: null,
   openFiles: (sessionGroupId, view = "files") => set({ filesSessionGroupId: sessionGroupId, view }),
+  toggleFiles: (sessionGroupId) =>
+    set((state) => ({
+      filesSessionGroupId:
+        state.filesSessionGroupId === sessionGroupId ? null : sessionGroupId,
+    })),
   closeFiles: () => set({ filesSessionGroupId: null }),
   setView: (view) => set({ view }),
   requestFileOpen: (sessionGroupId, filePath) =>
