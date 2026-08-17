@@ -1,12 +1,7 @@
 import { History } from "lucide-react";
 import type { SessionEntity } from "@trace/client-core";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
 import { ActionTooltip } from "../ui/ActionTooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "../ui/select";
 
 interface ClosedSessionTabsMenuProps {
   sessions: SessionEntity[];
@@ -17,30 +12,29 @@ export function ClosedSessionTabsMenu({ sessions, onRestoreSession }: ClosedSess
   if (sessions.length === 0) return null;
 
   return (
-    <DropdownMenu>
+    <Select
+      value={null}
+      onValueChange={(sessionId) => {
+        if (sessionId) onRestoreSession(sessionId);
+      }}
+    >
       <ActionTooltip label="Closed tabs">
-        <DropdownMenuTrigger
-          className="app-region-no-drag flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-border/70 bg-background/40 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+        <SelectTrigger
+          size="sm"
+          className="app-region-no-drag h-7 min-w-0 w-7 justify-center gap-0 rounded-md border-border/70 bg-background/40 px-0 text-muted-foreground hover:bg-surface-hover hover:text-foreground [&_[data-slot=select-icon]]:hidden"
           aria-label="Closed tabs"
         >
           <History size={13} />
-        </DropdownMenuTrigger>
+        </SelectTrigger>
       </ActionTooltip>
-      <DropdownMenuContent
-        align="end"
-        className="max-h-[min(20rem,var(--available-height))] w-64 max-w-80 border border-border shadow-[0_16px_48px_#0004] data-open:zoom-in-[0.98] data-open:duration-150 data-closed:zoom-out-[0.98] data-closed:duration-100"
-      >
+      <SelectContent align="end" className="w-64">
         {sessions.map((session) => (
-          <DropdownMenuItem
-            key={session.id}
-            onClick={() => onRestoreSession(session.id)}
-            className="h-8 cursor-pointer gap-2 rounded-sm px-2 text-foreground hover:bg-surface-hover focus:bg-surface-hover"
-          >
+          <SelectItem key={session.id} value={session.id}>
             <History size={14} />
-            <span className="min-w-0 flex-1 truncate opacity-60">{session.name}</span>
-          </DropdownMenuItem>
+            <span className="min-w-0 truncate opacity-60">{session.name}</span>
+          </SelectItem>
         ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </SelectContent>
+    </Select>
   );
 }
