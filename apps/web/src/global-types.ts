@@ -82,6 +82,7 @@ declare global {
 
   type DesktopBrowserWorkspaceState = {
     sessionGroupId: string;
+    browserId: string;
     url: string;
     title: string;
     canGoBack: boolean;
@@ -159,21 +160,42 @@ declare global {
     setBridgeAuthContext: (organizationId: string | null) => Promise<boolean>;
     onBridgeStatus: (callback: (status: DesktopBridgeConnectionStatus) => void) => () => void;
     onMenuCommand?: (callback: (command: string) => void) => () => void;
-    activateBrowser: (sessionGroupId: string) => Promise<DesktopBrowserWorkspaceState>;
-    hideBrowser: (sessionGroupId: string) => Promise<void>;
+    activateBrowser: (input: {
+      sessionGroupId: string;
+      browserId: string;
+    }) => Promise<DesktopBrowserWorkspaceState>;
+    hideBrowser: (input: { sessionGroupId: string; browserId: string }) => Promise<void>;
     setBrowserBounds: (input: {
       sessionGroupId: string;
+      browserId: string;
       bounds: { x: number; y: number; width: number; height: number };
     }) => Promise<void>;
     setBrowserOverlayHidden: (input: {
       sessionGroupId: string;
+      browserId: string;
       hidden: boolean;
     }) => Promise<void>;
-    navigateBrowser: (sessionGroupId: string, url: string) => Promise<DesktopBrowserWorkspaceState>;
-    goBrowserBack: (sessionGroupId: string) => Promise<DesktopBrowserWorkspaceState>;
-    goBrowserForward: (sessionGroupId: string) => Promise<DesktopBrowserWorkspaceState>;
-    reloadBrowser: (sessionGroupId: string) => Promise<DesktopBrowserWorkspaceState>;
-    toggleBrowserDevTools: (sessionGroupId: string) => Promise<DesktopBrowserWorkspaceState>;
+    navigateBrowser: (input: {
+      sessionGroupId: string;
+      browserId: string;
+      url: string;
+    }) => Promise<DesktopBrowserWorkspaceState>;
+    goBrowserBack: (input: {
+      sessionGroupId: string;
+      browserId: string;
+    }) => Promise<DesktopBrowserWorkspaceState>;
+    goBrowserForward: (input: {
+      sessionGroupId: string;
+      browserId: string;
+    }) => Promise<DesktopBrowserWorkspaceState>;
+    reloadBrowser: (input: {
+      sessionGroupId: string;
+      browserId: string;
+    }) => Promise<DesktopBrowserWorkspaceState>;
+    toggleBrowserDevTools: (input: {
+      sessionGroupId: string;
+      browserId: string;
+    }) => Promise<DesktopBrowserWorkspaceState>;
     onBrowserWorkspaceState: (callback: (state: unknown) => void) => () => void;
   }
 

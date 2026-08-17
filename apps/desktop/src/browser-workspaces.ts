@@ -15,6 +15,7 @@ import path from "node:path";
 
 export type BrowserWorkspaceState = {
   sessionGroupId: string;
+  browserId: string;
   url: string;
   title: string;
   canGoBack: boolean;
@@ -24,7 +25,9 @@ export type BrowserWorkspaceState = {
   suspensionState: "active" | "frozen" | "muted";
 };
 
-export type BrowserWorkspaceSnapshot = Pick<BrowserWorkspaceState, "sessionGroupId" | "url">;
+export type BrowserWorkspaceSnapshot = Pick<BrowserWorkspaceState, "sessionGroupId" | "url"> & {
+  browserId?: string;
+};
 
 export interface BrowserWorkspaceSnapshotStore {
   read(): Promise<unknown>;
@@ -44,6 +47,7 @@ type BrowserWorkspaceManagerOptions = {
 };
 
 type BrowserWorkspace = {
+  key: string;
   view: WebContentsView;
   state: BrowserWorkspaceState;
   lastActivatedOrder: number;
@@ -91,7 +95,7 @@ export class BrowserWorkspaceManager {
   private readonly permissionPrompt: (request: BrowserPermissionPrompt) => Promise<boolean>;
   private readonly snapshotStore: BrowserWorkspaceSnapshotStore;
   private window: BrowserWindow | null = null;
-  private visibleSessionGroupId: string | null = null;
+  private readonly visibleWorkspaceIds = new Set<string>();
   private loadStatePromise: Promise<void> | null = null;
   private activationOrder = 0;
   private persistenceDirty = false;
@@ -116,18 +120,14 @@ export class BrowserWorkspaceManager {
     this.window = window;
   }
 
-  async activate(sessionGroupId: string): Promise<BrowserWorkspaceState> {
+  async activate(sessionGroupId: string, browserId = "default"): Promise<BrowserWorkspaceState> {
     await this.loadSnapshots();
-    if (this.visibleSessionGroupId && this.visibleSessionGroupId !== sessionGroupId) {
-      await this.hide(this.visibleSessionGroupId);
-    }
-
-    const workspace = this.getOrCreate(sessionGroupId);
+    const workspace = this.getOrCreate(sessionGroupId, browserId);
     workspace.overlayHidden = false;
     if (this.window && !this.window.isDestroyed()) {
       this.window.contentView.addChildView(workspace.view);
     }
-    this.visibleSessionGroupId = sessionGroupId;
+    this.visibleWorkspaceIds.add(workspace.key);
     workspace.lastActivatedOrder = ++this.activationOrder;
     try {
       workspace.state.suspensionState = await this.setFrozen(workspace, false);
@@ -135,7 +135,7 @@ export class BrowserWorkspaceManager {
       if (this.window && !this.window.isDestroyed()) {
         this.window.contentView.removeChildView(workspace.view);
       }
-      this.visibleSessionGroupId = null;
+      this.visibleWorkspaceIds.delete(workspace.key);
       throw error;
     }
     this.evictInactiveWorkspaces();
@@ -143,31 +143,34 @@ export class BrowserWorkspaceManager {
     return workspace.state;
   }
 
-  async hide(sessionGroupId: string): Promise<void> {
-    const workspace = this.workspaces.get(sessionGroupId);
-    if (!workspace || this.visibleSessionGroupId !== sessionGroupId) return;
+  async hide(sessionGroupId: string, browserId = "default"): Promise<void> {
+    const key = browserWorkspaceKey(sessionGroupId, browserId);
+    const workspace = this.workspaces.get(key);
+    if (!workspace || !this.visibleWorkspaceIds.has(key)) return;
 
     if (this.window && !this.window.isDestroyed()) {
       this.window.contentView.removeChildView(workspace.view);
     }
-    this.visibleSessionGroupId = null;
+    this.visibleWorkspaceIds.delete(key);
     workspace.state.suspensionState = await this.setFrozen(workspace, true);
     this.persistWorkspace(workspace);
     await this.flushPersistence();
     this.publish(workspace);
   }
 
-  setBounds(sessionGroupId: string, bounds: Electron.Rectangle) {
-    if (this.visibleSessionGroupId !== sessionGroupId) return;
-    const workspace = this.workspaces.get(sessionGroupId);
+  setBounds(sessionGroupId: string, browserId: string, bounds: Electron.Rectangle) {
+    const key = browserWorkspaceKey(sessionGroupId, browserId);
+    if (!this.visibleWorkspaceIds.has(key)) return;
+    const workspace = this.workspaces.get(key);
     if (!workspace) return;
     const zoomFactor = this.window?.webContents.getZoomFactor() ?? 1;
     workspace.view.setBounds(scaleRectangle(bounds, zoomFactor));
   }
 
-  setOverlayHidden(sessionGroupId: string, hidden: boolean) {
-    if (this.visibleSessionGroupId !== sessionGroupId) return;
-    const workspace = this.workspaces.get(sessionGroupId);
+  setOverlayHidden(sessionGroupId: string, browserId: string, hidden: boolean) {
+    const key = browserWorkspaceKey(sessionGroupId, browserId);
+    if (!this.visibleWorkspaceIds.has(key)) return;
+    const workspace = this.workspaces.get(key);
     if (!workspace || workspace.overlayHidden === hidden) return;
     workspace.overlayHidden = hidden;
     if (!this.window || this.window.isDestroyed()) return;
@@ -175,36 +178,43 @@ export class BrowserWorkspaceManager {
     else this.window.contentView.addChildView(workspace.view);
   }
 
-  async navigate(sessionGroupId: string, rawUrl: string): Promise<BrowserWorkspaceState> {
-    const workspace = this.requireActiveWorkspace(sessionGroupId);
+  async navigate(
+    sessionGroupId: string,
+    browserId: string,
+    rawUrl: string,
+  ): Promise<BrowserWorkspaceState> {
+    const workspace = this.requireActiveWorkspace(sessionGroupId, browserId);
     await workspace.view.webContents.loadURL(normalizeUrl(rawUrl));
     return workspace.state;
   }
 
-  async goBack(sessionGroupId: string): Promise<BrowserWorkspaceState> {
-    const workspace = this.requireActiveWorkspace(sessionGroupId);
+  async goBack(sessionGroupId: string, browserId = "default"): Promise<BrowserWorkspaceState> {
+    const workspace = this.requireActiveWorkspace(sessionGroupId, browserId);
     if (workspace.view.webContents.navigationHistory.canGoBack()) {
       workspace.view.webContents.navigationHistory.goBack();
     }
     return workspace.state;
   }
 
-  async goForward(sessionGroupId: string): Promise<BrowserWorkspaceState> {
-    const workspace = this.requireActiveWorkspace(sessionGroupId);
+  async goForward(sessionGroupId: string, browserId = "default"): Promise<BrowserWorkspaceState> {
+    const workspace = this.requireActiveWorkspace(sessionGroupId, browserId);
     if (workspace.view.webContents.navigationHistory.canGoForward()) {
       workspace.view.webContents.navigationHistory.goForward();
     }
     return workspace.state;
   }
 
-  async reload(sessionGroupId: string): Promise<BrowserWorkspaceState> {
-    const workspace = this.requireActiveWorkspace(sessionGroupId);
+  async reload(sessionGroupId: string, browserId = "default"): Promise<BrowserWorkspaceState> {
+    const workspace = this.requireActiveWorkspace(sessionGroupId, browserId);
     workspace.view.webContents.reload();
     return workspace.state;
   }
 
-  async toggleDevTools(sessionGroupId: string): Promise<BrowserWorkspaceState> {
-    const workspace = this.requireActiveWorkspace(sessionGroupId);
+  async toggleDevTools(
+    sessionGroupId: string,
+    browserId = "default",
+  ): Promise<BrowserWorkspaceState> {
+    const workspace = this.requireActiveWorkspace(sessionGroupId, browserId);
     const contents = workspace.view.webContents;
     if (contents.isDevToolsOpened()) contents.closeDevTools();
     else contents.openDevTools({ mode: "right", title: "Trace Browser DevTools" });
@@ -232,27 +242,31 @@ export class BrowserWorkspaceManager {
     await this.persistenceChain;
   }
 
-  private requireActiveWorkspace(sessionGroupId: string): BrowserWorkspace {
-    if (this.visibleSessionGroupId !== sessionGroupId) {
+  private requireActiveWorkspace(sessionGroupId: string, browserId: string): BrowserWorkspace {
+    const key = browserWorkspaceKey(sessionGroupId, browserId);
+    if (!this.visibleWorkspaceIds.has(key)) {
       throw new Error("Browser workspace is not active.");
     }
-    const workspace = this.workspaces.get(sessionGroupId);
+    const workspace = this.workspaces.get(key);
     if (!workspace) throw new Error("Browser workspace was not created.");
     return workspace;
   }
 
-  private getOrCreate(sessionGroupId: string): BrowserWorkspace {
-    const existing = this.workspaces.get(sessionGroupId);
+  private getOrCreate(sessionGroupId: string, browserId: string): BrowserWorkspace {
+    const key = browserWorkspaceKey(sessionGroupId, browserId);
+    const existing = this.workspaces.get(key);
     if (existing) return existing;
 
-    const snapshot = this.snapshots.get(sessionGroupId);
+    const snapshot = this.snapshots.get(key);
     const view = new WebContentsView({
       webPreferences: browserWebPreferences(),
     });
     const workspace: BrowserWorkspace = {
+      key,
       view,
       state: {
         sessionGroupId,
+        browserId,
         url: snapshot?.url ?? "about:blank",
         title: "New tab",
         canGoBack: false,
@@ -265,7 +279,7 @@ export class BrowserWorkspaceManager {
       reopenDevToolsOnActivate: false,
       overlayHidden: false,
     };
-    this.workspaces.set(sessionGroupId, workspace);
+    this.workspaces.set(key, workspace);
     this.configureSession(view.webContents.session);
     this.bindWorkspaceEvents(workspace);
     this.configureWindowOpening(view.webContents);
@@ -287,8 +301,9 @@ export class BrowserWorkspaceManager {
     webContents.on("devtools-closed", sync);
     this.bindContextMenu(webContents);
     webContents.on("destroyed", () => {
-      if (this.workspaces.get(workspace.state.sessionGroupId) === workspace) {
-        this.workspaces.delete(workspace.state.sessionGroupId);
+      if (this.workspaces.get(workspace.key) === workspace) {
+        this.workspaces.delete(workspace.key);
+        this.visibleWorkspaceIds.delete(workspace.key);
       }
     });
   }
@@ -525,7 +540,10 @@ export class BrowserWorkspaceManager {
       if (!Array.isArray(snapshots)) return;
       for (const snapshot of snapshots) {
         if (!isSnapshot(snapshot)) continue;
-        this.snapshots.set(snapshot.sessionGroupId, snapshot);
+        this.snapshots.set(
+          browserWorkspaceKey(snapshot.sessionGroupId, snapshot.browserId ?? "default"),
+          snapshot,
+        );
       }
     } catch (error) {
       if (!isFileNotFoundError(error)) {
@@ -535,8 +553,9 @@ export class BrowserWorkspaceManager {
   }
 
   private persistWorkspace(workspace: BrowserWorkspace) {
-    this.snapshots.set(workspace.state.sessionGroupId, {
+    this.snapshots.set(workspace.key, {
       sessionGroupId: workspace.state.sessionGroupId,
+      browserId: workspace.state.browserId,
       url: workspace.state.url,
     });
     this.persistenceDirty = true;
@@ -550,12 +569,12 @@ export class BrowserWorkspaceManager {
   private evictInactiveWorkspaces() {
     while (this.workspaces.size > this.maxRetainedWorkspaces) {
       const candidate = [...this.workspaces.entries()]
-        .filter(([sessionGroupId]) => sessionGroupId !== this.visibleSessionGroupId)
+        .filter(([key]) => !this.visibleWorkspaceIds.has(key))
         .sort((left, right) => left[1].lastActivatedOrder - right[1].lastActivatedOrder)[0];
       if (!candidate) return;
-      const [sessionGroupId, workspace] = candidate;
+      const [key, workspace] = candidate;
       this.persistWorkspace(workspace);
-      this.workspaces.delete(sessionGroupId);
+      this.workspaces.delete(key);
       workspace.view.webContents.close();
     }
   }
@@ -628,6 +647,10 @@ function permissionDecisionKey(origin: string, permission: string): string {
   return `${origin}\n${permission}`;
 }
 
+function browserWorkspaceKey(sessionGroupId: string, browserId: string): string {
+  return `${sessionGroupId}\n${browserId}`;
+}
+
 function permissionLabel(permission: string): string {
   const labels: Record<string, string> = {
     "clipboard-read": "your clipboard",
@@ -663,6 +686,7 @@ function isSnapshot(value: unknown): value is BrowserWorkspaceSnapshot {
   const snapshot = value as Record<string, unknown>;
   return (
     typeof snapshot.sessionGroupId === "string" &&
+    (snapshot.browserId === undefined || typeof snapshot.browserId === "string") &&
     typeof snapshot.url === "string" &&
     isAllowedBrowserUrl(snapshot.url)
   );

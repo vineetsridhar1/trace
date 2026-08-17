@@ -6,6 +6,7 @@ import { Input } from "../ui/input";
 
 const EMPTY_BROWSER_STATE: DesktopBrowserWorkspaceState = {
   sessionGroupId: "",
+  browserId: "",
   url: "about:blank",
   title: "New tab",
   canGoBack: false,
@@ -15,7 +16,13 @@ const EMPTY_BROWSER_STATE: DesktopBrowserWorkspaceState = {
   suspensionState: "active",
 };
 
-export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: string }) {
+export function BrowserWorkspacePanel({
+  sessionGroupId,
+  browserId,
+}: {
+  sessionGroupId: string;
+  browserId: string;
+}) {
   const contentRef = useRef<HTMLDivElement>(null);
   const addressInputRef = useRef<HTMLInputElement>(null);
   const addressEditingRef = useRef(false);
@@ -29,6 +36,7 @@ export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: stri
     const rect = content.getBoundingClientRect();
     void window.trace.setBrowserBounds({
       sessionGroupId,
+      browserId,
       bounds: {
         x: Math.round(rect.x),
         y: Math.round(rect.y),
@@ -36,13 +44,13 @@ export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: stri
         height: Math.max(1, Math.round(rect.height)),
       },
     });
-  }, [sessionGroupId]);
+  }, [browserId, sessionGroupId]);
 
   useEffect(() => {
     if (!window.trace) return;
     let cancelled = false;
     void window.trace
-      .activateBrowser(sessionGroupId)
+      .activateBrowser({ sessionGroupId, browserId })
       .then((nextState) => {
         if (cancelled) return;
         setState(nextState);
@@ -54,7 +62,12 @@ export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: stri
           setError(reason instanceof Error ? reason.message : "Unable to open browser.");
       });
     const unsubscribe = window.trace.onBrowserWorkspaceState((nextState: unknown) => {
-      if (!isBrowserState(nextState) || nextState.sessionGroupId !== sessionGroupId) return;
+      if (
+        !isBrowserState(nextState) ||
+        nextState.sessionGroupId !== sessionGroupId ||
+        nextState.browserId !== browserId
+      )
+        return;
       setState(nextState);
       if (!addressEditingRef.current) setInputValue(nextState.url);
     });
@@ -69,9 +82,9 @@ export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: stri
       window.removeEventListener("resize", syncBounds);
       window.visualViewport?.removeEventListener("resize", syncBounds);
       unsubscribe();
-      void window.trace?.hideBrowser(sessionGroupId);
+      void window.trace?.hideBrowser({ sessionGroupId, browserId });
     };
-  }, [sessionGroupId, syncBounds]);
+  }, [browserId, sessionGroupId, syncBounds]);
 
   const perform = useCallback((action: () => Promise<DesktopBrowserWorkspaceState>) => {
     setError(null);
@@ -101,7 +114,7 @@ export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: stri
           event.preventDefault();
           addressEditingRef.current = false;
           addressInputRef.current?.blur();
-          perform(() => window.trace!.navigateBrowser(sessionGroupId, inputValue));
+          perform(() => window.trace!.navigateBrowser({ sessionGroupId, browserId, url: inputValue }));
         }}
       >
         <Button
@@ -110,7 +123,7 @@ export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: stri
           size="icon"
           className="app-region-no-drag h-7 w-7"
           disabled={!state.canGoBack}
-          onClick={() => perform(() => window.trace!.goBrowserBack(sessionGroupId))}
+          onClick={() => perform(() => window.trace!.goBrowserBack({ sessionGroupId, browserId }))}
           aria-label="Back"
         >
           <ChevronLeft size={16} />
@@ -121,7 +134,9 @@ export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: stri
           size="icon"
           className="app-region-no-drag h-7 w-7"
           disabled={!state.canGoForward}
-          onClick={() => perform(() => window.trace!.goBrowserForward(sessionGroupId))}
+          onClick={() =>
+            perform(() => window.trace!.goBrowserForward({ sessionGroupId, browserId }))
+          }
           aria-label="Forward"
         >
           <ChevronRight size={16} />
@@ -131,7 +146,7 @@ export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: stri
           variant="ghost"
           size="icon"
           className="app-region-no-drag h-7 w-7"
-          onClick={() => perform(() => window.trace!.reloadBrowser(sessionGroupId))}
+          onClick={() => perform(() => window.trace!.reloadBrowser({ sessionGroupId, browserId }))}
           aria-label="Reload"
         >
           {state.loading ? (
@@ -164,7 +179,9 @@ export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: stri
             "app-region-no-drag h-7 gap-1.5 text-xs",
             state.devToolsOpen && "bg-surface-hover text-foreground",
           )}
-          onClick={() => perform(() => window.trace!.toggleBrowserDevTools(sessionGroupId))}
+          onClick={() =>
+            perform(() => window.trace!.toggleBrowserDevTools({ sessionGroupId, browserId }))
+          }
         >
           <Code2 size={14} />
           DevTools
@@ -185,6 +202,7 @@ function isBrowserState(value: unknown): value is DesktopBrowserWorkspaceState {
   const state = value as Record<string, unknown>;
   return (
     typeof state.sessionGroupId === "string" &&
+    typeof state.browserId === "string" &&
     typeof state.url === "string" &&
     typeof state.title === "string" &&
     typeof state.canGoBack === "boolean" &&

@@ -1060,9 +1060,16 @@ export function SessionGroupDetailView({
 
   const handleWorkspaceOverlayVisibility = useCallback(
     (visible: boolean) => {
-      void window.trace?.setBrowserOverlayHidden({ sessionGroupId, hidden: visible });
+      for (const draft of draftWorkspaceTabs) {
+        if (draft.surface !== "browser") continue;
+        void window.trace?.setBrowserOverlayHidden({
+          sessionGroupId,
+          browserId: draft.id,
+          hidden: visible,
+        });
+      }
     },
-    [sessionGroupId],
+    [draftWorkspaceTabs, sessionGroupId],
   );
 
   const renderWorkspaceTab = useCallback(
@@ -1073,6 +1080,7 @@ export function SessionGroupDetailView({
           return (
             <WorkspaceSurfaceContent
               sessionGroupId={sessionGroupId}
+              browserId={tabId}
               surface={draft.surface}
               activeSessionId={selectedSession?.id ?? null}
               activeFilePath={activeFilePath}
@@ -1181,6 +1189,7 @@ export function SessionGroupDetailView({
         return (
           <WorkspaceSurfaceContent
             sessionGroupId={sessionGroupId}
+            browserId={tabId}
             surface={tabId.slice("surface:".length) as WorkspaceSurface}
             activeSessionId={selectedSession?.id ?? null}
             activeFilePath={activeFilePath}

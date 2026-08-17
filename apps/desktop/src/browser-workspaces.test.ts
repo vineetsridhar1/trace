@@ -244,7 +244,12 @@ describe("BrowserWorkspaceManager", () => {
     manager.setWindow(createWindow(0.8));
     await manager.activate("group-a");
 
-    manager.setBounds("group-a", { x: 1_100, y: 150, width: 1_100, height: 900 });
+    manager.setBounds("group-a", "default", {
+      x: 1_100,
+      y: 150,
+      width: 1_100,
+      height: 900,
+    });
 
     expect(electronMocks.views[0].setBounds).toHaveBeenCalledWith({
       x: 880,
@@ -261,12 +266,40 @@ describe("BrowserWorkspaceManager", () => {
     await manager.activate("group-a");
     const view = electronMocks.views[0];
 
-    manager.setOverlayHidden("group-a", true);
+    manager.setOverlayHidden("group-a", "default", true);
     expect(window.contentView.removeChildView).toHaveBeenCalledWith(view);
     expect(latestContents().operations).not.toContain("lifecycle:frozen");
 
-    manager.setOverlayHidden("group-a", false);
+    manager.setOverlayHidden("group-a", "default", false);
     expect(window.contentView.addChildView).toHaveBeenLastCalledWith(view);
+  });
+
+  it("keeps multiple browser tabs visible with independent native views", async () => {
+    const manager = new BrowserWorkspaceManager({ snapshotStore: new MemorySnapshotStore() });
+    const window = createWindow();
+    manager.setWindow(window);
+
+    const firstState = await manager.activate("group-a", "browser-a");
+    const firstView = electronMocks.views[0];
+    const secondState = await manager.activate("group-a", "browser-b");
+    const secondView = electronMocks.views[1];
+
+    expect(firstState.browserId).toBe("browser-a");
+    expect(secondState.browserId).toBe("browser-b");
+    expect(firstView).not.toBe(secondView);
+    expect(window.contentView.addChildView).toHaveBeenCalledWith(firstView);
+    expect(window.contentView.addChildView).toHaveBeenCalledWith(secondView);
+
+    await manager.navigate("group-a", "browser-a", "https://first.example");
+    await manager.navigate("group-a", "browser-b", "https://second.example");
+    expect(firstView.webContents.getURL()).toBe("https://first.example/");
+    expect(secondView.webContents.getURL()).toBe("https://second.example/");
+
+    await manager.hide("group-a", "browser-a");
+    expect(window.contentView.removeChildView).toHaveBeenCalledWith(firstView);
+    await expect(manager.reload("group-a", "browser-b")).resolves.toMatchObject({
+      browserId: "browser-b",
+    });
   });
 
   it("closes DevTools before freezing and restores them after activation", async () => {
@@ -383,7 +416,7 @@ describe("BrowserWorkspaceManager", () => {
 
     expect(store.maxConcurrentWrites).toBe(1);
     expect(store.writes.at(-1)).toEqual([
-      { sessionGroupId: "group-a", url: "https://last.example/" },
+      { sessionGroupId: "group-a", browserId: "default", url: "https://last.example/" },
     ]);
   });
 
@@ -398,7 +431,9 @@ describe("BrowserWorkspaceManager", () => {
     await manager.activate("group-a");
     const firstContents = latestContents();
     firstContents.setURL("https://a.example/");
+    await manager.hide("group-a");
     await manager.activate("group-b");
+    await manager.hide("group-b");
     await manager.activate("group-c");
 
     expect(firstContents.closed).toBe(true);

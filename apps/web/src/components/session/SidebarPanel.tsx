@@ -43,6 +43,7 @@ export type WorkspaceSurface = SidebarTab;
 
 export interface WorkspaceSurfaceContentProps {
   sessionGroupId: string;
+  browserId?: string;
   surface: WorkspaceSurface;
   activeSessionId: string | null;
   activeFilePath?: string | null;
@@ -154,6 +155,7 @@ export function SidebarPanel({
 
 export function WorkspaceSurfaceContent({
   sessionGroupId,
+  browserId = "default",
   surface,
   activeSessionId,
   activeFilePath,
@@ -188,7 +190,7 @@ export function WorkspaceSurfaceContent({
           embedded
         />
       ) : surface === "browser" ? (
-        <BrowserWorkspacePanel sessionGroupId={sessionGroupId} />
+        <BrowserWorkspacePanel sessionGroupId={sessionGroupId} browserId={browserId} />
       ) : surface === "terminal" ? (
         activeSessionId ? <TerminalPanel sessionId={activeSessionId} onClose={onClose} fill /> : null
       ) : surface === "files" ? (

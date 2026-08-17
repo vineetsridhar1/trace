@@ -382,38 +382,38 @@ ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null
   bridge.setAuthContext(organizationId);
   return true;
 });
-ipcMain.handle("browser-activate", (_event, sessionGroupId: string) =>
-  browserWorkspaces.activate(sessionGroupId),
+ipcMain.handle("browser-activate", (_event, input: { sessionGroupId: string; browserId: string }) =>
+  browserWorkspaces.activate(input.sessionGroupId, input.browserId),
 );
-ipcMain.handle("browser-hide", (_event, sessionGroupId: string) =>
-  browserWorkspaces.hide(sessionGroupId),
+ipcMain.handle("browser-hide", (_event, input: { sessionGroupId: string; browserId: string }) =>
+  browserWorkspaces.hide(input.sessionGroupId, input.browserId),
 );
 ipcMain.handle(
   "browser-set-bounds",
-  (_event, input: { sessionGroupId: string; bounds: Electron.Rectangle }) => {
-    browserWorkspaces.setBounds(input.sessionGroupId, input.bounds);
+  (_event, input: { sessionGroupId: string; browserId: string; bounds: Electron.Rectangle }) => {
+    browserWorkspaces.setBounds(input.sessionGroupId, input.browserId, input.bounds);
   },
 );
 ipcMain.handle(
   "browser-set-overlay-hidden",
-  (_event, input: { sessionGroupId: string; hidden: boolean }) => {
-    browserWorkspaces.setOverlayHidden(input.sessionGroupId, input.hidden);
+  (_event, input: { sessionGroupId: string; browserId: string; hidden: boolean }) => {
+    browserWorkspaces.setOverlayHidden(input.sessionGroupId, input.browserId, input.hidden);
   },
 );
-ipcMain.handle("browser-navigate", (_event, sessionGroupId: string, url: string) =>
-  browserWorkspaces.navigate(sessionGroupId, url),
+ipcMain.handle("browser-navigate", (_event, input: { sessionGroupId: string; browserId: string; url: string }) =>
+  browserWorkspaces.navigate(input.sessionGroupId, input.browserId, input.url),
 );
-ipcMain.handle("browser-back", (_event, sessionGroupId: string) =>
-  browserWorkspaces.goBack(sessionGroupId),
+ipcMain.handle("browser-back", (_event, input: { sessionGroupId: string; browserId: string }) =>
+  browserWorkspaces.goBack(input.sessionGroupId, input.browserId),
 );
-ipcMain.handle("browser-forward", (_event, sessionGroupId: string) =>
-  browserWorkspaces.goForward(sessionGroupId),
+ipcMain.handle("browser-forward", (_event, input: { sessionGroupId: string; browserId: string }) =>
+  browserWorkspaces.goForward(input.sessionGroupId, input.browserId),
 );
-ipcMain.handle("browser-reload", (_event, sessionGroupId: string) =>
-  browserWorkspaces.reload(sessionGroupId),
+ipcMain.handle("browser-reload", (_event, input: { sessionGroupId: string; browserId: string }) =>
+  browserWorkspaces.reload(input.sessionGroupId, input.browserId),
 );
-ipcMain.handle("browser-toggle-devtools", (_event, sessionGroupId: string) =>
-  browserWorkspaces.toggleDevTools(sessionGroupId),
+ipcMain.handle("browser-toggle-devtools", (_event, input: { sessionGroupId: string; browserId: string }) =>
+  browserWorkspaces.toggleDevTools(input.sessionGroupId, input.browserId),
 );
 // Cmd+W with no in-app tab to close falls back to closing the window.
 ipcMain.on("close-window", () => mainWindow?.close());
