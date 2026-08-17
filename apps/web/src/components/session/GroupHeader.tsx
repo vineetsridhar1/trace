@@ -3,6 +3,7 @@ import {
   AppWindow,
   Boxes,
   Cloud,
+  Globe,
   Monitor,
   PanelRight,
   Maximize2,
@@ -51,9 +52,12 @@ interface GroupHeaderProps {
   showApplicationsSidebar: boolean;
   canShowApplications: boolean;
   compactCanvasMode?: boolean;
+  browserOpen: boolean;
+  canShowBrowser: boolean;
   onToggleFullscreen: () => void;
   onToggleSidebar: () => void;
   onToggleApplicationsSidebar: () => void;
+  onToggleBrowser: () => void;
 }
 
 const headerIconButtonClass =
@@ -86,9 +90,12 @@ export function GroupHeader({
   showApplicationsSidebar,
   canShowApplications,
   compactCanvasMode = false,
+  browserOpen,
+  canShowBrowser,
   onToggleFullscreen,
   onToggleSidebar,
   onToggleApplicationsSidebar,
+  onToggleBrowser,
 }: GroupHeaderProps) {
   const [showArtifacts, setShowArtifacts] = useState(false);
   const { hasRunScripts, canRun, handleRun } = useRunScripts(sessionGroupId, selectedSessionId);
@@ -220,6 +227,22 @@ export function GroupHeader({
             aria-label={showApplicationsSidebar ? "Hide applications" : "Applications"}
           >
             <AppWindow size={13} />
+          </button>
+        </ActionTooltip>
+      ) : null}
+
+      {canShowBrowser ? (
+        <ActionTooltip label={browserOpen ? "Hide browser" : "Open browser"}>
+          <button
+            onClick={onToggleBrowser}
+            className={cn(
+              headerIconButtonClass,
+              "hidden sm:flex",
+              browserOpen ? "bg-surface-hover text-foreground" : undefined,
+            )}
+            aria-label={browserOpen ? "Hide browser" : "Open browser"}
+          >
+            <Globe size={13} />
           </button>
         </ActionTooltip>
       ) : null}

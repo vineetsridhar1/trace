@@ -36,4 +36,22 @@ contextBridge.exposeInMainWorld("trace", {
     ipcRenderer.on("menu-command", listener);
     return () => ipcRenderer.removeListener("menu-command", listener);
   },
+  activateBrowser: (sessionGroupId: string) =>
+    ipcRenderer.invoke("browser-activate", sessionGroupId),
+  hideBrowser: (sessionGroupId: string) => ipcRenderer.invoke("browser-hide", sessionGroupId),
+  setBrowserBounds: (input: { sessionGroupId: string; bounds: Electron.Rectangle }) =>
+    ipcRenderer.invoke("browser-set-bounds", input),
+  navigateBrowser: (sessionGroupId: string, url: string) =>
+    ipcRenderer.invoke("browser-navigate", sessionGroupId, url),
+  goBrowserBack: (sessionGroupId: string) => ipcRenderer.invoke("browser-back", sessionGroupId),
+  goBrowserForward: (sessionGroupId: string) =>
+    ipcRenderer.invoke("browser-forward", sessionGroupId),
+  reloadBrowser: (sessionGroupId: string) => ipcRenderer.invoke("browser-reload", sessionGroupId),
+  toggleBrowserDevTools: (sessionGroupId: string) =>
+    ipcRenderer.invoke("browser-toggle-devtools", sessionGroupId),
+  onBrowserWorkspaceState: (callback: (state: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state);
+    ipcRenderer.on("browser-workspace-state", listener);
+    return () => ipcRenderer.removeListener("browser-workspace-state", listener);
+  },
 });

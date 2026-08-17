@@ -37,8 +37,10 @@ import {
   shouldMovePackagedMacAppToApplicationsFolder,
 } from "./mac-install-location.js";
 import { getCodingToolStatuses, installOrUpdateCodingTool } from "./coding-tools.js";
+import { BrowserWorkspaceManager } from "./browser-workspaces.js";
 
 let mainWindow: BrowserWindow | null = null;
+const browserWorkspaces = new BrowserWorkspaceManager();
 const PROJECT_PARENT_SELECTION_TTL_MS = 10 * 60 * 1000;
 const projectParentSelections = new Map<
   string,
@@ -174,6 +176,7 @@ function createWindow() {
 
   const webUrl = process.env.TRACE_WEB_URL ?? defaultWebUrl;
   mainWindow.loadURL(webUrl);
+  browserWorkspaces.setWindow(mainWindow);
 
   // Open external links in the user's default browser.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -242,6 +245,7 @@ function createWindow() {
   });
 
   mainWindow.on("closed", () => {
+    browserWorkspaces.setWindow(null);
     mainWindow = null;
   });
 }
@@ -377,6 +381,33 @@ ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null
   bridge.setAuthContext(organizationId);
   return true;
 });
+ipcMain.handle("browser-activate", (_event, sessionGroupId: string) =>
+  browserWorkspaces.activate(sessionGroupId),
+);
+ipcMain.handle("browser-hide", (_event, sessionGroupId: string) =>
+  browserWorkspaces.hide(sessionGroupId),
+);
+ipcMain.handle(
+  "browser-set-bounds",
+  (_event, input: { sessionGroupId: string; bounds: Electron.Rectangle }) => {
+    browserWorkspaces.setBounds(input.sessionGroupId, input.bounds);
+  },
+);
+ipcMain.handle("browser-navigate", (_event, sessionGroupId: string, url: string) =>
+  browserWorkspaces.navigate(sessionGroupId, url),
+);
+ipcMain.handle("browser-back", (_event, sessionGroupId: string) =>
+  browserWorkspaces.goBack(sessionGroupId),
+);
+ipcMain.handle("browser-forward", (_event, sessionGroupId: string) =>
+  browserWorkspaces.goForward(sessionGroupId),
+);
+ipcMain.handle("browser-reload", (_event, sessionGroupId: string) =>
+  browserWorkspaces.reload(sessionGroupId),
+);
+ipcMain.handle("browser-toggle-devtools", (_event, sessionGroupId: string) =>
+  browserWorkspaces.toggleDevTools(sessionGroupId),
+);
 // Cmd+W with no in-app tab to close falls back to closing the window.
 ipcMain.on("close-window", () => mainWindow?.close());
 
