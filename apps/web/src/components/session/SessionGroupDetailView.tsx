@@ -38,7 +38,11 @@ import { useTerminalActions } from "./useTerminalActions";
 import { useFileActions } from "./useFileActions";
 import { useSessionGroupFiles } from "./useSessionGroupFiles";
 import { useSessionGroupDirectoryTree } from "./useSessionGroupDirectoryTree";
-import { getSessionGroupDisplayStatus, isTerminalStatus } from "./sessionStatus";
+import {
+  getSessionGroupAgentStatus,
+  getSessionGroupDisplayStatus,
+  isTerminalStatus,
+} from "./sessionStatus";
 import { isAnimationCanvasReady, isAppCanvasReady } from "./app-session-readiness";
 import { isGeneratedProjectCanvasReady } from "./generated-project-readiness";
 import { getProjectWorkspaceKind, usesFloatingProjectChat } from "./project-workspace-kind";
@@ -533,6 +537,10 @@ export function SessionGroupDetailView({
     groupArchivedAt ?? null,
     groupPrUrl,
   );
+  const displayAgentStatus = getSessionGroupAgentStatus(
+    groupSessions.map((session) => session.agentStatus),
+    groupSessions,
+  );
   const selectedSessionMergedUnavailable =
     selectedSession?.sessionStatus === "merged" && groupWorktreeDeleted !== false;
   const canMoveSelectedSession =
@@ -1001,6 +1009,7 @@ export function SessionGroupDetailView({
               selectedSessionStatus={selectedSessionStatus}
               selectedSessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
               selectedAgentStatus={selectedSession?.agentStatus}
+              displayAgentStatus={displayAgentStatus}
               selectedHosting={selectedSession?.hosting}
               selectedConnection={
                 selectedSession?.connection as Record<string, unknown> | null | undefined

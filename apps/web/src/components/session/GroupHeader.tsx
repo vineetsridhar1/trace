@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   AppWindow,
   Boxes,
-  Circle,
   Cloud,
   Monitor,
   PanelRight,
@@ -12,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { sessionStatusColor, sessionStatusLabel } from "./sessionStatus";
+import { AgentStatusIcon } from "./AgentStatusIcon";
 import { SessionGroupArtifactsDialog } from "../artifact/SessionGroupArtifactsDialog";
 import { useRunScripts } from "../../hooks/useRunScripts";
 import { useLinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
@@ -34,6 +34,7 @@ interface GroupHeaderProps {
   selectedSessionStatus: string;
   selectedSessionId: string | null;
   selectedAgentStatus?: string;
+  displayAgentStatus?: string;
   selectedHosting?: string;
   selectedConnection?: Record<string, unknown> | null;
   selectedWorktreeDeleted?: boolean;
@@ -66,6 +67,7 @@ export function GroupHeader({
   selectedSessionStatus,
   selectedSessionId,
   selectedAgentStatus,
+  displayAgentStatus,
   selectedHosting,
   selectedConnection,
   selectedWorktreeDeleted,
@@ -120,7 +122,7 @@ export function GroupHeader({
               sessionStatusColor[selectedSessionStatus],
             )}
           >
-            <Circle size={6} className="fill-current" />
+            <AgentStatusIcon agentStatus={displayAgentStatus ?? "done"} size={8} />
             {label}
           </span>
         </>
