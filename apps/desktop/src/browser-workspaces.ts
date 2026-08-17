@@ -638,7 +638,11 @@ async function closeDevTools(webContents: WebContents): Promise<void> {
 function isSnapshot(value: unknown): value is BrowserWorkspaceSnapshot {
   if (!value || typeof value !== "object") return false;
   const snapshot = value as Record<string, unknown>;
-  return typeof snapshot.sessionGroupId === "string" && typeof snapshot.url === "string";
+  return (
+    typeof snapshot.sessionGroupId === "string" &&
+    typeof snapshot.url === "string" &&
+    isAllowedBrowserUrl(snapshot.url)
+  );
 }
 
 function isFileNotFoundError(error: unknown): boolean {

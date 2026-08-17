@@ -324,6 +324,17 @@ describe("BrowserWorkspaceManager", () => {
     expect(handler({ url: "file:///etc/passwd" })).toEqual({ action: "deny" });
   });
 
+  it("rejects non-web URLs restored from persisted workspace state", async () => {
+    const store = new MemorySnapshotStore();
+    store.value = [{ sessionGroupId: "group-a", url: "file:///etc/passwd" }];
+    const manager = new BrowserWorkspaceManager({ snapshotStore: store });
+    manager.setWindow(createWindow());
+
+    await manager.activate("group-a");
+
+    expect(latestContents().getURL()).toBe("about:blank");
+  });
+
   it("serializes and coalesces workspace snapshot writes", async () => {
     const store = new MemorySnapshotStore();
     const manager = new BrowserWorkspaceManager({
