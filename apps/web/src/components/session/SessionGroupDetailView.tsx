@@ -1036,7 +1036,7 @@ export function SessionGroupDetailView({
                 trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
                 onSelectSession={handleSelectSession}
                 onCloseSession={handleCloseSession}
-                canCloseSessions={false}
+                canCloseSessions={sessionTabs.length > 1}
                 onSelectTerminal={handleSelectTerminalTab}
                 onCloseTerminal={handleCloseTerminal}
                 onRenameTerminal={renameTerminal}
