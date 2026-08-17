@@ -11,6 +11,7 @@ import {
   type DragMoveEvent,
   type DragOverEvent,
   type CollisionDetection,
+  type Modifier,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { motion } from "framer-motion";
@@ -88,6 +89,37 @@ const edgeLabels: Record<SpatialEdge, string> = {
 };
 
 const tabRailSpring = { type: "spring", stiffness: 520, damping: 42, mass: 0.7 } as const;
+
+const centerDragOverlayOnCursor: Modifier = ({
+  activatorEvent,
+  activeNodeRect,
+  overlayNodeRect,
+  transform,
+}) => {
+  if (!activatorEvent || !activeNodeRect || !overlayNodeRect) return transform;
+  if (!("clientX" in activatorEvent) || !("clientY" in activatorEvent)) return transform;
+  if (
+    typeof activatorEvent.clientX !== "number" ||
+    typeof activatorEvent.clientY !== "number"
+  ) {
+    return transform;
+  }
+  return {
+    ...transform,
+    x:
+      transform.x +
+      activatorEvent.clientX -
+      activeNodeRect.left -
+      overlayNodeRect.width / 2,
+    y:
+      transform.y +
+      activatorEvent.clientY -
+      activeNodeRect.top -
+      overlayNodeRect.height / 2,
+  };
+};
+
+const dragOverlayModifiers = [centerDragOverlayOnCursor];
 
 const spatialCollisionDetection: CollisionDetection = (args) => {
   const collisions = pointerWithin(args);
@@ -301,7 +333,10 @@ export function SpatialWorkspace({
         ) : null}
       </div>
 
-      <DragOverlay dropAnimation={{ duration: 160, easing: "cubic-bezier(.16,1,.3,1)" }}>
+      <DragOverlay
+        modifiers={dragOverlayModifiers}
+        dropAnimation={{ duration: 160, easing: "cubic-bezier(.16,1,.3,1)" }}
+      >
         {draggedTab ? <DraggedTab tab={draggedTab} /> : null}
       </DragOverlay>
     </DndContext>
