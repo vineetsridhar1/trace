@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronRight } from "lucide-react";
-import { cn } from "../../../lib/utils";
 import { formatCommandLabel, formatTime, serializeUnknown } from "./utils";
 import { InlineDiffView } from "./InlineDiffView";
+import { Tabs, TabsList, TabsTrigger } from "../../ui/tabs";
 
 export interface ToolCallRowProps {
   key?: React.Key;
@@ -73,14 +73,16 @@ export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps
           <div ref={bodyRef}>
             {showTabs ? (
               <>
-                <div className="flex gap-0 border-b border-border/40 mb-1">
-                  <TabButton active={tab === "output"} onClick={() => setTab("output")}>
-                    Output
-                  </TabButton>
-                  <TabButton active={tab === "input"} onClick={() => setTab("input")}>
-                    Input
-                  </TabButton>
-                </div>
+                <Tabs value={tab} onValueChange={(value) => setTab(value as "input" | "output")}>
+                  <TabsList className="mb-2 h-7 rounded-md" aria-label="Tool call details">
+                    <TabsTrigger value="output" className="px-2.5 text-xs">
+                      Output
+                    </TabsTrigger>
+                    <TabsTrigger value="input" className="px-2.5 text-xs">
+                      Input
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
                 {tab === "input" ? (
                   <pre className="tool-cmd-output">{serializeUnknown(input)}</pre>
                 ) : (
@@ -107,33 +109,5 @@ export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps
         </div>
       )}
     </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      className={cn(
-        "px-3 py-1.5 text-xs font-medium transition-colors border-b-2 -mb-px",
-        active
-          ? "border-accent text-accent"
-          : "border-transparent text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {children}
-    </button>
   );
 }
