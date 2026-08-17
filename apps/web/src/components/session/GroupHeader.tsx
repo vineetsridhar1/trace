@@ -21,6 +21,8 @@ import { SessionMoveButton } from "./SessionMoveButton";
 import { GitHubActions } from "./GitHubActions";
 import { GroupUsageBadge } from "./GroupUsageBadge";
 import { ActionTooltip } from "../ui/ActionTooltip";
+import { ClosedSessionTabsMenu } from "./ClosedSessionTabsMenu";
+import type { SessionEntity } from "@trace/client-core";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
@@ -38,6 +40,8 @@ interface GroupHeaderProps {
   selectedHosting?: string;
   selectedConnection?: Record<string, unknown> | null;
   selectedWorktreeDeleted?: boolean;
+  closedSessions: SessionEntity[];
+  onRestoreClosedSession: (sessionId: string) => void;
   canMoveSession: boolean;
   moveDisabledReason?: string;
   groupPrUrl: string | null | undefined;
@@ -71,6 +75,8 @@ export function GroupHeader({
   selectedHosting,
   selectedConnection,
   selectedWorktreeDeleted,
+  closedSessions,
+  onRestoreClosedSession,
   canMoveSession,
   moveDisabledReason,
   groupPrUrl,
@@ -136,6 +142,8 @@ export function GroupHeader({
       </div>
 
       <GroupUsageBadge sessionGroupId={sessionGroupId} />
+
+      <ClosedSessionTabsMenu sessions={closedSessions} onRestoreSession={onRestoreClosedSession} />
 
       <GitHubActions
         sessionId={selectedSessionId}

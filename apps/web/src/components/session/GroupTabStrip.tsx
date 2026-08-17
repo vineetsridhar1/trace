@@ -7,7 +7,6 @@ import {
   GitCompareArrows,
   MessageSquarePlus,
   Plus,
-  History,
   TerminalSquare,
   X,
 } from "lucide-react";
@@ -62,7 +61,6 @@ interface GroupTabStripProps {
   onCloseSession?: (sessionId: string) => void;
   canCloseSessions?: boolean;
   hiddenSessionIds: ReadonlySet<string>;
-  onRestoreSession: (sessionId: string) => void;
   onSelectTerminal: (sessionId: string | null, terminalId: string) => void;
   onCloseTerminal: (terminalId: string) => void;
   onRenameTerminal: (terminalId: string, name: string) => void;
@@ -104,7 +102,6 @@ export function GroupTabStrip({
   onCloseSession,
   canCloseSessions,
   hiddenSessionIds,
-  onRestoreSession,
   onSelectTerminal,
   onCloseTerminal,
   onRenameTerminal,
@@ -124,7 +121,6 @@ export function GroupTabStrip({
     (s: { sessionDoneBadges: Record<string, boolean> }) => s.sessionDoneBadges,
   );
   const sessionById = new Map(groupSessions.map((s) => [s.id, s]));
-  const hiddenSessions = groupSessions.filter((session) => hiddenSessionIds.has(session.id));
   const tabRefs = useRef<Map<string, HTMLElement>>(new Map());
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [editingTerminalId, setEditingTerminalId] = useState<string | null>(null);
@@ -185,7 +181,7 @@ export function GroupTabStrip({
     <TooltipProvider delay={300}>
       <div className="app-region-drag relative shrink-0 bg-surface-mid after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border">
         <div className="native-scrollbar overflow-x-auto">
-          <div className="flex min-w-max items-end gap-1 px-2 pt-1">
+          <div className="flex min-w-max items-end gap-0 px-2 pt-1">
             {sessionTabs.map((session) => {
               const displayAgentStatus = getDisplayAgentStatus(
                 session.agentStatus,
@@ -411,25 +407,6 @@ export function GroupTabStrip({
                 </div>
               );
             })}
-
-            {hiddenSessions.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  className="inline-flex shrink-0 items-center justify-center px-2.5 py-2 text-muted-foreground transition-colors hover:text-foreground"
-                  title="Closed tabs"
-                >
-                  <History size={14} />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  {hiddenSessions.map((session) => (
-                    <DropdownMenuItem key={session.id} onClick={() => onRestoreSession(session.id)}>
-                      <History size={14} />
-                      <span className="max-w-56 truncate opacity-60">{session.name}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
 
             <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
               <DropdownMenuTrigger

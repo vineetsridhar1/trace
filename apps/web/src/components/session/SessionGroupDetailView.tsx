@@ -1072,6 +1072,8 @@ export function SessionGroupDetailView({
                 selectedSession?.connection as Record<string, unknown> | null | undefined
               }
               selectedWorktreeDeleted={selectedSession?.worktreeDeleted}
+              closedSessions={groupSessions.filter((session) => hiddenSessionIds.has(session.id))}
+              onRestoreClosedSession={handleRestoreSession}
               canMoveSession={canMoveSelectedSession && selectedSessionBridgeInteractionAllowed}
               moveDisabledReason={moveDisabledReason}
               groupPrUrl={groupPrUrl}
@@ -1104,7 +1106,6 @@ export function SessionGroupDetailView({
                 onCloseSession={handleCloseSession}
                 canCloseSessions={sessionTabs.length > 0}
                 hiddenSessionIds={hiddenSessionIds}
-                onRestoreSession={handleRestoreSession}
                 onSelectTerminal={handleSelectTerminalTab}
                 onCloseTerminal={handleCloseTerminal}
                 onRenameTerminal={renameTerminal}
