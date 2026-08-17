@@ -69,6 +69,7 @@ import {
 } from "../lib/session-group-status.js";
 import { isLocalMode } from "../lib/mode.js";
 import {
+  assertSessionAccess,
   assertSessionGroupAccess,
   canViewSessionGroup,
   visibleSessionGroupWhere,
@@ -1575,14 +1576,12 @@ export class SessionService {
   }
 
   async hideTab(sessionId: string, organizationId: string, userId: string, actorType: ActorType) {
+    await assertSessionAccess(sessionId, userId, organizationId);
     const session = await prisma.session.findFirst({
       where: { id: sessionId, organizationId },
       select: { id: true, sessionGroupId: true },
     });
     if (!session) throw new ValidationError("Session not found");
-    if (session.sessionGroupId) {
-      await assertSessionGroupAccess(session.sessionGroupId, userId, organizationId);
-    }
     const hiddenTab = await prisma.hiddenSessionTab.upsert({
       where: { userId_sessionId: { userId, sessionId } },
       create: { userId, sessionId },

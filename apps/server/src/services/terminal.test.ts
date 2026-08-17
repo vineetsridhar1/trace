@@ -14,7 +14,10 @@ vi.mock("../lib/terminal-relay.js", () => ({
     getTerminalsForChannel: vi.fn().mockReturnValue([]),
     getSessionId: vi.fn(),
     getTerminalAuthContext: vi.fn(),
+    getTerminalAuthContextDistributed: vi.fn(),
+    getTerminalState: vi.fn(),
     destroyTerminal: vi.fn(),
+    destroyTerminalDistributed: vi.fn(),
   },
 }));
 
@@ -31,6 +34,16 @@ vi.mock("../lib/session-router.js", () => ({
 vi.mock("./runtime-access.js", () => ({
   runtimeAccessService: {
     assertAccess: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+vi.mock("./event.js", () => ({
+  eventService: {
+    create: vi.fn().mockResolvedValue({
+      id: "event-1",
+      scopeType: "session",
+      scopeId: "session-1",
+    }),
   },
 }));
 
@@ -73,6 +86,17 @@ describe("TerminalService", () => {
       runtimeInstanceId: "runtime-1",
       ownerUserId: "user-1",
     }));
+    terminalRelayMock.getTerminalAuthContextDistributed.mockImplementation((terminalId: string) =>
+      Promise.resolve(terminalRelayMock.getTerminalAuthContext(terminalId)),
+    );
+    terminalRelayMock.getTerminalState.mockImplementation((terminalId: string) => ({
+      id: terminalId,
+      sessionId: terminalRelayMock.getSessionId(terminalId) ?? "session-1",
+    }));
+    terminalRelayMock.destroyTerminalDistributed.mockImplementation((terminalId: string) => {
+      terminalRelayMock.destroyTerminal(terminalId);
+      return Promise.resolve();
+    });
   });
 
   describe("create", () => {

@@ -350,6 +350,10 @@ export function SessionGroupDetailView({
   );
   const { groupSessions, selectedSession, sessionTabs, sessionsByRecency } =
     useSessionGroupSessions(sessionGroupId, openTabIds, activeSessionId, hiddenSessionIds);
+  const closedSessions = useMemo(
+    () => groupSessions.filter((session) => hiddenSessionIds.has(session.id)),
+    [groupSessions, hiddenSessionIds],
+  );
 
   useEffect(() => {
     void client
@@ -457,15 +461,15 @@ export function SessionGroupDetailView({
   // Auto-select the most recent session if none is selected
   useEffect(() => {
     if (activeSessionGroupId !== sessionGroupId) return;
-    if (sessionsByRecency.length === 0) return;
-    if (activeSessionId && sessionsByRecency.some((s: SessionEntity) => s.id === activeSessionId))
+    if (sessionTabs.length === 0) return;
+    if (activeSessionId && sessionTabs.some((s: SessionEntity) => s.id === activeSessionId))
       return;
-    setActiveSessionId(sessionsByRecency[0].id);
+    setActiveSessionId(sessionTabs[0].id);
   }, [
     activeSessionGroupId,
     activeSessionId,
     sessionGroupId,
-    sessionsByRecency,
+    sessionTabs,
     setActiveSessionId,
   ]);
 
@@ -473,7 +477,7 @@ export function SessionGroupDetailView({
     (session: SessionEntity) => session.id === activeSessionId,
   );
   const initialSessionTabId =
-    activeSessionId && activeSessionBelongsToGroup ? activeSessionId : sessionsByRecency[0]?.id;
+    activeSessionId && activeSessionBelongsToGroup ? activeSessionId : sessionTabs[0]?.id;
 
   // Initialize open tabs with the active deep-linked session when possible.
   useEffect(() => {
@@ -1072,7 +1076,7 @@ export function SessionGroupDetailView({
                 selectedSession?.connection as Record<string, unknown> | null | undefined
               }
               selectedWorktreeDeleted={selectedSession?.worktreeDeleted}
-              closedSessions={groupSessions.filter((session) => hiddenSessionIds.has(session.id))}
+              closedSessions={closedSessions}
               onRestoreClosedSession={handleRestoreSession}
               canMoveSession={canMoveSelectedSession && selectedSessionBridgeInteractionAllowed}
               moveDisabledReason={moveDisabledReason}

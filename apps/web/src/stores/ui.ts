@@ -207,14 +207,19 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
     set((s: UIState) => {
       const openTabs = s.openSessionTabsByGroup[groupId] ?? [];
       const nextTabs = openTabs.filter((id) => id !== sessionId);
+      const closingActiveTab = s.activeSessionId === sessionId;
+      if (closingActiveTab && nextTabs.length === 0) {
+        const channelId = resolveChannelIdForSessionGroup(groupId, s.activeChannelId);
+        persistActiveSessionNav(groupId, null);
+        replaceNav(channelId, groupId, null, "main", null, s.channelSubPage);
+      }
       return {
         openSessionTabsByGroup: { ...s.openSessionTabsByGroup, [groupId]: nextTabs },
         hiddenSessionTabsByGroup: {
           ...s.hiddenSessionTabsByGroup,
           [groupId]: { ...s.hiddenSessionTabsByGroup[groupId], [sessionId]: hiddenAt },
         },
-        activeSessionId:
-          s.activeSessionId === sessionId ? (nextTabs[0] ?? null) : s.activeSessionId,
+        activeSessionId: closingActiveTab ? (nextTabs[0] ?? null) : s.activeSessionId,
       };
     });
   },
