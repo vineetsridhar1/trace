@@ -136,7 +136,7 @@ export function GroupTabStrip({
   return (
     <TooltipProvider delay={300}>
       <div className="app-region-drag relative shrink-0 bg-surface-mid after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border">
-        <div className="native-scrollbar overflow-x-auto">
+        <div className="no-scrollbar overflow-x-auto overflow-y-hidden">
           <div className="flex min-w-max items-end gap-0 px-2 pt-1">
             {sessionTabs.map((session) => {
               const displayAgentStatus = getDisplayAgentStatus(
