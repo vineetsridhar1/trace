@@ -236,6 +236,7 @@ export function moveSpatialTab(
   tabId: string,
   targetGroupId: string,
   targetIndex?: number,
+  preserveEmptySource = false,
 ): SpatialLayout {
   const sourceGroup = getSpatialGroups(layout.root).find((group) => group.tabIds.includes(tabId));
   const targetGroup = findSpatialGroup(layout.root, targetGroupId);
@@ -247,12 +248,15 @@ export function moveSpatialTab(
     const nextIds = sourceGroup.tabIds.filter((id) => id !== tabId);
     const clampedIndex = Math.max(0, Math.min(insertionIndex, nextIds.length));
     nextIds.splice(clampedIndex, 0, tabId);
-    return {
-      ...layout,
-      root: mapGroups(layout.root, (group) =>
+    if (nextIds.every((id, index) => id === sourceGroup.tabIds[index])) {
+      if (preserveEmptySource) return layout;
+      const collapsedRoot = collapseEmptyGroups(layout.root);
+      return collapsedRoot ? { ...layout, root: collapsedRoot } : layout;
+    }
+    const root = mapGroups(layout.root, (group) =>
         group.id === sourceGroup.id ? { ...group, tabIds: nextIds, activeTabId: tabId } : group,
-      ),
-    };
+      );
+    return { ...layout, root: preserveEmptySource ? root : (collapseEmptyGroups(root) ?? root) };
   }
 
   let root = mapGroups(layout.root, (group) => {
@@ -276,7 +280,9 @@ export function moveSpatialTab(
     }
     return group;
   });
-  root = collapseEmptyGroups(root) ?? createSpatialLayout([tabId], tabId).root;
+  if (!preserveEmptySource) {
+    root = collapseEmptyGroups(root) ?? createSpatialLayout([tabId], tabId).root;
+  }
   return { ...layout, root };
 }
 

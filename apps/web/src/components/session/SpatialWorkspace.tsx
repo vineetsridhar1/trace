@@ -8,14 +8,17 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
   type CollisionDetection,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import { motion } from "framer-motion";
 import { Columns2, Columns3, Columns4, LayoutGrid, Plus, Rows2, Square, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -44,6 +47,7 @@ import {
   syncSpatialTabs,
   type SpatialEdge,
   type SpatialLayoutPreset,
+  type SpatialLayout,
   type SpatialNode,
   type SpatialRowPosition,
   type SpatialTabGroup,
@@ -82,6 +86,8 @@ const edgeLabels: Record<SpatialEdge, string> = {
   bottom: "Split into bottom row",
 };
 
+const tabRailSpring = { type: "spring", stiffness: 520, damping: 42, mass: 0.7 } as const;
+
 const spatialCollisionDetection: CollisionDetection = (args) => {
   const collisions = pointerWithin(args);
   const tabCollision = collisions.find((collision) =>
@@ -109,6 +115,7 @@ export function SpatialWorkspace({
   const tabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs]);
   const [layout, setLayout] = useState(() => readLayout(persistenceKey, tabIds, preferredActiveTabId));
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
+  const dragStartLayoutRef = useRef<SpatialLayout | null>(null);
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -149,30 +156,46 @@ export function SpatialWorkspace({
     [onActivateTab],
   );
 
+  const handleDragOver = useCallback((event: DragOverEvent) => {
+    const move = getTabRailMove(event);
+    if (!move) return;
+    setLayout((current) =>
+      moveSpatialTab(current, move.tabId, move.groupId, move.targetIndex, true),
+    );
+  }, []);
+
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setDraggedTabId(null);
     const tabId = String(event.active.id);
     const over = event.over;
-    if (!over) return;
+    if (!over) {
+      if (dragStartLayoutRef.current) setLayout(dragStartLayoutRef.current);
+      dragStartLayoutRef.current = null;
+      return;
+    }
     const overId = String(over.id);
 
     const [kind, targetId, edge] = overId.split(":");
     if (kind === "snap" && isSpatialRowPosition(targetId) && isSpatialEdge(edge)) {
       setLayout((current) => dockSpatialTab(current, tabId, edge, targetId));
+      dragStartLayoutRef.current = null;
       return;
     }
-    const dropData: unknown = over.data.current;
-    if (isTabRailDropData(dropData)) {
-      if (dropData.targetTabId === tabId) return;
-      let targetIndex = dropData.targetIndex;
-      if (dropData.targetTabId) {
-        const activeRect = event.active.rect.current.translated;
-        if (activeRect && activeRect.left + activeRect.width / 2 > over.rect.left + over.rect.width / 2) {
-          targetIndex += 1;
-        }
-      }
-      setLayout((current) => moveSpatialTab(current, tabId, dropData.groupId, targetIndex));
+    const move = getTabRailMove(event);
+    if (move) {
+      setLayout((current) =>
+        moveSpatialTab(current, move.tabId, move.groupId, move.targetIndex),
+      );
+    } else if (dragStartLayoutRef.current) {
+      setLayout(dragStartLayoutRef.current);
     }
+    dragStartLayoutRef.current = null;
+  }, []);
+
+  const handleDragCancel = useCallback(() => {
+    setDraggedTabId(null);
+    if (dragStartLayoutRef.current) setLayout(dragStartLayoutRef.current);
+    dragStartLayoutRef.current = null;
   }, []);
 
   const handleLayoutPreset = useCallback((preset: SpatialLayoutPreset) => {
@@ -194,8 +217,12 @@ export function SpatialWorkspace({
     <DndContext
       sensors={sensors}
       collisionDetection={spatialCollisionDetection}
-      onDragStart={({ active }) => setDraggedTabId(String(active.id))}
-      onDragCancel={() => setDraggedTabId(null)}
+      onDragStart={({ active }) => {
+        dragStartLayoutRef.current = layout;
+        setDraggedTabId(String(active.id));
+      }}
+      onDragOver={handleDragOver}
+      onDragCancel={handleDragCancel}
       onDragEnd={handleDragEnd}
     >
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-surface-deep">
@@ -473,57 +500,64 @@ function SpatialTabButton({
   );
 
   return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Translate.toString(transform) }}
-      className={cn(
-        "group mb-0 flex shrink-0 items-center rounded-t-lg border-b-2 transition-[background-color,border-color,color,opacity]",
-        compact ? "h-8 max-w-40" : "h-9 max-w-56",
-        active
-          ? "border-blue-400 bg-background text-foreground"
-          : "border-transparent text-muted-foreground hover:bg-surface-hover/70 hover:text-foreground",
-        isDragging && "opacity-20",
-        isOver && !isDragging && "ring-1 ring-inset ring-blue-400/70",
-      )}
+    <motion.div
+      layout="position"
+      layoutId={`spatial-tab-${tab.id}`}
+      transition={tabRailSpring}
+      className="shrink-0"
     >
-      <button
-        type="button"
-        onClick={onActivate}
-        className="flex min-w-0 flex-1 cursor-grab items-center gap-2 overflow-hidden py-2 pl-3 active:cursor-grabbing"
-        title={tab.label}
-        aria-current={active ? "page" : undefined}
-        {...listeners}
-        {...attributes}
+      <div
+        ref={setNodeRef}
+        style={{ transform: CSS.Translate.toString(transform) }}
+        className={cn(
+          "group mb-0 flex shrink-0 items-center rounded-t-lg border-b-2 transition-[background-color,border-color,color,opacity]",
+          compact ? "h-8 max-w-40" : "h-9 max-w-56",
+          active
+            ? "border-blue-400 bg-background text-foreground"
+            : "border-transparent text-muted-foreground hover:bg-surface-hover/70 hover:text-foreground",
+          isDragging && "opacity-20",
+          isOver && !isDragging && "ring-1 ring-inset ring-blue-400/70",
+        )}
       >
-        <span className="shrink-0 text-muted-foreground">{tab.icon}</span>
-        <span className={cn("truncate font-medium", compact ? "text-[10px]" : "text-xs")}>
-          {tab.label}
-        </span>
-        {tab.status ? (
-          <span
-            className={cn(
-              "size-1.5 shrink-0 rounded-full",
-              tab.status === "live" && "bg-emerald-400",
-              tab.status === "changed" && "bg-blue-400",
-              tab.status === "attention" && "bg-amber-400",
-            )}
-          />
-        ) : null}
-      </button>
-      {tab.closable !== false ? (
         <button
           type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onClose();
-          }}
-          className="mr-1 flex size-5 shrink-0 items-center justify-center rounded opacity-0 transition-opacity hover:bg-surface-hover group-hover:opacity-70 focus:opacity-100"
-          aria-label={`Close ${tab.label}`}
+          onClick={onActivate}
+          className="flex min-w-0 flex-1 cursor-grab items-center gap-2 overflow-hidden py-2 pl-3 active:cursor-grabbing"
+          title={tab.label}
+          aria-current={active ? "page" : undefined}
+          {...listeners}
+          {...attributes}
         >
-          <X size={11} />
+          <span className="shrink-0 text-muted-foreground">{tab.icon}</span>
+          <span className={cn("truncate font-medium", compact ? "text-[10px]" : "text-xs")}>
+            {tab.label}
+          </span>
+          {tab.status ? (
+            <span
+              className={cn(
+                "size-1.5 shrink-0 rounded-full",
+                tab.status === "live" && "bg-emerald-400",
+                tab.status === "changed" && "bg-blue-400",
+                tab.status === "attention" && "bg-amber-400",
+              )}
+            />
+          ) : null}
         </button>
-      ) : null}
-    </div>
+        {tab.closable !== false ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onClose();
+            }}
+            className="mr-1 flex size-5 shrink-0 items-center justify-center rounded opacity-0 transition-opacity hover:bg-surface-hover group-hover:opacity-70 focus:opacity-100"
+            aria-label={`Close ${tab.label}`}
+          >
+            <X size={11} />
+          </button>
+        ) : null}
+      </div>
+    </motion.div>
   );
 }
 
@@ -667,4 +701,25 @@ function isTabRailDropData(value: unknown): value is TabRailDropData {
     typeof data.targetIndex === "number" &&
     (data.targetTabId === undefined || typeof data.targetTabId === "string")
   );
+}
+
+function getTabRailMove(event: DragOverEvent | DragEndEvent) {
+  const over = event.over;
+  if (!over) return null;
+  const dropData: unknown = over.data.current;
+  if (!isTabRailDropData(dropData)) return null;
+
+  const tabId = String(event.active.id);
+  if (dropData.targetTabId === tabId) return null;
+  let targetIndex = dropData.targetIndex;
+  if (dropData.targetTabId) {
+    const activeRect = event.active.rect.current.translated;
+    if (
+      activeRect &&
+      activeRect.left + activeRect.width / 2 > over.rect.left + over.rect.width / 2
+    ) {
+      targetIndex += 1;
+    }
+  }
+  return { tabId, groupId: dropData.groupId, targetIndex };
 }

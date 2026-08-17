@@ -153,6 +153,22 @@ describe("spatial workspace layout", () => {
     ]);
   });
 
+  it("keeps an emptied source rail during preview and collapses it on drop", () => {
+    let layout = createSpatialLayout(["chat", "browser"]);
+    layout = dockSpatialTab(layout, "browser", "right");
+    layout = moveSpatialTab(layout, "browser", "region-1", 1, true);
+
+    expect(countSpatialRegions(layout.root)).toBe(2);
+    expect(getSpatialGroups(layout.root).map((group) => group.tabIds)).toEqual([
+      ["chat", "browser"],
+      [],
+    ]);
+
+    layout = moveSpatialTab(layout, "browser", "region-1", 1);
+    expect(countSpatialRegions(layout.root)).toBe(1);
+    expect(getSpatialGroups(layout.root)[0].tabIds).toEqual(["chat", "browser"]);
+  });
+
   it("inserts a new tab into the region that created it", () => {
     let layout = createSpatialLayout(["chat", "browser"]);
     layout = dockSpatialTab(layout, "browser", "right");
