@@ -21,6 +21,7 @@ import {
   terminalStatusColor,
   terminalStatusLabel,
 } from "./sessionStatus";
+import { AgentStatusIcon } from "./AgentStatusIcon";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -215,7 +216,7 @@ export function GroupTabStrip({
                         color,
                       )}
                     >
-                      <Circle size={6} className="fill-current" />
+                      <AgentStatusIcon agentStatus={displayAgentStatus} size={6} />
                       {hasDoneBadge && (
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75" />
                       )}
