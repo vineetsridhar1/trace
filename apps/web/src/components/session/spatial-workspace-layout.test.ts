@@ -7,6 +7,7 @@ import {
   dockSpatialTab,
   getSpatialAxisSpan,
   getSpatialGroups,
+  insertSpatialTab,
   moveSpatialTab,
   syncSpatialTabs,
 } from "./spatial-workspace-layout";
@@ -68,6 +69,18 @@ describe("spatial workspace layout", () => {
       ["terminal", "changes"],
       ["chat", "browser"],
     ]);
+  });
+
+  it("inserts a new tab into the region that created it", () => {
+    let layout = createSpatialLayout(["chat", "browser"]);
+    layout = dockSpatialTab(layout, "browser", "region-1", "right");
+    layout = insertSpatialTab(layout, "draft:new", "region-2");
+
+    expect(getSpatialGroups(layout.root).map((group) => group.tabIds)).toEqual([
+      ["chat"],
+      ["browser", "draft:new"],
+    ]);
+    expect(getSpatialGroups(layout.root)[1].activeTabId).toBe("draft:new");
   });
 
   it("keeps tab identity and active state while syncing live tabs", () => {

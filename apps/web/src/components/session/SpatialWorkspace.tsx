@@ -35,6 +35,7 @@ import {
   createSpatialLayout,
   dockSpatialTab,
   getSpatialAxisSpan,
+  insertSpatialTab,
   isSpatialLayout,
   moveSpatialTab,
   syncSpatialTabs,
@@ -58,7 +59,7 @@ interface SpatialWorkspaceProps {
   preferredActiveTabId?: string | null;
   onActivateTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;
-  onNewTab: () => void;
+  onNewTab: (groupId: string) => string;
   onOverlayVisibilityChange?: (visible: boolean) => void;
   renderTab: (tabId: string, compact: boolean) => ReactNode;
 }
@@ -151,6 +152,14 @@ export function SpatialWorkspace({
     setLayout((current) => applySpatialLayoutPreset(current, preset));
   }, []);
 
+  const handleNewTab = useCallback(
+    (groupId: string) => {
+      const tabId = onNewTab(groupId);
+      setLayout((current) => insertSpatialTab(current, tabId, groupId));
+    },
+    [onNewTab],
+  );
+
   const draggedTab = draggedTabId ? tabById.get(draggedTabId) : null;
 
   return (
@@ -213,7 +222,7 @@ export function SpatialWorkspace({
           canSplit={regionCount < MAX_SPATIAL_REGIONS}
           onActivate={handleActivate}
           onCloseTab={onCloseTab}
-          onNewTab={onNewTab}
+          onNewTab={handleNewTab}
           renderTab={renderTab}
         />
       </div>
@@ -260,7 +269,7 @@ function SpatialNodeView({
   canSplit: boolean;
   onActivate: (groupId: string, tabId: string) => void;
   onCloseTab: (tabId: string) => void;
-  onNewTab: () => void;
+  onNewTab: (groupId: string) => void;
   renderTab: (tabId: string, compact: boolean) => ReactNode;
 }) {
   if (node.type === "group") {
@@ -327,7 +336,7 @@ function SpatialRegion({
   canSplit: boolean;
   onActivate: (groupId: string, tabId: string) => void;
   onCloseTab: (tabId: string) => void;
-  onNewTab: () => void;
+  onNewTab: (groupId: string) => void;
   renderTab: (tabId: string, compact: boolean) => ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `region:${group.id}` });
@@ -365,7 +374,7 @@ function SpatialRegion({
           })}
           <button
             type="button"
-            onClick={onNewTab}
+            onClick={() => onNewTab(group.id)}
             className="mb-1 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
             aria-label="New tab"
             title="New tab (⌘T)"

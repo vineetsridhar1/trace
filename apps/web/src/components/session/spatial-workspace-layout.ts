@@ -79,6 +79,25 @@ export function activateSpatialTab(
   };
 }
 
+export function insertSpatialTab(
+  layout: SpatialLayout,
+  tabId: string,
+  targetGroupId: string,
+): SpatialLayout {
+  const sourceGroup = getSpatialGroups(layout.root).find((group) => group.tabIds.includes(tabId));
+  if (sourceGroup) return moveSpatialTab(layout, tabId, targetGroupId);
+  if (!findSpatialGroup(layout.root, targetGroupId)) return layout;
+
+  return {
+    ...layout,
+    root: mapGroups(layout.root, (group) =>
+      group.id === targetGroupId
+        ? { ...group, tabIds: [...group.tabIds, tabId], activeTabId: tabId }
+        : group,
+    ),
+  };
+}
+
 export function syncSpatialTabs(
   layout: SpatialLayout,
   tabIds: string[],

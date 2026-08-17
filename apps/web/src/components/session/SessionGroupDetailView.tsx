@@ -1055,6 +1055,7 @@ export function SessionGroupDetailView({
   const handleNewWorkspaceTab = useCallback(() => {
     const id = `draft:${crypto.randomUUID()}`;
     setDraftWorkspaceTabs((drafts) => [...drafts, { id, surface: null }]);
+    return id;
   }, []);
 
   const handleWorkspaceOverlayVisibility = useCallback(
