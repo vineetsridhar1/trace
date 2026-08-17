@@ -1,4 +1,4 @@
-import { AppWindow, Globe, TerminalSquare } from "lucide-react";
+import { AppWindow, Globe, PanelsTopLeft, TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuthStore } from "@trace/client-core";
@@ -45,6 +45,12 @@ const quickStarts: Array<{
   icon: typeof Globe;
 }> = [
   { surface: "browser", label: "Open browser", detail: "Preview a running app", icon: Globe },
+  {
+    surface: "trace",
+    label: "Open Trace",
+    detail: "Use another Trace workspace",
+    icon: PanelsTopLeft,
+  },
   {
     surface: "terminal",
     label: "Open terminal",

@@ -19,10 +19,12 @@ const EMPTY_BROWSER_STATE: DesktopBrowserWorkspaceState = {
 export function BrowserWorkspacePanel({
   sessionGroupId,
   browserId,
+  initialUrl,
   onTitleChange,
 }: {
   sessionGroupId: string;
   browserId: string;
+  initialUrl?: string;
   onTitleChange?: (browserId: string, title: string) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -55,8 +57,19 @@ export function BrowserWorkspacePanel({
   useEffect(() => {
     if (!window.trace) return;
     let cancelled = false;
-    void window.trace
-      .activateBrowser({ sessionGroupId, browserId })
+    const activate = async () => {
+      let nextState = await window.trace!.activateBrowser({ sessionGroupId, browserId });
+      const navigationUrl = browserInitialNavigationUrl(nextState.url, initialUrl);
+      if (navigationUrl) {
+        nextState = await window.trace!.navigateBrowser({
+          sessionGroupId,
+          browserId,
+          url: navigationUrl,
+        });
+      }
+      return nextState;
+    };
+    void activate()
       .then((nextState) => {
         if (cancelled) return;
         setState(nextState);
@@ -90,7 +103,7 @@ export function BrowserWorkspacePanel({
       unsubscribe();
       void window.trace?.hideBrowser({ sessionGroupId, browserId });
     };
-  }, [browserId, sessionGroupId, syncBounds]);
+  }, [browserId, initialUrl, sessionGroupId, syncBounds]);
 
   const perform = useCallback((action: () => Promise<DesktopBrowserWorkspaceState>) => {
     setError(null);
@@ -201,6 +214,10 @@ export function BrowserWorkspacePanel({
       <div ref={contentRef} className="min-h-0 flex-1" aria-label={state.title} />
     </div>
   );
+}
+
+export function browserInitialNavigationUrl(currentUrl: string, initialUrl?: string) {
+  return initialUrl && currentUrl === "about:blank" ? initialUrl : null;
 }
 
 function isBrowserState(value: unknown): value is DesktopBrowserWorkspaceState {
