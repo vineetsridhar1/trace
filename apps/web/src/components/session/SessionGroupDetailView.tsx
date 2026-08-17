@@ -414,7 +414,6 @@ export function SessionGroupDetailView({
 
   const {
     handleOpenTerminal,
-    handleCreateTerminal,
     handleCloseTerminal,
     handleSelectTerminal: selectTerminal,
   } = useTerminalActions({
@@ -505,8 +504,7 @@ export function SessionGroupDetailView({
   useEffect(() => {
     if (activeSessionGroupId !== sessionGroupId) return;
     if (sessionTabs.length === 0) return;
-    if (activeSessionId && sessionTabs.some((s: SessionEntity) => s.id === activeSessionId))
-      return;
+    if (activeSessionId && sessionTabs.some((s: SessionEntity) => s.id === activeSessionId)) return;
     setActiveSessionId(sessionTabs[0].id);
   }, [activeSessionGroupId, activeSessionId, sessionGroupId, sessionTabs, setActiveSessionId]);
 
@@ -739,10 +737,6 @@ export function SessionGroupDetailView({
     setShowSidebar(true);
   }, [showSidebar, sidebarTab]);
 
-  const handleOpenFilePalette = useCallback(() => {
-    setFilePaletteOpen(true);
-  }, []);
-
   const handleToggleFilePalette = useCallback(() => {
     setFilePaletteOpen((open) => !open);
   }, []);
@@ -754,19 +748,6 @@ export function SessionGroupDetailView({
     void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
   }, [
     handleOpenTerminal,
-    selectedSession,
-    setActiveArtifactId,
-    setActiveFilePath,
-    terminalAllowed,
-  ]);
-
-  const handleCreateTerminalTab = useCallback(() => {
-    setActiveWorkflowTab("session");
-    setActiveArtifactId(null);
-    setActiveFilePath(null);
-    void handleCreateTerminal(selectedSession ?? null, terminalAllowed);
-  }, [
-    handleCreateTerminal,
     selectedSession,
     setActiveArtifactId,
     setActiveFilePath,
@@ -1148,12 +1129,9 @@ export function SessionGroupDetailView({
                 onSelectTraffic={handleSelectTrafficTab}
                 onCloseTraffic={handleCloseTrafficTab}
                 onNewChat={handleNewChat}
-                onOpenTerminal={handleCreateTerminalTab}
-                onOpenFilePalette={handleOpenFilePalette}
                 canNewChat={
                   !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
                 }
-                canOpenTerminal={!selectedSessionIsOptimistic && terminalAllowed}
               />
             ) : null}
 
