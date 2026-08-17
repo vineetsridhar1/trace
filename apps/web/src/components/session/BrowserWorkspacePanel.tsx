@@ -12,10 +12,13 @@ const EMPTY_BROWSER_STATE: DesktopBrowserWorkspaceState = {
   canGoForward: false,
   loading: false,
   devToolsOpen: false,
+  suspensionState: "active",
 };
 
 export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: string }) {
   const contentRef = useRef<HTMLDivElement>(null);
+  const addressInputRef = useRef<HTMLInputElement>(null);
+  const addressEditingRef = useRef(false);
   const [state, setState] = useState<DesktopBrowserWorkspaceState>(EMPTY_BROWSER_STATE);
   const [inputValue, setInputValue] = useState("about:blank");
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +56,7 @@ export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: stri
     const unsubscribe = window.trace.onBrowserWorkspaceState((nextState: unknown) => {
       if (!isBrowserState(nextState) || nextState.sessionGroupId !== sessionGroupId) return;
       setState(nextState);
-      setInputValue(nextState.url);
+      if (!addressEditingRef.current) setInputValue(nextState.url);
     });
     const observer = new ResizeObserver(syncBounds);
     if (contentRef.current) observer.observe(contentRef.current);
@@ -73,7 +76,7 @@ export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: stri
     void action()
       .then((nextState) => {
         setState(nextState);
-        setInputValue(nextState.url);
+        if (!addressEditingRef.current) setInputValue(nextState.url);
       })
       .catch((reason: unknown) =>
         setError(reason instanceof Error ? reason.message : "Browser action failed."),
@@ -94,6 +97,8 @@ export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: stri
         className="app-region-drag flex shrink-0 items-center gap-2 border-b border-border bg-surface-mid px-3 py-2"
         onSubmit={(event) => {
           event.preventDefault();
+          addressEditingRef.current = false;
+          addressInputRef.current?.blur();
           perform(() => window.trace!.navigateBrowser(sessionGroupId, inputValue));
         }}
       >
@@ -134,8 +139,16 @@ export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: stri
           )}
         </Button>
         <Input
+          ref={addressInputRef}
           value={inputValue}
           onChange={(event) => setInputValue(event.target.value)}
+          onFocus={() => {
+            addressEditingRef.current = true;
+          }}
+          onBlur={() => {
+            addressEditingRef.current = false;
+            setInputValue(state.url);
+          }}
           className="app-region-no-drag h-8 flex-1 bg-background/70 text-xs"
           aria-label="Browser URL"
           placeholder="Enter a URL"
@@ -175,6 +188,9 @@ function isBrowserState(value: unknown): value is DesktopBrowserWorkspaceState {
     typeof state.canGoBack === "boolean" &&
     typeof state.canGoForward === "boolean" &&
     typeof state.loading === "boolean" &&
-    typeof state.devToolsOpen === "boolean"
+    typeof state.devToolsOpen === "boolean" &&
+    (state.suspensionState === "active" ||
+      state.suspensionState === "frozen" ||
+      state.suspensionState === "muted")
   );
 }

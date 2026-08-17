@@ -2,11 +2,15 @@ import {
   app,
   BrowserWindow,
   clipboard,
+  dialog,
   Menu,
   type MenuItemConstructorOptions,
+  type Session,
+  type WebContents,
   WebContentsView,
+  type WindowOpenHandlerResponse,
 } from "electron";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export type BrowserWorkspaceState = {
@@ -17,17 +21,58 @@ export type BrowserWorkspaceState = {
   canGoForward: boolean;
   loading: boolean;
   devToolsOpen: boolean;
+  suspensionState: "active" | "frozen" | "muted";
+};
+
+export type BrowserWorkspaceSnapshot = Pick<BrowserWorkspaceState, "sessionGroupId" | "url">;
+
+export interface BrowserWorkspaceSnapshotStore {
+  read(): Promise<unknown>;
+  write(snapshots: BrowserWorkspaceSnapshot[]): Promise<void>;
+}
+
+export type BrowserPermissionPrompt = {
+  origin: string;
+  permission: string;
+};
+
+type BrowserWorkspaceManagerOptions = {
+  maxRetainedWorkspaces?: number;
+  persistenceDelayMs?: number;
+  permissionPrompt?: (request: BrowserPermissionPrompt) => Promise<boolean>;
+  snapshotStore?: BrowserWorkspaceSnapshotStore;
 };
 
 type BrowserWorkspace = {
   view: WebContentsView;
   state: BrowserWorkspaceState;
+  lastActivatedOrder: number;
+  reopenDevToolsOnActivate: boolean;
 };
 
-type BrowserWorkspaceSnapshot = Pick<BrowserWorkspaceState, "sessionGroupId" | "url">;
+type PermissionRequestHandler = NonNullable<Parameters<Session["setPermissionRequestHandler"]>[0]>;
+type BrowserPermission = Parameters<PermissionRequestHandler>[1];
+type BrowserPermissionDetails = Parameters<PermissionRequestHandler>[3];
 
 const BROWSER_PARTITION = "persist:trace-browser";
 const STATE_FILE_NAME = "browser-workspaces.json";
+const DEFAULT_MAX_RETAINED_WORKSPACES = 12;
+const DEFAULT_PERSISTENCE_DELAY_MS = 100;
+const DEVTOOLS_CLOSE_TIMEOUT_MS = 1_000;
+const PROMPTABLE_PERMISSIONS = new Set<string>([
+  "clipboard-read",
+  "fullscreen",
+  "geolocation",
+  "idle-detection",
+  "keyboardLock",
+  "media",
+  "mediaKeySystem",
+  "midi",
+  "midiSysex",
+  "notifications",
+  "pointerLock",
+  "speaker-selection",
+]);
 
 /**
  * Owns the native Chromium pages used by session-group browsers. React can
@@ -37,9 +82,34 @@ const STATE_FILE_NAME = "browser-workspaces.json";
 export class BrowserWorkspaceManager {
   private readonly workspaces = new Map<string, BrowserWorkspace>();
   private readonly snapshots = new Map<string, BrowserWorkspaceSnapshot>();
+  private readonly configuredSessions = new WeakSet<Session>();
+  private readonly permissionDecisions = new Map<string, boolean>();
+  private readonly pendingPermissionPrompts = new Map<string, Promise<boolean>>();
+  private readonly maxRetainedWorkspaces: number;
+  private readonly persistenceDelayMs: number;
+  private readonly permissionPrompt: (request: BrowserPermissionPrompt) => Promise<boolean>;
+  private readonly snapshotStore: BrowserWorkspaceSnapshotStore;
   private window: BrowserWindow | null = null;
   private visibleSessionGroupId: string | null = null;
   private loadStatePromise: Promise<void> | null = null;
+  private activationOrder = 0;
+  private persistenceDirty = false;
+  private persistenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private persistenceChain: Promise<void> = Promise.resolve();
+
+  constructor(options: BrowserWorkspaceManagerOptions = {}) {
+    this.maxRetainedWorkspaces = Math.max(
+      1,
+      options.maxRetainedWorkspaces ?? DEFAULT_MAX_RETAINED_WORKSPACES,
+    );
+    this.persistenceDelayMs = Math.max(
+      0,
+      options.persistenceDelayMs ?? DEFAULT_PERSISTENCE_DELAY_MS,
+    );
+    this.permissionPrompt =
+      options.permissionPrompt ?? ((request) => this.showPermissionPrompt(request));
+    this.snapshotStore = options.snapshotStore ?? new FileBrowserWorkspaceSnapshotStore();
+  }
 
   setWindow(window: BrowserWindow | null) {
     this.window = window;
@@ -56,22 +126,33 @@ export class BrowserWorkspaceManager {
       this.window.contentView.addChildView(workspace.view);
     }
     this.visibleSessionGroupId = sessionGroupId;
-    await this.setFrozen(workspace.view, false);
-    this.publish(workspace);
+    workspace.lastActivatedOrder = ++this.activationOrder;
+    try {
+      workspace.state.suspensionState = await this.setFrozen(workspace, false);
+    } catch (error) {
+      if (this.window && !this.window.isDestroyed()) {
+        this.window.contentView.removeChildView(workspace.view);
+      }
+      this.visibleSessionGroupId = null;
+      throw error;
+    }
+    this.evictInactiveWorkspaces();
+    this.updateState(workspace);
     return workspace.state;
   }
 
   async hide(sessionGroupId: string): Promise<void> {
     const workspace = this.workspaces.get(sessionGroupId);
-    if (!workspace) return;
+    if (!workspace || this.visibleSessionGroupId !== sessionGroupId) return;
 
-    const wasVisible = this.visibleSessionGroupId === sessionGroupId;
-    if (wasVisible && this.window && !this.window.isDestroyed()) {
+    if (this.window && !this.window.isDestroyed()) {
       this.window.contentView.removeChildView(workspace.view);
     }
-    if (wasVisible) this.visibleSessionGroupId = null;
-    await this.setFrozen(workspace.view, true);
+    this.visibleSessionGroupId = null;
+    workspace.state.suspensionState = await this.setFrozen(workspace, true);
     this.persistWorkspace(workspace);
+    await this.flushPersistence();
+    this.publish(workspace);
   }
 
   setBounds(sessionGroupId: string, bounds: Electron.Rectangle) {
@@ -82,14 +163,13 @@ export class BrowserWorkspaceManager {
   }
 
   async navigate(sessionGroupId: string, rawUrl: string): Promise<BrowserWorkspaceState> {
-    const workspace = await this.requireWorkspace(sessionGroupId);
-    const url = normalizeUrl(rawUrl);
-    await workspace.view.webContents.loadURL(url);
+    const workspace = this.requireActiveWorkspace(sessionGroupId);
+    await workspace.view.webContents.loadURL(normalizeUrl(rawUrl));
     return workspace.state;
   }
 
   async goBack(sessionGroupId: string): Promise<BrowserWorkspaceState> {
-    const workspace = await this.requireWorkspace(sessionGroupId);
+    const workspace = this.requireActiveWorkspace(sessionGroupId);
     if (workspace.view.webContents.navigationHistory.canGoBack()) {
       workspace.view.webContents.navigationHistory.goBack();
     }
@@ -97,7 +177,7 @@ export class BrowserWorkspaceManager {
   }
 
   async goForward(sessionGroupId: string): Promise<BrowserWorkspaceState> {
-    const workspace = await this.requireWorkspace(sessionGroupId);
+    const workspace = this.requireActiveWorkspace(sessionGroupId);
     if (workspace.view.webContents.navigationHistory.canGoForward()) {
       workspace.view.webContents.navigationHistory.goForward();
     }
@@ -105,13 +185,13 @@ export class BrowserWorkspaceManager {
   }
 
   async reload(sessionGroupId: string): Promise<BrowserWorkspaceState> {
-    const workspace = await this.requireWorkspace(sessionGroupId);
+    const workspace = this.requireActiveWorkspace(sessionGroupId);
     workspace.view.webContents.reload();
     return workspace.state;
   }
 
   async toggleDevTools(sessionGroupId: string): Promise<BrowserWorkspaceState> {
-    const workspace = await this.requireWorkspace(sessionGroupId);
+    const workspace = this.requireActiveWorkspace(sessionGroupId);
     const contents = workspace.view.webContents;
     if (contents.isDevToolsOpened()) contents.closeDevTools();
     else contents.openDevTools({ mode: "right", title: "Trace Browser DevTools" });
@@ -119,8 +199,30 @@ export class BrowserWorkspaceManager {
     return workspace.state;
   }
 
-  private async requireWorkspace(sessionGroupId: string): Promise<BrowserWorkspace> {
-    await this.activate(sessionGroupId);
+  async flushPersistence(): Promise<void> {
+    if (this.persistenceTimer) {
+      clearTimeout(this.persistenceTimer);
+      this.persistenceTimer = null;
+    }
+    if (!this.persistenceDirty) {
+      await this.persistenceChain;
+      return;
+    }
+
+    this.persistenceDirty = false;
+    const snapshots = [...this.snapshots.values()];
+    this.persistenceChain = this.persistenceChain
+      .then(() => this.snapshotStore.write(snapshots))
+      .catch((error: unknown) => {
+        console.warn("[browser] failed to persist browser workspaces", error);
+      });
+    await this.persistenceChain;
+  }
+
+  private requireActiveWorkspace(sessionGroupId: string): BrowserWorkspace {
+    if (this.visibleSessionGroupId !== sessionGroupId) {
+      throw new Error("Browser workspace is not active.");
+    }
     const workspace = this.workspaces.get(sessionGroupId);
     if (!workspace) throw new Error("Browser workspace was not created.");
     return workspace;
@@ -132,12 +234,7 @@ export class BrowserWorkspaceManager {
 
     const snapshot = this.snapshots.get(sessionGroupId);
     const view = new WebContentsView({
-      webPreferences: {
-        contextIsolation: true,
-        nodeIntegration: false,
-        partition: BROWSER_PARTITION,
-        sandbox: true,
-      },
+      webPreferences: browserWebPreferences(),
     });
     const workspace: BrowserWorkspace = {
       view,
@@ -149,17 +246,18 @@ export class BrowserWorkspaceManager {
         canGoForward: false,
         loading: false,
         devToolsOpen: false,
+        suspensionState: "active",
       },
+      lastActivatedOrder: ++this.activationOrder,
+      reopenDevToolsOnActivate: false,
     };
     this.workspaces.set(sessionGroupId, workspace);
+    this.configureSession(view.webContents.session);
     this.bindWorkspaceEvents(workspace);
-    view.webContents.setWindowOpenHandler(({ url }) => {
-      // New browser windows must stay inside the workspace and never inherit
-      // Trace's privileged BrowserWindow configuration.
-      void this.navigate(sessionGroupId, url).catch(() => undefined);
-      return { action: "deny" };
+    this.configureWindowOpening(view.webContents);
+    void view.webContents.loadURL(workspace.state.url).catch((error: unknown) => {
+      console.warn("[browser] failed to restore browser workspace", error);
     });
-    void view.webContents.loadURL(workspace.state.url);
     return workspace;
   }
 
@@ -173,17 +271,26 @@ export class BrowserWorkspaceManager {
     webContents.on("page-title-updated", sync);
     webContents.on("devtools-opened", sync);
     webContents.on("devtools-closed", sync);
+    this.bindContextMenu(webContents);
+    webContents.on("destroyed", () => {
+      if (this.workspaces.get(workspace.state.sessionGroupId) === workspace) {
+        this.workspaces.delete(workspace.state.sessionGroupId);
+      }
+    });
+  }
+
+  private bindContextMenu(webContents: WebContents) {
     webContents.on("context-menu", (_event, params) => {
       const template: MenuItemConstructorOptions[] = [
         {
           label: "Back",
           enabled: webContents.navigationHistory.canGoBack(),
-          click: () => void this.goBack(workspace.state.sessionGroupId),
+          click: () => webContents.navigationHistory.goBack(),
         },
         {
           label: "Forward",
           enabled: webContents.navigationHistory.canGoForward(),
-          click: () => void this.goForward(workspace.state.sessionGroupId),
+          click: () => webContents.navigationHistory.goForward(),
         },
         { label: "Reload", click: () => webContents.reload() },
       ];
@@ -193,10 +300,15 @@ export class BrowserWorkspaceManager {
           { type: "separator" },
           {
             label: "Open Link",
-            click: () =>
-              void this.navigate(workspace.state.sessionGroupId, params.linkURL).catch(
-                () => undefined,
-              ),
+            click: () => {
+              try {
+                void webContents.loadURL(normalizeUrl(params.linkURL)).catch((error: unknown) => {
+                  console.warn("[browser] context-menu navigation failed", error);
+                });
+              } catch (error) {
+                console.warn("[browser] refused context-menu navigation", error);
+              }
+            },
           },
           { label: "Copy Link", click: () => clipboard.writeText(params.linkURL) },
         );
@@ -245,7 +357,94 @@ export class BrowserWorkspaceManager {
       );
       Menu.buildFromTemplate(template).popup({ window: this.window ?? undefined });
     });
-    webContents.on("destroyed", () => this.workspaces.delete(workspace.state.sessionGroupId));
+  }
+
+  private configureWindowOpening(webContents: WebContents) {
+    webContents.setWindowOpenHandler(({ url }) => this.windowOpenResponse(url));
+    webContents.on("did-create-window", (popup) => {
+      this.configureSession(popup.webContents.session);
+      this.configureWindowOpening(popup.webContents);
+      this.bindContextMenu(popup.webContents);
+    });
+  }
+
+  private windowOpenResponse(url: string): WindowOpenHandlerResponse {
+    if (!isAllowedBrowserUrl(url)) return { action: "deny" };
+    return {
+      action: "allow",
+      overrideBrowserWindowOptions: {
+        width: 1000,
+        height: 720,
+        autoHideMenuBar: true,
+        backgroundColor: "#18181b",
+        webPreferences: browserWebPreferences(),
+      },
+    };
+  }
+
+  private configureSession(browserSession: Session) {
+    if (this.configuredSessions.has(browserSession)) return;
+    this.configuredSessions.add(browserSession);
+    browserSession.setPermissionCheckHandler(
+      (_webContents, permission, requestingOrigin, details) => {
+        const origin = permissionOrigin(details.requestingUrl ?? requestingOrigin);
+        return origin
+          ? this.permissionDecisions.get(permissionDecisionKey(origin, permission)) === true
+          : false;
+      },
+    );
+    browserSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+      void this.handlePermissionRequest(webContents, permission, callback, details);
+    });
+    browserSession.setDevicePermissionHandler(() => false);
+  }
+
+  private async handlePermissionRequest(
+    webContents: WebContents,
+    permission: BrowserPermission,
+    callback: (permissionGranted: boolean) => void,
+    details: BrowserPermissionDetails,
+  ) {
+    const origin = permissionOrigin(details.requestingUrl || webContents.getURL());
+    if (!origin || !PROMPTABLE_PERMISSIONS.has(permission)) {
+      callback(false);
+      return;
+    }
+
+    const key = permissionDecisionKey(origin, permission);
+    const existing = this.permissionDecisions.get(key);
+    if (existing !== undefined) {
+      callback(existing);
+      return;
+    }
+
+    let prompt = this.pendingPermissionPrompts.get(key);
+    if (!prompt) {
+      prompt = this.permissionPrompt({ origin, permission }).catch((error: unknown) => {
+        console.warn("[browser] permission prompt failed", error);
+        return false;
+      });
+      this.pendingPermissionPrompts.set(key, prompt);
+    }
+    const allowed = await prompt;
+    this.pendingPermissionPrompts.delete(key);
+    this.permissionDecisions.set(key, allowed);
+    callback(allowed);
+  }
+
+  private async showPermissionPrompt(request: BrowserPermissionPrompt): Promise<boolean> {
+    if (!this.window || this.window.isDestroyed()) return false;
+    const result = await dialog.showMessageBox(this.window, {
+      type: "question",
+      buttons: ["Allow", "Deny"],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true,
+      title: "Website permission",
+      message: `${request.origin} wants permission to use ${permissionLabel(request.permission)}.`,
+      detail: "Only allow this if you trust the website.",
+    });
+    return result.response === 0;
   }
 
   private updateState(workspace: BrowserWorkspace) {
@@ -268,18 +467,37 @@ export class BrowserWorkspaceManager {
     this.window.webContents.send("browser-workspace-state", workspace.state);
   }
 
-  private async setFrozen(view: WebContentsView, frozen: boolean) {
-    const { webContents } = view;
+  private async setFrozen(
+    workspace: BrowserWorkspace,
+    frozen: boolean,
+  ): Promise<BrowserWorkspaceState["suspensionState"]> {
+    const { webContents } = workspace.view;
+    if (frozen && webContents.isDevToolsOpened()) {
+      workspace.reopenDevToolsOnActivate = true;
+      await closeDevTools(webContents);
+    }
+
     try {
       if (!webContents.debugger.isAttached()) webContents.debugger.attach("1.3");
       await webContents.debugger.sendCommand("Page.setWebLifecycleState", {
         state: frozen ? "frozen" : "active",
       });
-    } catch {
-      // The lifecycle protocol is experimental. Muting remains a safe fallback
-      // if Chromium rejects it for a particular page.
+    } catch (error) {
+      console.warn(
+        `[browser] failed to ${frozen ? "freeze" : "activate"} browser workspace`,
+        error,
+      );
+      webContents.setAudioMuted(frozen);
+      if (frozen) return "muted";
+      throw new Error("Unable to resume the browser workspace.");
     }
+
     webContents.setAudioMuted(frozen);
+    if (!frozen && workspace.reopenDevToolsOnActivate) {
+      workspace.reopenDevToolsOnActivate = false;
+      webContents.openDevTools({ mode: "right", title: "Trace Browser DevTools" });
+    }
+    return frozen ? "frozen" : "active";
   }
 
   private async loadSnapshots() {
@@ -289,15 +507,16 @@ export class BrowserWorkspaceManager {
 
   private async readSnapshots() {
     try {
-      const raw = await readFile(this.statePath(), "utf8");
-      const snapshots: unknown = JSON.parse(raw);
+      const snapshots = await this.snapshotStore.read();
       if (!Array.isArray(snapshots)) return;
       for (const snapshot of snapshots) {
         if (!isSnapshot(snapshot)) continue;
         this.snapshots.set(snapshot.sessionGroupId, snapshot);
       }
-    } catch {
-      // No saved workspace is a normal first-run state.
+    } catch (error) {
+      if (!isFileNotFoundError(error)) {
+        console.warn("[browser] failed to restore browser workspaces", error);
+      }
     }
   }
 
@@ -306,7 +525,38 @@ export class BrowserWorkspaceManager {
       sessionGroupId: workspace.state.sessionGroupId,
       url: workspace.state.url,
     });
-    void writeFile(this.statePath(), JSON.stringify([...this.snapshots.values()]), "utf8");
+    this.persistenceDirty = true;
+    if (this.persistenceTimer) return;
+    this.persistenceTimer = setTimeout(() => {
+      this.persistenceTimer = null;
+      void this.flushPersistence();
+    }, this.persistenceDelayMs);
+  }
+
+  private evictInactiveWorkspaces() {
+    while (this.workspaces.size > this.maxRetainedWorkspaces) {
+      const candidate = [...this.workspaces.entries()]
+        .filter(([sessionGroupId]) => sessionGroupId !== this.visibleSessionGroupId)
+        .sort((left, right) => left[1].lastActivatedOrder - right[1].lastActivatedOrder)[0];
+      if (!candidate) return;
+      const [sessionGroupId, workspace] = candidate;
+      this.persistWorkspace(workspace);
+      this.workspaces.delete(sessionGroupId);
+      workspace.view.webContents.close();
+    }
+  }
+}
+
+class FileBrowserWorkspaceSnapshotStore implements BrowserWorkspaceSnapshotStore {
+  async read(): Promise<unknown> {
+    return JSON.parse(await readFile(this.statePath(), "utf8")) as unknown;
+  }
+
+  async write(snapshots: BrowserWorkspaceSnapshot[]): Promise<void> {
+    const statePath = this.statePath();
+    const temporaryPath = `${statePath}.${process.pid}.tmp`;
+    await writeFile(temporaryPath, JSON.stringify(snapshots), "utf8");
+    await rename(temporaryPath, statePath);
   }
 
   private statePath() {
@@ -314,18 +564,87 @@ export class BrowserWorkspaceManager {
   }
 }
 
+function browserWebPreferences(): Electron.WebPreferences {
+  return {
+    contextIsolation: true,
+    nodeIntegration: false,
+    partition: BROWSER_PARTITION,
+    sandbox: true,
+  };
+}
+
 function normalizeUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim();
   const candidate = /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(trimmed) ? trimmed : `https://${trimmed}`;
   const url = new URL(candidate);
-  if (!new Set(["http:", "https:", "about:"]).has(url.protocol)) {
+  if (!isAllowedBrowserUrl(url.toString())) {
     throw new Error("Only web URLs are supported in the Trace browser.");
   }
   return url.toString();
+}
+
+function isAllowedBrowserUrl(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    return url.protocol === "http:" || url.protocol === "https:" || url.href === "about:blank";
+  } catch {
+    return false;
+  }
+}
+
+function permissionOrigin(rawUrl: string): string | null {
+  try {
+    const url = new URL(rawUrl);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+function permissionDecisionKey(origin: string, permission: string): string {
+  return `${origin}\n${permission}`;
+}
+
+function permissionLabel(permission: string): string {
+  const labels: Record<string, string> = {
+    "clipboard-read": "your clipboard",
+    fullscreen: "full screen",
+    geolocation: "your location",
+    media: "your camera or microphone",
+    notifications: "notifications",
+    pointerLock: "pointer lock",
+  };
+  return labels[permission] ?? permission;
+}
+
+async function closeDevTools(webContents: WebContents): Promise<void> {
+  if (!webContents.isDevToolsOpened()) return;
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      webContents.removeListener("devtools-closed", finish);
+      resolve();
+    };
+    const timeout = setTimeout(finish, DEVTOOLS_CLOSE_TIMEOUT_MS);
+    webContents.once("devtools-closed", finish);
+    webContents.closeDevTools();
+    if (!webContents.isDevToolsOpened()) finish();
+  });
 }
 
 function isSnapshot(value: unknown): value is BrowserWorkspaceSnapshot {
   if (!value || typeof value !== "object") return false;
   const snapshot = value as Record<string, unknown>;
   return typeof snapshot.sessionGroupId === "string" && typeof snapshot.url === "string";
+}
+
+function isFileNotFoundError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error as Error & { code?: string }).code === "ENOENT"
+  );
 }

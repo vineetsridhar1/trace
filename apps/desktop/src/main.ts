@@ -41,6 +41,7 @@ import { BrowserWorkspaceManager } from "./browser-workspaces.js";
 
 let mainWindow: BrowserWindow | null = null;
 const browserWorkspaces = new BrowserWorkspaceManager();
+let browserStateFlushedForQuit = false;
 const PROJECT_PARENT_SELECTION_TTL_MS = 10 * 60 * 1000;
 const projectParentSelections = new Map<
   string,
@@ -450,6 +451,15 @@ app.on("window-all-closed", () => {
     bridge.disconnect();
     app.quit();
   }
+});
+
+app.on("before-quit", (event) => {
+  if (browserStateFlushedForQuit) return;
+  event.preventDefault();
+  void browserWorkspaces.flushPersistence().finally(() => {
+    browserStateFlushedForQuit = true;
+    app.quit();
+  });
 });
 
 app.on("activate", () => {

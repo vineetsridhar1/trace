@@ -88,6 +88,7 @@ declare global {
     canGoForward: boolean;
     loading: boolean;
     devToolsOpen: boolean;
+    suspensionState: "active" | "frozen" | "muted";
   };
 
   type DesktopLinkedCheckoutActionResult = {
