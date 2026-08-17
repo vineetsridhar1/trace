@@ -1,0 +1,248 @@
+export type SpatialEdge = "left" | "right" | "top" | "bottom";
+
+export interface SpatialTabGroup {
+  type: "group";
+  id: string;
+  tabIds: string[];
+  activeTabId: string | null;
+}
+
+export interface SpatialSplit {
+  type: "split";
+  id: string;
+  direction: "horizontal" | "vertical";
+  children: [SpatialNode, SpatialNode];
+}
+
+export type SpatialNode = SpatialTabGroup | SpatialSplit;
+
+export interface SpatialLayout {
+  root: SpatialNode;
+  nextGroupNumber: number;
+  nextSplitNumber: number;
+}
+
+export const MAX_SPATIAL_REGIONS = 4;
+
+export function createSpatialLayout(tabIds: string[], activeTabId?: string | null): SpatialLayout {
+  return {
+    root: {
+      type: "group",
+      id: "region-1",
+      tabIds,
+      activeTabId: resolveActiveTab(tabIds, activeTabId),
+    },
+    nextGroupNumber: 2,
+    nextSplitNumber: 1,
+  };
+}
+
+export function countSpatialRegions(node: SpatialNode): number {
+  if (node.type === "group") return 1;
+  return countSpatialRegions(node.children[0]) + countSpatialRegions(node.children[1]);
+}
+
+export function getSpatialGroups(node: SpatialNode): SpatialTabGroup[] {
+  if (node.type === "group") return [node];
+  return [...getSpatialGroups(node.children[0]), ...getSpatialGroups(node.children[1])];
+}
+
+export function findSpatialGroup(node: SpatialNode, groupId: string): SpatialTabGroup | null {
+  if (node.type === "group") return node.id === groupId ? node : null;
+  return findSpatialGroup(node.children[0], groupId) ?? findSpatialGroup(node.children[1], groupId);
+}
+
+export function activateSpatialTab(
+  layout: SpatialLayout,
+  groupId: string,
+  tabId: string,
+): SpatialLayout {
+  return {
+    ...layout,
+    root: mapGroups(layout.root, (group) =>
+      group.id === groupId && group.tabIds.includes(tabId)
+        ? { ...group, activeTabId: tabId }
+        : group,
+    ),
+  };
+}
+
+export function syncSpatialTabs(
+  layout: SpatialLayout,
+  tabIds: string[],
+  preferredActiveTabId?: string | null,
+): SpatialLayout {
+  const available = new Set(tabIds);
+  const assigned = new Set<string>();
+  let root = mapGroups(layout.root, (group) => {
+    const nextIds = group.tabIds.filter((id) => available.has(id) && !assigned.has(id));
+    nextIds.forEach((id) => assigned.add(id));
+    return {
+      ...group,
+      tabIds: nextIds,
+      activeTabId: resolveActiveTab(nextIds, group.activeTabId),
+    };
+  });
+
+  const missing = tabIds.filter((id) => !assigned.has(id));
+  if (missing.length > 0) {
+    const firstGroup = getSpatialGroups(root)[0];
+    root = mapGroups(root, (group) =>
+      group.id === firstGroup.id
+        ? {
+            ...group,
+            tabIds: [...group.tabIds, ...missing],
+            activeTabId: resolveActiveTab(
+              [...group.tabIds, ...missing],
+              preferredActiveTabId ?? group.activeTabId,
+            ),
+          }
+        : group,
+    );
+  }
+
+  root = collapseEmptyGroups(root) ?? createSpatialLayout(tabIds, preferredActiveTabId).root;
+  return { ...layout, root };
+}
+
+export function dockSpatialTab(
+  layout: SpatialLayout,
+  tabId: string,
+  targetGroupId: string,
+  edge: SpatialEdge,
+): SpatialLayout {
+  if (countSpatialRegions(layout.root) >= MAX_SPATIAL_REGIONS) return layout;
+  const sourceGroup = getSpatialGroups(layout.root).find((group) => group.tabIds.includes(tabId));
+  const targetGroup = findSpatialGroup(layout.root, targetGroupId);
+  if (!sourceGroup || !targetGroup) return layout;
+
+  const withoutTab = mapGroups(layout.root, (group) => {
+    if (group.id !== sourceGroup.id) return group;
+    const nextIds = group.tabIds.filter((id) => id !== tabId);
+    return {
+      ...group,
+      tabIds: nextIds,
+      activeTabId: resolveActiveTab(nextIds, group.activeTabId === tabId ? null : group.activeTabId),
+    };
+  });
+
+  const newGroup: SpatialTabGroup = {
+    type: "group",
+    id: `region-${layout.nextGroupNumber}`,
+    tabIds: [tabId],
+    activeTabId: tabId,
+  };
+  const horizontal = edge === "left" || edge === "right";
+  const newFirst = edge === "left" || edge === "top";
+  const nextRoot = replaceGroup(withoutTab, targetGroupId, (currentTarget) => ({
+    type: "split",
+    id: `split-${layout.nextSplitNumber}`,
+    direction: horizontal ? "horizontal" : "vertical",
+    children: newFirst ? [newGroup, currentTarget] : [currentTarget, newGroup],
+  }));
+
+  return {
+    root: collapseEmptyGroups(nextRoot) ?? newGroup,
+    nextGroupNumber: layout.nextGroupNumber + 1,
+    nextSplitNumber: layout.nextSplitNumber + 1,
+  };
+}
+
+export function moveSpatialTab(
+  layout: SpatialLayout,
+  tabId: string,
+  targetGroupId: string,
+): SpatialLayout {
+  const sourceGroup = getSpatialGroups(layout.root).find((group) => group.tabIds.includes(tabId));
+  const targetGroup = findSpatialGroup(layout.root, targetGroupId);
+  if (!sourceGroup || !targetGroup) return layout;
+  if (sourceGroup.id === targetGroup.id) return activateSpatialTab(layout, targetGroupId, tabId);
+
+  let root = mapGroups(layout.root, (group) => {
+    if (group.id === sourceGroup.id) {
+      const nextIds = group.tabIds.filter((id) => id !== tabId);
+      return {
+        ...group,
+        tabIds: nextIds,
+        activeTabId: resolveActiveTab(nextIds, group.activeTabId === tabId ? null : group.activeTabId),
+      };
+    }
+    if (group.id === targetGroup.id) {
+      return {
+        ...group,
+        tabIds: group.tabIds.includes(tabId) ? group.tabIds : [...group.tabIds, tabId],
+        activeTabId: tabId,
+      };
+    }
+    return group;
+  });
+  root = collapseEmptyGroups(root) ?? createSpatialLayout([tabId], tabId).root;
+  return { ...layout, root };
+}
+
+export function isSpatialLayout(value: unknown): value is SpatialLayout {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.nextGroupNumber === "number" &&
+    typeof candidate.nextSplitNumber === "number" &&
+    isSpatialNode(candidate.root)
+  );
+}
+
+function isSpatialNode(value: unknown): value is SpatialNode {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.type === "group") {
+    return (
+      typeof candidate.id === "string" &&
+      Array.isArray(candidate.tabIds) &&
+      candidate.tabIds.every((id) => typeof id === "string") &&
+      (candidate.activeTabId === null || typeof candidate.activeTabId === "string")
+    );
+  }
+  return (
+    candidate.type === "split" &&
+    typeof candidate.id === "string" &&
+    (candidate.direction === "horizontal" || candidate.direction === "vertical") &&
+    Array.isArray(candidate.children) &&
+    candidate.children.length === 2 &&
+    candidate.children.every(isSpatialNode)
+  );
+}
+
+function resolveActiveTab(tabIds: string[], requested?: string | null): string | null {
+  return requested && tabIds.includes(requested) ? requested : (tabIds[0] ?? null);
+}
+
+function mapGroups(node: SpatialNode, mapper: (group: SpatialTabGroup) => SpatialTabGroup): SpatialNode {
+  if (node.type === "group") return mapper(node);
+  return {
+    ...node,
+    children: [mapGroups(node.children[0], mapper), mapGroups(node.children[1], mapper)],
+  };
+}
+
+function replaceGroup(
+  node: SpatialNode,
+  groupId: string,
+  replacement: (group: SpatialTabGroup) => SpatialNode,
+): SpatialNode {
+  if (node.type === "group") return node.id === groupId ? replacement(node) : node;
+  return {
+    ...node,
+    children: [
+      replaceGroup(node.children[0], groupId, replacement),
+      replaceGroup(node.children[1], groupId, replacement),
+    ],
+  };
+}
+
+function collapseEmptyGroups(node: SpatialNode): SpatialNode | null {
+  if (node.type === "group") return node.tabIds.length > 0 ? node : null;
+  const first = collapseEmptyGroups(node.children[0]);
+  const second = collapseEmptyGroups(node.children[1]);
+  if (!first) return second;
+  if (!second) return first;
+  return { ...node, children: [first, second] };
+}

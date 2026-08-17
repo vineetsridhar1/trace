@@ -1,7 +1,6 @@
 import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { useAuthStore, useEntityField, useEntityStore, type AuthState } from "@trace/client-core";
 import { useUIStore, type UIState } from "./stores/ui";
-import { AppSidebar } from "./components/AppSidebar";
 import { AppTitleBar } from "./components/AppTitleBar";
 import { BridgeSyncHydrator } from "./components/BridgeSyncHydrator";
 import { ChannelView } from "./components/channel/ChannelView";
@@ -15,7 +14,6 @@ import { SearchResultsView } from "./components/search/SearchResultsView";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
 import { GlobalCommandPalette } from "./components/command/GlobalCommandPalette";
 import { KeyboardShortcutsDialog } from "./components/command/KeyboardShortcutsDialog";
-import { SidebarProvider, SidebarInset, useSidebar } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { useOrgEvents } from "./hooks/useOrgEvents";
 import { useHistorySync } from "./hooks/useHistorySync";
@@ -173,9 +171,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
         {activePage === "settings" ? (
           <SettingsPage />
         ) : (
-          <SidebarProvider className="min-h-0 flex-1">
-            <AppSidebar />
-
+          <div className="flex min-h-0 flex-1">
             <MainContentFrame>
               {activePage === "create" ? (
               <HomeView mode="create" />
@@ -199,7 +195,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
               )}
             </MainContentFrame>
             <AppTitleBar />
-          </SidebarProvider>
+          </div>
         )}
       </div>
     </TooltipProvider>
@@ -207,20 +203,14 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
 }
 
 function MainContentFrame({ children }: { children: ReactNode }) {
-  const { state, isMobile } = useSidebar();
   const style = {
-    // On mobile the sidebar is an off-canvas sheet, so the desktop collapsed
-    // offset (which reserves room for the sidebar rail) would push the header
-    // content off-screen. Keep a small offset on mobile regardless of state.
-    "--trace-header-title-offset": !isMobile && state === "collapsed" ? "20rem" : "1rem",
+    "--trace-header-title-offset": "21rem",
   } as CSSProperties;
 
   return (
     <div className="flex w-full flex-1 overflow-hidden" style={style}>
-      <div className="flex min-w-0 flex-1 overflow-hidden rounded-tr-lg border border-border/80 bg-background/95">
-        <SidebarInset className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {children}
-        </SidebarInset>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background/95">
+        {children}
       </div>
     </div>
   );

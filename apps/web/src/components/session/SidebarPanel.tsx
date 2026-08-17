@@ -39,6 +39,26 @@ interface SidebarPanelProps {
   onBridgeAccessRequested?: () => void | Promise<void>;
 }
 
+export type WorkspaceSurface = SidebarTab;
+
+export interface WorkspaceSurfaceContentProps {
+  sessionGroupId: string;
+  surface: WorkspaceSurface;
+  activeSessionId: string | null;
+  activeFilePath?: string | null;
+  fileTree: FileTreeNode[];
+  filesLoading: boolean;
+  filesError: string | null;
+  onClose: () => void;
+  onFileClick: (filePath: string) => void;
+  onRefreshFiles: () => Promise<void>;
+  onLoadDirectory: (directoryPath: string) => Promise<void>;
+  onDiffFileClick?: (filePath: string, status: string) => void;
+  onOpenTraffic: (endpointId: string) => void;
+  bridgeAccess?: BridgeRuntimeAccessInfo | null;
+  onBridgeAccessRequested?: () => void | Promise<void>;
+}
+
 export function SidebarPanel({
   sessionGroupId,
   activeTab,
@@ -59,8 +79,6 @@ export function SidebarPanel({
   bridgeAccess,
   onBridgeAccessRequested,
 }: SidebarPanelProps) {
-  const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess ?? null);
-
   return (
     <aside className="flex h-full w-full bg-surface-deep font-sans">
       <nav
@@ -113,45 +131,83 @@ export function SidebarPanel({
         />
       </nav>
 
-      <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {!bridgeInteractionAllowed && activeTab !== "browser" ? (
-          <div className="p-3">
-            <BridgeAccessNotice
-              access={bridgeAccess ?? null}
-              sessionGroupId={sessionGroupId}
-              onRequested={onBridgeAccessRequested}
-            />
-          </div>
-        ) : activeTab === "applications" ? (
-          <SessionApplicationsPanel
-            sessionGroupId={sessionGroupId}
-            onOpenTraffic={onOpenTraffic}
-            embedded
-          />
-        ) : activeTab === "browser" ? (
-          <BrowserWorkspacePanel sessionGroupId={sessionGroupId} />
-        ) : activeTab === "terminal" ? (
-          activeSessionId ? (
-            <TerminalPanel sessionId={activeSessionId} onClose={onClose} fill />
-          ) : null
-        ) : activeTab === "files" ? (
-          <FileExplorer
-            tree={fileTree}
-            activeFilePath={activeFilePath}
-            loading={filesLoading}
-            error={filesError}
-            onRefresh={onRefreshFiles}
-            onLoadDirectory={onLoadDirectory}
-            onFileClick={onFileClick}
-          />
-        ) : (
-          <BranchChangesPanel
-            sessionGroupId={sessionGroupId}
-            onFileClick={onDiffFileClick ?? (() => {})}
-          />
-        )}
-      </section>
+      <WorkspaceSurfaceContent
+        sessionGroupId={sessionGroupId}
+        surface={activeTab}
+        activeSessionId={activeSessionId}
+        activeFilePath={activeFilePath}
+        fileTree={fileTree}
+        filesLoading={filesLoading}
+        filesError={filesError}
+        onClose={onClose}
+        onFileClick={onFileClick}
+        onRefreshFiles={onRefreshFiles}
+        onLoadDirectory={onLoadDirectory}
+        onDiffFileClick={onDiffFileClick}
+        onOpenTraffic={onOpenTraffic}
+        bridgeAccess={bridgeAccess}
+        onBridgeAccessRequested={onBridgeAccessRequested}
+      />
     </aside>
+  );
+}
+
+export function WorkspaceSurfaceContent({
+  sessionGroupId,
+  surface,
+  activeSessionId,
+  activeFilePath,
+  fileTree,
+  filesLoading,
+  filesError,
+  onClose,
+  onFileClick,
+  onRefreshFiles,
+  onLoadDirectory,
+  onDiffFileClick,
+  onOpenTraffic,
+  bridgeAccess,
+  onBridgeAccessRequested,
+}: WorkspaceSurfaceContentProps) {
+  const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess ?? null);
+
+  return (
+    <section className="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-surface-deep">
+      {!bridgeInteractionAllowed && surface !== "browser" ? (
+        <div className="p-3">
+          <BridgeAccessNotice
+            access={bridgeAccess ?? null}
+            sessionGroupId={sessionGroupId}
+            onRequested={onBridgeAccessRequested}
+          />
+        </div>
+      ) : surface === "applications" ? (
+        <SessionApplicationsPanel
+          sessionGroupId={sessionGroupId}
+          onOpenTraffic={onOpenTraffic}
+          embedded
+        />
+      ) : surface === "browser" ? (
+        <BrowserWorkspacePanel sessionGroupId={sessionGroupId} />
+      ) : surface === "terminal" ? (
+        activeSessionId ? <TerminalPanel sessionId={activeSessionId} onClose={onClose} fill /> : null
+      ) : surface === "files" ? (
+        <FileExplorer
+          tree={fileTree}
+          activeFilePath={activeFilePath}
+          loading={filesLoading}
+          error={filesError}
+          onRefresh={onRefreshFiles}
+          onLoadDirectory={onLoadDirectory}
+          onFileClick={onFileClick}
+        />
+      ) : (
+        <BranchChangesPanel
+          sessionGroupId={sessionGroupId}
+          onFileClick={onDiffFileClick ?? (() => {})}
+        />
+      )}
+    </section>
   );
 }
 

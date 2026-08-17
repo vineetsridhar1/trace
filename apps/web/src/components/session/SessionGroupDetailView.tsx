@@ -2,11 +2,18 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
-  type MouseEvent as ReactMouseEvent,
 } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import {
+  Activity,
+  AppWindow,
+  Bot,
+  FileCode,
+  Files,
+  GitCompareArrows,
+  Globe,
+  TerminalSquare,
+} from "lucide-react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import { SESSION_TERMINALS_QUERY, START_SESSION_MUTATION } from "@trace/client-core";
@@ -19,15 +26,16 @@ import { useUIStore, type UIState } from "../../stores/ui";
 import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-core";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
-import { GroupTabStrip } from "./GroupTabStrip";
 import { FileCommandPalette } from "./FileCommandPalette";
 import { ForkSessionDialog } from "./ForkSessionDialog";
 import { SessionGroupContentArea } from "./SessionGroupContentArea";
 import { ProjectPreviewWorkspace } from "./ProjectPreviewWorkspace";
 import { AttachmentOpenContext, UploadedAttachmentOpenContext } from "./AttachmentOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
-import { SidebarPanel } from "./SidebarPanel";
-import type { SidebarTab } from "./SidebarPanel";
+import { WorkspaceSurfaceContent, type WorkspaceSurface } from "./SidebarPanel";
+import { SpatialWorkspace, type SpatialWorkspaceTab } from "./SpatialWorkspace";
+import { SpatialNewTab } from "./SpatialNewTab";
+import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
 import { AppSessionPreviewPanel } from "./applications/AppSessionPreviewPanel";
 import { AnimationSessionPreviewPanel } from "./applications/AnimationSessionPreviewPanel";
 import { GeneratedProjectPreviewPanel } from "./applications/GeneratedProjectPreviewPanel";
@@ -58,11 +66,6 @@ import type { RegisteredCommand } from "../../stores/command-registry";
 import { ArtifactOpenContext } from "../artifact/ArtifactOpenContext";
 import { ArtifactTabContent } from "../artifact/ArtifactTabContent";
 
-const SESSION_SIDEBAR_WIDTH_KEY = "trace:session-workbench-sidebar-width";
-const SESSION_SIDEBAR_STATE_KEY_PREFIX = "trace:session-workbench-sidebar-state:";
-const DEFAULT_SESSION_SIDEBAR_WIDTH = 404;
-const MIN_SESSION_SIDEBAR_WIDTH = 320;
-const MAX_SESSION_SIDEBAR_WIDTH = 560;
 const EMPTY_ARTIFACT_IDS: string[] = [];
 const EMPTY_HIDDEN_SESSION_TABS: Record<string, string> = {};
 
@@ -83,59 +86,6 @@ const HIDE_SESSION_TAB_MUTATION = gql`
     }
   }
 `;
-
-function clampSessionSidebarWidth(width: number): number {
-  return Math.min(MAX_SESSION_SIDEBAR_WIDTH, Math.max(MIN_SESSION_SIDEBAR_WIDTH, width));
-}
-
-function getStoredSessionSidebarWidth(): number {
-  if (typeof window === "undefined") return DEFAULT_SESSION_SIDEBAR_WIDTH;
-
-  try {
-    const stored = localStorage.getItem(SESSION_SIDEBAR_WIDTH_KEY);
-    if (!stored) return DEFAULT_SESSION_SIDEBAR_WIDTH;
-
-    const parsed = parseInt(stored, 10);
-    return Number.isFinite(parsed)
-      ? clampSessionSidebarWidth(parsed)
-      : DEFAULT_SESSION_SIDEBAR_WIDTH;
-  } catch {
-    return DEFAULT_SESSION_SIDEBAR_WIDTH;
-  }
-}
-
-function isSidebarTab(value: unknown): value is SidebarTab {
-  return (
-    value === "applications" ||
-    value === "browser" ||
-    value === "terminal" ||
-    value === "files" ||
-    value === "changes"
-  );
-}
-
-function getStoredSessionSidebarState(sessionGroupId: string): {
-  open: boolean;
-  tab: SidebarTab;
-} {
-  const fallback = { open: false, tab: "files" as const };
-  if (typeof window === "undefined") return fallback;
-
-  try {
-    const stored = localStorage.getItem(`${SESSION_SIDEBAR_STATE_KEY_PREFIX}${sessionGroupId}`);
-    if (!stored) return fallback;
-    const parsed: unknown = JSON.parse(stored);
-    if (!parsed || typeof parsed !== "object") return fallback;
-
-    const state = parsed as Record<string, unknown>;
-    return {
-      open: typeof state.open === "boolean" ? state.open : fallback.open,
-      tab: isSidebarTab(state.tab) ? state.tab : fallback.tab,
-    };
-  } catch {
-    return fallback;
-  }
-}
 
 const SESSION_GROUP_DETAIL_QUERY = gql`
   query SessionGroupDetail($id: ID!) {
@@ -364,15 +314,6 @@ export function SessionGroupDetailView({
   const pinnedTerminalIds = useTerminalStore((s) => s.pinnedTerminalIds);
   const unpinTerminal = useTerminalStore((s) => s.unpinTerminal);
 
-  const [showSidebar, setShowSidebar] = useState(
-    () => getStoredSessionSidebarState(sessionGroupId).open,
-  );
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>(
-    () => getStoredSessionSidebarState(sessionGroupId).tab,
-  );
-  const [sidebarWidth, setSidebarWidth] = useState(() => getStoredSessionSidebarWidth());
-  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
-  const prefersReducedMotion = useReducedMotion();
   const [trafficEndpointId, setTrafficEndpointId] = useState<string | null>(null);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<"session" | "traffic">("session");
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
@@ -380,27 +321,15 @@ export function SessionGroupDetailView({
   const [forkEventId, setForkEventId] = useState<string | null>(null);
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
   const [groupLoadError, setGroupLoadError] = useState<string | null>(null);
-  const sidebarResizeCleanupRef = useRef<(() => void) | null>(null);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        `${SESSION_SIDEBAR_STATE_KEY_PREFIX}${sessionGroupId}`,
-        JSON.stringify({ open: showSidebar, tab: sidebarTab }),
-      );
-    } catch {
-      // Persistence is optional when browser storage is unavailable.
-    }
-  }, [sessionGroupId, showSidebar, sidebarTab]);
+  const [draftWorkspaceTabs, setDraftWorkspaceTabs] = useState<
+    Array<{ id: string; surface: WorkspaceSurface | null }>
+  >([]);
 
   const handleOpenForkDialog = useCallback((eventId: string) => {
     setForkEventId(eventId);
     setForkDialogOpen(true);
   }, []);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
-  const renameTerminal = useTerminalStore(
-    (s: { renameTerminal: (id: string, name: string) => void }) => s.renameTerminal,
-  );
 
   const hiddenSessionIds = useMemo(
     () => new Set(Object.keys(hiddenSessionTabs)),
@@ -606,25 +535,6 @@ export function SessionGroupDetailView({
   );
   const animationCanvasReady = isAnimationCanvasReady(appCanvasReady, groupAnimationPreviewUrl);
   const showApplicationsSidebarTab = selectedSession?.hosting === "cloud";
-  const activeTerminal = terminals.find((t) => t.id === activeTerminalId) ?? null;
-
-  useEffect(() => {
-    if (selectedSessionIsOptimistic && showSidebar) {
-      setShowSidebar(false);
-    }
-  }, [selectedSessionIsOptimistic, showSidebar]);
-
-  useEffect(() => {
-    if (selectedSession && !showApplicationsSidebarTab && sidebarTab === "applications") {
-      setSidebarTab("files");
-    }
-  }, [selectedSession, showApplicationsSidebarTab, sidebarTab]);
-
-  useEffect(() => {
-    if (sidebarTab === "browser" && typeof window.trace === "undefined") {
-      setSidebarTab("files");
-    }
-  }, [sidebarTab]);
 
   const selectedSessionStatus = getSessionGroupDisplayStatus(
     groupSessions.map((session) => session.sessionStatus),
@@ -694,10 +604,6 @@ export function SessionGroupDetailView({
 
   const handleScrollComplete = useCallback(() => setScrollToEventId(null), []);
 
-  const handleSidebarTabChange = useCallback((tab: SidebarTab) => {
-    setSidebarTab(tab);
-  }, []);
-
   const handleOpenTrafficTab = useCallback(
     (endpointId: string) => {
       setTrafficEndpointId(endpointId);
@@ -749,19 +655,6 @@ export function SessionGroupDetailView({
     [activeTerminalId, setActiveTerminalId, unpinTerminal],
   );
 
-  const handleToggleSidebar = useCallback(() => {
-    setShowSidebar((open) => !open);
-  }, []);
-
-  const handleToggleApplicationsSidebar = useCallback(() => {
-    if (showSidebar && sidebarTab === "applications") {
-      setShowSidebar(false);
-      return;
-    }
-    setSidebarTab("applications");
-    setShowSidebar(true);
-  }, [showSidebar, sidebarTab]);
-
   const handleToggleFilePalette = useCallback(() => {
     setFilePaletteOpen((open) => !open);
   }, []);
@@ -779,63 +672,10 @@ export function SessionGroupDetailView({
     terminalAllowed,
   ]);
 
-  const showSidebarTab = useCallback((tab: SidebarTab) => {
-    setShowSidebar(true);
-    setSidebarTab(tab);
-  }, []);
-
   const canInteract = !selectedSessionIsOptimistic;
   const canNewChatCmd =
     !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed;
   const canOpenTerminalCmd = !selectedSessionIsOptimistic && terminalAllowed;
-
-  const handleSidebarResizeStart = useCallback(
-    (event: ReactMouseEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      sidebarResizeCleanupRef.current?.();
-      const startX = event.clientX;
-      const startWidth = sidebarWidth;
-      const previousCursor = document.body.style.cursor;
-      const previousUserSelect = document.body.style.userSelect;
-
-      setIsResizingSidebar(true);
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        const nextWidth = clampSessionSidebarWidth(startWidth + startX - moveEvent.clientX);
-        setSidebarWidth(nextWidth);
-      };
-
-      const handleMouseUp = () => {
-        sidebarResizeCleanupRef.current?.();
-        setIsResizingSidebar(false);
-        setSidebarWidth((width) => {
-          try {
-            localStorage.setItem(SESSION_SIDEBAR_WIDTH_KEY, String(width));
-          } catch {
-            // Persistence is optional when browser storage is unavailable.
-          }
-          return width;
-        });
-      };
-
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-      sidebarResizeCleanupRef.current = () => {
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
-        document.body.style.cursor = previousCursor;
-        document.body.style.userSelect = previousUserSelect;
-        sidebarResizeCleanupRef.current = null;
-      };
-    },
-    [sidebarWidth],
-  );
-
-  useEffect(() => {
-    return () => sidebarResizeCleanupRef.current?.();
-  }, []);
 
   const handleNewChat = useCallback(async () => {
     if (!selectedSession || selectedSession._optimistic || !bridgeInteractionAllowed) return null;
@@ -964,43 +804,6 @@ export function SessionGroupDetailView({
         shortcut: { key: "p", mod: true },
       },
     ];
-    if (canInteract) {
-      commands.push(
-        {
-          id: "session.toggle-sidebar",
-          title: "Toggle session sidebar",
-          group: "Session",
-          keywords: "files git changes panel info",
-          run: handleToggleSidebar,
-          shortcut: { key: "e", mod: true, shift: true },
-        },
-        {
-          id: "session.show-files",
-          title: "Show files",
-          group: "Session",
-          keywords: "file tree explorer sidebar",
-          run: () => showSidebarTab("files"),
-        },
-        {
-          id: "session.show-changes",
-          title: "Show changes",
-          group: "Session",
-          keywords: "diff changes review sidebar",
-          run: () => showSidebarTab("changes"),
-        },
-      );
-      // Applications panel only exists for cloud-hosted sessions; registering it
-      // otherwise would open a panel an effect immediately closes again.
-      if (showApplicationsSidebarTab) {
-        commands.push({
-          id: "session.toggle-applications",
-          title: "Toggle applications panel",
-          group: "Session",
-          keywords: "apps processes ports traffic",
-          run: handleToggleApplicationsSidebar,
-        });
-      }
-    }
     if (canNewChatCmd) {
       commands.push({
         id: "session.new-chat",
@@ -1022,15 +825,10 @@ export function SessionGroupDetailView({
     }
     return commands;
   }, [
-    canInteract,
     canNewChatCmd,
     canOpenTerminalCmd,
-    showApplicationsSidebarTab,
     handleCloseCurrentTab,
     handleToggleFilePalette,
-    handleToggleSidebar,
-    handleToggleApplicationsSidebar,
-    showSidebarTab,
     handleNewChat,
     handleOpenTerminalCmd,
   ]);
@@ -1080,6 +878,382 @@ export function SessionGroupDetailView({
     [setActiveArtifactId, setActiveFilePath, setActiveTerminalId],
   );
 
+  const workspaceTabs = useMemo<SpatialWorkspaceTab[]>(() => {
+    const tabs: SpatialWorkspaceTab[] = sessionTabs.map((session) => ({
+      id: `session:${session.id}`,
+      label: session.name,
+      icon: <Bot size={12} />,
+      status: session.agentStatus === "active" ? "live" : undefined,
+    }));
+
+    tabs.push(
+      {
+        id: "surface:browser",
+        label: "Browser",
+        icon: <Globe size={12} />,
+        status: "live",
+        closable: false,
+      },
+      {
+        id: "surface:terminal",
+        label: "Terminal",
+        icon: <TerminalSquare size={12} />,
+        closable: false,
+      },
+      {
+        id: "surface:files",
+        label: "Files",
+        icon: <Files size={12} />,
+        closable: false,
+      },
+      {
+        id: "surface:changes",
+        label: "Files changed",
+        icon: <GitCompareArrows size={12} />,
+        status: "changed",
+        closable: false,
+      },
+    );
+
+    if (showApplicationsSidebarTab) {
+      tabs.push({
+        id: "surface:applications",
+        label: "Applications",
+        icon: <AppWindow size={12} />,
+        status: "live",
+        closable: false,
+      });
+    }
+
+    tabs.push(
+      ...openArtifactIds.map((artifactId) => ({
+        id: `artifact:${artifactId}`,
+        label: "Artifact",
+        icon: <FileCode size={12} />,
+      })),
+      ...terminals
+        .filter((terminal) => pinnedTerminalIds[terminal.id])
+        .map((terminal, index) => ({
+          id: `terminal:${terminal.id}`,
+          label: terminal.customName || `Terminal ${index + 1}`,
+          icon: <TerminalSquare size={12} />,
+          status: terminal.status === "active" ? ("live" as const) : undefined,
+        })),
+      ...openFiles.map((file) => ({
+        id: `file:${file.filePath}`,
+        label: file.fileName,
+        icon: file.isDiff ? <GitCompareArrows size={12} /> : <FileCode size={12} />,
+        status: file.isDiff ? ("changed" as const) : undefined,
+      })),
+      ...draftWorkspaceTabs.map((draft) => ({
+        id: draft.id,
+        label: draft.surface
+          ? draft.surface === "changes"
+            ? "Files changed"
+            : `${draft.surface[0].toUpperCase()}${draft.surface.slice(1)}`
+          : "New tab",
+        icon: draft.surface ? <AppWindow size={12} /> : <Bot size={12} />,
+      })),
+    );
+
+    if (trafficEndpointId) {
+      tabs.push({
+        id: "traffic",
+        label: "Traffic",
+        icon: <Activity size={12} />,
+      });
+    }
+    return tabs;
+  }, [
+    draftWorkspaceTabs,
+    openArtifactIds,
+    openFiles,
+    pinnedTerminalIds,
+    sessionTabs,
+    showApplicationsSidebarTab,
+    terminals,
+    trafficEndpointId,
+  ]);
+
+  const preferredWorkspaceTabId = activeArtifactId
+    ? `artifact:${activeArtifactId}`
+    : activeFilePath
+      ? `file:${activeFilePath}`
+      : activeTerminalId
+        ? `terminal:${activeTerminalId}`
+        : activeWorkflowTab === "traffic" && trafficEndpointId
+          ? "traffic"
+          : selectedSession
+            ? `session:${selectedSession.id}`
+            : "surface:files";
+
+  const handleActivateWorkspaceTab = useCallback(
+    (tabId: string) => {
+      if (tabId.startsWith("session:")) {
+        handleSelectSession(tabId.slice("session:".length));
+      } else if (tabId.startsWith("artifact:")) {
+        handleSelectArtifact(tabId.slice("artifact:".length));
+      } else if (tabId.startsWith("terminal:")) {
+        const terminalId = tabId.slice("terminal:".length);
+        const terminal = terminals.find((candidate) => candidate.id === terminalId);
+        handleSelectTerminalTab(terminal?.sessionId ?? null, terminalId);
+      } else if (tabId.startsWith("file:")) {
+        handleSelectFileTab(tabId.slice("file:".length));
+      } else if (tabId === "traffic") {
+        handleSelectTrafficTab();
+      }
+    },
+    [
+      handleSelectArtifact,
+      handleSelectFileTab,
+      handleSelectSession,
+      handleSelectTerminalTab,
+      handleSelectTrafficTab,
+      terminals,
+    ],
+  );
+
+  const handleCloseWorkspaceTab = useCallback(
+    (tabId: string) => {
+      if (tabId.startsWith("draft:")) {
+        setDraftWorkspaceTabs((drafts) => drafts.filter((draft) => draft.id !== tabId));
+      } else if (tabId.startsWith("session:")) {
+        handleCloseSession(tabId.slice("session:".length));
+      } else if (tabId.startsWith("artifact:")) {
+        handleCloseArtifact(tabId.slice("artifact:".length));
+      } else if (tabId.startsWith("terminal:")) {
+        handleClosePinnedTerminal(tabId.slice("terminal:".length));
+      } else if (tabId.startsWith("file:")) {
+        handleCloseFile(tabId.slice("file:".length));
+      } else if (tabId === "traffic") {
+        handleCloseTrafficTab();
+      }
+    },
+    [
+      handleCloseArtifact,
+      handleCloseFile,
+      handleClosePinnedTerminal,
+      handleCloseSession,
+      handleCloseTrafficTab,
+    ],
+  );
+
+  const handleNewWorkspaceTab = useCallback(() => {
+    const id = `draft:${crypto.randomUUID()}`;
+    setDraftWorkspaceTabs((drafts) => [...drafts, { id, surface: null }]);
+  }, []);
+
+  const renderWorkspaceTab = useCallback(
+    (tabId: string) => {
+      if (tabId.startsWith("draft:")) {
+        const draft = draftWorkspaceTabs.find((candidate) => candidate.id === tabId);
+        if (draft?.surface) {
+          return (
+            <WorkspaceSurfaceContent
+              sessionGroupId={sessionGroupId}
+              surface={draft.surface}
+              activeSessionId={selectedSession?.id ?? null}
+              activeFilePath={activeFilePath}
+              fileTree={sessionGroupFileTree}
+              filesLoading={sessionGroupFileTreeLoading}
+              filesError={sessionGroupFileTreeError}
+              onClose={() => undefined}
+              onFileClick={handleFileClick}
+              onRefreshFiles={refreshTree}
+              onLoadDirectory={loadDirectory}
+              onDiffFileClick={handleDiffFileClick}
+              onOpenTraffic={handleOpenTrafficTab}
+              bridgeAccess={bridgeAccess}
+              onBridgeAccessRequested={refreshBridgeAccess}
+            />
+          );
+        }
+        return (
+          <SpatialNewTab
+            canStartChat={
+              !!selectedSession && !selectedSession._optimistic && bridgeInteractionAllowed
+            }
+            canShowApplications={showApplicationsSidebarTab}
+            onConvert={(surface) =>
+              setDraftWorkspaceTabs((drafts) =>
+                drafts.map((candidate) =>
+                  candidate.id === tabId ? { ...candidate, surface } : candidate,
+                ),
+              )
+            }
+            onStartChat={async (prompt) => {
+              const sessionId = await handleNewChat();
+              if (!sessionId) return;
+              await sendOptimisticSessionMessage({ sessionId, text: prompt });
+              setDraftWorkspaceTabs((drafts) =>
+                drafts.filter((candidate) => candidate.id !== tabId),
+              );
+            }}
+          />
+        );
+      }
+
+      if (tabId.startsWith("surface:")) {
+        if (tabId === "surface:browser" && isCanvasWorkspace) {
+          const canvasReady = isAppGroup
+            ? appCanvasReady
+            : isAnimationGroup
+              ? animationCanvasReady
+              : generatedProjectCanvasReady;
+          const canvasKey = isAppGroup
+            ? "app-canvas"
+            : isAnimationGroup
+              ? "animation-canvas"
+              : "generated-project-canvas";
+          const emptyState = isAppGroup ? (
+            <AppSessionPreviewPanel sessionGroupId={sessionGroupId} />
+          ) : isAnimationGroup ? (
+            <AnimationSessionPreviewPanel sessionGroupId={sessionGroupId} />
+          ) : (
+            <GeneratedProjectPreviewPanel
+              sessionGroupId={sessionGroupId}
+              projectKind={projectWorkspaceKind === "pdf" ? "pdf" : "design"}
+            />
+          );
+
+          return (
+            <ProjectPreviewWorkspace
+              onOpenArtifact={handleOpenArtifact}
+              sessionId={selectedSession?.id ?? null}
+              scrollToEventId={scrollToEventId}
+              onScrollComplete={handleScrollComplete}
+              onForkSession={handleOpenForkDialog}
+              canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
+              canvasReady={canvasReady}
+              canvasKey={canvasKey}
+              floatingChat={floatingProjectChat}
+              manualSessionGroupId={isGeneratedProjectGroup ? sessionGroupId : undefined}
+              showCanvasWhileLoading={
+                projectWorkspaceKind === "design" || projectWorkspaceKind === "design_system"
+              }
+              canvas={
+                <SessionGroupContentArea
+                  sessionGroupId={sessionGroupId}
+                  activeFilePath={null}
+                  openFiles={openFiles}
+                  activeTerminalId={null}
+                  activeTrafficEndpointId={null}
+                  selectedSession={null}
+                  sessionsByRecency={sessionsByRecency}
+                  canStartNewChat={false}
+                  onStartNewChat={handleNewChat}
+                  defaultBranch={groupRepo?.defaultBranch ?? "main"}
+                  getFileBuffer={getFileBuffer}
+                  setFileBuffer={setFileBuffer}
+                  scrollToEventId={null}
+                  onScrollComplete={handleScrollComplete}
+                  onForkSession={handleOpenForkDialog}
+                  canForkSession={false}
+                  emptyState={emptyState}
+                />
+              }
+            />
+          );
+        }
+
+        return (
+          <WorkspaceSurfaceContent
+            sessionGroupId={sessionGroupId}
+            surface={tabId.slice("surface:".length) as WorkspaceSurface}
+            activeSessionId={selectedSession?.id ?? null}
+            activeFilePath={activeFilePath}
+            fileTree={sessionGroupFileTree}
+            filesLoading={sessionGroupFileTreeLoading}
+            filesError={sessionGroupFileTreeError}
+            onClose={() => undefined}
+            onFileClick={handleFileClick}
+            onRefreshFiles={refreshTree}
+            onLoadDirectory={loadDirectory}
+            onDiffFileClick={handleDiffFileClick}
+            onOpenTraffic={handleOpenTrafficTab}
+            bridgeAccess={bridgeAccess}
+            onBridgeAccessRequested={refreshBridgeAccess}
+          />
+        );
+      }
+
+      if (tabId.startsWith("artifact:")) {
+        return <ArtifactTabContent artifactId={tabId.slice("artifact:".length)} />;
+      }
+
+      const tabSession = tabId.startsWith("session:")
+        ? (groupSessions.find((session) => session.id === tabId.slice("session:".length)) ?? null)
+        : null;
+      const tabFilePath = tabId.startsWith("file:") ? tabId.slice("file:".length) : null;
+      const tabTerminalId = tabId.startsWith("terminal:")
+        ? tabId.slice("terminal:".length)
+        : null;
+      const tabTrafficEndpointId = tabId === "traffic" ? trafficEndpointId : null;
+
+      return (
+        <ArtifactOpenContext.Provider value={handleOpenArtifact}>
+          <SessionGroupContentArea
+            sessionGroupId={sessionGroupId}
+            activeFilePath={tabFilePath}
+            openFiles={openFiles}
+            activeTerminalId={tabTerminalId}
+            activeTrafficEndpointId={tabTrafficEndpointId}
+            selectedSession={tabSession}
+            sessionsByRecency={sessionsByRecency}
+            canStartNewChat={!!tabSession && !tabSession._optimistic && bridgeInteractionAllowed}
+            onStartNewChat={handleNewChat}
+            defaultBranch={groupRepo?.defaultBranch ?? "main"}
+            getFileBuffer={getFileBuffer}
+            setFileBuffer={setFileBuffer}
+            scrollToEventId={tabSession?.id === selectedSession?.id ? scrollToEventId : null}
+            onScrollComplete={handleScrollComplete}
+            onForkSession={handleOpenForkDialog}
+            canForkSession={!!tabSession && !tabSession._optimistic}
+          />
+        </ArtifactOpenContext.Provider>
+      );
+    },
+    [
+      activeFilePath,
+      animationCanvasReady,
+      appCanvasReady,
+      bridgeAccess,
+      bridgeInteractionAllowed,
+      draftWorkspaceTabs,
+      getFileBuffer,
+      generatedProjectCanvasReady,
+      groupRepo?.defaultBranch,
+      groupSessions,
+      handleDiffFileClick,
+      handleFileClick,
+      handleNewChat,
+      handleOpenArtifact,
+      handleOpenForkDialog,
+      handleOpenTrafficTab,
+      handleScrollComplete,
+      isAnimationGroup,
+      isAppGroup,
+      isCanvasWorkspace,
+      isGeneratedProjectGroup,
+      loadDirectory,
+      openFiles,
+      refreshBridgeAccess,
+      refreshTree,
+      floatingProjectChat,
+      projectWorkspaceKind,
+      scrollToEventId,
+      selectedSession?.id,
+      selectedSessionIsOptimistic,
+      sessionGroupFileTree,
+      sessionGroupFileTreeError,
+      sessionGroupFileTreeLoading,
+      sessionGroupId,
+      sessionsByRecency,
+      setFileBuffer,
+      showApplicationsSidebarTab,
+    ],
+  );
+
   if (groupLoadError) {
     return (
       <div className="flex h-full items-center justify-center p-6">
@@ -1121,243 +1295,19 @@ export function SessionGroupDetailView({
               groupPrUrl={groupPrUrl}
               panelMode={panelMode}
               isFullscreen={isFullscreen}
-              showSidebar={showSidebar}
-              showApplicationsSidebar={showSidebar && sidebarTab === "applications"}
-              canShowApplications={showApplicationsSidebarTab}
               compactCanvasMode={isCanvasWorkspace}
               onToggleFullscreen={toggleFullscreen}
-              onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
-              onToggleApplicationsSidebar={
-                selectedSessionIsOptimistic ? () => {} : handleToggleApplicationsSidebar
-              }
             />
-            <div className="flex min-h-0 flex-1 overflow-hidden">
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                {!isCanvasWorkspace || openArtifactIds.length > 0 ? (
-                  <GroupTabStrip
-                    sessionTabs={sessionTabs}
-                    terminals={terminals}
-                    pinnedTerminalIds={pinnedTerminalIds}
-                    groupSessions={groupSessions}
-                    selectedSessionId={selectedSession?.id ?? null}
-                    activeTerminalId={activeTerminalId}
-                    openFiles={openFiles}
-                    activeFilePath={activeFilePath}
-                    openArtifactIds={openArtifactIds}
-                    activeArtifactId={activeArtifactId}
-                    trafficTabOpen={trafficEndpointId !== null}
-                    trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
-                    onSelectSession={handleSelectSession}
-                    onCloseSession={handleCloseSession}
-                    canCloseSessions={sessionTabs.length > 0}
-                    hiddenSessionIds={hiddenSessionIds}
-                    onSelectTerminal={handleSelectTerminalTab}
-                    onCloseTerminal={handleClosePinnedTerminal}
-                    onRenameTerminal={renameTerminal}
-                    onSelectFile={handleSelectFileTab}
-                    onCloseFile={handleCloseFile}
-                    onSelectArtifact={handleSelectArtifact}
-                    onCloseArtifact={handleCloseArtifact}
-                    onSelectTraffic={handleSelectTrafficTab}
-                    onCloseTraffic={handleCloseTrafficTab}
-                    onNewChat={handleNewChat}
-                    canNewChat={
-                      !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
-                    }
-                  />
-                ) : null}
-                <div className="min-h-0 flex-1 overflow-hidden">
-                  {activeArtifactId ? (
-                  <ArtifactTabContent artifactId={activeArtifactId} />
-                ) : isAppGroup ? (
-                  <ProjectPreviewWorkspace
-                    onOpenArtifact={handleOpenArtifact}
-                    sessionId={selectedSession?.id ?? null}
-                    scrollToEventId={scrollToEventId}
-                    onScrollComplete={handleScrollComplete}
-                    onForkSession={handleOpenForkDialog}
-                    canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
-                    canvasReady={appCanvasReady}
-                    canvasKey="app-canvas"
-                    floatingChat={floatingProjectChat}
-                    canvas={
-                      <SessionGroupContentArea
-                        sessionGroupId={sessionGroupId}
-                        activeFilePath={activeFilePath}
-                        openFiles={openFiles}
-                        activeTerminalId={activeTerminal?.id ?? null}
-                        activeTrafficEndpointId={
-                          activeWorkflowTab === "traffic" ? trafficEndpointId : null
-                        }
-                        selectedSession={null}
-                        sessionsByRecency={sessionsByRecency}
-                        canStartNewChat={false}
-                        onStartNewChat={handleNewChat}
-                        defaultBranch={groupRepo?.defaultBranch ?? "main"}
-                        getFileBuffer={getFileBuffer}
-                        setFileBuffer={setFileBuffer}
-                        scrollToEventId={null}
-                        onScrollComplete={handleScrollComplete}
-                        onForkSession={handleOpenForkDialog}
-                        canForkSession={false}
-                        emptyState={<AppSessionPreviewPanel sessionGroupId={sessionGroupId} />}
-                      />
-                    }
-                  />
-                ) : isAnimationGroup ? (
-                  <ProjectPreviewWorkspace
-                    onOpenArtifact={handleOpenArtifact}
-                    sessionId={selectedSession?.id ?? null}
-                    scrollToEventId={scrollToEventId}
-                    onScrollComplete={handleScrollComplete}
-                    onForkSession={handleOpenForkDialog}
-                    canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
-                    canvasReady={animationCanvasReady}
-                    canvasKey="animation-canvas"
-                    floatingChat={floatingProjectChat}
-                    canvas={
-                      <SessionGroupContentArea
-                        sessionGroupId={sessionGroupId}
-                        activeFilePath={activeFilePath}
-                        openFiles={openFiles}
-                        activeTerminalId={activeTerminal?.id ?? null}
-                        activeTrafficEndpointId={
-                          activeWorkflowTab === "traffic" ? trafficEndpointId : null
-                        }
-                        selectedSession={null}
-                        sessionsByRecency={sessionsByRecency}
-                        canStartNewChat={false}
-                        onStartNewChat={handleNewChat}
-                        defaultBranch={groupRepo?.defaultBranch ?? "main"}
-                        getFileBuffer={getFileBuffer}
-                        setFileBuffer={setFileBuffer}
-                        scrollToEventId={null}
-                        onScrollComplete={handleScrollComplete}
-                        onForkSession={handleOpenForkDialog}
-                        canForkSession={false}
-                        emptyState={
-                          <AnimationSessionPreviewPanel sessionGroupId={sessionGroupId} />
-                        }
-                      />
-                    }
-                  />
-                ) : isGeneratedProjectGroup ? (
-                  <ProjectPreviewWorkspace
-                    onOpenArtifact={handleOpenArtifact}
-                    sessionId={selectedSession?.id ?? null}
-                    scrollToEventId={scrollToEventId}
-                    onScrollComplete={handleScrollComplete}
-                    onForkSession={handleOpenForkDialog}
-                    canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
-                    canvasReady={generatedProjectCanvasReady}
-                    canvasKey="generated-project-canvas"
-                    floatingChat={floatingProjectChat}
-                    manualSessionGroupId={sessionGroupId}
-                    showCanvasWhileLoading={
-                      projectWorkspaceKind === "design" || projectWorkspaceKind === "design_system"
-                    }
-                    canvas={
-                      <SessionGroupContentArea
-                        sessionGroupId={sessionGroupId}
-                        activeFilePath={activeFilePath}
-                        openFiles={openFiles}
-                        activeTerminalId={activeTerminal?.id ?? null}
-                        activeTrafficEndpointId={
-                          activeWorkflowTab === "traffic" ? trafficEndpointId : null
-                        }
-                        selectedSession={null}
-                        sessionsByRecency={sessionsByRecency}
-                        canStartNewChat={false}
-                        onStartNewChat={handleNewChat}
-                        defaultBranch={groupRepo?.defaultBranch ?? "main"}
-                        getFileBuffer={getFileBuffer}
-                        setFileBuffer={setFileBuffer}
-                        scrollToEventId={null}
-                        onScrollComplete={handleScrollComplete}
-                        onForkSession={handleOpenForkDialog}
-                        canForkSession={false}
-                        emptyState={
-                          <GeneratedProjectPreviewPanel
-                            sessionGroupId={sessionGroupId}
-                            projectKind={projectWorkspaceKind === "pdf" ? "pdf" : "design"}
-                          />
-                        }
-                      />
-                    }
-                  />
-                ) : (
-                  <ArtifactOpenContext.Provider value={handleOpenArtifact}>
-                    <SessionGroupContentArea
-                      sessionGroupId={sessionGroupId}
-                      activeFilePath={activeFilePath}
-                      openFiles={openFiles}
-                      activeTerminalId={activeTerminal?.id ?? null}
-                      activeTrafficEndpointId={
-                        activeWorkflowTab === "traffic" ? trafficEndpointId : null
-                      }
-                      activeArtifactId={activeArtifactId}
-                      selectedSession={selectedSession}
-                      sessionsByRecency={sessionsByRecency}
-                      canStartNewChat={
-                        !!selectedSession &&
-                        !selectedSessionIsOptimistic &&
-                        bridgeInteractionAllowed
-                      }
-                      onStartNewChat={handleNewChat}
-                      defaultBranch={groupRepo?.defaultBranch ?? "main"}
-                      getFileBuffer={getFileBuffer}
-                      setFileBuffer={setFileBuffer}
-                      scrollToEventId={scrollToEventId}
-                      onScrollComplete={handleScrollComplete}
-                      onForkSession={handleOpenForkDialog}
-                      canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
-                    />
-                  </ArtifactOpenContext.Provider>
-                )}
-                </div>
-              </div>
-              <AnimatePresence initial={false}>
-                {showSidebar && !selectedSessionIsOptimistic ? (
-                  <motion.div
-                    key="session-sidebar"
-                    initial={{ width: 0, x: 64, opacity: 0 }}
-                    animate={{ width: sidebarWidth, x: 0, opacity: 1 }}
-                    exit={{ width: 0, x: 64, opacity: 0 }}
-                    transition={{
-                      duration: prefersReducedMotion || isResizingSidebar ? 0 : 0.3,
-                      ease: [0.16, 1, 0.3, 1],
-                    }}
-                    className="relative h-full shrink-0 overflow-hidden border-l border-border"
-                  >
-                    <div
-                      onMouseDown={handleSidebarResizeStart}
-                      className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize hover:bg-ring active:bg-ring"
-                    />
-                    <div className="h-full" style={{ width: sidebarWidth }}>
-                      <SidebarPanel
-                        sessionGroupId={sessionGroupId}
-                        activeTab={sidebarTab}
-                        activeSessionId={selectedSession?.id ?? null}
-                        activeFilePath={activeFilePath}
-                        fileTree={sessionGroupFileTree}
-                        filesLoading={sessionGroupFileTreeLoading}
-                        filesError={sessionGroupFileTreeError}
-                        canShowApplications={showApplicationsSidebarTab}
-                        canShowBrowser={typeof window.trace !== "undefined"}
-                        onTabChange={handleSidebarTabChange}
-                        onClose={() => setShowSidebar(false)}
-                        onFileClick={handleFileClick}
-                        onRefreshFiles={refreshTree}
-                        onLoadDirectory={loadDirectory}
-                        onDiffFileClick={handleDiffFileClick}
-                        onOpenTraffic={handleOpenTrafficTab}
-                        bridgeAccess={bridgeAccess}
-                        onBridgeAccessRequested={refreshBridgeAccess}
-                      />
-                    </div>
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <SpatialWorkspace
+                persistenceKey={`trace:spatial-workspace:${sessionGroupId}`}
+                tabs={workspaceTabs}
+                preferredActiveTabId={preferredWorkspaceTabId}
+                onActivateTab={handleActivateWorkspaceTab}
+                onCloseTab={handleCloseWorkspaceTab}
+                onNewTab={handleNewWorkspaceTab}
+                renderTab={renderWorkspaceTab}
+              />
             </div>
             <ForkSessionDialog
               eventId={selectedSessionIsOptimistic ? null : forkEventId}

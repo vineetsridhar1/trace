@@ -1,10 +1,8 @@
 import { useState } from "react";
 import {
-  AppWindow,
   Boxes,
   Cloud,
   Monitor,
-  PanelRight,
   Maximize2,
   Minimize2,
   Play,
@@ -47,13 +45,8 @@ interface GroupHeaderProps {
   groupPrUrl: string | null | undefined;
   panelMode?: boolean;
   isFullscreen: boolean;
-  showSidebar: boolean;
-  showApplicationsSidebar: boolean;
-  canShowApplications: boolean;
   compactCanvasMode?: boolean;
   onToggleFullscreen: () => void;
-  onToggleSidebar: () => void;
-  onToggleApplicationsSidebar: () => void;
 }
 
 const headerIconButtonClass =
@@ -82,13 +75,8 @@ export function GroupHeader({
   groupPrUrl,
   panelMode,
   isFullscreen,
-  showSidebar,
-  showApplicationsSidebar,
-  canShowApplications,
   compactCanvasMode = false,
   onToggleFullscreen,
-  onToggleSidebar,
-  onToggleApplicationsSidebar,
 }: GroupHeaderProps) {
   const [showArtifacts, setShowArtifacts] = useState(false);
   const { hasRunScripts, canRun, handleRun } = useRunScripts(sessionGroupId, selectedSessionId);
@@ -208,37 +196,6 @@ export function GroupHeader({
         </ActionTooltip>
       )}
 
-      {canShowApplications ? (
-        <ActionTooltip label={showApplicationsSidebar ? "Hide applications" : "Applications"}>
-          <button
-            onClick={onToggleApplicationsSidebar}
-            className={cn(
-              headerIconButtonClass,
-              "hidden sm:flex",
-              showApplicationsSidebar ? "bg-surface-hover text-foreground" : undefined,
-            )}
-            aria-label={showApplicationsSidebar ? "Hide applications" : "Applications"}
-          >
-            <AppWindow size={13} />
-          </button>
-        </ActionTooltip>
-      ) : null}
-
-      {!compactCanvasMode ? (
-        <ActionTooltip label={showSidebar ? "Hide sidebar" : "Show sidebar"}>
-          <button
-            onClick={onToggleSidebar}
-            className={cn(
-              headerIconButtonClass,
-              "hidden sm:flex",
-              showSidebar ? "bg-surface-hover text-foreground" : undefined,
-            )}
-            aria-label={showSidebar ? "Hide sidebar" : "Show sidebar"}
-          >
-            <PanelRight size={13} />
-          </button>
-        </ActionTooltip>
-      ) : null}
     </div>
   );
 }
