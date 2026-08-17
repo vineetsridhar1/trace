@@ -173,6 +173,7 @@ export function SpatialWorkspace({
   const tabIdsKey = tabIds.join("\u0000");
   const tabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs]);
   const [layout, setLayout] = useState(() => readLayout(persistenceKey, tabIds, preferredActiveTabId));
+  const previousPreferredActiveTabIdRef = useRef(preferredActiveTabId);
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
   const dragStartLayoutRef = useRef<SpatialLayout | null>(null);
   const lastDragPointerXRef = useRef<number | null>(null);
@@ -188,7 +189,12 @@ export function SpatialWorkspace({
   );
 
   useEffect(() => {
-    setLayout((current) => syncSpatialTabs(current, tabIds, preferredActiveTabId));
+    const preferredTabChanged =
+      previousPreferredActiveTabIdRef.current !== preferredActiveTabId;
+    previousPreferredActiveTabIdRef.current = preferredActiveTabId;
+    setLayout((current) =>
+      syncSpatialTabs(current, tabIds, preferredTabChanged ? preferredActiveTabId : null),
+    );
   }, [preferredActiveTabId, tabIdsKey]);
 
   useEffect(() => {
