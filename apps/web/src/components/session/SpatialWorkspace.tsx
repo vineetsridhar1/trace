@@ -1,5 +1,6 @@
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   pointerWithin,
   useDraggable,
@@ -10,6 +11,7 @@ import {
   type DragMoveEvent,
   type DragOverEvent,
   type CollisionDetection,
+  type Modifier,
 } from "@dnd-kit/core";
 import { motion } from "framer-motion";
 import { Columns2, Columns3, Columns4, LayoutGrid, Plus, Rows2, Square, X } from "lucide-react";
@@ -86,6 +88,36 @@ const edgeLabels: Record<SpatialEdge, string> = {
 };
 
 const tabRailSpring = { type: "spring", stiffness: 520, damping: 42, mass: 0.7 } as const;
+
+const centerDragOverlayOnCursor: Modifier = ({
+  activatorEvent,
+  overlayNodeRect,
+  transform,
+}) => {
+  if (!activatorEvent || !overlayNodeRect) return transform;
+  if (!("clientX" in activatorEvent) || !("clientY" in activatorEvent)) return transform;
+  if (
+    typeof activatorEvent.clientX !== "number" ||
+    typeof activatorEvent.clientY !== "number"
+  ) {
+    return transform;
+  }
+  return {
+    ...transform,
+    x:
+      transform.x +
+      activatorEvent.clientX -
+      overlayNodeRect.left -
+      overlayNodeRect.width / 2,
+    y:
+      transform.y +
+      activatorEvent.clientY -
+      overlayNodeRect.top -
+      overlayNodeRect.height / 2,
+  };
+};
+
+const dragOverlayModifiers = [centerDragOverlayOnCursor];
 
 const spatialCollisionDetection: CollisionDetection = (args) => {
   const collisions = pointerWithin(args);
@@ -212,6 +244,7 @@ export function SpatialWorkspace({
     [onNewTab],
   );
 
+  const draggedTab = draggedTabId ? tabById.get(draggedTabId) : null;
   const hasVerticalSplit = layout.root.type === "split" && layout.root.direction === "vertical";
 
   return (
@@ -298,6 +331,12 @@ export function SpatialWorkspace({
         ) : null}
       </div>
 
+      <DragOverlay
+        modifiers={dragOverlayModifiers}
+        dropAnimation={{ duration: 160, easing: "cubic-bezier(.16,1,.3,1)" }}
+      >
+        {draggedTab ? <DraggedTab tab={draggedTab} /> : null}
+      </DragOverlay>
     </DndContext>
   );
 }
@@ -645,6 +684,16 @@ function SpatialSnapTarget({
           {edgeLabels[edge]}
         </span>
       ) : null}
+    </div>
+  );
+}
+
+function DraggedTab({ tab }: { tab: SpatialWorkspaceTab }) {
+  return (
+    <div className="flex size-full items-center gap-2 rounded-lg border border-border bg-surface px-3 text-xs text-foreground shadow-2xl shadow-black/60">
+      <span className="text-muted-foreground">{tab.icon}</span>
+      <span className="min-w-0 flex-1 truncate">{tab.label}</span>
+      {tab.status ? <span className="size-1.5 rounded-full bg-emerald-400" /> : null}
     </div>
   );
 }
