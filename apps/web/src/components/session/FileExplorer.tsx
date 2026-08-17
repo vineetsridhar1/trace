@@ -129,7 +129,7 @@ export function FileExplorer({
 
   return (
     <div className="flex h-full flex-col bg-transparent">
-      <div className="px-3 pb-3">
+      <div className="px-3 pb-3 pt-3">
         <label className="flex h-9 items-center gap-2 rounded-lg border border-white/[0.1] bg-black/20 px-3 text-muted-foreground focus-within:border-white/20">
           <Search size={13} />
           <input

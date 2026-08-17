@@ -30,13 +30,6 @@ interface SidebarPanelProps {
   onBridgeAccessRequested?: () => void | Promise<void>;
 }
 
-const panelMeta: Record<SidebarTab, { title: string; description: string }> = {
-  applications: { title: "Applications", description: "Cloud runtimes" },
-  terminal: { title: "Terminal", description: "Session process" },
-  files: { title: "Files", description: "Workspace files" },
-  changes: { title: "Changes", description: "Branch changes" },
-};
-
 export function SidebarPanel({
   sessionGroupId,
   activeTab,
@@ -57,7 +50,6 @@ export function SidebarPanel({
   onBridgeAccessRequested,
 }: SidebarPanelProps) {
   const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess ?? null);
-  const meta = panelMeta[activeTab];
 
   return (
     <aside className="flex h-full w-full bg-[#18181b] font-sans">
@@ -104,21 +96,6 @@ export function SidebarPanel({
       </nav>
 
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center px-4">
-          <div>
-            <h2 className="text-xs font-semibold text-foreground">{meta.title}</h2>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">{meta.description}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/[0.07] hover:text-foreground"
-            aria-label="Close sidebar"
-          >
-            <PanelRightClose size={14} />
-          </button>
-        </header>
-
         {!bridgeInteractionAllowed ? (
           <div className="p-3">
             <BridgeAccessNotice
