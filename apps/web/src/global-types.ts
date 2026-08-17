@@ -165,6 +165,10 @@ declare global {
       sessionGroupId: string;
       bounds: { x: number; y: number; width: number; height: number };
     }) => Promise<void>;
+    setBrowserOverlayHidden: (input: {
+      sessionGroupId: string;
+      hidden: boolean;
+    }) => Promise<void>;
     navigateBrowser: (sessionGroupId: string, url: string) => Promise<DesktopBrowserWorkspaceState>;
     goBrowserBack: (sessionGroupId: string) => Promise<DesktopBrowserWorkspaceState>;
     goBrowserForward: (sessionGroupId: string) => Promise<DesktopBrowserWorkspaceState>;

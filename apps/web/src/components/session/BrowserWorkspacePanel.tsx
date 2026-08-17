@@ -61,11 +61,13 @@ export function BrowserWorkspacePanel({ sessionGroupId }: { sessionGroupId: stri
     const observer = new ResizeObserver(syncBounds);
     if (contentRef.current) observer.observe(contentRef.current);
     window.addEventListener("resize", syncBounds);
+    window.visualViewport?.addEventListener("resize", syncBounds);
 
     return () => {
       cancelled = true;
       observer.disconnect();
       window.removeEventListener("resize", syncBounds);
+      window.visualViewport?.removeEventListener("resize", syncBounds);
       unsubscribe();
       void window.trace?.hideBrowser(sessionGroupId);
     };

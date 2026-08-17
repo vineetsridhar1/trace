@@ -394,6 +394,12 @@ ipcMain.handle(
     browserWorkspaces.setBounds(input.sessionGroupId, input.bounds);
   },
 );
+ipcMain.handle(
+  "browser-set-overlay-hidden",
+  (_event, input: { sessionGroupId: string; hidden: boolean }) => {
+    browserWorkspaces.setOverlayHidden(input.sessionGroupId, input.hidden);
+  },
+);
 ipcMain.handle("browser-navigate", (_event, sessionGroupId: string, url: string) =>
   browserWorkspaces.navigate(sessionGroupId, url),
 );

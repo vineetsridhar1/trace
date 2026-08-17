@@ -48,6 +48,7 @@ type BrowserWorkspace = {
   state: BrowserWorkspaceState;
   lastActivatedOrder: number;
   reopenDevToolsOnActivate: boolean;
+  overlayHidden: boolean;
 };
 
 type PermissionRequestHandler = NonNullable<Parameters<Session["setPermissionRequestHandler"]>[0]>;
@@ -122,6 +123,7 @@ export class BrowserWorkspaceManager {
     }
 
     const workspace = this.getOrCreate(sessionGroupId);
+    workspace.overlayHidden = false;
     if (this.window && !this.window.isDestroyed()) {
       this.window.contentView.addChildView(workspace.view);
     }
@@ -159,7 +161,18 @@ export class BrowserWorkspaceManager {
     if (this.visibleSessionGroupId !== sessionGroupId) return;
     const workspace = this.workspaces.get(sessionGroupId);
     if (!workspace) return;
-    workspace.view.setBounds(bounds);
+    const zoomFactor = this.window?.webContents.getZoomFactor() ?? 1;
+    workspace.view.setBounds(scaleRectangle(bounds, zoomFactor));
+  }
+
+  setOverlayHidden(sessionGroupId: string, hidden: boolean) {
+    if (this.visibleSessionGroupId !== sessionGroupId) return;
+    const workspace = this.workspaces.get(sessionGroupId);
+    if (!workspace || workspace.overlayHidden === hidden) return;
+    workspace.overlayHidden = hidden;
+    if (!this.window || this.window.isDestroyed()) return;
+    if (hidden) this.window.contentView.removeChildView(workspace.view);
+    else this.window.contentView.addChildView(workspace.view);
   }
 
   async navigate(sessionGroupId: string, rawUrl: string): Promise<BrowserWorkspaceState> {
@@ -250,6 +263,7 @@ export class BrowserWorkspaceManager {
       },
       lastActivatedOrder: ++this.activationOrder,
       reopenDevToolsOnActivate: false,
+      overlayHidden: false,
     };
     this.workspaces.set(sessionGroupId, workspace);
     this.configureSession(view.webContents.session);
@@ -545,6 +559,15 @@ export class BrowserWorkspaceManager {
       workspace.view.webContents.close();
     }
   }
+}
+
+function scaleRectangle(bounds: Electron.Rectangle, scale: number): Electron.Rectangle {
+  return {
+    x: Math.round(bounds.x * scale),
+    y: Math.round(bounds.y * scale),
+    width: Math.max(1, Math.round(bounds.width * scale)),
+    height: Math.max(1, Math.round(bounds.height * scale)),
+  };
 }
 
 class FileBrowserWorkspaceSnapshotStore implements BrowserWorkspaceSnapshotStore {

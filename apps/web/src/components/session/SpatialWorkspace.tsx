@@ -58,6 +58,7 @@ interface SpatialWorkspaceProps {
   onActivateTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;
   onNewTab: () => void;
+  onOverlayVisibilityChange?: (visible: boolean) => void;
   renderTab: (tabId: string, compact: boolean) => ReactNode;
 }
 
@@ -81,6 +82,7 @@ export function SpatialWorkspace({
   onActivateTab,
   onCloseTab,
   onNewTab,
+  onOverlayVisibilityChange,
   renderTab,
 }: SpatialWorkspaceProps) {
   const tabIds = useMemo(() => tabs.map((tab) => tab.id), [tabs]);
@@ -88,6 +90,7 @@ export function SpatialWorkspace({
   const tabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs]);
   const [layout, setLayout] = useState(() => readLayout(persistenceKey, tabIds, preferredActiveTabId));
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
+  const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
@@ -103,6 +106,18 @@ export function SpatialWorkspace({
       // Persistence is optional when browser storage is unavailable.
     }
   }, [layout, persistenceKey]);
+
+  const overlayVisible = draggedTabId !== null || layoutMenuOpen;
+  useEffect(() => {
+    onOverlayVisibilityChange?.(overlayVisible);
+  }, [onOverlayVisibilityChange, overlayVisible]);
+
+  useEffect(
+    () => () => {
+      onOverlayVisibilityChange?.(false);
+    },
+    [onOverlayVisibilityChange],
+  );
 
   const regionCount = countSpatialRegions(layout.root);
   const compact = regionCount > 2;
@@ -150,7 +165,7 @@ export function SpatialWorkspace({
           <span className="px-1 text-[10px] text-muted-foreground">
             {regionCount} {regionCount === 1 ? "region" : "regions"}
           </span>
-          <DropdownMenu>
+          <DropdownMenu open={layoutMenuOpen} onOpenChange={setLayoutMenuOpen}>
             <DropdownMenuTrigger
               className="pointer-events-auto flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
               aria-label="Choose workspace layout"

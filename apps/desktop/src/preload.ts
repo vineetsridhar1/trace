@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld("trace", {
   hideBrowser: (sessionGroupId: string) => ipcRenderer.invoke("browser-hide", sessionGroupId),
   setBrowserBounds: (input: { sessionGroupId: string; bounds: Electron.Rectangle }) =>
     ipcRenderer.invoke("browser-set-bounds", input),
+  setBrowserOverlayHidden: (input: { sessionGroupId: string; hidden: boolean }) =>
+    ipcRenderer.invoke("browser-set-overlay-hidden", input),
   navigateBrowser: (sessionGroupId: string, url: string) =>
     ipcRenderer.invoke("browser-navigate", sessionGroupId, url),
   goBrowserBack: (sessionGroupId: string) => ipcRenderer.invoke("browser-back", sessionGroupId),

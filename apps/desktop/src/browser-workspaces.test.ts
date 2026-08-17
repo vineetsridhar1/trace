@@ -213,14 +213,14 @@ class MemorySnapshotStore implements BrowserWorkspaceSnapshotStore {
   }
 }
 
-function createWindow(): BrowserWindow {
+function createWindow(zoomFactor = 1): BrowserWindow {
   return {
     isDestroyed: () => false,
     contentView: {
       addChildView: vi.fn(),
       removeChildView: vi.fn(),
     },
-    webContents: { send: vi.fn() },
+    webContents: { send: vi.fn(), getZoomFactor: () => zoomFactor },
   } as unknown as BrowserWindow;
 }
 
@@ -239,6 +239,36 @@ beforeEach(() => {
 });
 
 describe("BrowserWorkspaceManager", () => {
+  it("scales native bounds with the Trace window zoom factor", async () => {
+    const manager = new BrowserWorkspaceManager({ snapshotStore: new MemorySnapshotStore() });
+    manager.setWindow(createWindow(0.8));
+    await manager.activate("group-a");
+
+    manager.setBounds("group-a", { x: 1_100, y: 150, width: 1_100, height: 900 });
+
+    expect(electronMocks.views[0].setBounds).toHaveBeenCalledWith({
+      x: 880,
+      y: 120,
+      width: 880,
+      height: 720,
+    });
+  });
+
+  it("detaches the native view while a React overlay is visible", async () => {
+    const manager = new BrowserWorkspaceManager({ snapshotStore: new MemorySnapshotStore() });
+    const window = createWindow();
+    manager.setWindow(window);
+    await manager.activate("group-a");
+    const view = electronMocks.views[0];
+
+    manager.setOverlayHidden("group-a", true);
+    expect(window.contentView.removeChildView).toHaveBeenCalledWith(view);
+    expect(latestContents().operations).not.toContain("lifecycle:frozen");
+
+    manager.setOverlayHidden("group-a", false);
+    expect(window.contentView.addChildView).toHaveBeenLastCalledWith(view);
+  });
+
   it("closes DevTools before freezing and restores them after activation", async () => {
     const manager = new BrowserWorkspaceManager({ snapshotStore: new MemorySnapshotStore() });
     manager.setWindow(createWindow());

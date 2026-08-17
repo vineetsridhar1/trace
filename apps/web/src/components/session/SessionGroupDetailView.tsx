@@ -1057,6 +1057,13 @@ export function SessionGroupDetailView({
     setDraftWorkspaceTabs((drafts) => [...drafts, { id, surface: null }]);
   }, []);
 
+  const handleWorkspaceOverlayVisibility = useCallback(
+    (visible: boolean) => {
+      void window.trace?.setBrowserOverlayHidden({ sessionGroupId, hidden: visible });
+    },
+    [sessionGroupId],
+  );
+
   const renderWorkspaceTab = useCallback(
     (tabId: string) => {
       if (tabId.startsWith("draft:")) {
@@ -1320,6 +1327,7 @@ export function SessionGroupDetailView({
                 onActivateTab={handleActivateWorkspaceTab}
                 onCloseTab={handleCloseWorkspaceTab}
                 onNewTab={handleNewWorkspaceTab}
+                onOverlayVisibilityChange={handleWorkspaceOverlayVisibility}
                 renderTab={renderWorkspaceTab}
               />
             </div>
