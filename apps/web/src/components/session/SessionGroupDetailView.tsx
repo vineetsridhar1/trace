@@ -1108,42 +1108,42 @@ export function SessionGroupDetailView({
                 selectedSessionIsOptimistic ? () => {} : handleToggleApplicationsSidebar
               }
             />
-            {!isCanvasWorkspace || openArtifactIds.length > 0 ? (
-              <GroupTabStrip
-                sessionTabs={sessionTabs}
-                terminals={terminals}
-                pinnedTerminalIds={pinnedTerminalIds}
-                groupSessions={groupSessions}
-                selectedSessionId={selectedSession?.id ?? null}
-                activeTerminalId={activeTerminalId}
-                openFiles={openFiles}
-                activeFilePath={activeFilePath}
-                openArtifactIds={openArtifactIds}
-                activeArtifactId={activeArtifactId}
-                trafficTabOpen={trafficEndpointId !== null}
-                trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
-                onSelectSession={handleSelectSession}
-                onCloseSession={handleCloseSession}
-                canCloseSessions={sessionTabs.length > 0}
-                hiddenSessionIds={hiddenSessionIds}
-                onSelectTerminal={handleSelectTerminalTab}
-                onCloseTerminal={handleClosePinnedTerminal}
-                onRenameTerminal={renameTerminal}
-                onSelectFile={handleSelectFileTab}
-                onCloseFile={handleCloseFile}
-                onSelectArtifact={handleSelectArtifact}
-                onCloseArtifact={handleCloseArtifact}
-                onSelectTraffic={handleSelectTrafficTab}
-                onCloseTraffic={handleCloseTrafficTab}
-                onNewChat={handleNewChat}
-                canNewChat={
-                  !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
-                }
-              />
-            ) : null}
-
             <div className="flex min-h-0 flex-1 overflow-hidden">
-              <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                {!isCanvasWorkspace || openArtifactIds.length > 0 ? (
+                  <GroupTabStrip
+                    sessionTabs={sessionTabs}
+                    terminals={terminals}
+                    pinnedTerminalIds={pinnedTerminalIds}
+                    groupSessions={groupSessions}
+                    selectedSessionId={selectedSession?.id ?? null}
+                    activeTerminalId={activeTerminalId}
+                    openFiles={openFiles}
+                    activeFilePath={activeFilePath}
+                    openArtifactIds={openArtifactIds}
+                    activeArtifactId={activeArtifactId}
+                    trafficTabOpen={trafficEndpointId !== null}
+                    trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
+                    onSelectSession={handleSelectSession}
+                    onCloseSession={handleCloseSession}
+                    canCloseSessions={sessionTabs.length > 0}
+                    hiddenSessionIds={hiddenSessionIds}
+                    onSelectTerminal={handleSelectTerminalTab}
+                    onCloseTerminal={handleClosePinnedTerminal}
+                    onRenameTerminal={renameTerminal}
+                    onSelectFile={handleSelectFileTab}
+                    onCloseFile={handleCloseFile}
+                    onSelectArtifact={handleSelectArtifact}
+                    onCloseArtifact={handleCloseArtifact}
+                    onSelectTraffic={handleSelectTrafficTab}
+                    onCloseTraffic={handleCloseTrafficTab}
+                    onNewChat={handleNewChat}
+                    canNewChat={
+                      !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
+                    }
+                  />
+                ) : null}
+                <div className="min-h-0 flex-1 overflow-hidden">
                 {activeArtifactId ? (
                   <ArtifactTabContent artifactId={activeArtifactId} />
                 ) : isAppGroup ? (
@@ -1291,6 +1291,7 @@ export function SessionGroupDetailView({
                     />
                   </ArtifactOpenContext.Provider>
                 )}
+                </div>
               </div>
               <AnimatePresence initial={false}>
                 {showSidebar && !selectedSessionIsOptimistic ? (
