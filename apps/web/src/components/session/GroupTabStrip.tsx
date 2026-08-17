@@ -79,7 +79,7 @@ const tabBase =
   "inline-flex max-w-[220px] shrink-0 items-center gap-2 rounded-t-lg border border-b-0 border-border/70 px-3 py-2 text-xs shadow-sm transition-[background-color,border-color,color,box-shadow]";
 
 const tabActive =
-  "relative z-10 translate-y-px border-border bg-surface text-foreground shadow-black/20";
+  "relative z-10 border-border bg-surface text-foreground shadow-black/20 before:absolute before:inset-x-0 before:-bottom-px before:h-px before:bg-surface before:content-['']";
 
 const tabInactive =
   "border-transparent bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-hover/50 hover:text-foreground";
@@ -176,7 +176,7 @@ export function GroupTabStrip({
 
   return (
     <TooltipProvider delay={300}>
-      <div className="app-region-drag shrink-0 border-b border-border bg-surface-mid">
+      <div className="app-region-drag relative shrink-0 bg-surface-mid after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border">
         <div className="native-scrollbar overflow-x-auto">
           <div className="flex min-w-max items-end gap-1 px-2 pt-1">
             {sessionTabs.map((session) => {
