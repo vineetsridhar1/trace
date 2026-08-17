@@ -100,7 +100,11 @@ function getStoredSessionSidebarWidth(): number {
 
 function isSidebarTab(value: unknown): value is SidebarTab {
   return (
-    value === "applications" || value === "terminal" || value === "files" || value === "changes"
+    value === "applications" ||
+    value === "browser" ||
+    value === "terminal" ||
+    value === "files" ||
+    value === "changes"
   );
 }
 
@@ -606,6 +610,12 @@ export function SessionGroupDetailView({
       setSidebarTab("files");
     }
   }, [selectedSession, showApplicationsSidebarTab, sidebarTab]);
+
+  useEffect(() => {
+    if (sidebarTab === "browser" && typeof window.trace === "undefined") {
+      setSidebarTab("files");
+    }
+  }, [sidebarTab]);
 
   const selectedSessionStatus = getSessionGroupDisplayStatus(
     groupSessions.map((session) => session.sessionStatus),
@@ -1144,7 +1154,7 @@ export function SessionGroupDetailView({
                   />
                 ) : null}
                 <div className="min-h-0 flex-1 overflow-hidden">
-                {activeArtifactId ? (
+                  {activeArtifactId ? (
                   <ArtifactTabContent artifactId={activeArtifactId} />
                 ) : isAppGroup ? (
                   <ProjectPreviewWorkspace
@@ -1320,6 +1330,7 @@ export function SessionGroupDetailView({
                         filesLoading={sessionGroupFileTreeLoading}
                         filesError={sessionGroupFileTreeError}
                         canShowApplications={showApplicationsSidebarTab}
+                        canShowBrowser={typeof window.trace !== "undefined"}
                         onTabChange={handleSidebarTabChange}
                         onClose={() => setShowSidebar(false)}
                         onFileClick={handleFileClick}
