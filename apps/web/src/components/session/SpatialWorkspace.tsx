@@ -559,8 +559,8 @@ function SpatialResizeHandle({
       className={cn(
         "app-region-no-drag group absolute z-30 touch-none select-none",
         direction === "horizontal"
-          ? "inset-y-0 w-2 -translate-x-1/2 cursor-col-resize"
-          : "inset-x-0 h-2 -translate-y-1/2 cursor-row-resize",
+          ? "inset-y-0 w-2 -translate-x-1/2 cursor-pointer"
+          : "inset-x-0 h-2 -translate-y-1/2 cursor-pointer",
       )}
       style={direction === "horizontal" ? { left: `${ratio * 100}%` } : { top: `${ratio * 100}%` }}
     >
