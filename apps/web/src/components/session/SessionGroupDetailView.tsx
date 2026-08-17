@@ -488,10 +488,15 @@ export function SessionGroupDetailView({
 
   useEffect(() => {
     if (!sidebarFileOpenRequest || sidebarFileOpenRequest.sessionGroupId !== sessionGroupId) return;
-    handleFileClick(sidebarFileOpenRequest.filePath);
+    if (sidebarFileOpenRequest.kind === "diff") {
+      handleDiffFileClick(sidebarFileOpenRequest.filePath, sidebarFileOpenRequest.status ?? "modified");
+    } else {
+      handleFileClick(sidebarFileOpenRequest.filePath);
+    }
     consumeSidebarFileOpenRequest(sidebarFileOpenRequest.id);
   }, [
     consumeSidebarFileOpenRequest,
+    handleDiffFileClick,
     handleFileClick,
     sessionGroupId,
     sidebarFileOpenRequest,
@@ -1182,8 +1187,8 @@ export function SessionGroupDetailView({
             defaultModel={selectedSession?.model}
             defaultReasoningEffort={selectedSession?.reasoningEffort}
             onConvert={(surface) => {
-              if (surface === "files") {
-                openFilesSidebar(sessionGroupId);
+              if (surface === "files" || surface === "changes") {
+                openFilesSidebar(sessionGroupId, surface);
                 return;
               }
               if (surface === "terminal") {
@@ -1451,6 +1456,7 @@ export function SessionGroupDetailView({
               panelMode={panelMode}
               isFullscreen={isFullscreen}
               compactCanvasMode={isCanvasWorkspace}
+              onOpenFiles={() => openFilesSidebar(sessionGroupId)}
               onToggleFullscreen={toggleFullscreen}
             />
             <div className="min-h-0 flex-1 overflow-hidden">

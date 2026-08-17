@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Boxes,
   Cloud,
+  FolderTree,
   Monitor,
   Maximize2,
   Minimize2,
@@ -46,6 +47,7 @@ interface GroupHeaderProps {
   panelMode?: boolean;
   isFullscreen: boolean;
   compactCanvasMode?: boolean;
+  onOpenFiles: () => void;
   onToggleFullscreen: () => void;
 }
 
@@ -76,6 +78,7 @@ export function GroupHeader({
   panelMode,
   isFullscreen,
   compactCanvasMode = false,
+  onOpenFiles,
   onToggleFullscreen,
 }: GroupHeaderProps) {
   const [showArtifacts, setShowArtifacts] = useState(false);
@@ -143,6 +146,12 @@ export function GroupHeader({
       />
 
       <LinkedCheckoutActions state={linkedCheckout} />
+
+      <ActionTooltip label="Files and changes">
+        <button onClick={onOpenFiles} className={headerIconButtonClass} aria-label="Files and changes">
+          <FolderTree size={13} />
+        </button>
+      </ActionTooltip>
 
       {hasRunScripts && (
         <ActionTooltip label="Run scripts">

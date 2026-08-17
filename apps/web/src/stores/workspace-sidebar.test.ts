@@ -5,6 +5,7 @@ describe("workspace sidebar", () => {
   beforeEach(() => {
     useWorkspaceSidebarStore.setState({
       filesSessionGroupId: null,
+      view: "files",
       fileOpenRequest: null,
     });
   });
@@ -17,15 +18,37 @@ describe("workspace sidebar", () => {
     expect(useWorkspaceSidebarStore.getState().filesSessionGroupId).toBeNull();
   });
 
+  it("opens directly into changes and switches resource views", () => {
+    useWorkspaceSidebarStore.getState().openFiles("group-1", "changes");
+    expect(useWorkspaceSidebarStore.getState().view).toBe("changes");
+
+    useWorkspaceSidebarStore.getState().setView("files");
+    expect(useWorkspaceSidebarStore.getState().view).toBe("files");
+  });
+
   it("clears only the file request that was consumed", () => {
     useWorkspaceSidebarStore.getState().requestFileOpen("group-1", "src/App.tsx");
     const request = useWorkspaceSidebarStore.getState().fileOpenRequest;
-    expect(request).toMatchObject({ sessionGroupId: "group-1", filePath: "src/App.tsx" });
+    expect(request).toMatchObject({
+      sessionGroupId: "group-1",
+      filePath: "src/App.tsx",
+      kind: "file",
+    });
 
     useWorkspaceSidebarStore.getState().consumeFileOpenRequest("another-request");
     expect(useWorkspaceSidebarStore.getState().fileOpenRequest).toBe(request);
 
     useWorkspaceSidebarStore.getState().consumeFileOpenRequest(request?.id ?? "");
     expect(useWorkspaceSidebarStore.getState().fileOpenRequest).toBeNull();
+  });
+
+  it("includes diff metadata when opening a changed file", () => {
+    useWorkspaceSidebarStore.getState().requestDiffOpen("group-1", "src/App.tsx", "modified");
+    expect(useWorkspaceSidebarStore.getState().fileOpenRequest).toMatchObject({
+      sessionGroupId: "group-1",
+      filePath: "src/App.tsx",
+      kind: "diff",
+      status: "modified",
+    });
   });
 });
