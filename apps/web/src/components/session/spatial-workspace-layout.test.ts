@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   activateSpatialTab,
   applySpatialLayoutPreset,
+  balanceSpatialGroups,
   countSpatialRegions,
   createSpatialLayout,
   dockSpatialTab,
+  focusSpatialGroup,
   getSpatialAxisSpan,
   getSpatialGroups,
   getSpatialRowPositionForTab,
@@ -114,6 +116,27 @@ describe("spatial workspace layout", () => {
     layout = setSpatialSplitRatio(layout, layout.root.id, 0.7);
 
     expect(layout.root).toMatchObject({ type: "split", ratio: 0.7 });
+  });
+
+  it("focuses one horizontal panel and balances the row again", () => {
+    let layout = applySpatialLayoutPreset(
+      createSpatialLayout(["chat", "browser", "terminal"]),
+      "three-columns",
+    );
+    layout = focusSpatialGroup(layout, "region-2");
+
+    expect(layout.focusedGroupId).toBe("region-2");
+    if (layout.root.type !== "split") throw new Error("Expected a split layout");
+    expect(layout.root.ratio).toBeCloseTo(0.15);
+    if (layout.root.children[1].type !== "split") throw new Error("Expected a nested split");
+    expect(layout.root.children[1].ratio).toBeCloseTo(0.7 / 0.85);
+
+    layout = balanceSpatialGroups(layout);
+    expect(layout.focusedGroupId).toBeNull();
+    if (layout.root.type !== "split") throw new Error("Expected a split layout");
+    expect(layout.root.ratio).toBeCloseTo(1 / 3);
+    if (layout.root.children[1].type !== "split") throw new Error("Expected a nested split");
+    expect(layout.root.children[1].ratio).toBeCloseTo(0.5);
   });
 
   it("collapses an empty source region when a tab moves into another group", () => {

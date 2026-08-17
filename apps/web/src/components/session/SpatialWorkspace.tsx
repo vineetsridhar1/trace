@@ -37,10 +37,12 @@ import {
   MAX_SPATIAL_COLUMNS,
   activateSpatialTab,
   applySpatialLayoutPreset,
+  balanceSpatialGroups,
   countSpatialColumnsInRow,
   countSpatialRegions,
   createSpatialLayout,
   dockSpatialTab,
+  focusSpatialGroup,
   getSpatialAxisSpan,
   insertSpatialTab,
   isSpatialLayout,
@@ -283,6 +285,20 @@ export function SpatialWorkspace({
     setLayout((current) => setSpatialSplitRatio(current, splitId, ratio));
   }, []);
 
+  const handleFocusPanel = useCallback((groupId: string) => {
+    setLayout((current) =>
+      current.focusedGroupId ? focusSpatialGroup(current, groupId) : current,
+    );
+  }, []);
+
+  const handleTogglePanelFocus = useCallback((groupId: string) => {
+    setLayout((current) =>
+      current.focusedGroupId
+        ? balanceSpatialGroups(current)
+        : focusSpatialGroup(current, groupId),
+    );
+  }, []);
+
   const handleNewTab = useCallback(
     (groupId: string) => {
       const tabId = onNewTab(groupId);
@@ -359,12 +375,16 @@ export function SpatialWorkspace({
           tabById={tabById}
           compact={compact}
           dragging={draggedTabId !== null}
+          focusedMode={!!layout.focusedGroupId}
+          resizing={resizingSplitId !== null}
           onActivate={handleActivate}
           onCloseTab={onCloseTab}
+          onFocusPanel={handleFocusPanel}
           onNewTab={handleNewTab}
           onResizeSplit={handleResizeSplit}
           onResizeStart={setResizingSplitId}
           onResizeEnd={() => setResizingSplitId(null)}
+          onTogglePanelFocus={handleTogglePanelFocus}
           renderTab={renderTab}
         />
         {draggedTabId ? (
@@ -415,24 +435,32 @@ function SpatialNodeView({
   tabById,
   compact,
   dragging,
+  focusedMode,
+  resizing,
   onActivate,
   onCloseTab,
+  onFocusPanel,
   onNewTab,
   onResizeSplit,
   onResizeStart,
   onResizeEnd,
+  onTogglePanelFocus,
   renderTab,
 }: {
   node: SpatialNode;
   tabById: Map<string, SpatialWorkspaceTab>;
   compact: boolean;
   dragging: boolean;
+  focusedMode: boolean;
+  resizing: boolean;
   onActivate: (groupId: string, tabId: string) => void;
   onCloseTab: (tabId: string) => void;
+  onFocusPanel: (groupId: string) => void;
   onNewTab: (groupId: string) => void;
   onResizeSplit: (splitId: string, ratio: number) => void;
   onResizeStart: (splitId: string) => void;
   onResizeEnd: () => void;
+  onTogglePanelFocus: (groupId: string) => void;
   renderTab: (tabId: string, compact: boolean) => ReactNode;
 }) {
   if (node.type === "group") {
@@ -442,9 +470,12 @@ function SpatialNodeView({
         tabById={tabById}
         compact={compact}
         dragging={dragging}
+        focusedMode={focusedMode}
         onActivate={onActivate}
         onCloseTab={onCloseTab}
+        onFocusPanel={onFocusPanel}
         onNewTab={onNewTab}
+        onTogglePanelFocus={onTogglePanelFocus}
         renderTab={renderTab}
       />
     );
@@ -456,7 +487,10 @@ function SpatialNodeView({
 
   return (
     <div
-      className="relative grid min-h-0 min-w-0 flex-1 gap-px bg-border"
+      className={cn(
+        "relative grid min-h-0 min-w-0 flex-1 gap-px bg-border",
+        !resizing && "transition-[grid-template-columns,grid-template-rows] duration-200 ease-out",
+      )}
       style={
         node.direction === "horizontal"
           ? { gridTemplateColumns: `minmax(0, ${ratio}fr) minmax(0, ${1 - ratio}fr)` }
@@ -470,12 +504,16 @@ function SpatialNodeView({
           tabById={tabById}
           compact={compact}
           dragging={dragging}
+          focusedMode={focusedMode}
+          resizing={resizing}
           onActivate={onActivate}
           onCloseTab={onCloseTab}
+          onFocusPanel={onFocusPanel}
           onNewTab={onNewTab}
           onResizeSplit={onResizeSplit}
           onResizeStart={onResizeStart}
           onResizeEnd={onResizeEnd}
+          onTogglePanelFocus={onTogglePanelFocus}
           renderTab={renderTab}
         />
       ))}
@@ -579,18 +617,24 @@ function SpatialRegion({
   tabById,
   compact,
   dragging,
+  focusedMode,
   onActivate,
   onCloseTab,
+  onFocusPanel,
   onNewTab,
+  onTogglePanelFocus,
   renderTab,
 }: {
   group: SpatialTabGroup;
   tabById: Map<string, SpatialWorkspaceTab>;
   compact: boolean;
   dragging: boolean;
+  focusedMode: boolean;
   onActivate: (groupId: string, tabId: string) => void;
   onCloseTab: (tabId: string) => void;
+  onFocusPanel: (groupId: string) => void;
   onNewTab: (groupId: string) => void;
+  onTogglePanelFocus: (groupId: string) => void;
   renderTab: (tabId: string, compact: boolean) => ReactNode;
 }) {
   const { setNodeRef: setRailNodeRef, isOver: isRailOver } = useDroppable({
@@ -606,6 +650,7 @@ function SpatialRegion({
     <section
       className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
       aria-label="Workspace region"
+      onPointerDownCapture={focusedMode ? () => onFocusPanel(group.id) : undefined}
     >
       <div
         className={cn(
@@ -633,6 +678,7 @@ function SpatialRegion({
                 compact={compact}
                 onActivate={() => onActivate(group.id, tabId)}
                 onClose={() => onCloseTab(tabId)}
+                onDoubleClick={() => onTogglePanelFocus(group.id)}
               />
             );
           })}
@@ -666,6 +712,7 @@ function SpatialTabButton({
   compact,
   onActivate,
   onClose,
+  onDoubleClick,
 }: {
   tab: SpatialWorkspaceTab;
   groupId: string;
@@ -674,6 +721,7 @@ function SpatialTabButton({
   compact: boolean;
   onActivate: () => void;
   onClose: () => void;
+  onDoubleClick: () => void;
 }) {
   const {
     attributes,
@@ -715,6 +763,7 @@ function SpatialTabButton({
         <button
           type="button"
           onClick={onActivate}
+          onDoubleClick={onDoubleClick}
           className="flex min-w-0 flex-1 cursor-grab items-center gap-2 overflow-hidden py-2 pl-3 active:cursor-grabbing"
           title={tab.label}
           aria-current={active ? "page" : undefined}
