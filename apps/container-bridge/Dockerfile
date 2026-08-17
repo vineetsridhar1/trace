@@ -90,9 +90,11 @@ RUN mkdir -p /home/coder/.ssh && chmod 700 /home/coder/.ssh
 
 # Fail the image build if system Chromium, the pinned CLI, or FFmpeg recording
 # cannot work together without downloading anything during an agent session.
-# Depot BuildKit cannot create Chromium's sandbox namespaces, so this image-build
-# smoke alone uses a dedicated no-sandbox config. The shipped runtime config keeps
-# Chromium's sandbox enabled and the image explicitly installs chromium-sandbox.
+# Neither Depot BuildKit nor the PSS-restricted runtime pod can give Chromium a
+# sandbox: the pod sets allowPrivilegeEscalation=false and drops ALL capabilities
+# (so the setuid helper cannot elevate) and exposes user.max_user_namespaces=0
+# (so the namespace sandbox cannot start either). Both configs therefore pass
+# --no-sandbox; the container itself is the isolation boundary.
 RUN set -eu; \
     smoke_dir=/tmp/trace-playwright-image-smoke; \
     mkdir -p "$smoke_dir"; \

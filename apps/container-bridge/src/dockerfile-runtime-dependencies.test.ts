@@ -93,7 +93,10 @@ describe("container runtime dependencies", () => {
     expect(config.browser.launchOptions).toEqual(
       expect.objectContaining({ executablePath: "/usr/bin/chromium", headless: true }),
     );
-    expect(config.browser.launchOptions.args).not.toContain("--no-sandbox");
+    // The runtime pod drops ALL capabilities, sets allowPrivilegeEscalation=false,
+    // and exposes user.max_user_namespaces=0, so neither the setuid nor the
+    // namespace sandbox can start and Chromium aborts before opening a page.
+    expect(config.browser.launchOptions.args).toContain("--no-sandbox");
     expect(smokeConfig.browser.launchOptions.args).toContain("--no-sandbox");
     expect(config.allowUnrestrictedFileAccess).toBe(false);
   });
