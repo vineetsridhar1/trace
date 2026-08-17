@@ -17,7 +17,7 @@ function terminalEvent(eventType: Event["eventType"], payload: Record<string, un
 
 describe("terminal lifecycle event reconciliation", () => {
   beforeEach(() => {
-    useTerminalStore.setState({ terminals: {} });
+    useTerminalStore.setState({ terminals: {}, pinnedTerminalIds: {} });
     useUIStore.setState({ activeTerminalId: null });
   });
 

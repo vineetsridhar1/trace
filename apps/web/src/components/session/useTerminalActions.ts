@@ -1,10 +1,6 @@
 import { useCallback } from "react";
 import { client } from "../../lib/urql";
-import {
-  CREATE_TERMINAL_MUTATION,
-  DESTROY_TERMINAL_MUTATION,
-  SESSION_TERMINALS_QUERY,
-} from "@trace/client-core";
+import { CREATE_TERMINAL_MUTATION, SESSION_TERMINALS_QUERY } from "@trace/client-core";
 import { useTerminalStore } from "../../stores/terminal";
 import { useUIStore } from "../../stores/ui";
 import type { Terminal } from "@trace/gql";
@@ -15,10 +11,10 @@ interface TerminalActionsArgs {
 }
 
 export function useTerminalActions({ sessionGroupId, terminals }: TerminalActionsArgs) {
-  const activeTerminalId = useUIStore((s) => s.activeTerminalId);
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const setActiveTerminalId = useUIStore((s) => s.setActiveTerminalId);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
+  const pinTerminal = useTerminalStore((s) => s.pinTerminal);
 
   const ensureSessionTerminals = useCallback(
     async (sessionId: string) => {
@@ -47,6 +43,7 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
       if (!session || session._optimistic || !terminalAllowed) return;
       const existing = await ensureSessionTerminals(session.id);
       if (existing.length > 0) {
+        pinTerminal(existing[0].id);
         setActiveSessionId(session.id);
         setActiveTerminalId(existing[0].id);
         return;
@@ -58,11 +55,19 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
       if (result.data?.createTerminal) {
         const { id } = result.data.createTerminal as { id: string };
         addTerminal(id, session.id, sessionGroupId, "connecting");
+        pinTerminal(id);
         setActiveSessionId(session.id);
         setActiveTerminalId(id);
       }
     },
-    [addTerminal, ensureSessionTerminals, sessionGroupId, setActiveSessionId, setActiveTerminalId],
+    [
+      addTerminal,
+      ensureSessionTerminals,
+      pinTerminal,
+      sessionGroupId,
+      setActiveSessionId,
+      setActiveTerminalId,
+    ],
   );
 
   const handleCreateTerminal = useCallback(
@@ -74,20 +79,11 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
       if (!result.data?.createTerminal) return;
       const { id } = result.data.createTerminal as { id: string };
       addTerminal(id, session.id, sessionGroupId, "connecting");
+      pinTerminal(id);
       setActiveSessionId(session.id);
       setActiveTerminalId(id);
     },
-    [addTerminal, sessionGroupId, setActiveSessionId, setActiveTerminalId],
-  );
-
-  const handleCloseTerminal = useCallback(
-    async (terminalId: string) => {
-      if (activeTerminalId === terminalId) {
-        setActiveTerminalId(null);
-      }
-      await client.mutation(DESTROY_TERMINAL_MUTATION, { terminalId }).toPromise();
-    },
-    [activeTerminalId, setActiveTerminalId],
+    [addTerminal, pinTerminal, sessionGroupId, setActiveSessionId, setActiveTerminalId],
   );
 
   const handleSelectTerminal = useCallback(
@@ -101,7 +97,6 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
   return {
     handleOpenTerminal,
     handleCreateTerminal,
-    handleCloseTerminal,
     handleSelectTerminal,
   };
 }

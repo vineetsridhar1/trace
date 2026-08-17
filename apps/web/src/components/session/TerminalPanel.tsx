@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, X, TerminalSquare } from "lucide-react";
+import { Pin, Plus, X, TerminalSquare } from "lucide-react";
 import {
   useSessionGroupTerminals,
   useTerminalStore,
@@ -15,6 +15,7 @@ import {
 } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import type { Terminal } from "@trace/gql";
+import { useUIStore } from "../../stores/ui";
 
 export function TerminalPanel({
   sessionId,
@@ -32,6 +33,12 @@ export function TerminalPanel({
   const removeTerminal = useTerminalStore(
     (s: { removeTerminal: (id: string) => void }) => s.removeTerminal,
   );
+  const pinnedTerminalIds = useTerminalStore((s) => s.pinnedTerminalIds);
+  const pinTerminal = useTerminalStore((s) => s.pinTerminal);
+  const unpinTerminal = useTerminalStore((s) => s.unpinTerminal);
+  const mainActiveTerminalId = useUIStore((s) => s.activeTerminalId);
+  const setMainActiveSessionId = useUIStore((s) => s.setActiveSessionId);
+  const setMainActiveTerminalId = useUIStore((s) => s.setActiveTerminalId);
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
   const groupTerminals = useSessionGroupTerminals(sessionGroupId ?? "");
 
@@ -80,6 +87,28 @@ export function TerminalPanel({
       }
     },
     [activeTerminalId, removeTerminal, terminals],
+  );
+
+  const togglePinnedTerminal = useCallback(
+    (terminal: TerminalEntry) => {
+      if (pinnedTerminalIds[terminal.id]) {
+        unpinTerminal(terminal.id);
+        if (mainActiveTerminalId === terminal.id) setMainActiveTerminalId(null);
+        return;
+      }
+
+      pinTerminal(terminal.id);
+      setMainActiveSessionId(terminal.sessionId);
+      setMainActiveTerminalId(terminal.id);
+    },
+    [
+      mainActiveTerminalId,
+      pinTerminal,
+      pinnedTerminalIds,
+      setMainActiveSessionId,
+      setMainActiveTerminalId,
+      unpinTerminal,
+    ],
   );
 
   const hasTriggeredInit = useRef(false);
@@ -139,6 +168,23 @@ export function TerminalPanel({
               {terminal.status === "exited" && (
                 <span className="text-[10px] text-muted-foreground">(exited)</span>
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => togglePinnedTerminal(terminal)}
+              className={cn(
+                "flex h-5 w-5 items-center justify-center rounded transition-colors",
+                pinnedTerminalIds[terminal.id]
+                  ? "text-foreground"
+                  : "text-muted-foreground opacity-50 hover:opacity-100",
+              )}
+              title={pinnedTerminalIds[terminal.id] ? "Unpin from main tabs" : "Pin to main tabs"}
+              aria-label={
+                pinnedTerminalIds[terminal.id] ? "Unpin from main tabs" : "Pin to main tabs"
+              }
+              aria-pressed={Boolean(pinnedTerminalIds[terminal.id])}
+            >
+              <Pin size={11} className={pinnedTerminalIds[terminal.id] ? "fill-current" : ""} />
             </button>
             <button
               type="button"

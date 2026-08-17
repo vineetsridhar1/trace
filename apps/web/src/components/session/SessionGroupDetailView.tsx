@@ -352,6 +352,8 @@ export function SessionGroupDetailView({
     (s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany,
   );
   const terminals = useSessionGroupTerminals(sessionGroupId);
+  const pinnedTerminalIds = useTerminalStore((s) => s.pinnedTerminalIds);
+  const unpinTerminal = useTerminalStore((s) => s.unpinTerminal);
 
   const [showSidebar, setShowSidebar] = useState(
     () => getStoredSessionSidebarState(sessionGroupId).open,
@@ -412,11 +414,7 @@ export function SessionGroupDetailView({
       });
   }, [sessionGroupId, setHiddenSessionTabs]);
 
-  const {
-    handleOpenTerminal,
-    handleCloseTerminal,
-    handleSelectTerminal: selectTerminal,
-  } = useTerminalActions({
+  const { handleOpenTerminal, handleSelectTerminal: selectTerminal } = useTerminalActions({
     sessionGroupId,
     terminals,
   });
@@ -724,6 +722,14 @@ export function SessionGroupDetailView({
     [handleSelectFile, setActiveArtifactId],
   );
 
+  const handleClosePinnedTerminal = useCallback(
+    (terminalId: string) => {
+      unpinTerminal(terminalId);
+      if (activeTerminalId === terminalId) setActiveTerminalId(null);
+    },
+    [activeTerminalId, setActiveTerminalId, unpinTerminal],
+  );
+
   const handleToggleSidebar = useCallback(() => {
     setShowSidebar((open) => !open);
   }, []);
@@ -894,7 +900,7 @@ export function SessionGroupDetailView({
       return;
     }
     if (activeTerminalId) {
-      handleCloseTerminal(activeTerminalId);
+      handleClosePinnedTerminal(activeTerminalId);
       return;
     }
     if (activeSessionId) {
@@ -912,7 +918,7 @@ export function SessionGroupDetailView({
     handleCloseTrafficTab,
     handleCloseArtifact,
     handleCloseFile,
-    handleCloseTerminal,
+    handleClosePinnedTerminal,
     setActiveSessionGroupId,
   ]);
 
@@ -1106,6 +1112,7 @@ export function SessionGroupDetailView({
               <GroupTabStrip
                 sessionTabs={sessionTabs}
                 terminals={terminals}
+                pinnedTerminalIds={pinnedTerminalIds}
                 groupSessions={groupSessions}
                 selectedSessionId={selectedSession?.id ?? null}
                 activeTerminalId={activeTerminalId}
@@ -1120,7 +1127,7 @@ export function SessionGroupDetailView({
                 canCloseSessions={sessionTabs.length > 0}
                 hiddenSessionIds={hiddenSessionIds}
                 onSelectTerminal={handleSelectTerminalTab}
-                onCloseTerminal={handleCloseTerminal}
+                onCloseTerminal={handleClosePinnedTerminal}
                 onRenameTerminal={renameTerminal}
                 onSelectFile={handleSelectFileTab}
                 onCloseFile={handleCloseFile}

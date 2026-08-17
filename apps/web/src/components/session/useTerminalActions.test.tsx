@@ -35,7 +35,7 @@ describe("useTerminalActions", () => {
     });
     vi.stubGlobal("history", { pushState: vi.fn(), replaceState: vi.fn() });
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-    useTerminalStore.setState({ terminals: {} });
+    useTerminalStore.setState({ terminals: {}, pinnedTerminalIds: {} });
     useUIStore.setState({
       activeSessionGroupId: "group-1",
       activeSessionId: null,
@@ -66,5 +66,6 @@ describe("useTerminalActions", () => {
     });
     expect(useUIStore.getState().activeSessionId).toBe("session-1");
     expect(useUIStore.getState().activeTerminalId).toBe("terminal-1");
+    expect(useTerminalStore.getState().pinnedTerminalIds["terminal-1"]).toBe(true);
   });
 });

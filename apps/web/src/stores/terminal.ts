@@ -21,6 +21,7 @@ interface AddTerminalOptions {
 
 interface TerminalState {
   terminals: Record<string, TerminalEntry>;
+  pinnedTerminalIds: Record<string, boolean>;
   addTerminal: (
     id: string,
     sessionId: string,
@@ -30,6 +31,8 @@ interface TerminalState {
   ) => void;
   setTerminalStatus: (id: string, status: TerminalStatus) => void;
   renameTerminal: (id: string, name: string) => void;
+  pinTerminal: (id: string) => void;
+  unpinTerminal: (id: string) => void;
   removeTerminal: (id: string) => void;
 }
 
@@ -37,6 +40,7 @@ type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
 
 export const useTerminalStore = create<TerminalState>((set: SetState<TerminalState>) => ({
   terminals: {},
+  pinnedTerminalIds: {},
 
   addTerminal: (
     id: string,
@@ -75,10 +79,23 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
       return { terminals: { ...state.terminals, [id]: { ...entry, customName } } };
     }),
 
+  pinTerminal: (id: string) =>
+    set((state: TerminalState) => {
+      if (!state.terminals[id]) return {};
+      return { pinnedTerminalIds: { ...state.pinnedTerminalIds, [id]: true } };
+    }),
+
+  unpinTerminal: (id: string) =>
+    set((state: TerminalState) => {
+      const { [id]: _, ...rest } = state.pinnedTerminalIds;
+      return { pinnedTerminalIds: rest };
+    }),
+
   removeTerminal: (id: string) =>
     set((state: TerminalState) => {
       const { [id]: _, ...rest } = state.terminals;
-      return { terminals: rest };
+      const { [id]: _pinned, ...remainingPinnedIds } = state.pinnedTerminalIds;
+      return { terminals: rest, pinnedTerminalIds: remainingPinnedIds };
     }),
 }));
 

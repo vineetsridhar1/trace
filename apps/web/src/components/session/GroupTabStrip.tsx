@@ -31,6 +31,7 @@ export interface OpenFileTab {
 interface GroupTabStripProps {
   sessionTabs: SessionEntity[];
   terminals: TerminalEntry[];
+  pinnedTerminalIds: Readonly<Record<string, boolean>>;
   groupSessions: SessionEntity[];
   selectedSessionId: string | null;
   activeTerminalId: string | null;
@@ -69,6 +70,7 @@ const tabInactive =
 export function GroupTabStrip({
   sessionTabs,
   terminals,
+  pinnedTerminalIds,
   groupSessions,
   selectedSessionId,
   activeTerminalId,
@@ -216,6 +218,7 @@ export function GroupTabStrip({
             })}
 
             {terminals.map((terminal, index) => {
+              if (!pinnedTerminalIds[terminal.id]) return null;
               const session = sessionById.get(terminal.sessionId);
               const defaultLabel = session
                 ? `Terminal ${index + 1} · ${session.name}`
