@@ -80,6 +80,8 @@ interface TabRailDropData {
   targetTabId?: string;
 }
 
+type HorizontalDragDirection = "left" | "right" | null;
+
 const edgeLabels: Record<SpatialEdge, string> = {
   left: "Add column on left",
   right: "Add column on right",
@@ -92,6 +94,7 @@ const tabRailSpring = { type: "spring", stiffness: 520, damping: 42, mass: 0.7 }
 const centerDragOverlayOnCursor: Modifier = ({
   activatorEvent,
   overlayNodeRect,
+  over,
   transform,
 }) => {
   if (!activatorEvent || !overlayNodeRect) return transform;
@@ -102,6 +105,12 @@ const centerDragOverlayOnCursor: Modifier = ({
   ) {
     return transform;
   }
+  const pointerCenterY =
+    transform.y + activatorEvent.clientY - overlayNodeRect.top;
+  const railCenterY =
+    over && isTabRailDropData(over.data.current)
+      ? over.rect.top + over.rect.height / 2 - overlayNodeRect.top
+      : pointerCenterY;
   return {
     ...transform,
     x:
@@ -109,30 +118,41 @@ const centerDragOverlayOnCursor: Modifier = ({
       activatorEvent.clientX -
       overlayNodeRect.left -
       overlayNodeRect.width / 2,
-    y:
-      transform.y +
-      activatorEvent.clientY -
-      overlayNodeRect.top -
-      overlayNodeRect.height / 2,
+    y: railCenterY - overlayNodeRect.height / 2,
   };
 };
 
 const dragOverlayModifiers = [centerDragOverlayOnCursor];
 
-const spatialCollisionDetection: CollisionDetection = (args) => {
+function spatialCollisionDetection(
+  args: Parameters<CollisionDetection>[0],
+  direction: HorizontalDragDirection,
+) {
   const collisions = pointerWithin(args);
-  const activeTabTargetId = `tab-target:${String(args.active.id)}`;
-  const tabCollision = collisions.find(
-    (collision) =>
-      String(collision.id).startsWith("tab-target:") &&
-      String(collision.id) !== activeTabTargetId,
+  if (direction && args.pointerCoordinates) {
+    const draggedTabWidth = args.active.rect.current.initial?.width ?? 0;
+    const leadingEdgeX =
+      args.pointerCoordinates.x + (direction === "right" ? draggedTabWidth / 2 : -draggedTabWidth / 2);
+    const leadingEdgeCollisions = pointerWithin({
+      ...args,
+      pointerCoordinates: { x: leadingEdgeX, y: args.pointerCoordinates.y },
+    });
+    const leadingTabCollision = leadingEdgeCollisions.find(
+      (collision) =>
+        String(collision.id).startsWith("tab-target:") &&
+        String(collision.id) !== `tab-target:${String(args.active.id)}`,
+    );
+    if (leadingTabCollision) return [leadingTabCollision];
+  }
+  const tabCollision = collisions.find((collision) =>
+    String(collision.id).startsWith("tab-target:"),
   );
   if (tabCollision) return [tabCollision];
   const railCollision = collisions.find((collision) => String(collision.id).startsWith("tab-rail:"));
   if (railCollision) return [railCollision];
   const snapCollision = collisions.find((collision) => String(collision.id).startsWith("snap:"));
   return snapCollision ? [snapCollision] : collisions;
-};
+}
 
 export function SpatialWorkspace({
   persistenceKey,
@@ -150,6 +170,12 @@ export function SpatialWorkspace({
   const [layout, setLayout] = useState(() => readLayout(persistenceKey, tabIds, preferredActiveTabId));
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
   const dragStartLayoutRef = useRef<SpatialLayout | null>(null);
+  const lastDragPointerXRef = useRef<number | null>(null);
+  const dragDirectionRef = useRef<HorizontalDragDirection>(null);
+  const collisionDetection = useCallback<CollisionDetection>(
+    (args) => spatialCollisionDetection(args, dragDirectionRef.current),
+    [],
+  );
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -191,7 +217,15 @@ export function SpatialWorkspace({
   );
 
   const handleDragMove = useCallback((event: DragMoveEvent) => {
-    const move = getTabRailMove(event);
+    const pointerX = getDragPointerX(event);
+    if (pointerX !== null) {
+      const previousPointerX = lastDragPointerXRef.current;
+      if (previousPointerX !== null && Math.abs(pointerX - previousPointerX) >= 1) {
+        dragDirectionRef.current = pointerX > previousPointerX ? "right" : "left";
+      }
+      lastDragPointerXRef.current = pointerX;
+    }
+    const move = getTabRailMove(event, dragDirectionRef.current);
     if (!move) return;
     setLayout((current) =>
       moveSpatialTab(current, move.tabId, move.groupId, move.targetIndex, true),
@@ -200,6 +234,9 @@ export function SpatialWorkspace({
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setDraggedTabId(null);
+    const dragDirection = dragDirectionRef.current;
+    dragDirectionRef.current = null;
+    lastDragPointerXRef.current = null;
     const tabId = String(event.active.id);
     const over = event.over;
     if (!over) {
@@ -215,7 +252,7 @@ export function SpatialWorkspace({
       dragStartLayoutRef.current = null;
       return;
     }
-    const move = getTabRailMove(event);
+    const move = getTabRailMove(event, dragDirection);
     if (move) {
       setLayout((current) =>
         moveSpatialTab(current, move.tabId, move.groupId, move.targetIndex),
@@ -228,6 +265,8 @@ export function SpatialWorkspace({
 
   const handleDragCancel = useCallback(() => {
     setDraggedTabId(null);
+    dragDirectionRef.current = null;
+    lastDragPointerXRef.current = null;
     if (dragStartLayoutRef.current) setLayout(dragStartLayoutRef.current);
     dragStartLayoutRef.current = null;
   }, []);
@@ -250,9 +289,11 @@ export function SpatialWorkspace({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={spatialCollisionDetection}
-      onDragStart={({ active }) => {
+      collisionDetection={collisionDetection}
+      onDragStart={({ active, activatorEvent }) => {
         dragStartLayoutRef.current = layout;
+        dragDirectionRef.current = null;
+        lastDragPointerXRef.current = getActivatorClientX(activatorEvent);
         setDraggedTabId(String(active.id));
       }}
       onDragMove={handleDragMove}
@@ -738,7 +779,10 @@ function isTabRailDropData(value: unknown): value is TabRailDropData {
   );
 }
 
-function getTabRailMove(event: DragMoveEvent | DragOverEvent | DragEndEvent) {
+function getTabRailMove(
+  event: DragMoveEvent | DragOverEvent | DragEndEvent,
+  direction: HorizontalDragDirection,
+) {
   const over = event.over;
   if (!over) return null;
   const dropData: unknown = over.data.current;
@@ -749,15 +793,27 @@ function getTabRailMove(event: DragMoveEvent | DragOverEvent | DragEndEvent) {
   let targetIndex = dropData.targetIndex;
   if (dropData.targetTabId) {
     const pointerX = getDragPointerX(event);
-    if (pointerX !== null && pointerX > over.rect.left + over.rect.width / 2) {
-      targetIndex += 1;
+    if (pointerX !== null) {
+      const draggedTabWidth = event.active.rect.current.initial?.width ?? 0;
+      const targetMidpoint = over.rect.left + over.rect.width / 2;
+      const insertAfter =
+        direction === "right"
+          ? pointerX + draggedTabWidth / 2 > targetMidpoint
+          : direction === "left"
+            ? pointerX - draggedTabWidth / 2 >= targetMidpoint
+            : pointerX > targetMidpoint;
+      if (insertAfter) targetIndex += 1;
     }
   }
   return { tabId, groupId: dropData.groupId, targetIndex };
 }
 
 function getDragPointerX(event: DragMoveEvent | DragOverEvent | DragEndEvent) {
-  const activatorEvent = event.activatorEvent;
-  if (!("clientX" in activatorEvent) || typeof activatorEvent.clientX !== "number") return null;
-  return activatorEvent.clientX + event.delta.x;
+  const activatorClientX = getActivatorClientX(event.activatorEvent);
+  return activatorClientX === null ? null : activatorClientX + event.delta.x;
+}
+
+function getActivatorClientX(event: Event) {
+  if (!("clientX" in event) || typeof event.clientX !== "number") return null;
+  return event.clientX;
 }
