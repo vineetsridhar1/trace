@@ -4034,6 +4034,12 @@ export class SessionService {
       "runtimeInstanceId" in sharedConnection
         ? ((sharedConnection as { runtimeInstanceId?: string | null }).runtimeInstanceId ?? null)
         : null;
+    // Provisioned (cloud) runtimes carry a runtimeInstanceId too, so the id
+    // alone does not mean the group is bound to a local bridge.
+    const sharedRuntimeIsProvisioned =
+      !!sharedConnection &&
+      typeof sharedConnection === "object" &&
+      (sharedConnection as { adapterType?: string | null }).adapterType === "provisioned";
 
     const sourceProjectIds =
       sourceSession?.projects.map((project: { projectId: string }) => project.projectId) ?? [];
@@ -4078,7 +4084,7 @@ export class SessionService {
     // is already bound, reject any request that would place the new session on a
     // different runtime — every session in a group must share the same bridge.
     if (existingGroup?.id) {
-      if (sharedRuntimeInstanceId) {
+      if (sharedRuntimeInstanceId && !sharedRuntimeIsProvisioned) {
         const conflictsWithLocalRuntime =
           (!!input.runtimeInstanceId && input.runtimeInstanceId !== sharedRuntimeInstanceId) ||
           input.hosting === "cloud" ||
@@ -4086,8 +4092,10 @@ export class SessionService {
         if (conflictsWithLocalRuntime) {
           throw new Error("This session group is already bound to a different runtime");
         }
-      } else if (sharedConnectionHasRuntimeSelection) {
-        const conflictsWithCloudRuntime = !!input.runtimeInstanceId || input.hosting === "local";
+      } else if (sharedRuntimeInstanceId || sharedConnectionHasRuntimeSelection) {
+        const conflictsWithCloudRuntime =
+          (!!input.runtimeInstanceId && input.runtimeInstanceId !== sharedRuntimeInstanceId) ||
+          input.hosting === "local";
         if (conflictsWithCloudRuntime) {
           throw new Error("This session group is already bound to a different runtime");
         }
@@ -4184,8 +4192,18 @@ export class SessionService {
           ? "cloud"
           : null;
 
+    // Joining a group that already owns a runtime: that runtime decides hosting,
+    // so a caller that omits `hosting` lands on the same instance as its siblings.
+    const sharedBindingHosting = !existingGroup?.id
+      ? null
+      : sharedRuntimeIsProvisioned
+        ? "cloud"
+        : sharedRuntimeInstanceId
+          ? (runtimeMetadata(sharedRuntimeInstanceId, input.organizationId)?.hostingMode ?? null)
+          : null;
+
     let hosting =
-      (resolvedKind === "app" ? "cloud" : input.hosting) ??
+      (resolvedKind === "app" ? "cloud" : (input.hosting ?? sharedBindingHosting)) ??
       (deferRuntimeSelection ? "local" : environmentHosting) ??
       sourceSession?.hosting ??
       (isLocalMode() ? "local" : "cloud");

@@ -3332,6 +3332,166 @@ describe("SessionService", () => {
       );
     });
 
+    it("joins a group already bound to a provisioned runtime when cloud hosting is requested", async () => {
+      const groupConnection = {
+        state: "connected",
+        adapterType: "provisioned",
+        environmentId: "env-default",
+        runtimeInstanceId: "runtime_cloud-1",
+        providerRuntimeId: "machine-1",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+      };
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
+        makeSessionGroup({
+          workdir: "/tmp/trace/shared",
+          repoId: "repo-1",
+          branch: "feature/shared",
+          connection: groupConnection,
+        }),
+      );
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      prismaMock.session.create.mockResolvedValueOnce(
+        makeSession({
+          id: "session-2",
+          workdir: "/tmp/trace/shared",
+          branch: "feature/shared",
+          connection: groupConnection,
+        }),
+      );
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        hosting: "cloud",
+        sessionGroupId: "group-1",
+      } as unknown as StartSessionServiceInput);
+
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            hosting: "cloud",
+            sessionGroupId: "group-1",
+            connection: groupConnection,
+          }),
+        }),
+      );
+    });
+
+    it("defaults to the group's cloud runtime when no hosting is requested", async () => {
+      const groupConnection = {
+        state: "connected",
+        adapterType: "provisioned",
+        environmentId: "env-default",
+        runtimeInstanceId: "runtime_cloud-1",
+        providerRuntimeId: "machine-1",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+      };
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
+        makeSessionGroup({
+          workdir: "/tmp/trace/shared",
+          repoId: "repo-1",
+          branch: "feature/shared",
+          connection: groupConnection,
+        }),
+      );
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      prismaMock.session.create.mockResolvedValueOnce(
+        makeSession({ id: "session-2", connection: groupConnection }),
+      );
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        sessionGroupId: "group-1",
+      } as unknown as StartSessionServiceInput);
+
+      expect(prismaMock.agentEnvironment.findFirst).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            hosting: "cloud",
+            sessionGroupId: "group-1",
+            connection: groupConnection,
+          }),
+        }),
+      );
+    });
+
+    it("rejects local hosting for a group already bound to a provisioned runtime", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
+        makeSessionGroup({
+          workdir: "/tmp/trace/shared",
+          connection: {
+            state: "connected",
+            adapterType: "provisioned",
+            environmentId: "env-default",
+            runtimeInstanceId: "runtime_cloud-1",
+          },
+        }),
+      );
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          tool: "claude_code",
+          hosting: "local",
+          sessionGroupId: "group-1",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("This session group is already bound to a different runtime");
+    });
+
+    it("rejects cloud hosting for a group already bound to a local runtime", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
+        makeSessionGroup({
+          workdir: "/tmp/trace/shared",
+          connection: {
+            state: "connected",
+            adapterType: "local",
+            runtimeInstanceId: "runtime-1",
+          },
+        }),
+      );
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          tool: "claude_code",
+          hosting: "cloud",
+          sessionGroupId: "group-1",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("This session group is already bound to a different runtime");
+    });
+
     it("forks a visible session into a new owned group and records source group ancestry", async () => {
       const sourceGroup = makeSessionGroup({
         id: "source-group",
