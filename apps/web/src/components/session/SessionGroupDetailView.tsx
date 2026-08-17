@@ -27,6 +27,7 @@ import { useEntityField, useEntityStore } from "@trace/client-core";
 import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
 import { useUIStore, type UIState } from "../../stores/ui";
+import { useWorkspaceSidebarStore } from "../../stores/workspace-sidebar";
 import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-core";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
@@ -363,6 +364,11 @@ export function SessionGroupDetailView({
     (s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany,
   );
   const terminals = useSessionGroupTerminals(sessionGroupId);
+  const openFilesSidebar = useWorkspaceSidebarStore((state) => state.openFiles);
+  const sidebarFileOpenRequest = useWorkspaceSidebarStore((state) => state.fileOpenRequest);
+  const consumeSidebarFileOpenRequest = useWorkspaceSidebarStore(
+    (state) => state.consumeFileOpenRequest,
+  );
 
   const [trafficEndpointId, setTrafficEndpointId] = useState<string | null>(null);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<"session" | "traffic">("session");
@@ -479,6 +485,17 @@ export function SessionGroupDetailView({
     handleSelectFile,
     handleCloseFile,
   } = useFileActions();
+
+  useEffect(() => {
+    if (!sidebarFileOpenRequest || sidebarFileOpenRequest.sessionGroupId !== sessionGroupId) return;
+    handleFileClick(sidebarFileOpenRequest.filePath);
+    consumeSidebarFileOpenRequest(sidebarFileOpenRequest.id);
+  }, [
+    consumeSidebarFileOpenRequest,
+    handleFileClick,
+    sessionGroupId,
+    sidebarFileOpenRequest,
+  ]);
 
   const handleCloseArtifact = useCallback(
     (artifactId: string) => closeArtifactTab(sessionGroupId, artifactId),
@@ -1165,6 +1182,10 @@ export function SessionGroupDetailView({
             defaultModel={selectedSession?.model}
             defaultReasoningEffort={selectedSession?.reasoningEffort}
             onConvert={(surface) => {
+              if (surface === "files") {
+                openFilesSidebar(sessionGroupId);
+                return;
+              }
               if (surface === "terminal") {
                 if (!selectedSession || !terminalAllowed) return;
                 void handleCreateTerminal(selectedSession, terminalAllowed)
@@ -1369,6 +1390,7 @@ export function SessionGroupDetailView({
       isGeneratedProjectGroup,
       loadDirectory,
       openFiles,
+      openFilesSidebar,
       refreshBridgeAccess,
       refreshTree,
       floatingProjectChat,
