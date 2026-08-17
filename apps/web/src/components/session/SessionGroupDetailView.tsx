@@ -59,6 +59,7 @@ import { ArtifactOpenContext } from "../artifact/ArtifactOpenContext";
 import { ArtifactTabContent } from "../artifact/ArtifactTabContent";
 
 const SESSION_SIDEBAR_WIDTH_KEY = "trace:session-workbench-sidebar-width";
+const SESSION_SIDEBAR_STATE_KEY_PREFIX = "trace:session-workbench-sidebar-state:";
 const DEFAULT_SESSION_SIDEBAR_WIDTH = 404;
 const MIN_SESSION_SIDEBAR_WIDTH = 320;
 const MAX_SESSION_SIDEBAR_WIDTH = 560;
@@ -95,6 +96,36 @@ function getStoredSessionSidebarWidth(): number {
 
   const parsed = parseInt(stored, 10);
   return Number.isFinite(parsed) ? clampSessionSidebarWidth(parsed) : DEFAULT_SESSION_SIDEBAR_WIDTH;
+}
+
+function isSidebarTab(value: unknown): value is SidebarTab {
+  return (
+    value === "applications" || value === "terminal" || value === "files" || value === "changes"
+  );
+}
+
+function getStoredSessionSidebarState(sessionGroupId: string): {
+  open: boolean;
+  tab: SidebarTab;
+} {
+  const fallback = { open: false, tab: "files" as const };
+  if (typeof window === "undefined") return fallback;
+
+  const stored = localStorage.getItem(`${SESSION_SIDEBAR_STATE_KEY_PREFIX}${sessionGroupId}`);
+  if (!stored) return fallback;
+
+  try {
+    const parsed: unknown = JSON.parse(stored);
+    if (!parsed || typeof parsed !== "object") return fallback;
+
+    const state = parsed as Record<string, unknown>;
+    return {
+      open: typeof state.open === "boolean" ? state.open : fallback.open,
+      tab: isSidebarTab(state.tab) ? state.tab : fallback.tab,
+    };
+  } catch {
+    return fallback;
+  }
 }
 
 const SESSION_GROUP_DETAIL_QUERY = gql`
@@ -322,8 +353,12 @@ export function SessionGroupDetailView({
   );
   const terminals = useSessionGroupTerminals(sessionGroupId);
 
-  const [showSidebar, setShowSidebar] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
+  const [showSidebar, setShowSidebar] = useState(
+    () => getStoredSessionSidebarState(sessionGroupId).open,
+  );
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>(
+    () => getStoredSessionSidebarState(sessionGroupId).tab,
+  );
   const [sidebarWidth, setSidebarWidth] = useState(() => getStoredSessionSidebarWidth());
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const prefersReducedMotion = useReducedMotion();
@@ -335,6 +370,14 @@ export function SessionGroupDetailView({
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
   const [groupLoadError, setGroupLoadError] = useState<string | null>(null);
   const sidebarResizeCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem(
+      `${SESSION_SIDEBAR_STATE_KEY_PREFIX}${sessionGroupId}`,
+      JSON.stringify({ open: showSidebar, tab: sidebarTab }),
+    );
+  }, [sessionGroupId, showSidebar, sidebarTab]);
+
   const handleOpenForkDialog = useCallback((eventId: string) => {
     setForkEventId(eventId);
     setForkDialogOpen(true);
@@ -563,10 +606,10 @@ export function SessionGroupDetailView({
   }, [selectedSessionIsOptimistic, showSidebar]);
 
   useEffect(() => {
-    if (!showApplicationsSidebarTab && sidebarTab === "applications") {
+    if (selectedSession && !showApplicationsSidebarTab && sidebarTab === "applications") {
       setSidebarTab("files");
     }
-  }, [showApplicationsSidebarTab, sidebarTab]);
+  }, [selectedSession, showApplicationsSidebarTab, sidebarTab]);
 
   const selectedSessionStatus = getSessionGroupDisplayStatus(
     groupSessions.map((session) => session.sessionStatus),
