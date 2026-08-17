@@ -136,8 +136,6 @@ export function GroupHeader({
 
       <GroupUsageBadge sessionGroupId={sessionGroupId} />
 
-      <ClosedSessionTabsMenu sessions={closedSessions} onRestoreSession={onRestoreClosedSession} />
-
       <GitHubActions
         sessionId={selectedSessionId}
         prUrl={groupPrUrl}
@@ -148,6 +146,8 @@ export function GroupHeader({
       />
 
       <LinkedCheckoutActions state={linkedCheckout} />
+
+      <ClosedSessionTabsMenu sessions={closedSessions} onRestoreSession={onRestoreClosedSession} />
 
       <ActionTooltip label={filesOpen ? "Close files and changes" : "Files and changes"}>
         <button
