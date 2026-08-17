@@ -19,9 +19,11 @@ const EMPTY_BROWSER_STATE: DesktopBrowserWorkspaceState = {
 export function BrowserWorkspacePanel({
   sessionGroupId,
   browserId,
+  onTitleChange,
 }: {
   sessionGroupId: string;
   browserId: string;
+  onTitleChange?: (browserId: string, title: string) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const addressInputRef = useRef<HTMLInputElement>(null);
@@ -29,6 +31,10 @@ export function BrowserWorkspacePanel({
   const [state, setState] = useState<DesktopBrowserWorkspaceState>(EMPTY_BROWSER_STATE);
   const [inputValue, setInputValue] = useState("about:blank");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onTitleChange?.(browserId, state.title);
+  }, [browserId, onTitleChange, state.title]);
 
   const syncBounds = useCallback(() => {
     const content = contentRef.current;

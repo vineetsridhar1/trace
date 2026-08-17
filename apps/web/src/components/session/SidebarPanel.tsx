@@ -35,6 +35,7 @@ interface SidebarPanelProps {
   onLoadDirectory: (directoryPath: string) => Promise<void>;
   onDiffFileClick?: (filePath: string, status: string) => void;
   onOpenTraffic: (endpointId: string) => void;
+  onBrowserTitleChange?: (browserId: string, title: string) => void;
   bridgeAccess?: BridgeRuntimeAccessInfo | null;
   onBridgeAccessRequested?: () => void | Promise<void>;
 }
@@ -56,6 +57,7 @@ export interface WorkspaceSurfaceContentProps {
   onLoadDirectory: (directoryPath: string) => Promise<void>;
   onDiffFileClick?: (filePath: string, status: string) => void;
   onOpenTraffic: (endpointId: string) => void;
+  onBrowserTitleChange?: (browserId: string, title: string) => void;
   bridgeAccess?: BridgeRuntimeAccessInfo | null;
   onBridgeAccessRequested?: () => void | Promise<void>;
 }
@@ -77,6 +79,7 @@ export function SidebarPanel({
   onLoadDirectory,
   onDiffFileClick,
   onOpenTraffic,
+  onBrowserTitleChange,
   bridgeAccess,
   onBridgeAccessRequested,
 }: SidebarPanelProps) {
@@ -146,6 +149,7 @@ export function SidebarPanel({
         onLoadDirectory={onLoadDirectory}
         onDiffFileClick={onDiffFileClick}
         onOpenTraffic={onOpenTraffic}
+        onBrowserTitleChange={onBrowserTitleChange}
         bridgeAccess={bridgeAccess}
         onBridgeAccessRequested={onBridgeAccessRequested}
       />
@@ -168,6 +172,7 @@ export function WorkspaceSurfaceContent({
   onLoadDirectory,
   onDiffFileClick,
   onOpenTraffic,
+  onBrowserTitleChange,
   bridgeAccess,
   onBridgeAccessRequested,
 }: WorkspaceSurfaceContentProps) {
@@ -190,7 +195,11 @@ export function WorkspaceSurfaceContent({
           embedded
         />
       ) : surface === "browser" ? (
-        <BrowserWorkspacePanel sessionGroupId={sessionGroupId} browserId={browserId} />
+        <BrowserWorkspacePanel
+          sessionGroupId={sessionGroupId}
+          browserId={browserId}
+          onTitleChange={onBrowserTitleChange}
+        />
       ) : surface === "terminal" ? (
         activeSessionId ? <TerminalPanel sessionId={activeSessionId} onClose={onClose} fill /> : null
       ) : surface === "files" ? (

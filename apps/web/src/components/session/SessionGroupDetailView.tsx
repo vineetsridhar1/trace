@@ -116,6 +116,11 @@ function workspaceSurfaceIcon(surface: WorkspaceSurface | null) {
   return <Bot size={12} />;
 }
 
+function browserWorkspaceLabel(title: string | undefined) {
+  const trimmedTitle = title?.trim();
+  return trimmedTitle && trimmedTitle !== "New tab" ? `Browser · ${trimmedTitle}` : "Browser";
+}
+
 const HIDDEN_SESSION_TABS_QUERY = gql`
   query HiddenSessionTabs($sessionGroupId: ID!) {
     hiddenSessionTabs(sessionGroupId: $sessionGroupId) {
@@ -369,6 +374,7 @@ export function SessionGroupDetailView({
   const [draftWorkspaceTabs, setDraftWorkspaceTabs] = useState<
     Array<{ id: string; surface: WorkspaceSurface | null }>
   >(() => getStoredWorkspaceTabs(sessionGroupId));
+  const [browserTitles, setBrowserTitles] = useState<Record<string, string>>({});
   const [pendingTerminalTabs, setPendingTerminalTabs] = useState<
     Array<{
       id: string;
@@ -1004,6 +1010,8 @@ export function SessionGroupDetailView({
         label: draft.surface
           ? draft.surface === "changes"
             ? "Files changed"
+            : draft.surface === "browser"
+              ? browserWorkspaceLabel(browserTitles[draft.id])
             : `${draft.surface[0].toUpperCase()}${draft.surface.slice(1)}`
           : "New tab",
         icon: workspaceSurfaceIcon(draft.surface),
@@ -1020,6 +1028,7 @@ export function SessionGroupDetailView({
     }
     return tabs;
   }, [
+    browserTitles,
     draftWorkspaceTabs,
     openArtifactIds,
     openFiles,
@@ -1098,6 +1107,12 @@ export function SessionGroupDetailView({
     return id;
   }, []);
 
+  const handleBrowserTitleChange = useCallback((browserId: string, title: string) => {
+    setBrowserTitles((titles) =>
+      titles[browserId] === title ? titles : { ...titles, [browserId]: title },
+    );
+  }, []);
+
   const handleWorkspaceOverlayVisibility = useCallback(
     (visible: boolean) => {
       for (const draft of draftWorkspaceTabs) {
@@ -1133,6 +1148,7 @@ export function SessionGroupDetailView({
               onLoadDirectory={loadDirectory}
               onDiffFileClick={handleDiffFileClick}
               onOpenTraffic={handleOpenTrafficTab}
+              onBrowserTitleChange={handleBrowserTitleChange}
               bridgeAccess={bridgeAccess}
               onBridgeAccessRequested={refreshBridgeAccess}
             />
@@ -1284,6 +1300,7 @@ export function SessionGroupDetailView({
             onLoadDirectory={loadDirectory}
             onDiffFileClick={handleDiffFileClick}
             onOpenTraffic={handleOpenTrafficTab}
+            onBrowserTitleChange={handleBrowserTitleChange}
             bridgeAccess={bridgeAccess}
             onBridgeAccessRequested={refreshBridgeAccess}
           />
@@ -1340,6 +1357,7 @@ export function SessionGroupDetailView({
       handleCreateTerminal,
       handleDiffFileClick,
       handleFileClick,
+      handleBrowserTitleChange,
       handleNewChat,
       handleOpenArtifact,
       handleOpenForkDialog,
