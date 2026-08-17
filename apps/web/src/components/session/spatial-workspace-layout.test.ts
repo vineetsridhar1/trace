@@ -224,6 +224,16 @@ describe("spatial workspace layout", () => {
     });
   });
 
+  it("activates an existing tab when external selection prefers it", () => {
+    const layout = syncSpatialTabs(
+      createSpatialLayout(["chat", "terminal"], "chat"),
+      ["chat", "terminal"],
+      "terminal",
+    );
+
+    expect(getSpatialGroups(layout.root)[0].activeTabId).toBe("terminal");
+  });
+
   it("preserves tab groups while applying row and flat column arrangements", () => {
     const single = createSpatialLayout(["chat", "browser", "terminal", "changes"]);
     const columns = applySpatialLayoutPreset(single, "columns");

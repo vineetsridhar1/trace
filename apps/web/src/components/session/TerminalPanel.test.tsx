@@ -1,7 +1,6 @@
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTerminalStore } from "../../stores/terminal";
-import { useUIStore } from "../../stores/ui";
 import { TerminalPanel } from "./TerminalPanel";
 
 const query = vi.fn();
@@ -48,7 +47,6 @@ describe("TerminalPanel", () => {
     useTerminalStore
       .getState()
       .addTerminal("terminal-1", "session-1", "group-1", "active");
-    useUIStore.setState({ activeSessionId: "session-1", activeTerminalId: null });
   });
 
   afterEach(() => {
@@ -67,48 +65,31 @@ describe("TerminalPanel", () => {
     return renderer;
   }
 
-  it("mounts the terminal in the sidebar while it is not pinned", async () => {
+  it("mounts one terminal without an inner tab strip", async () => {
     const renderer = await renderPanel();
 
     expect(renderer.root.findAllByProps({ "data-terminal-instance": "terminal-1" })).toHaveLength(1);
     expect(
       renderer.root
         .findAllByType("button")
-        .filter((button) => button.props["aria-label"] === "Open terminal in main panel"),
+        .filter((button) => button.props["aria-pressed"] !== undefined),
     ).toHaveLength(0);
   });
 
-  it("replaces the sidebar instance with a working deep link while pinned", async () => {
+  it("ignores legacy pin state and keeps rendering the terminal", async () => {
     useTerminalStore.getState().pinTerminal("terminal-1");
-    const onClose = vi.fn();
-
-    const renderer = await renderPanel(onClose);
-
-    expect(renderer.root.findAllByProps({ "data-terminal-instance": "terminal-1" })).toHaveLength(0);
-    const openButton = renderer.root
-      .findAllByType("button")
-      .find((button) => button.props["aria-label"] === "Open terminal in main panel");
-    if (!openButton) throw new Error("Open terminal button was not rendered");
-    act(() => openButton.props.onClick());
-    expect(useUIStore.getState().activeTerminalId).toBe("terminal-1");
-    expect(onClose).toHaveBeenCalledOnce();
+    const renderer = await renderPanel();
+    expect(renderer.root.findAllByProps({ "data-terminal-instance": "terminal-1" })).toHaveLength(1);
   });
 
-  it("does not mount an unpinned sidebar terminal while another terminal is active in main", async () => {
+  it("renders only one terminal when the session has multiple terminals", async () => {
     useTerminalStore
       .getState()
       .addTerminal("terminal-2", "session-1", "group-1", "active");
-    useTerminalStore.getState().pinTerminal("terminal-2");
-    useUIStore.setState({ activeTerminalId: "terminal-2" });
 
     const renderer = await renderPanel();
 
-    expect(renderer.root.findAllByProps({ "data-terminal-instance": "terminal-1" })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ "data-terminal-instance": "terminal-1" })).toHaveLength(1);
     expect(renderer.root.findAllByProps({ "data-terminal-instance": "terminal-2" })).toHaveLength(0);
-    expect(
-      renderer.root
-        .findAllByType("button")
-        .filter((button) => button.props["aria-label"] === "Open terminal in main panel"),
-    ).toHaveLength(1);
   });
 });

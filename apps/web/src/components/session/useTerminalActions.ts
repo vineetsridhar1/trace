@@ -15,7 +15,6 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const setActiveTerminalId = useUIStore((s) => s.setActiveTerminalId);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
-  const pinTerminal = useTerminalStore((s) => s.pinTerminal);
 
   const ensureSessionTerminals = useCallback(
     async (sessionId: string) => {
@@ -44,18 +43,16 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
       if (!session || session._optimistic || !terminalAllowed) return;
       const existing = await ensureSessionTerminals(session.id);
       if (existing.length > 0) {
-        pinTerminal(existing[0].id);
         setActiveSessionId(session.id);
         setActiveTerminalId(existing[0].id);
         return;
       }
 
       setActiveSessionId(session.id);
-      await requestSessionTerminal({ sessionId: session.id, pin: true, select: true }).completion;
+      await requestSessionTerminal({ sessionId: session.id, select: true }).completion;
     },
     [
       ensureSessionTerminals,
-      pinTerminal,
       setActiveSessionId,
       setActiveTerminalId,
     ],
@@ -65,7 +62,7 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
     async (session: { id: string; _optimistic?: boolean } | null, terminalAllowed: boolean) => {
       if (!session || session._optimistic || !terminalAllowed) return;
       setActiveSessionId(session.id);
-      await requestSessionTerminal({ sessionId: session.id, pin: true, select: true }).completion;
+      await requestSessionTerminal({ sessionId: session.id, select: true }).completion;
     },
     [setActiveSessionId],
   );

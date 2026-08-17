@@ -51,7 +51,7 @@ describe("useTerminalActions", () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it("waits for the lifecycle event before registering and selecting a terminal", async () => {
+  it("registers and selects a terminal without pinning it", async () => {
     mutation.mockReturnValue({
       toPromise: async () => ({ data: { createTerminal: { id: "terminal-1" } } }),
     });
@@ -98,6 +98,6 @@ describe("useTerminalActions", () => {
     });
     expect(useUIStore.getState().activeSessionId).toBe("session-1");
     expect(useUIStore.getState().activeTerminalId).toBe("terminal-1");
-    expect(useTerminalStore.getState().pinnedTerminalIds["terminal-1"]).toBe(true);
+    expect(useTerminalStore.getState().pinnedTerminalIds["terminal-1"]).toBeUndefined();
   });
 });

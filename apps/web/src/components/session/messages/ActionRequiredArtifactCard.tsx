@@ -34,9 +34,7 @@ export function ActionRequiredArtifactCard({
         sessionId,
         customName: "Sign in",
         initialCommand: LOGIN_COMMANDS[artifact.provider],
-        pin: true,
         select: true,
-        showPanel: true,
       }).completion;
     } finally {
       setWorking(false);

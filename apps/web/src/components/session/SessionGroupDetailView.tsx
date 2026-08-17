@@ -16,7 +16,11 @@ import {
 } from "lucide-react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
-import { SESSION_TERMINALS_QUERY, START_SESSION_MUTATION } from "@trace/client-core";
+import {
+  DESTROY_TERMINAL_MUTATION,
+  SESSION_TERMINALS_QUERY,
+  START_SESSION_MUTATION,
+} from "@trace/client-core";
 import type { Terminal } from "@trace/gql";
 import { useDetailPanelStore } from "../../stores/detail-panel";
 import { useEntityField, useEntityStore } from "@trace/client-core";
@@ -353,8 +357,6 @@ export function SessionGroupDetailView({
     (s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany,
   );
   const terminals = useSessionGroupTerminals(sessionGroupId);
-  const pinnedTerminalIds = useTerminalStore((s) => s.pinnedTerminalIds);
-  const unpinTerminal = useTerminalStore((s) => s.unpinTerminal);
 
   const [trafficEndpointId, setTrafficEndpointId] = useState<string | null>(null);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<"session" | "traffic">("session");
@@ -700,12 +702,12 @@ export function SessionGroupDetailView({
     [handleSelectFile, setActiveArtifactId],
   );
 
-  const handleClosePinnedTerminal = useCallback(
+  const handleCloseTerminal = useCallback(
     (terminalId: string) => {
-      unpinTerminal(terminalId);
       if (activeTerminalId === terminalId) setActiveTerminalId(null);
+      void client.mutation(DESTROY_TERMINAL_MUTATION, { terminalId }).toPromise();
     },
-    [activeTerminalId, setActiveTerminalId, unpinTerminal],
+    [activeTerminalId, setActiveTerminalId],
   );
 
   const handleToggleFilePalette = useCallback(() => {
@@ -816,7 +818,7 @@ export function SessionGroupDetailView({
       return;
     }
     if (activeTerminalId) {
-      handleClosePinnedTerminal(activeTerminalId);
+      handleCloseTerminal(activeTerminalId);
       return;
     }
     if (activeSessionId) {
@@ -834,7 +836,7 @@ export function SessionGroupDetailView({
     handleCloseTrafficTab,
     handleCloseArtifact,
     handleCloseFile,
-    handleClosePinnedTerminal,
+    handleCloseTerminal,
     setActiveSessionGroupId,
   ]);
 
@@ -945,14 +947,12 @@ export function SessionGroupDetailView({
         label: "Artifact",
         icon: <FileCode size={12} />,
       })),
-      ...terminals
-        .filter((terminal) => pinnedTerminalIds[terminal.id])
-        .map((terminal, index) => ({
-          id: `terminal:${terminal.id}`,
-          label: terminal.customName || `Terminal ${index + 1}`,
-          icon: <TerminalSquare size={12} />,
-          status: terminal.status === "active" ? ("live" as const) : undefined,
-        })),
+      ...terminals.map((terminal, index) => ({
+        id: `terminal:${terminal.id}`,
+        label: terminal.customName || `Terminal ${index + 1}`,
+        icon: <TerminalSquare size={12} />,
+        status: terminal.status === "active" ? ("live" as const) : undefined,
+      })),
       ...openFiles.map((file) => ({
         id: `file:${file.filePath}`,
         label: file.fileName,
@@ -983,7 +983,6 @@ export function SessionGroupDetailView({
     draftWorkspaceTabs,
     openArtifactIds,
     openFiles,
-    pinnedTerminalIds,
     sessionTabs,
     showApplicationsSidebarTab,
     terminals,
@@ -1037,7 +1036,7 @@ export function SessionGroupDetailView({
       } else if (tabId.startsWith("artifact:")) {
         handleCloseArtifact(tabId.slice("artifact:".length));
       } else if (tabId.startsWith("terminal:")) {
-        handleClosePinnedTerminal(tabId.slice("terminal:".length));
+        handleCloseTerminal(tabId.slice("terminal:".length));
       } else if (tabId.startsWith("file:")) {
         handleCloseFile(tabId.slice("file:".length));
       } else if (tabId === "traffic") {
@@ -1047,7 +1046,7 @@ export function SessionGroupDetailView({
     [
       handleCloseArtifact,
       handleCloseFile,
-      handleClosePinnedTerminal,
+      handleCloseTerminal,
       handleCloseSession,
       handleCloseTrafficTab,
     ],

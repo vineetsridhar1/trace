@@ -232,9 +232,7 @@ export function SessionInput({
             customName: "Pi Login",
             initialCommand: "pi\n/login",
             submitInitialCommand: false,
-            pin: true,
             select: true,
-            showPanel: true,
           }).completion;
           setDraftText(sessionId, "", "");
         } catch (error) {

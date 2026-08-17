@@ -59,7 +59,6 @@ export function useRunScripts(sessionGroupId: string, selectedSessionId: string 
         sessionId: selectedSessionId,
         customName: script.name,
         initialCommand: script.command,
-        showPanel: true,
       }).completion;
     }
   }, [selectedSessionId, runScripts]);

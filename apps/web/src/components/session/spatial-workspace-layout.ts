@@ -198,6 +198,14 @@ export function syncSpatialTabs(
     );
   }
 
+  if (preferredActiveTabId && available.has(preferredActiveTabId)) {
+    root = mapGroups(root, (group) =>
+      group.tabIds.includes(preferredActiveTabId)
+        ? { ...group, activeTabId: preferredActiveTabId }
+        : group,
+    );
+  }
+
   root = collapseEmptyGroups(root) ?? createSpatialLayout(tabIds, preferredActiveTabId).root;
   const synced = { ...layout, root };
   return layout.focusedGroupId && !findSpatialGroup(root, layout.focusedGroupId)
