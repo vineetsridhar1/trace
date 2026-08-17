@@ -13,6 +13,7 @@ import { FileExplorer } from "./FileExplorer";
 import type { FileTreeNode } from "./file-explorer-utils";
 import { SessionApplicationsPanel } from "./applications/SessionApplicationsPanel";
 import { TerminalPanel } from "./TerminalPanel";
+import { BrowserWorkspacePanel } from "./BrowserWorkspacePanel";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
 export type SidebarTab = "applications" | "browser" | "terminal" | "files" | "changes";
@@ -128,7 +129,7 @@ export function SidebarPanel({
             embedded
           />
         ) : activeTab === "browser" ? (
-          <div className="p-3 text-sm text-muted-foreground">Browser is open in the workspace.</div>
+          <BrowserWorkspacePanel sessionGroupId={sessionGroupId} />
         ) : activeTab === "terminal" ? (
           activeSessionId ? (
             <TerminalPanel sessionId={activeSessionId} onClose={onClose} fill />

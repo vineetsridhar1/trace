@@ -57,7 +57,6 @@ import { useRegisterCommands } from "../../hooks/useRegisterCommands";
 import type { RegisteredCommand } from "../../stores/command-registry";
 import { ArtifactOpenContext } from "../artifact/ArtifactOpenContext";
 import { ArtifactTabContent } from "../artifact/ArtifactTabContent";
-import { BrowserWorkspacePanel } from "./BrowserWorkspacePanel";
 
 const SESSION_SIDEBAR_WIDTH_KEY = "trace:session-workbench-sidebar-width";
 const SESSION_SIDEBAR_STATE_KEY_PREFIX = "trace:session-workbench-sidebar-state:";
@@ -1155,9 +1154,7 @@ export function SessionGroupDetailView({
                   />
                 ) : null}
                 <div className="min-h-0 flex-1 overflow-hidden">
-                  {showSidebar && sidebarTab === "browser" ? (
-                  <BrowserWorkspacePanel sessionGroupId={sessionGroupId} />
-                ) : activeArtifactId ? (
+                  {activeArtifactId ? (
                   <ArtifactTabContent artifactId={activeArtifactId} />
                 ) : isAppGroup ? (
                   <ProjectPreviewWorkspace
