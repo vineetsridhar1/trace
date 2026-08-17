@@ -9,6 +9,11 @@ const mocks = vi.hoisted(() => ({
   isRuntimeGenerationCurrent: vi.fn(() => true),
   sessionFindMany: vi.fn(),
   channelFindMany: vi.fn(),
+  terminalDirectoryGet: vi.fn(),
+  terminalDirectoryRegister: vi.fn(),
+  terminalDirectoryRemove: vi.fn(),
+  backplaneSend: vi.fn(() => Promise.resolve()),
+  backplaneHandlers: new Map<string, Array<(envelope: { sourceReplicaId: string; payload: unknown }) => void>>(),
 }));
 
 vi.mock("./session-router.js", () => ({
@@ -29,6 +34,27 @@ vi.mock("./db.js", () => ({
   },
 }));
 
+vi.mock("./terminal-directory.js", () => ({
+  terminalDirectory: {
+    get: mocks.terminalDirectoryGet,
+    register: mocks.terminalDirectoryRegister,
+    remove: mocks.terminalDirectoryRemove,
+  },
+}));
+
+vi.mock("./realtime-backplane.js", () => ({
+  realtimeBackplane: {
+    replicaId: "replica-local",
+    send: mocks.backplaneSend,
+    on: vi.fn((kind: string, handler: (envelope: { sourceReplicaId: string; payload: unknown }) => void) => {
+      const handlers = mocks.backplaneHandlers.get(kind) ?? [];
+      handlers.push(handler);
+      mocks.backplaneHandlers.set(kind, handlers);
+      return () => undefined;
+    }),
+  },
+}));
+
 import { TerminalRelay } from "./terminal-relay.js";
 
 function createOpenWs() {
@@ -42,6 +68,7 @@ function createOpenWs() {
 describe("TerminalRelay runtime identity", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.backplaneHandlers.clear();
     mocks.getRuntime.mockImplementation((runtimeId: string, organizationId?: string | null) => {
       if (
         runtimeId === "bridge-1" ||
@@ -66,6 +93,7 @@ describe("TerminalRelay runtime identity", () => {
       Promise.resolve(mocks.sendToRuntime(...args)),
     );
     mocks.isRuntimeGenerationCurrent.mockReturnValue(true);
+    mocks.terminalDirectoryGet.mockResolvedValue(undefined);
   });
 
   it("accepts bridge terminal messages from the org-scoped runtime key", async () => {
@@ -185,5 +213,34 @@ describe("TerminalRelay runtime identity", () => {
     });
     expect(relay.getTerminalAuthContext("session-term")).toBeNull();
     expect(relay.getTerminalAuthContext("channel-term")).toBeNull();
+  });
+
+  it("does not let a stale distributed detach clear a replacement frontend", async () => {
+    const relay = new TerminalRelay();
+    const terminalId = relay.createTerminal(
+      "session-1", "group-1", "org-1", "bridge-1", "user-1", 80, 24, "/repo",
+    );
+    const attach = mocks.backplaneHandlers.get("terminal_frontend_attach")?.at(-1);
+    const detach = mocks.backplaneHandlers.get("terminal_frontend_detach")?.at(-1);
+
+    attach?.({ sourceReplicaId: "replica-frontend", payload: { terminalId, attachmentId: "attachment-old" } });
+    attach?.({ sourceReplicaId: "replica-frontend", payload: { terminalId, attachmentId: "attachment-new" } });
+    detach?.({ sourceReplicaId: "replica-frontend", payload: { terminalId, attachmentId: "attachment-old" } });
+    mocks.backplaneSend.mockClear();
+
+    await relay.relayFromBridge(
+      { type: "terminal_output", terminalId, data: "still connected" },
+      "org-1:bridge-1",
+    );
+
+    expect(mocks.backplaneSend).toHaveBeenCalledWith(
+      "replica-frontend",
+      "terminal_frontend_messages",
+      {
+        terminalId,
+        attachmentId: "attachment-new",
+        messages: [JSON.stringify({ type: "output", data: "still connected" })],
+      },
+    );
   });
 });
