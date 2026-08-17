@@ -57,7 +57,7 @@ export function FileTreeItem({
         ) : (
           <span className="h-4 w-4 shrink-0" />
         )}
-        {!node.isDirectory ? <FileIcon path={node.path} size={16} /> : null}
+        {!node.isDirectory ? <FileIcon path={node.path} size={14} /> : null}
         <span className="truncate">{node.name}</span>
       </button>
       {node.isDirectory && isExpanded && (
