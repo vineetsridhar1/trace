@@ -1,4 +1,4 @@
-import { AppWindow, Files, GitCompareArrows, Globe, TerminalSquare } from "lucide-react";
+import { AppWindow, Globe, TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuthStore } from "@trace/client-core";
@@ -46,18 +46,11 @@ const quickStarts: Array<{
 }> = [
   { surface: "browser", label: "Open browser", detail: "Preview a running app", icon: Globe },
   {
-    surface: "changes",
-    label: "Files changed",
-    detail: "Review the current diff",
-    icon: GitCompareArrows,
-  },
-  {
     surface: "terminal",
     label: "Open terminal",
     detail: "Start a shell or task",
     icon: TerminalSquare,
   },
-  { surface: "files", label: "Browse files", detail: "Explore the repository", icon: Files },
   {
     surface: "applications",
     label: "Applications",
