@@ -72,6 +72,23 @@ describe("spatial workspace layout", () => {
     expect(getSpatialRowPositionForTab(layout.root, "draft:new")).toBe("bottom");
   });
 
+  it("moves a tab across rows while creating a destination column", () => {
+    let layout = createSpatialLayout(["chat", "browser", "terminal"]);
+    layout = dockSpatialTab(layout, "browser", "bottom");
+    layout = insertSpatialTab(layout, "draft:new", "region-1");
+    layout = dockSpatialTab(layout, "draft:new", "right", "bottom");
+
+    expect(layout.root).toMatchObject({ type: "split", direction: "vertical" });
+    if (layout.root.type !== "split") throw new Error("Expected a vertical split");
+    expect(getSpatialGroups(layout.root.children[0]).map((group) => group.tabIds)).toEqual([
+      ["chat", "terminal"],
+    ]);
+    expect(getSpatialGroups(layout.root.children[1]).map((group) => group.tabIds)).toEqual([
+      ["browser"],
+      ["draft:new"],
+    ]);
+  });
+
   it("gives three same-direction regions equal top-level space", () => {
     let layout = createSpatialLayout(["chat", "browser", "terminal"]);
     layout = dockSpatialTab(layout, "browser", "right");

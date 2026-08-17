@@ -32,12 +32,11 @@ import {
   MAX_SPATIAL_COLUMNS,
   activateSpatialTab,
   applySpatialLayoutPreset,
+  countSpatialColumnsInRow,
   countSpatialRegions,
-  countSpatialColumnsForTab,
   createSpatialLayout,
   dockSpatialTab,
   getSpatialAxisSpan,
-  getSpatialRowPositionForTab,
   insertSpatialTab,
   isSpatialLayout,
   moveSpatialTab,
@@ -46,6 +45,7 @@ import {
   type SpatialEdge,
   type SpatialLayoutPreset,
   type SpatialNode,
+  type SpatialRowPosition,
   type SpatialTabGroup,
 } from "./spatial-workspace-layout";
 
@@ -142,13 +142,13 @@ export function SpatialWorkspace({
     const overId = event.over?.id ? String(event.over.id) : "";
     if (!overId) return;
 
-    const [kind, groupId, edge] = overId.split(":");
-    if (kind === "snap" && isSpatialEdge(edge)) {
-      setLayout((current) => dockSpatialTab(current, tabId, edge));
+    const [kind, targetId, edge] = overId.split(":");
+    if (kind === "snap" && isSpatialRowPosition(targetId) && isSpatialEdge(edge)) {
+      setLayout((current) => dockSpatialTab(current, tabId, edge, targetId));
       return;
     }
     if (kind === "region") {
-      setLayout((current) => moveSpatialTab(current, tabId, groupId));
+      setLayout((current) => moveSpatialTab(current, tabId, targetId));
     }
   }, []);
 
@@ -165,12 +165,6 @@ export function SpatialWorkspace({
   );
 
   const draggedTab = draggedTabId ? tabById.get(draggedTabId) : null;
-  const draggedRowColumnCount = draggedTabId
-    ? countSpatialColumnsForTab(layout.root, draggedTabId)
-    : 0;
-  const draggedRowPosition = draggedTabId
-    ? getSpatialRowPositionForTab(layout.root, draggedTabId)
-    : null;
   const hasVerticalSplit = layout.root.type === "split" && layout.root.direction === "vertical";
 
   return (
@@ -239,9 +233,16 @@ export function SpatialWorkspace({
         />
         {draggedTabId ? (
           <SpatialWorkspaceSnapTargets
-            canAddColumn={draggedRowColumnCount < MAX_SPATIAL_COLUMNS}
-            canAddRow={!hasVerticalSplit}
-            rowPosition={draggedRowPosition ?? "full"}
+            hasVerticalSplit={hasVerticalSplit}
+            canAddFullColumn={
+              countSpatialColumnsInRow(layout.root, "full") < MAX_SPATIAL_COLUMNS
+            }
+            canAddTopColumn={
+              countSpatialColumnsInRow(layout.root, "top") < MAX_SPATIAL_COLUMNS
+            }
+            canAddBottomColumn={
+              countSpatialColumnsInRow(layout.root, "bottom") < MAX_SPATIAL_COLUMNS
+            }
           />
         ) : null}
       </div>
@@ -495,34 +496,56 @@ function SpatialGroupDropTarget({ groupIsOver }: { groupIsOver: boolean }) {
 }
 
 function SpatialWorkspaceSnapTargets({
-  canAddColumn,
-  canAddRow,
-  rowPosition,
+  hasVerticalSplit,
+  canAddFullColumn,
+  canAddTopColumn,
+  canAddBottomColumn,
 }: {
+  hasVerticalSplit: boolean;
+  canAddFullColumn: boolean;
+  canAddTopColumn: boolean;
+  canAddBottomColumn: boolean;
+}) {
+  if (hasVerticalSplit) {
+    return (
+      <>
+        <SpatialRowSnapTargets position="top" canAddColumn={canAddTopColumn} />
+        <SpatialRowSnapTargets position="bottom" canAddColumn={canAddBottomColumn} />
+      </>
+    );
+  }
+  return <SpatialRowSnapTargets position="full" canAddColumn={canAddFullColumn} canAddRow />;
+}
+
+function SpatialRowSnapTargets({
+  position,
+  canAddColumn,
+  canAddRow = false,
+}: {
+  position: SpatialRowPosition;
   canAddColumn: boolean;
-  canAddRow: boolean;
-  rowPosition: "full" | "top" | "bottom";
+  canAddRow?: boolean;
 }) {
   return (
     <div
       className="pointer-events-none absolute z-40"
-      style={workspaceSnapTargetBounds(rowPosition)}
+      style={workspaceSnapTargetBounds(position)}
     >
       {canAddColumn
         ? (["left", "right"] as const).map((edge) => (
-            <SpatialSnapTarget key={edge} edge={edge} />
+            <SpatialSnapTarget key={edge} rowPosition={position} edge={edge} />
           ))
         : null}
       {canAddRow
         ? (["top", "bottom"] as const).map((edge) => (
-            <SpatialSnapTarget key={edge} edge={edge} />
+            <SpatialSnapTarget key={edge} rowPosition={position} edge={edge} />
           ))
         : null}
     </div>
   );
 }
 
-function workspaceSnapTargetBounds(position: "full" | "top" | "bottom") {
+function workspaceSnapTargetBounds(position: SpatialRowPosition) {
   if (position === "top") {
     return { left: "0.5rem", right: "0.5rem", top: "0.5rem", height: "calc(50% - 0.5rem)" };
   }
@@ -532,8 +555,14 @@ function workspaceSnapTargetBounds(position: "full" | "top" | "bottom") {
   return { inset: "0.5rem" };
 }
 
-function SpatialSnapTarget({ edge }: { edge: SpatialEdge }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `snap:workspace:${edge}` });
+function SpatialSnapTarget({
+  rowPosition,
+  edge,
+}: {
+  rowPosition: SpatialRowPosition;
+  edge: SpatialEdge;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `snap:${rowPosition}:${edge}` });
   return (
     <div
       ref={setNodeRef}
@@ -591,4 +620,8 @@ function readLayout(
 
 function isSpatialEdge(value: string): value is SpatialEdge {
   return value === "left" || value === "right" || value === "top" || value === "bottom";
+}
+
+function isSpatialRowPosition(value: string): value is SpatialRowPosition {
+  return value === "full" || value === "top" || value === "bottom";
 }
