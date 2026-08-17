@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   AppWindow,
   Boxes,
-  Circle,
   Cloud,
   Monitor,
   PanelRight,
@@ -12,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { sessionStatusColor, sessionStatusLabel } from "./sessionStatus";
+import { AgentStatusIcon } from "./AgentStatusIcon";
 import { SessionGroupArtifactsDialog } from "../artifact/SessionGroupArtifactsDialog";
 import { useRunScripts } from "../../hooks/useRunScripts";
 import { useLinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
@@ -21,6 +21,8 @@ import { SessionMoveButton } from "./SessionMoveButton";
 import { GitHubActions } from "./GitHubActions";
 import { GroupUsageBadge } from "./GroupUsageBadge";
 import { ActionTooltip } from "../ui/ActionTooltip";
+import { ClosedSessionTabsMenu } from "./ClosedSessionTabsMenu";
+import type { SessionEntity } from "@trace/client-core";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
@@ -34,9 +36,12 @@ interface GroupHeaderProps {
   selectedSessionStatus: string;
   selectedSessionId: string | null;
   selectedAgentStatus?: string;
+  displayAgentStatus?: string;
   selectedHosting?: string;
   selectedConnection?: Record<string, unknown> | null;
   selectedWorktreeDeleted?: boolean;
+  closedSessions: SessionEntity[];
+  onRestoreClosedSession: (sessionId: string) => void;
   canMoveSession: boolean;
   moveDisabledReason?: string;
   groupPrUrl: string | null | undefined;
@@ -66,9 +71,12 @@ export function GroupHeader({
   selectedSessionStatus,
   selectedSessionId,
   selectedAgentStatus,
+  displayAgentStatus,
   selectedHosting,
   selectedConnection,
   selectedWorktreeDeleted,
+  closedSessions,
+  onRestoreClosedSession,
   canMoveSession,
   moveDisabledReason,
   groupPrUrl,
@@ -120,7 +128,7 @@ export function GroupHeader({
               sessionStatusColor[selectedSessionStatus],
             )}
           >
-            <Circle size={6} className="fill-current" />
+            <AgentStatusIcon agentStatus={displayAgentStatus ?? "done"} size={8} />
             {label}
           </span>
         </>
@@ -134,6 +142,8 @@ export function GroupHeader({
       </div>
 
       <GroupUsageBadge sessionGroupId={sessionGroupId} />
+
+      <ClosedSessionTabsMenu sessions={closedSessions} onRestoreSession={onRestoreClosedSession} />
 
       <GitHubActions
         sessionId={selectedSessionId}

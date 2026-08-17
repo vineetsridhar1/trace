@@ -854,6 +854,8 @@ export type EventType =
   | "session_setup_script_failed"
   | "session_setup_script_started"
   | "session_started"
+  | "session_tab_hidden"
+  | "session_tab_restored"
   | "session_terminated"
   | "terminal_created"
   | "terminal_destroyed"
@@ -864,6 +866,12 @@ export type EventType =
   | "ticket_unassigned"
   | "ticket_unlinked"
   | "ticket_updated";
+
+export type HiddenSessionTab = {
+  __typename?: "HiddenSessionTab";
+  hiddenAt: Scalars["DateTime"]["output"];
+  sessionId: Scalars["ID"]["output"];
+};
 
 export type HostingMode = "cloud" | "local";
 
@@ -1075,6 +1083,7 @@ export type Mutation = {
   enableSessionEndpointForwarding: SessionEndpoint;
   forkSession: Session;
   forwardSessionPort: SessionEndpoint;
+  hideSessionTab: HiddenSessionTab;
   /** Adopt an existing local worktree into a not-yet-started session's group (local hosting only). */
   importWorktree: SessionGroup;
   joinChannel: Channel;
@@ -1391,6 +1400,10 @@ export type MutationForwardSessionPortArgs = {
   label?: InputMaybe<Scalars["String"]["input"]>;
   port: Scalars["Int"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationHideSessionTabArgs = {
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationImportWorktreeArgs = {
@@ -1927,6 +1940,7 @@ export type Query = {
   designSystems: Array<DesignSystem>;
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
+  hiddenSessionTabs: Array<HiddenSessionTab>;
   inboxItems: Array<InboxItem>;
   integrationConnections: Array<IntegrationConnection>;
   linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
@@ -2116,6 +2130,10 @@ export type QueryEventsArgs = {
   organizationId: Scalars["ID"]["input"];
   scope?: InputMaybe<ScopeInput>;
   types?: InputMaybe<Array<Scalars["String"]["input"]>>;
+};
+
+export type QueryHiddenSessionTabsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryInboxItemsArgs = {

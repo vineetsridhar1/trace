@@ -364,6 +364,7 @@ describe("SessionService", () => {
     prismaMock.session.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.sessionGroup.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.artifact.findMany.mockResolvedValue([]);
+    prismaMock.hiddenSessionTab.deleteMany.mockResolvedValue({ count: 0 });
     sessionRouterMock.send.mockReturnValue("delivered");
     sessionRouterMock.sendAsync.mockImplementation((...args) =>
       Promise.resolve(sessionRouterMock.send(...args)),
@@ -419,6 +420,33 @@ describe("SessionService", () => {
     prismaMock.repo.findFirst.mockResolvedValue({
       id: "repo-1",
       remoteUrl: "git@github.com:trace/trace.git",
+    });
+  });
+
+  describe("hidden tabs", () => {
+    it("authorizes and records a per-user hidden tab event", async () => {
+      prismaMock.session.findFirst.mockResolvedValue({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        sessionGroup: { visibility: "public", ownerUserId: "user-1" },
+      } as never);
+      prismaMock.hiddenSessionTab.upsert.mockResolvedValue({
+        sessionId: "session-1",
+        hiddenAt: new Date("2026-08-17T00:00:00.000Z"),
+      } as never);
+
+      await service.hideTab("session-1", "org-1", "user-1", "user");
+
+      expect(prismaMock.hiddenSessionTab.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId_sessionId: { userId: "user-1", sessionId: "session-1" } } }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_tab_hidden",
+          payload: expect.objectContaining({ sessionId: "session-1", userId: "user-1" }),
+        }),
+      );
     });
   });
 

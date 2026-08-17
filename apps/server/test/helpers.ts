@@ -229,6 +229,11 @@ export function createPrismaMock() {
       updateMany: vi.fn(),
       delete: vi.fn(),
     },
+    hiddenSessionTab: {
+      findMany: vi.fn(),
+      upsert: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     sessionGroup: {
       create: vi.fn(),
       findMany: vi.fn(),

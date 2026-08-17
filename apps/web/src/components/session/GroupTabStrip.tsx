@@ -21,6 +21,7 @@ import {
   terminalStatusColor,
   terminalStatusLabel,
 } from "./sessionStatus";
+import { AgentStatusIcon } from "./AgentStatusIcon";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,6 +60,7 @@ interface GroupTabStripProps {
   onSelectSession: (sessionId: string) => void;
   onCloseSession?: (sessionId: string) => void;
   canCloseSessions?: boolean;
+  hiddenSessionIds: ReadonlySet<string>;
   onSelectTerminal: (sessionId: string | null, terminalId: string) => void;
   onCloseTerminal: (terminalId: string) => void;
   onRenameTerminal: (terminalId: string, name: string) => void;
@@ -76,12 +78,13 @@ interface GroupTabStripProps {
 }
 
 const tabBase =
-  "inline-flex max-w-[220px] shrink-0 items-center gap-2 border-r border-b-2 border-border/40 px-3 py-2 text-xs transition-colors";
+  "inline-flex max-w-[220px] shrink-0 items-center gap-2 rounded-t-lg border border-b-0 border-border/70 px-3 py-2 text-xs shadow-sm transition-[background-color,border-color,color,box-shadow]";
 
-const tabActive = "border-b-accent bg-surface-mid text-foreground";
+const tabActive =
+  "relative z-10 border-border bg-surface text-foreground shadow-black/20 before:absolute before:inset-x-0 before:-bottom-px before:h-px before:bg-surface before:content-['']";
 
 const tabInactive =
-  "border-b-transparent bg-surface-mid text-muted-foreground hover:text-foreground";
+  "border-transparent bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-hover/50 hover:text-foreground";
 
 export function GroupTabStrip({
   sessionTabs,
@@ -98,6 +101,7 @@ export function GroupTabStrip({
   onSelectSession,
   onCloseSession,
   canCloseSessions,
+  hiddenSessionIds,
   onSelectTerminal,
   onCloseTerminal,
   onRenameTerminal,
@@ -175,9 +179,9 @@ export function GroupTabStrip({
 
   return (
     <TooltipProvider delay={300}>
-      <div className="app-region-drag shrink-0 border-b border-border bg-surface-mid">
+      <div className="app-region-drag relative shrink-0 bg-surface-mid after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border">
         <div className="native-scrollbar overflow-x-auto">
-          <div className="flex min-w-max">
+          <div className="flex min-w-max items-end gap-0 px-2 pt-1">
             {sessionTabs.map((session) => {
               const displayAgentStatus = getDisplayAgentStatus(
                 session.agentStatus,
@@ -193,6 +197,7 @@ export function GroupTabStrip({
                 !trafficTabActive &&
                 selectedSessionId === session.id;
               const hasDoneBadge = !!sessionDoneBadges[session.id];
+              const isHidden = hiddenSessionIds.has(session.id);
               return (
                 <div
                   key={session.id}
@@ -201,6 +206,7 @@ export function GroupTabStrip({
                     tabBase,
                     "max-w-[260px] gap-0 p-0",
                     isActive ? tabActive : tabInactive,
+                    isHidden && "opacity-45 saturate-0",
                   )}
                 >
                   <button
@@ -214,7 +220,7 @@ export function GroupTabStrip({
                         color,
                       )}
                     >
-                      <Circle size={6} className="fill-current" />
+                      <AgentStatusIcon agentStatus={displayAgentStatus} size={6} />
                       {hasDoneBadge && (
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75" />
                       )}

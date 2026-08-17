@@ -379,6 +379,8 @@ enum EventType {
   session_runtime_disconnected
   session_runtime_reconnected
   session_group_visibility_updated
+  session_tab_hidden
+  session_tab_restored
   session_converted
   application_config_updated
   session_setup_script_started
@@ -759,6 +761,11 @@ type Session {
   artifacts: [Artifact!]!
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+type HiddenSessionTab {
+  sessionId: ID!
+  hiddenAt: DateTime!
 }
 
 type ArtifactFile {
@@ -1843,6 +1850,7 @@ type Query {
   """
   animationSessionGroups(organizationId: ID!, includeArchived: Boolean): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
+  hiddenSessionTabs(sessionGroupId: ID!): [HiddenSessionTab!]!
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
   # Pass sessionId for one session, or sessionGroupId for every session in a group.
@@ -2083,6 +2091,7 @@ type Mutation {
     designSystemVersionId: ID
   ): Session!
   updateSessionDefaults(input: UpdateSessionDefaultsInput!): User!
+  hideSessionTab(sessionId: ID!): HiddenSessionTab!
   sendSessionMessage(
     sessionId: ID!
     text: String!

@@ -14,7 +14,7 @@ import { useDetailPanelStore } from "../../stores/detail-panel";
 import { useEntityField, useEntityStore } from "@trace/client-core";
 import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
-import { useUIStore } from "../../stores/ui";
+import { useUIStore, type UIState } from "../../stores/ui";
 import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-core";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
@@ -38,7 +38,11 @@ import { useTerminalActions } from "./useTerminalActions";
 import { useFileActions } from "./useFileActions";
 import { useSessionGroupFiles } from "./useSessionGroupFiles";
 import { useSessionGroupDirectoryTree } from "./useSessionGroupDirectoryTree";
-import { getSessionGroupDisplayStatus, isTerminalStatus } from "./sessionStatus";
+import {
+  getSessionGroupAgentStatus,
+  getSessionGroupDisplayStatus,
+  isTerminalStatus,
+} from "./sessionStatus";
 import { isAnimationCanvasReady, isAppCanvasReady } from "./app-session-readiness";
 import { isGeneratedProjectCanvasReady } from "./generated-project-readiness";
 import { getProjectWorkspaceKind, usesFloatingProjectChat } from "./project-workspace-kind";
@@ -59,6 +63,25 @@ const DEFAULT_SESSION_SIDEBAR_WIDTH = 300;
 const MIN_SESSION_SIDEBAR_WIDTH = 240;
 const MAX_SESSION_SIDEBAR_WIDTH = 560;
 const EMPTY_ARTIFACT_IDS: string[] = [];
+const EMPTY_HIDDEN_SESSION_TABS: Record<string, string> = {};
+
+const HIDDEN_SESSION_TABS_QUERY = gql`
+  query HiddenSessionTabs($sessionGroupId: ID!) {
+    hiddenSessionTabs(sessionGroupId: $sessionGroupId) {
+      sessionId
+      hiddenAt
+    }
+  }
+`;
+
+const HIDE_SESSION_TAB_MUTATION = gql`
+  mutation HideSessionTab($sessionId: ID!) {
+    hideSessionTab(sessionId: $sessionId) {
+      sessionId
+      hiddenAt
+    }
+  }
+`;
 
 function clampSessionSidebarWidth(width: number): number {
   return Math.min(MAX_SESSION_SIDEBAR_WIDTH, Math.max(MIN_SESSION_SIDEBAR_WIDTH, width));
@@ -252,11 +275,15 @@ export function SessionGroupDetailView({
     (s: { openSessionTabsByGroup: Record<string, string[]> }) =>
       s.openSessionTabsByGroup[sessionGroupId],
   );
+  const hiddenSessionTabs = useUIStore(
+    (s: { hiddenSessionTabsByGroup: Record<string, Record<string, string>> }) =>
+      s.hiddenSessionTabsByGroup[sessionGroupId] ?? EMPTY_HIDDEN_SESSION_TABS,
+  );
+  const setHiddenSessionTabs = useUIStore(
+    (s: { setHiddenSessionTabs: UIState["setHiddenSessionTabs"] }) => s.setHiddenSessionTabs,
+  );
   const openSessionTab = useUIStore(
     (s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab,
-  );
-  const closeSessionTab = useUIStore(
-    (s: { closeSessionTab: (groupId: string, sessionId: string) => void }) => s.closeSessionTab,
   );
   const initSessionTabs = useUIStore(
     (s: { initSessionTabs: (groupId: string, sessionIds: string[]) => void }) => s.initSessionTabs,
@@ -317,8 +344,30 @@ export function SessionGroupDetailView({
     (s: { renameTerminal: (id: string, name: string) => void }) => s.renameTerminal,
   );
 
+  const hiddenSessionIds = useMemo(
+    () => new Set(Object.keys(hiddenSessionTabs)),
+    [hiddenSessionTabs],
+  );
   const { groupSessions, selectedSession, sessionTabs, sessionsByRecency } =
-    useSessionGroupSessions(sessionGroupId, openTabIds, activeSessionId);
+    useSessionGroupSessions(sessionGroupId, openTabIds, activeSessionId, hiddenSessionIds);
+  const closedSessions = useMemo(
+    () => groupSessions.filter((session) => hiddenSessionIds.has(session.id)),
+    [groupSessions, hiddenSessionIds],
+  );
+
+  useEffect(() => {
+    void client
+      .query(HIDDEN_SESSION_TABS_QUERY, { sessionGroupId }, { requestPolicy: "network-only" })
+      .toPromise()
+      .then((result) => {
+        const tabs = (
+          result.data as
+            | { hiddenSessionTabs?: Array<{ sessionId: string; hiddenAt: string }> }
+            | undefined
+        )?.hiddenSessionTabs;
+        if (tabs) setHiddenSessionTabs(sessionGroupId, tabs);
+      });
+  }, [sessionGroupId, setHiddenSessionTabs]);
 
   const {
     handleOpenTerminal,
@@ -412,15 +461,15 @@ export function SessionGroupDetailView({
   // Auto-select the most recent session if none is selected
   useEffect(() => {
     if (activeSessionGroupId !== sessionGroupId) return;
-    if (sessionsByRecency.length === 0) return;
-    if (activeSessionId && sessionsByRecency.some((s: SessionEntity) => s.id === activeSessionId))
+    if (sessionTabs.length === 0) return;
+    if (activeSessionId && sessionTabs.some((s: SessionEntity) => s.id === activeSessionId))
       return;
-    setActiveSessionId(sessionsByRecency[0].id);
+    setActiveSessionId(sessionTabs[0].id);
   }, [
     activeSessionGroupId,
     activeSessionId,
     sessionGroupId,
-    sessionsByRecency,
+    sessionTabs,
     setActiveSessionId,
   ]);
 
@@ -428,7 +477,7 @@ export function SessionGroupDetailView({
     (session: SessionEntity) => session.id === activeSessionId,
   );
   const initialSessionTabId =
-    activeSessionId && activeSessionBelongsToGroup ? activeSessionId : sessionsByRecency[0]?.id;
+    activeSessionId && activeSessionBelongsToGroup ? activeSessionId : sessionTabs[0]?.id;
 
   // Initialize open tabs with the active deep-linked session when possible.
   useEffect(() => {
@@ -532,6 +581,10 @@ export function SessionGroupDetailView({
     groupSessions.map((session) => session.sessionStatus),
     groupArchivedAt ?? null,
     groupPrUrl,
+  );
+  const displayAgentStatus = getSessionGroupAgentStatus(
+    groupSessions.map((session) => session.agentStatus),
+    groupSessions,
   );
   const selectedSessionMergedUnavailable =
     selectedSession?.sessionStatus === "merged" && groupWorktreeDeleted !== false;
@@ -670,14 +723,26 @@ export function SessionGroupDetailView({
     setActiveArtifactId(null);
     setActiveFilePath(null);
     void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
-  }, [handleOpenTerminal, selectedSession, setActiveArtifactId, setActiveFilePath, terminalAllowed]);
+  }, [
+    handleOpenTerminal,
+    selectedSession,
+    setActiveArtifactId,
+    setActiveFilePath,
+    terminalAllowed,
+  ]);
 
   const handleCreateTerminalTab = useCallback(() => {
     setActiveWorkflowTab("session");
     setActiveArtifactId(null);
     setActiveFilePath(null);
     void handleCreateTerminal(selectedSession ?? null, terminalAllowed);
-  }, [handleCreateTerminal, selectedSession, setActiveArtifactId, setActiveFilePath, terminalAllowed]);
+  }, [
+    handleCreateTerminal,
+    selectedSession,
+    setActiveArtifactId,
+    setActiveFilePath,
+    terminalAllowed,
+  ]);
 
   const showSidebarTab = useCallback((tab: SidebarTab) => {
     setShowApplicationsSidebar(false);
@@ -823,8 +888,8 @@ export function SessionGroupDetailView({
       handleCloseTerminal(activeTerminalId);
       return;
     }
-    if (activeSessionId && (openTabIds?.length ?? 0) > 1) {
-      closeSessionTab(sessionGroupId, activeSessionId);
+    if (activeSessionId) {
+      void client.mutation(HIDE_SESSION_TAB_MUTATION, { sessionId: activeSessionId }).toPromise();
       return;
     }
     setActiveSessionGroupId(null);
@@ -835,13 +900,10 @@ export function SessionGroupDetailView({
     activeFilePath,
     activeTerminalId,
     activeSessionId,
-    openTabIds,
     handleCloseTrafficTab,
     handleCloseArtifact,
     handleCloseFile,
     handleCloseTerminal,
-    closeSessionTab,
-    sessionGroupId,
     setActiveSessionGroupId,
   ]);
 
@@ -948,9 +1010,16 @@ export function SessionGroupDetailView({
     [setActiveArtifactId, setActiveSessionId, setActiveTerminalId, setActiveFilePath],
   );
 
-  const handleCloseSession = useCallback(
-    (sessionId: string) => closeSessionTab(sessionGroupId, sessionId),
-    [closeSessionTab, sessionGroupId],
+  const handleCloseSession = useCallback((sessionId: string) => {
+    void client.mutation(HIDE_SESSION_TAB_MUTATION, { sessionId }).toPromise();
+  }, []);
+
+  const handleRestoreSession = useCallback(
+    (sessionId: string) => {
+      openSessionTab(sessionGroupId, sessionId);
+      handleSelectSession(sessionId);
+    },
+    [handleSelectSession, openSessionTab, sessionGroupId],
   );
 
   const handleOpenArtifact = useCallback(
@@ -1001,11 +1070,14 @@ export function SessionGroupDetailView({
               selectedSessionStatus={selectedSessionStatus}
               selectedSessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
               selectedAgentStatus={selectedSession?.agentStatus}
+              displayAgentStatus={displayAgentStatus}
               selectedHosting={selectedSession?.hosting}
               selectedConnection={
                 selectedSession?.connection as Record<string, unknown> | null | undefined
               }
               selectedWorktreeDeleted={selectedSession?.worktreeDeleted}
+              closedSessions={closedSessions}
+              onRestoreClosedSession={handleRestoreSession}
               canMoveSession={canMoveSelectedSession && selectedSessionBridgeInteractionAllowed}
               moveDisabledReason={moveDisabledReason}
               groupPrUrl={groupPrUrl}
@@ -1036,7 +1108,8 @@ export function SessionGroupDetailView({
                 trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
                 onSelectSession={handleSelectSession}
                 onCloseSession={handleCloseSession}
-                canCloseSessions={false}
+                canCloseSessions={sessionTabs.length > 0}
+                hiddenSessionIds={hiddenSessionIds}
                 onSelectTerminal={handleSelectTerminalTab}
                 onCloseTerminal={handleCloseTerminal}
                 onRenameTerminal={renameTerminal}
