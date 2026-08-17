@@ -81,6 +81,22 @@ export function countSpatialColumnsForTab(node: SpatialNode, tabId: string): num
     : 0;
 }
 
+export function getSpatialRowPositionForTab(
+  node: SpatialNode,
+  tabId: string,
+): "full" | "top" | "bottom" | null {
+  if (node.type !== "split" || node.direction !== "vertical") {
+    return getSpatialGroups(node).some((group) => group.tabIds.includes(tabId)) ? "full" : null;
+  }
+  if (getSpatialGroups(node.children[0]).some((group) => group.tabIds.includes(tabId))) {
+    return "top";
+  }
+  if (getSpatialGroups(node.children[1]).some((group) => group.tabIds.includes(tabId))) {
+    return "bottom";
+  }
+  return null;
+}
+
 export function activateSpatialTab(
   layout: SpatialLayout,
   groupId: string,

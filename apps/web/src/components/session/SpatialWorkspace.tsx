@@ -37,6 +37,7 @@ import {
   createSpatialLayout,
   dockSpatialTab,
   getSpatialAxisSpan,
+  getSpatialRowPositionForTab,
   insertSpatialTab,
   isSpatialLayout,
   moveSpatialTab,
@@ -167,6 +168,9 @@ export function SpatialWorkspace({
   const draggedRowColumnCount = draggedTabId
     ? countSpatialColumnsForTab(layout.root, draggedTabId)
     : 0;
+  const draggedRowPosition = draggedTabId
+    ? getSpatialRowPositionForTab(layout.root, draggedTabId)
+    : null;
   const hasVerticalSplit = layout.root.type === "split" && layout.root.direction === "vertical";
 
   return (
@@ -237,6 +241,7 @@ export function SpatialWorkspace({
           <SpatialWorkspaceSnapTargets
             canAddColumn={draggedRowColumnCount < MAX_SPATIAL_COLUMNS}
             canAddRow={!hasVerticalSplit}
+            rowPosition={draggedRowPosition ?? "full"}
           />
         ) : null}
       </div>
@@ -492,12 +497,17 @@ function SpatialGroupDropTarget({ groupIsOver }: { groupIsOver: boolean }) {
 function SpatialWorkspaceSnapTargets({
   canAddColumn,
   canAddRow,
+  rowPosition,
 }: {
   canAddColumn: boolean;
   canAddRow: boolean;
+  rowPosition: "full" | "top" | "bottom";
 }) {
   return (
-    <div className="pointer-events-none absolute inset-2 z-40">
+    <div
+      className="pointer-events-none absolute z-40"
+      style={workspaceSnapTargetBounds(rowPosition)}
+    >
       {canAddColumn
         ? (["left", "right"] as const).map((edge) => (
             <SpatialSnapTarget key={edge} edge={edge} />
@@ -510,6 +520,16 @@ function SpatialWorkspaceSnapTargets({
         : null}
     </div>
   );
+}
+
+function workspaceSnapTargetBounds(position: "full" | "top" | "bottom") {
+  if (position === "top") {
+    return { left: "0.5rem", right: "0.5rem", top: "0.5rem", height: "calc(50% - 0.5rem)" };
+  }
+  if (position === "bottom") {
+    return { left: "0.5rem", right: "0.5rem", bottom: "0.5rem", height: "calc(50% - 0.5rem)" };
+  }
+  return { inset: "0.5rem" };
 }
 
 function SpatialSnapTarget({ edge }: { edge: SpatialEdge }) {

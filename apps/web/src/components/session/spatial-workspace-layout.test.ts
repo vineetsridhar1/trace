@@ -7,6 +7,7 @@ import {
   dockSpatialTab,
   getSpatialAxisSpan,
   getSpatialGroups,
+  getSpatialRowPositionForTab,
   insertSpatialTab,
   moveSpatialTab,
   normalizeSpatialLayout,
@@ -67,6 +68,8 @@ describe("spatial workspace layout", () => {
       ["browser"],
       ["draft:new"],
     ]);
+    expect(getSpatialRowPositionForTab(layout.root, "chat")).toBe("top");
+    expect(getSpatialRowPositionForTab(layout.root, "draft:new")).toBe("bottom");
   });
 
   it("gives three same-direction regions equal top-level space", () => {
