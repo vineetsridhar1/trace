@@ -89,7 +89,7 @@ export function BranchChangesPanel({ sessionGroupId, onFileClick }: BranchChange
             <summary className="cursor-pointer list-none text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground">
               Technical details
             </summary>
-            <p className="mt-2 break-words rounded-lg bg-black/15 px-3 py-2 text-[10px] leading-relaxed text-muted-foreground">
+            <p className="mt-2 break-words rounded-lg bg-muted/50 px-3 py-2 text-[10px] leading-relaxed text-muted-foreground">
               {error.replace(/^\[GraphQL\]\s*/, "")}
             </p>
           </details>

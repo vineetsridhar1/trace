@@ -39,7 +39,7 @@ export function FileTreeItem({
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
       >
         {activeFilePath === node.path ? (
-          <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-blue-400" />
+          <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-primary" />
         ) : null}
         {node.isDirectory ? (
           <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">

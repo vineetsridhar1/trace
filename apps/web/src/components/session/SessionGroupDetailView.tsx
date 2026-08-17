@@ -91,11 +91,17 @@ function clampSessionSidebarWidth(width: number): number {
 function getStoredSessionSidebarWidth(): number {
   if (typeof window === "undefined") return DEFAULT_SESSION_SIDEBAR_WIDTH;
 
-  const stored = localStorage.getItem(SESSION_SIDEBAR_WIDTH_KEY);
-  if (!stored) return DEFAULT_SESSION_SIDEBAR_WIDTH;
+  try {
+    const stored = localStorage.getItem(SESSION_SIDEBAR_WIDTH_KEY);
+    if (!stored) return DEFAULT_SESSION_SIDEBAR_WIDTH;
 
-  const parsed = parseInt(stored, 10);
-  return Number.isFinite(parsed) ? clampSessionSidebarWidth(parsed) : DEFAULT_SESSION_SIDEBAR_WIDTH;
+    const parsed = parseInt(stored, 10);
+    return Number.isFinite(parsed)
+      ? clampSessionSidebarWidth(parsed)
+      : DEFAULT_SESSION_SIDEBAR_WIDTH;
+  } catch {
+    return DEFAULT_SESSION_SIDEBAR_WIDTH;
+  }
 }
 
 function isSidebarTab(value: unknown): value is SidebarTab {
@@ -115,10 +121,9 @@ function getStoredSessionSidebarState(sessionGroupId: string): {
   const fallback = { open: false, tab: "files" as const };
   if (typeof window === "undefined") return fallback;
 
-  const stored = localStorage.getItem(`${SESSION_SIDEBAR_STATE_KEY_PREFIX}${sessionGroupId}`);
-  if (!stored) return fallback;
-
   try {
+    const stored = localStorage.getItem(`${SESSION_SIDEBAR_STATE_KEY_PREFIX}${sessionGroupId}`);
+    if (!stored) return fallback;
     const parsed: unknown = JSON.parse(stored);
     if (!parsed || typeof parsed !== "object") return fallback;
 
@@ -378,10 +383,14 @@ export function SessionGroupDetailView({
   const sidebarResizeCleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    localStorage.setItem(
-      `${SESSION_SIDEBAR_STATE_KEY_PREFIX}${sessionGroupId}`,
-      JSON.stringify({ open: showSidebar, tab: sidebarTab }),
-    );
+    try {
+      localStorage.setItem(
+        `${SESSION_SIDEBAR_STATE_KEY_PREFIX}${sessionGroupId}`,
+        JSON.stringify({ open: showSidebar, tab: sidebarTab }),
+      );
+    } catch {
+      // Persistence is optional when browser storage is unavailable.
+    }
   }, [sessionGroupId, showSidebar, sidebarTab]);
 
   const handleOpenForkDialog = useCallback((eventId: string) => {
@@ -802,7 +811,11 @@ export function SessionGroupDetailView({
         sidebarResizeCleanupRef.current?.();
         setIsResizingSidebar(false);
         setSidebarWidth((width) => {
-          localStorage.setItem(SESSION_SIDEBAR_WIDTH_KEY, String(width));
+          try {
+            localStorage.setItem(SESSION_SIDEBAR_WIDTH_KEY, String(width));
+          } catch {
+            // Persistence is optional when browser storage is unavailable.
+          }
           return width;
         });
       };
