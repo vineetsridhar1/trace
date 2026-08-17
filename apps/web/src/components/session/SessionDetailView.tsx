@@ -652,6 +652,8 @@ export function SessionDetailView({
     !visiblePlanArtifact &&
     !worktreeDeleted &&
     !(isDisconnected(connection) && !isNotStarted);
+  const centeredComposer =
+    composerActive && !condensed && !initialEventsLoading && listNodes.length === 0;
 
   // The bottom bar (composer / plan / question / notice) floats over the message
   // list so content scrolls behind it. Measure its height to pad the scroll area
@@ -786,7 +788,11 @@ export function SessionDetailView({
           </div>
           <div
             ref={bottomBarRef}
-            className={cn("absolute inset-x-0 bottom-0 z-10", condensed && showQuestion && "top-0")}
+            className={cn(
+              "absolute inset-x-0 bottom-0 z-10",
+              condensed && showQuestion && "top-0",
+              centeredComposer && "pointer-events-none top-0 flex items-center justify-center",
+            )}
           >
             {showQuestion || pinnedQuestion ? (
               <>
@@ -814,6 +820,7 @@ export function SessionDetailView({
                       sessionGroupId={sessionGroupId ?? null}
                       onAccessRequested={refreshBridgeAccess}
                       condensed={condensed}
+                      centered={centeredComposer}
                     />
                   </>
                 ) : null}
@@ -858,6 +865,7 @@ export function SessionDetailView({
                   sessionGroupId={sessionGroupId ?? null}
                   onAccessRequested={refreshBridgeAccess}
                   condensed={condensed}
+                  centered={centeredComposer}
                 />
               </>
             )}

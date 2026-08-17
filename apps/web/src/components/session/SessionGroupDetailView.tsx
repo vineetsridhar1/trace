@@ -38,7 +38,7 @@ import { AttachmentOpenContext, UploadedAttachmentOpenContext } from "./Attachme
 import { FileOpenContext } from "./FileOpenContext";
 import { WorkspaceSurfaceContent, type WorkspaceSurface } from "./SidebarPanel";
 import { SpatialWorkspace, type SpatialWorkspaceTab } from "./SpatialWorkspace";
-import { SpatialNewTab } from "./SpatialNewTab";
+import { SpatialNewTab, type SpatialNewChatInput } from "./SpatialNewTab";
 import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
 import { AppSessionPreviewPanel } from "./applications/AppSessionPreviewPanel";
 import { AnimationSessionPreviewPanel } from "./applications/AnimationSessionPreviewPanel";
@@ -732,7 +732,7 @@ export function SessionGroupDetailView({
     !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed;
   const canOpenTerminalCmd = !selectedSessionIsOptimistic && terminalAllowed;
 
-  const handleNewChat = useCallback(async () => {
+  const handleNewChat = useCallback(async (input?: Partial<SpatialNewChatInput>) => {
     if (!selectedSession || selectedSession._optimistic || !bridgeInteractionAllowed) return null;
     const resolvedChannelId =
       getSessionGroupChannelId(
@@ -749,12 +749,18 @@ export function SessionGroupDetailView({
       return null;
     }
     const selectedHosting = resolveSupportedHostingForRepo(selectedSession.hosting, selectedRepo);
+    const nextTool = input?.tool ?? selectedSession.tool;
+    const nextModel = input?.model === undefined ? selectedSession.model : input.model;
+    const nextReasoningEffort =
+      input?.reasoningEffort === undefined
+        ? selectedSession.reasoningEffort
+        : input.reasoningEffort;
     const result = await client
       .mutation(START_SESSION_MUTATION, {
         input: {
-          tool: selectedSession.tool,
-          model: selectedSession.model ?? undefined,
-          reasoningEffort: selectedSession.reasoningEffort ?? undefined,
+          tool: nextTool,
+          model: nextModel ?? undefined,
+          reasoningEffort: nextReasoningEffort ?? undefined,
           channelId: resolvedChannelId ?? undefined,
           repoId: selectedRepo?.id,
           branch: groupBranch ?? selectedSession.branch ?? undefined,
@@ -778,9 +784,9 @@ export function SessionGroupDetailView({
     optimisticallyInsertSession({
       id: newSessionId,
       sessionGroupId,
-      tool: selectedSession.tool,
-      model: selectedSession.model,
-      reasoningEffort: selectedSession.reasoningEffort,
+      tool: nextTool,
+      model: nextModel,
+      reasoningEffort: nextReasoningEffort,
       hosting: selectedHosting ?? selectedSession.hosting,
       channel: resolvedChannelId ? { id: resolvedChannelId } : null,
       repo: selectedRepo,
@@ -1104,6 +1110,9 @@ export function SessionGroupDetailView({
               !!selectedSession && !selectedSession._optimistic && bridgeInteractionAllowed
             }
             canShowApplications={showApplicationsSidebarTab}
+            defaultTool={selectedSession?.tool}
+            defaultModel={selectedSession?.model}
+            defaultReasoningEffort={selectedSession?.reasoningEffort}
             onConvert={(surface) =>
               setDraftWorkspaceTabs((drafts) =>
                 drafts.map((candidate) =>
@@ -1111,13 +1120,22 @@ export function SessionGroupDetailView({
                 ),
               )
             }
-            onStartChat={async (prompt) => {
-              const sessionId = await handleNewChat();
-              if (!sessionId) return;
-              await sendOptimisticSessionMessage({ sessionId, text: prompt });
+            onStartChat={async (input) => {
+              const sessionId = await handleNewChat(input);
+              if (!sessionId) return false;
+              await sendOptimisticSessionMessage({
+                sessionId,
+                text: input.prompt,
+                imageKeys: input.attachmentKeys.length > 0 ? input.attachmentKeys : undefined,
+                imagePreviewUrls:
+                  input.imagePreviewUrls.length > 0 ? input.imagePreviewUrls : undefined,
+                interactionMode:
+                  input.interactionMode === "code" ? undefined : input.interactionMode,
+              });
               setDraftWorkspaceTabs((drafts) =>
                 drafts.filter((candidate) => candidate.id !== tabId),
               );
+              return true;
             }}
           />
         );

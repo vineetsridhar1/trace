@@ -48,6 +48,7 @@ export function SessionInput({
   sessionGroupId,
   onAccessRequested,
   condensed = false,
+  centered = false,
 }: {
   sessionId: string;
   onStop: () => void;
@@ -55,6 +56,7 @@ export function SessionInput({
   sessionGroupId?: string | null;
   onAccessRequested?: () => void | Promise<void>;
   condensed?: boolean;
+  centered?: boolean;
 }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
@@ -409,7 +411,11 @@ export function SessionInput({
   return (
     <div
       className={
-        condensed ? "shrink-0 bg-background px-3 pb-3" : "shrink-0 bg-background px-4 pb-8"
+        centered
+          ? "pointer-events-auto w-full bg-transparent px-8"
+          : condensed
+            ? "shrink-0 bg-background px-3 pb-3"
+            : "shrink-0 bg-background px-4 pb-8"
       }
     >
       <DesignPickerDialog
@@ -417,7 +423,25 @@ export function SessionInput({
         open={showDesignPicker}
         onOpenChange={setShowDesignPicker}
       />
-      <div className={condensed ? "relative mx-auto w-full" : "relative mx-auto w-[90%]"}>
+      <div
+        className={
+          centered
+            ? "relative mx-auto w-full max-w-3xl"
+            : condensed
+              ? "relative mx-auto w-full"
+              : "relative mx-auto w-[90%]"
+        }
+      >
+        {centered ? (
+          <div className="mb-7 text-center">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+              What do you want to work on?
+            </h1>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Add instructions, images, or files to start this session.
+            </p>
+          </div>
+        ) : null}
         {preparing && (
           <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
             <TraceLoader size={12} showLabel={false} className="shrink-0" />
