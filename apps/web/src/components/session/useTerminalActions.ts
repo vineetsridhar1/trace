@@ -15,6 +15,8 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
   const setActiveTerminalId = useUIStore((s) => s.setActiveTerminalId);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const pinTerminal = useTerminalStore((s) => s.pinTerminal);
+  const requestPinnedTerminal = useTerminalStore((s) => s.requestPinnedTerminal);
+  const cancelPinnedTerminalRequest = useTerminalStore((s) => s.cancelPinnedTerminalRequest);
 
   const ensureSessionTerminals = useCallback(
     async (sessionId: string) => {
@@ -49,22 +51,21 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
         return;
       }
 
+      requestPinnedTerminal(session.id);
+      setActiveSessionId(session.id);
       const result = await client
         .mutation(CREATE_TERMINAL_MUTATION, { sessionId: session.id, cols: 80, rows: 24 })
         .toPromise();
-      if (result.data?.createTerminal) {
-        const { id } = result.data.createTerminal as { id: string };
-        addTerminal(id, session.id, sessionGroupId, "connecting");
-        pinTerminal(id);
-        setActiveSessionId(session.id);
-        setActiveTerminalId(id);
+      if (result.error) {
+        cancelPinnedTerminalRequest(session.id);
       }
     },
     [
       addTerminal,
+      cancelPinnedTerminalRequest,
       ensureSessionTerminals,
       pinTerminal,
-      sessionGroupId,
+      requestPinnedTerminal,
       setActiveSessionId,
       setActiveTerminalId,
     ],
@@ -73,17 +74,14 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
   const handleCreateTerminal = useCallback(
     async (session: { id: string; _optimistic?: boolean } | null, terminalAllowed: boolean) => {
       if (!session || session._optimistic || !terminalAllowed) return;
+      requestPinnedTerminal(session.id);
+      setActiveSessionId(session.id);
       const result = await client
         .mutation(CREATE_TERMINAL_MUTATION, { sessionId: session.id, cols: 80, rows: 24 })
         .toPromise();
-      if (!result.data?.createTerminal) return;
-      const { id } = result.data.createTerminal as { id: string };
-      addTerminal(id, session.id, sessionGroupId, "connecting");
-      pinTerminal(id);
-      setActiveSessionId(session.id);
-      setActiveTerminalId(id);
+      if (result.error) cancelPinnedTerminalRequest(session.id);
     },
-    [addTerminal, pinTerminal, sessionGroupId, setActiveSessionId, setActiveTerminalId],
+    [cancelPinnedTerminalRequest, requestPinnedTerminal, setActiveSessionId],
   );
 
   const handleSelectTerminal = useCallback(

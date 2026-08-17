@@ -1,5 +1,5 @@
 import type { Event } from "@trace/gql";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTerminalStore } from "./terminal";
 import { reconcileTerminalEvent } from "./terminal-events";
 import { useUIStore } from "./ui";
@@ -17,9 +17,21 @@ function terminalEvent(eventType: Event["eventType"], payload: Record<string, un
 
 describe("terminal lifecycle event reconciliation", () => {
   beforeEach(() => {
-    useTerminalStore.setState({ terminals: {}, pinnedTerminalIds: {} });
-    useUIStore.setState({ activeTerminalId: null });
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    });
+    vi.stubGlobal("history", { pushState: vi.fn(), replaceState: vi.fn() });
+    useTerminalStore.setState({
+      terminals: {},
+      pinnedTerminalIds: {},
+      pendingPinnedTerminalSessions: {},
+    });
+    useUIStore.setState({ activeSessionId: null, activeTerminalId: null });
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it("adds a terminal from metadata-only terminal_created events", () => {
     reconcileTerminalEvent(
@@ -52,6 +64,27 @@ describe("terminal lifecycle event reconciliation", () => {
 
     expect(useTerminalStore.getState().terminals["terminal-1"]).toBeUndefined();
     expect(useUIStore.getState().activeTerminalId).toBeNull();
+  });
+
+  it("pins and selects a created terminal when the client requested it", () => {
+    useTerminalStore.getState().requestPinnedTerminal("session-1");
+
+    reconcileTerminalEvent(
+      terminalEvent("terminal_created", {
+        terminal: {
+          id: "terminal-1",
+          sessionId: "session-1",
+          sessionGroupId: "group-1",
+          status: "active",
+          closed: false,
+        },
+      }),
+    );
+
+    expect(useTerminalStore.getState().pinnedTerminalIds).toEqual({ "terminal-1": true });
+    expect(useTerminalStore.getState().pendingPinnedTerminalSessions).toEqual({});
+    expect(useUIStore.getState().activeSessionId).toBe("session-1");
+    expect(useUIStore.getState().activeTerminalId).toBe("terminal-1");
   });
 
   it("ignores malformed lifecycle payloads", () => {

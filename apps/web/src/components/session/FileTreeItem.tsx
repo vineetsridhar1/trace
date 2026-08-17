@@ -8,7 +8,7 @@ export interface FileTreeItemProps {
   node: FileTreeNode;
   activeFilePath?: string | null;
   depth: number;
-  expandedPaths: Set<string>;
+  isExpanded: boolean;
   onToggle: (path: string) => void;
   onFileClick: (path: string) => void;
 }
@@ -17,15 +17,12 @@ export function FileTreeItem({
   node,
   activeFilePath,
   depth,
-  expandedPaths,
+  isExpanded,
   onToggle,
   onFileClick,
 }: FileTreeItemProps) {
-  const isExpanded = expandedPaths.has(node.path);
-
   return (
-    <>
-      <button
+    <button
         type="button"
         onClick={() => {
           if (node.isDirectory) {
@@ -59,38 +56,6 @@ export function FileTreeItem({
         )}
         {!node.isDirectory ? <FileIcon path={node.path} size={14} /> : null}
         <span className="truncate">{node.name}</span>
-      </button>
-      {node.isDirectory && isExpanded && (
-        <>
-          {node.children.map((child) => (
-            <FileTreeItem
-              key={child.path}
-              node={child}
-              activeFilePath={activeFilePath}
-              depth={depth + 1}
-              expandedPaths={expandedPaths}
-              onToggle={onToggle}
-              onFileClick={onFileClick}
-            />
-          ))}
-          {node.error && (
-            <div
-              className="py-[1px] text-[13px] italic leading-[22px] text-destructive"
-              style={{ paddingLeft: `${(depth + 1) * 14 + 28}px` }}
-            >
-              {node.error}
-            </div>
-          )}
-          {!node.error && node.isLoaded && node.children.length === 0 && (
-            <div
-              className="py-[1px] text-[13px] italic leading-[22px] text-muted-foreground"
-              style={{ paddingLeft: `${(depth + 1) * 14 + 28}px` }}
-            >
-              empty
-            </div>
-          )}
-        </>
-      )}
-    </>
+    </button>
   );
 }

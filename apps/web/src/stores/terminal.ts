@@ -22,6 +22,7 @@ interface AddTerminalOptions {
 interface TerminalState {
   terminals: Record<string, TerminalEntry>;
   pinnedTerminalIds: Record<string, boolean>;
+  pendingPinnedTerminalSessions: Record<string, number>;
   addTerminal: (
     id: string,
     sessionId: string,
@@ -33,6 +34,9 @@ interface TerminalState {
   renameTerminal: (id: string, name: string) => void;
   pinTerminal: (id: string) => void;
   unpinTerminal: (id: string) => void;
+  requestPinnedTerminal: (sessionId: string) => void;
+  cancelPinnedTerminalRequest: (sessionId: string) => void;
+  consumePinnedTerminalRequest: (sessionId: string) => boolean;
   removeTerminal: (id: string) => void;
 }
 
@@ -41,6 +45,7 @@ type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
 export const useTerminalStore = create<TerminalState>((set: SetState<TerminalState>) => ({
   terminals: {},
   pinnedTerminalIds: {},
+  pendingPinnedTerminalSessions: {},
 
   addTerminal: (
     id: string,
@@ -91,6 +96,37 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
       return { pinnedTerminalIds: rest };
     }),
 
+  requestPinnedTerminal: (sessionId: string) =>
+    set((state: TerminalState) => ({
+      pendingPinnedTerminalSessions: {
+        ...state.pendingPinnedTerminalSessions,
+        [sessionId]: (state.pendingPinnedTerminalSessions[sessionId] ?? 0) + 1,
+      },
+    })),
+
+  cancelPinnedTerminalRequest: (sessionId: string) =>
+    set((state: TerminalState) => ({
+      pendingPinnedTerminalSessions: decrementPendingRequest(
+        state.pendingPinnedTerminalSessions,
+        sessionId,
+      ),
+    })),
+
+  consumePinnedTerminalRequest: (sessionId: string) => {
+    let consumed = false;
+    set((state: TerminalState) => {
+      consumed = (state.pendingPinnedTerminalSessions[sessionId] ?? 0) > 0;
+      if (!consumed) return {};
+      return {
+        pendingPinnedTerminalSessions: decrementPendingRequest(
+          state.pendingPinnedTerminalSessions,
+          sessionId,
+        ),
+      };
+    });
+    return consumed;
+  },
+
   removeTerminal: (id: string) =>
     set((state: TerminalState) => {
       const { [id]: _, ...rest } = state.terminals;
@@ -98,6 +134,18 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
       return { terminals: rest, pinnedTerminalIds: remainingPinnedIds };
     }),
 }));
+
+function decrementPendingRequest(
+  requests: Record<string, number>,
+  sessionId: string,
+): Record<string, number> {
+  const count = requests[sessionId] ?? 0;
+  if (count <= 1) {
+    const { [sessionId]: _, ...rest } = requests;
+    return rest;
+  }
+  return { ...requests, [sessionId]: count - 1 };
+}
 
 export function useSessionGroupTerminals(sessionGroupId: string): TerminalEntry[] {
   return useTerminalStore(

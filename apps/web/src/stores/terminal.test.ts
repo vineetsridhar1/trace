@@ -3,7 +3,11 @@ import { useTerminalStore } from "./terminal";
 
 describe("terminal pinning", () => {
   beforeEach(() => {
-    useTerminalStore.setState({ terminals: {}, pinnedTerminalIds: {} });
+    useTerminalStore.setState({
+      terminals: {},
+      pinnedTerminalIds: {},
+      pendingPinnedTerminalSessions: {},
+    });
   });
 
   it("pins and unpins an existing terminal", () => {
@@ -26,5 +30,17 @@ describe("terminal pinning", () => {
 
     expect(useTerminalStore.getState().terminals).toEqual({});
     expect(useTerminalStore.getState().pinnedTerminalIds).toEqual({});
+  });
+
+  it("tracks multiple pending pin requests for the same session", () => {
+    const store = useTerminalStore.getState();
+    store.requestPinnedTerminal("session-1");
+    store.requestPinnedTerminal("session-1");
+
+    expect(useTerminalStore.getState().consumePinnedTerminalRequest("session-1")).toBe(true);
+    expect(useTerminalStore.getState().pendingPinnedTerminalSessions).toEqual({ "session-1": 1 });
+
+    useTerminalStore.getState().cancelPinnedTerminalRequest("session-1");
+    expect(useTerminalStore.getState().pendingPinnedTerminalSessions).toEqual({});
   });
 });

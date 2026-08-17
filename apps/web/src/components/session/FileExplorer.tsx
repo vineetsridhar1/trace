@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Search } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { TraceLoader } from "../ui/trace-loader";
-import type { FileTreeNode } from "./file-explorer-utils";
+import {
+  flattenVisibleFileTree,
+  type FileTreeNode,
+} from "./file-explorer-utils";
 import { FileTreeItem } from "./FileTreeItem";
+import { cn } from "../../lib/utils";
 
 export function FileExplorer({
   tree,
@@ -24,6 +29,7 @@ export function FileExplorer({
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const didAutoExpandRef = useRef(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const loadedDirectoryPaths = useMemo(() => {
     const paths = new Set<string>();
     const visit = (node: FileTreeNode) => {
@@ -54,6 +60,16 @@ export function FileExplorer({
     for (const node of visibleTree) visit(node);
     return paths;
   }, [expandedPaths, search, visibleTree]);
+  const flattenedRows = useMemo(
+    () => flattenVisibleFileTree(visibleTree, visibleExpandedPaths),
+    [visibleExpandedPaths, visibleTree],
+  );
+  const virtualizer = useVirtualizer({
+    count: flattenedRows.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => 24,
+    overscan: 12,
+  });
 
   // Auto-expand first level + single-child directory chains on initial load
   useEffect(() => {
@@ -155,18 +171,43 @@ export function FileExplorer({
           <RefreshCw size={12} />
         </button>
       </div>
-      <div className="native-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        {visibleTree.map((node: FileTreeNode) => (
-          <FileTreeItem
-            key={node.path}
-            node={node}
-            activeFilePath={activeFilePath}
-            depth={0}
-            expandedPaths={visibleExpandedPaths}
-            onToggle={handleToggle}
-            onFileClick={onFileClick}
-          />
-        ))}
+      <div
+        ref={scrollContainerRef}
+        className="native-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2"
+      >
+        <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const row = flattenedRows[virtualRow.index];
+            return (
+              <div
+                key={row.key}
+                className="absolute left-0 top-0 w-full"
+                style={{ transform: `translateY(${virtualRow.start}px)` }}
+              >
+                {row.kind === "node" ? (
+                  <FileTreeItem
+                    node={row.node}
+                    activeFilePath={activeFilePath}
+                    depth={row.depth}
+                    isExpanded={visibleExpandedPaths.has(row.node.path)}
+                    onToggle={handleToggle}
+                    onFileClick={onFileClick}
+                  />
+                ) : (
+                  <div
+                    className={cn(
+                      "h-6 truncate text-[11px] italic leading-6",
+                      row.destructive ? "text-destructive" : "text-muted-foreground",
+                    )}
+                    style={{ paddingLeft: `${row.depth * 14 + 28}px` }}
+                  >
+                    {row.message}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
         {visibleTree.length === 0 && search.trim() ? (
           <p className="px-3 py-5 text-center text-[10px] text-muted-foreground">
             No matching files

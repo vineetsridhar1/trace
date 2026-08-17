@@ -21,14 +21,19 @@ export function reconcileTerminalEvent(event: Event): void {
     ) {
       return;
     }
-    useTerminalStore
-      .getState()
-      .addTerminal(
-        terminal.id,
-        terminal.sessionId,
-        terminal.sessionGroupId,
-        terminal.closed === true ? "exited" : "active",
-      );
+    const terminalStore = useTerminalStore.getState();
+    terminalStore.addTerminal(
+      terminal.id,
+      terminal.sessionId,
+      terminal.sessionGroupId,
+      terminal.closed === true ? "exited" : "active",
+    );
+    if (terminalStore.consumePinnedTerminalRequest(terminal.sessionId)) {
+      useTerminalStore.getState().pinTerminal(terminal.id);
+      const ui = useUIStore.getState();
+      ui.setActiveSessionId(terminal.sessionId);
+      ui.setActiveTerminalId(terminal.id);
+    }
     return;
   }
 
