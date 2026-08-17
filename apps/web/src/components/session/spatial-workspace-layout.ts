@@ -18,6 +18,7 @@ export interface SpatialSplit {
   type: "split";
   id: string;
   direction: "horizontal" | "vertical";
+  ratio?: number;
   children: [SpatialNode, SpatialNode];
 }
 
@@ -68,6 +69,18 @@ export function getSpatialAxisSpan(
 export function findSpatialGroup(node: SpatialNode, groupId: string): SpatialTabGroup | null {
   if (node.type === "group") return node.id === groupId ? node : null;
   return findSpatialGroup(node.children[0], groupId) ?? findSpatialGroup(node.children[1], groupId);
+}
+
+export function setSpatialSplitRatio(
+  layout: SpatialLayout,
+  splitId: string,
+  ratio: number,
+): SpatialLayout {
+  const nextRatio = Math.max(0.02, Math.min(0.98, ratio));
+  const root = mapSpatialNodes(layout.root, (node) =>
+    node.type === "split" && node.id === splitId ? { ...node, ratio: nextRatio } : node,
+  );
+  return root === layout.root ? layout : { ...layout, root };
 }
 
 export function getSpatialRowPositionForTab(
@@ -418,6 +431,11 @@ function isSpatialNode(value: unknown): value is SpatialNode {
     candidate.type === "split" &&
     typeof candidate.id === "string" &&
     (candidate.direction === "horizontal" || candidate.direction === "vertical") &&
+    (candidate.ratio === undefined ||
+      (typeof candidate.ratio === "number" &&
+        Number.isFinite(candidate.ratio) &&
+        candidate.ratio > 0 &&
+        candidate.ratio < 1)) &&
     Array.isArray(candidate.children) &&
     candidate.children.length === 2 &&
     candidate.children.every(isSpatialNode)
@@ -434,6 +452,23 @@ function mapGroups(node: SpatialNode, mapper: (group: SpatialTabGroup) => Spatia
     ...node,
     children: [mapGroups(node.children[0], mapper), mapGroups(node.children[1], mapper)],
   };
+}
+
+function mapSpatialNodes(
+  node: SpatialNode,
+  mapper: (node: SpatialNode) => SpatialNode,
+): SpatialNode {
+  const mappedChildren =
+    node.type === "split"
+      ? {
+          ...node,
+          children: [
+            mapSpatialNodes(node.children[0], mapper),
+            mapSpatialNodes(node.children[1], mapper),
+          ] as [SpatialNode, SpatialNode],
+        }
+      : node;
+  return mapper(mappedChildren);
 }
 
 function removeTabFromSpatialNode(
@@ -496,6 +531,9 @@ function createSplit(
     type: "split",
     id: `split-${number}`,
     direction,
+    ratio:
+      getSpatialAxisSpan(first, direction) /
+      (getSpatialAxisSpan(first, direction) + getSpatialAxisSpan(second, direction)),
     children: [first, second],
   };
 }

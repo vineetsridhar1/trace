@@ -11,6 +11,7 @@ import {
   insertSpatialTab,
   moveSpatialTab,
   normalizeSpatialLayout,
+  setSpatialSplitRatio,
   syncSpatialTabs,
   type SpatialLayout,
 } from "./spatial-workspace-layout";
@@ -105,6 +106,14 @@ describe("spatial workspace layout", () => {
       ["browser"],
       ["terminal"],
     ]);
+  });
+
+  it("stores a resized split ratio in the persisted layout model", () => {
+    let layout = dockSpatialTab(createSpatialLayout(["chat", "terminal"]), "terminal", "right");
+    if (layout.root.type !== "split") throw new Error("Expected a split layout");
+    layout = setSpatialSplitRatio(layout, layout.root.id, 0.7);
+
+    expect(layout.root).toMatchObject({ type: "split", ratio: 0.7 });
   });
 
   it("collapses an empty source region when a tab moves into another group", () => {

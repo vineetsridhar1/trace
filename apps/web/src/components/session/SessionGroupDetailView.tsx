@@ -967,6 +967,7 @@ export function SessionGroupDetailView({
             : `${draft.surface[0].toUpperCase()}${draft.surface.slice(1)}`
           : "New tab",
         icon: workspaceSurfaceIcon(draft.surface),
+        minContentWidth: draft.surface === "browser" ? 0 : undefined,
       })),
     );
 

@@ -21,6 +21,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { cn } from "../../lib/utils";
@@ -45,6 +46,7 @@ import {
   isSpatialLayout,
   moveSpatialTab,
   normalizeSpatialLayout,
+  setSpatialSplitRatio,
   syncSpatialTabs,
   type SpatialEdge,
   type SpatialLayoutPreset,
@@ -60,6 +62,7 @@ export interface SpatialWorkspaceTab {
   icon: ReactNode;
   status?: "live" | "changed" | "attention";
   closable?: boolean;
+  minContentWidth?: number;
 }
 
 interface SpatialWorkspaceProps {
@@ -177,6 +180,7 @@ export function SpatialWorkspace({
     [],
   );
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
+  const [resizingSplitId, setResizingSplitId] = useState<string | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
@@ -193,7 +197,7 @@ export function SpatialWorkspace({
     }
   }, [layout, persistenceKey]);
 
-  const overlayVisible = draggedTabId !== null || layoutMenuOpen;
+  const overlayVisible = draggedTabId !== null || layoutMenuOpen || resizingSplitId !== null;
   useEffect(() => {
     onOverlayVisibilityChange?.(overlayVisible);
   }, [onOverlayVisibilityChange, overlayVisible]);
@@ -275,6 +279,10 @@ export function SpatialWorkspace({
     setLayout((current) => applySpatialLayoutPreset(current, preset));
   }, []);
 
+  const handleResizeSplit = useCallback((splitId: string, ratio: number) => {
+    setLayout((current) => setSpatialSplitRatio(current, splitId, ratio));
+  }, []);
+
   const handleNewTab = useCallback(
     (groupId: string) => {
       const tabId = onNewTab(groupId);
@@ -354,6 +362,9 @@ export function SpatialWorkspace({
           onActivate={handleActivate}
           onCloseTab={onCloseTab}
           onNewTab={handleNewTab}
+          onResizeSplit={handleResizeSplit}
+          onResizeStart={setResizingSplitId}
+          onResizeEnd={() => setResizingSplitId(null)}
           renderTab={renderTab}
         />
         {draggedTabId ? (
@@ -407,6 +418,9 @@ function SpatialNodeView({
   onActivate,
   onCloseTab,
   onNewTab,
+  onResizeSplit,
+  onResizeStart,
+  onResizeEnd,
   renderTab,
 }: {
   node: SpatialNode;
@@ -416,6 +430,9 @@ function SpatialNodeView({
   onActivate: (groupId: string, tabId: string) => void;
   onCloseTab: (tabId: string) => void;
   onNewTab: (groupId: string) => void;
+  onResizeSplit: (splitId: string, ratio: number) => void;
+  onResizeStart: (splitId: string) => void;
+  onResizeEnd: () => void;
   renderTab: (tabId: string, compact: boolean) => ReactNode;
 }) {
   if (node.type === "group") {
@@ -435,14 +452,15 @@ function SpatialNodeView({
 
   const firstSpan = getSpatialAxisSpan(node.children[0], node.direction);
   const secondSpan = getSpatialAxisSpan(node.children[1], node.direction);
+  const ratio = node.ratio ?? firstSpan / (firstSpan + secondSpan);
 
   return (
     <div
-      className="grid min-h-0 min-w-0 flex-1 gap-px bg-border"
+      className="relative grid min-h-0 min-w-0 flex-1 gap-px bg-border"
       style={
         node.direction === "horizontal"
-          ? { gridTemplateColumns: `${firstSpan}fr ${secondSpan}fr` }
-          : { gridTemplateRows: `${firstSpan}fr ${secondSpan}fr` }
+          ? { gridTemplateColumns: `minmax(0, ${ratio}fr) minmax(0, ${1 - ratio}fr)` }
+          : { gridTemplateRows: `minmax(0, ${ratio}fr) minmax(0, ${1 - ratio}fr)` }
       }
     >
       {node.children.map((child) => (
@@ -455,9 +473,103 @@ function SpatialNodeView({
           onActivate={onActivate}
           onCloseTab={onCloseTab}
           onNewTab={onNewTab}
+          onResizeSplit={onResizeSplit}
+          onResizeStart={onResizeStart}
+          onResizeEnd={onResizeEnd}
           renderTab={renderTab}
         />
       ))}
+      <SpatialResizeHandle
+        splitId={node.id}
+        direction={node.direction}
+        ratio={ratio}
+        onResize={onResizeSplit}
+        onResizeStart={onResizeStart}
+        onResizeEnd={onResizeEnd}
+      />
+    </div>
+  );
+}
+
+function SpatialResizeHandle({
+  splitId,
+  direction,
+  ratio,
+  onResize,
+  onResizeStart,
+  onResizeEnd,
+}: {
+  splitId: string;
+  direction: "horizontal" | "vertical";
+  ratio: number;
+  onResize: (splitId: string, ratio: number) => void;
+  onResizeStart: (splitId: string) => void;
+  onResizeEnd: () => void;
+}) {
+  const handlePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+      const container = event.currentTarget.parentElement;
+      if (!container) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const bounds = container.getBoundingClientRect();
+      const axisSize = direction === "horizontal" ? bounds.width : bounds.height;
+      if (axisSize <= 0) return;
+
+      const previousCursor = document.body.style.cursor;
+      const previousUserSelect = document.body.style.userSelect;
+      document.body.style.cursor = direction === "horizontal" ? "col-resize" : "row-resize";
+      document.body.style.userSelect = "none";
+      onResizeStart(splitId);
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        const position =
+          direction === "horizontal"
+            ? moveEvent.clientX - bounds.left
+            : moveEvent.clientY - bounds.top;
+        const minimumRatio = Math.min(0.45, 48 / axisSize);
+        const nextRatio = Math.max(minimumRatio, Math.min(1 - minimumRatio, position / axisSize));
+        onResize(splitId, nextRatio);
+      };
+      const stopResizing = () => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", stopResizing);
+        window.removeEventListener("pointercancel", stopResizing);
+        window.removeEventListener("blur", stopResizing);
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+        onResizeEnd();
+      };
+
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", stopResizing);
+      window.addEventListener("pointercancel", stopResizing);
+      window.addEventListener("blur", stopResizing);
+    },
+    [direction, onResize, onResizeEnd, onResizeStart, splitId],
+  );
+
+  return (
+    <div
+      role="separator"
+      aria-orientation={direction === "horizontal" ? "vertical" : "horizontal"}
+      aria-valuenow={Math.round(ratio * 100)}
+      onPointerDown={handlePointerDown}
+      className={cn(
+        "app-region-no-drag group absolute z-30 touch-none select-none",
+        direction === "horizontal"
+          ? "inset-y-0 w-2 -translate-x-1/2 cursor-col-resize"
+          : "inset-x-0 h-2 -translate-y-1/2 cursor-row-resize",
+      )}
+      style={direction === "horizontal" ? { left: `${ratio * 100}%` } : { top: `${ratio * 100}%` }}
+    >
+      <div
+        className={cn(
+          "absolute bg-transparent transition-colors group-hover:bg-blue-400/70",
+          direction === "horizontal" ? "inset-y-0 left-1/2 w-px" : "inset-x-0 top-1/2 h-px",
+        )}
+      />
     </div>
   );
 }
@@ -486,6 +598,9 @@ function SpatialRegion({
     data: { type: "tab-rail", groupId: group.id, targetIndex: group.tabIds.length },
   });
   const activeTabId = group.activeTabId ?? group.tabIds[0] ?? null;
+  const minContentWidth = activeTabId
+    ? (tabById.get(activeTabId)?.minContentWidth ?? 448)
+    : 448;
 
   return (
     <section
@@ -533,8 +648,10 @@ function SpatialRegion({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden">
-        {activeTabId ? renderTab(activeTabId, compact) : null}
+      <div className="min-h-0 flex-1 overflow-auto">
+        <div className="h-full overflow-hidden" style={{ minWidth: minContentWidth }}>
+          {activeTabId ? renderTab(activeTabId, compact) : null}
+        </div>
       </div>
 
     </section>
