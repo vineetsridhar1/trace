@@ -92,11 +92,10 @@ const tabRailSpring = { type: "spring", stiffness: 520, damping: 42, mass: 0.7 }
 
 const centerDragOverlayOnCursor: Modifier = ({
   activatorEvent,
-  activeNodeRect,
   overlayNodeRect,
   transform,
 }) => {
-  if (!activatorEvent || !activeNodeRect || !overlayNodeRect) return transform;
+  if (!activatorEvent || !overlayNodeRect) return transform;
   if (!("clientX" in activatorEvent) || !("clientY" in activatorEvent)) return transform;
   if (
     typeof activatorEvent.clientX !== "number" ||
@@ -109,12 +108,12 @@ const centerDragOverlayOnCursor: Modifier = ({
     x:
       transform.x +
       activatorEvent.clientX -
-      activeNodeRect.left -
+      overlayNodeRect.left -
       overlayNodeRect.width / 2,
     y:
       transform.y +
       activatorEvent.clientY -
-      activeNodeRect.top -
+      overlayNodeRect.top -
       overlayNodeRect.height / 2,
   };
 };
@@ -752,13 +751,16 @@ function getTabRailMove(event: DragMoveEvent | DragOverEvent | DragEndEvent) {
   if (dropData.targetTabId === tabId) return null;
   let targetIndex = dropData.targetIndex;
   if (dropData.targetTabId) {
-    const activeRect = event.active.rect.current.translated;
-    if (
-      activeRect &&
-      activeRect.left + activeRect.width / 2 > over.rect.left + over.rect.width / 2
-    ) {
+    const pointerX = getDragPointerX(event);
+    if (pointerX !== null && pointerX > over.rect.left + over.rect.width / 2) {
       targetIndex += 1;
     }
   }
   return { tabId, groupId: dropData.groupId, targetIndex };
+}
+
+function getDragPointerX(event: DragMoveEvent | DragOverEvent | DragEndEvent) {
+  const activatorEvent = event.activatorEvent;
+  if (!("clientX" in activatorEvent) || typeof activatorEvent.clientX !== "number") return null;
+  return activatorEvent.clientX + event.delta.x;
 }
