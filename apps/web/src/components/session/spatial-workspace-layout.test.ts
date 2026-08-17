@@ -12,6 +12,7 @@ import {
   getSpatialRowPositionForTab,
   insertSpatialTab,
   moveSpatialTab,
+  replaceSpatialTab,
   normalizeSpatialLayout,
   setSpatialSplitRatio,
   syncSpatialTabs,
@@ -211,6 +212,25 @@ describe("spatial workspace layout", () => {
       ["browser", "draft:new"],
     ]);
     expect(getSpatialGroups(layout.root)[1].activeTabId).toBe("draft:new");
+  });
+
+  it("replaces a draft tab without moving or collapsing its row", () => {
+    let layout = createSpatialLayout(["chat", "draft:top", "draft:bottom"]);
+    layout = applySpatialLayoutPreset(layout, "rows");
+    const sourceGroup = getSpatialGroups(layout.root).find((group) =>
+      group.tabIds.includes("draft:bottom"),
+    );
+    if (!sourceGroup) throw new Error("Expected the bottom draft group");
+    layout = activateSpatialTab(layout, sourceGroup.id, "draft:bottom");
+
+    layout = replaceSpatialTab(layout, "draft:bottom", "terminal:one");
+
+    expect(countSpatialRegions(layout.root)).toBe(2);
+    const replacementGroup = getSpatialGroups(layout.root).find((group) =>
+      group.tabIds.includes("terminal:one"),
+    );
+    expect(replacementGroup?.id).toBe(sourceGroup.id);
+    expect(replacementGroup?.activeTabId).toBe("terminal:one");
   });
 
   it("keeps tab identity and active state while syncing live tabs", () => {

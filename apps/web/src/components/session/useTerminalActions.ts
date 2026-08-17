@@ -60,9 +60,9 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
 
   const handleCreateTerminal = useCallback(
     async (session: { id: string; _optimistic?: boolean } | null, terminalAllowed: boolean) => {
-      if (!session || session._optimistic || !terminalAllowed) return;
+      if (!session || session._optimistic || !terminalAllowed) return null;
       setActiveSessionId(session.id);
-      await requestSessionTerminal({ sessionId: session.id, select: true }).completion;
+      return requestSessionTerminal({ sessionId: session.id, select: true }).completion;
     },
     [setActiveSessionId],
   );

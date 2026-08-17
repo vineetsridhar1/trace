@@ -12,7 +12,7 @@ type TerminalCreationRequest = Omit<
 
 export function requestSessionTerminal(input: TerminalCreationRequest): {
   clientMutationId: string;
-  completion: Promise<void>;
+  completion: Promise<string>;
 } {
   const clientMutationId = generateUUID();
   useTerminalStore.getState().registerTerminalCreationIntent(clientMutationId, {
@@ -31,6 +31,9 @@ export function requestSessionTerminal(input: TerminalCreationRequest): {
         })
         .toPromise();
       if (result.error) throw result.error;
+      const terminalId = result.data?.createTerminal?.id;
+      if (!terminalId) throw new Error("Server did not return a terminal ID");
+      return terminalId;
     } catch (error: unknown) {
       useTerminalStore.getState().cancelTerminalCreationIntent(clientMutationId);
       throw error;

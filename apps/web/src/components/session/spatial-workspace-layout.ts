@@ -164,6 +164,37 @@ export function insertSpatialTab(
   };
 }
 
+export function replaceSpatialTab(
+  layout: SpatialLayout,
+  sourceTabId: string,
+  replacementTabId: string,
+): SpatialLayout {
+  const sourceGroup = getSpatialGroups(layout.root).find((group) =>
+    group.tabIds.includes(sourceTabId),
+  );
+  if (!sourceGroup || sourceTabId === replacementTabId) return layout;
+
+  return {
+    ...layout,
+    root: mapGroups(layout.root, (group) => {
+      if (group.id !== sourceGroup.id) {
+        return group.tabIds.includes(replacementTabId)
+          ? { ...group, tabIds: group.tabIds.filter((id) => id !== replacementTabId) }
+          : group;
+      }
+      const nextIds = group.tabIds
+        .map((id) => (id === sourceTabId ? replacementTabId : id))
+        .filter((id, index, ids) => ids.indexOf(id) === index);
+      return {
+        ...group,
+        tabIds: nextIds,
+        activeTabId:
+          group.activeTabId === sourceTabId ? replacementTabId : group.activeTabId,
+      };
+    }),
+  };
+}
+
 export function syncSpatialTabs(
   layout: SpatialLayout,
   tabIds: string[],

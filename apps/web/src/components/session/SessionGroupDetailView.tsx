@@ -369,6 +369,35 @@ export function SessionGroupDetailView({
   const [draftWorkspaceTabs, setDraftWorkspaceTabs] = useState<
     Array<{ id: string; surface: WorkspaceSurface | null }>
   >(() => getStoredWorkspaceTabs(sessionGroupId));
+  const [pendingTerminalTabs, setPendingTerminalTabs] = useState<
+    Array<{
+      id: string;
+      sessionId: string;
+      sessionGroupId: string;
+      status: "connecting";
+      customName?: string;
+    }>
+  >([]);
+  const [workspaceTabReplacements, setWorkspaceTabReplacements] = useState<
+    Record<string, string>
+  >({});
+  const workspaceTerminals = useMemo(
+    () => [
+      ...terminals,
+      ...pendingTerminalTabs.filter(
+        (pending) => !terminals.some((terminal) => terminal.id === pending.id),
+      ),
+    ],
+    [pendingTerminalTabs, terminals],
+  );
+
+  useEffect(() => {
+    if (pendingTerminalTabs.length === 0) return;
+    const terminalIds = new Set(terminals.map((terminal) => terminal.id));
+    setPendingTerminalTabs((pending) =>
+      pending.filter((terminal) => !terminalIds.has(terminal.id)),
+    );
+  }, [pendingTerminalTabs.length, terminals]);
 
   useEffect(() => {
     try {
@@ -707,6 +736,9 @@ export function SessionGroupDetailView({
   const handleCloseTerminal = useCallback(
     (terminalId: string) => {
       if (activeTerminalId === terminalId) setActiveTerminalId(null);
+      setPendingTerminalTabs((pending) =>
+        pending.filter((terminal) => terminal.id !== terminalId),
+      );
       void client.mutation(DESTROY_TERMINAL_MUTATION, { terminalId }).toPromise();
     },
     [activeTerminalId, setActiveTerminalId],
@@ -955,7 +987,7 @@ export function SessionGroupDetailView({
         label: "Artifact",
         icon: <FileCode size={12} />,
       })),
-      ...terminals.map((terminal, index) => ({
+      ...workspaceTerminals.map((terminal, index) => ({
         id: `terminal:${terminal.id}`,
         label: terminal.customName || `Terminal ${index + 1}`,
         icon: <TerminalSquare size={12} />,
@@ -993,7 +1025,7 @@ export function SessionGroupDetailView({
     openFiles,
     sessionTabs,
     showApplicationsSidebarTab,
-    terminals,
+    workspaceTerminals,
     trafficEndpointId,
   ]);
 
@@ -1017,7 +1049,7 @@ export function SessionGroupDetailView({
         handleSelectArtifact(tabId.slice("artifact:".length));
       } else if (tabId.startsWith("terminal:")) {
         const terminalId = tabId.slice("terminal:".length);
-        const terminal = terminals.find((candidate) => candidate.id === terminalId);
+        const terminal = workspaceTerminals.find((candidate) => candidate.id === terminalId);
         handleSelectTerminalTab(terminal?.sessionId ?? null, terminalId);
       } else if (tabId.startsWith("file:")) {
         handleSelectFileTab(tabId.slice("file:".length));
@@ -1031,7 +1063,7 @@ export function SessionGroupDetailView({
       handleSelectSession,
       handleSelectTerminalTab,
       handleSelectTrafficTab,
-      terminals,
+      workspaceTerminals,
     ],
   );
 
@@ -1120,7 +1152,21 @@ export function SessionGroupDetailView({
               if (surface === "terminal") {
                 if (!selectedSession || !terminalAllowed) return;
                 void handleCreateTerminal(selectedSession, terminalAllowed)
-                  .then(() => {
+                  .then((terminalId) => {
+                    if (!terminalId) return;
+                    setPendingTerminalTabs((pending) => [
+                      ...pending,
+                      {
+                        id: terminalId,
+                        sessionId: selectedSession.id,
+                        sessionGroupId,
+                        status: "connecting",
+                      },
+                    ]);
+                    setWorkspaceTabReplacements((replacements) => ({
+                      ...replacements,
+                      [tabId]: `terminal:${terminalId}`,
+                    }));
                     setDraftWorkspaceTabs((drafts) =>
                       drafts.filter((candidate) => candidate.id !== tabId),
                     );
@@ -1372,6 +1418,7 @@ export function SessionGroupDetailView({
                 persistenceKey={`trace:spatial-workspace:${sessionGroupId}`}
                 tabs={workspaceTabs}
                 preferredActiveTabId={preferredWorkspaceTabId}
+                tabReplacements={workspaceTabReplacements}
                 onActivateTab={handleActivateWorkspaceTab}
                 onCloseTab={handleCloseWorkspaceTab}
                 onNewTab={handleNewWorkspaceTab}

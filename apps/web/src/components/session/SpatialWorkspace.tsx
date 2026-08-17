@@ -45,6 +45,7 @@ import {
   focusSpatialGroup,
   getSpatialAxisSpan,
   insertSpatialTab,
+  replaceSpatialTab,
   isSpatialLayout,
   moveSpatialTab,
   normalizeSpatialLayout,
@@ -74,6 +75,7 @@ interface SpatialWorkspaceProps {
   onActivateTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;
   onNewTab: (groupId: string) => string;
+  tabReplacements?: Record<string, string>;
   onOverlayVisibilityChange?: (visible: boolean) => void;
   renderTab: (tabId: string, compact: boolean) => ReactNode;
 }
@@ -166,11 +168,15 @@ export function SpatialWorkspace({
   onActivateTab,
   onCloseTab,
   onNewTab,
+  tabReplacements = {},
   onOverlayVisibilityChange,
   renderTab,
 }: SpatialWorkspaceProps) {
   const tabIds = useMemo(() => tabs.map((tab) => tab.id), [tabs]);
   const tabIdsKey = tabIds.join("\u0000");
+  const tabReplacementsKey = Object.entries(tabReplacements)
+    .map(([source, replacement]) => `${source}\u0000${replacement}`)
+    .join("\u0001");
   const tabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs]);
   const [layout, setLayout] = useState(() => readLayout(persistenceKey, tabIds, preferredActiveTabId));
   const previousPreferredActiveTabIdRef = useRef(preferredActiveTabId);
@@ -192,10 +198,18 @@ export function SpatialWorkspace({
     const preferredTabChanged =
       previousPreferredActiveTabIdRef.current !== preferredActiveTabId;
     previousPreferredActiveTabIdRef.current = preferredActiveTabId;
-    setLayout((current) =>
-      syncSpatialTabs(current, tabIds, preferredTabChanged ? preferredActiveTabId : null),
-    );
-  }, [preferredActiveTabId, tabIdsKey]);
+    setLayout((current) => {
+      const replaced = Object.entries(tabReplacements).reduce(
+        (next, [source, replacement]) => replaceSpatialTab(next, source, replacement),
+        current,
+      );
+      return syncSpatialTabs(
+        replaced,
+        tabIds,
+        preferredTabChanged ? preferredActiveTabId : null,
+      );
+    });
+  }, [preferredActiveTabId, tabIdsKey, tabReplacementsKey]);
 
   useEffect(() => {
     try {
