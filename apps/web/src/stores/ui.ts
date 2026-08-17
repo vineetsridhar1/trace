@@ -16,11 +16,7 @@ import {
 } from "./ui-navigation";
 
 export type ActivePage = "main" | "create" | "settings" | "inbox" | "tickets" | "search";
-export type ChannelSubPage =
-  | "sessions"
-  | "merged-archived"
-  | "merged-archived-archived"
-  | null;
+export type ChannelSubPage = "sessions" | "merged-archived" | "merged-archived-archived" | null;
 export interface NavigationState {
   channelId: string | null;
   sessionGroupId: string | null;
@@ -57,8 +53,15 @@ export interface UIState {
   triggerRefresh: () => void;
   lastSelectedSessionIdsByGroup: Record<string, string>;
   openSessionTabsByGroup: Record<string, string[]>;
+  hiddenSessionTabsByGroup: Record<string, Record<string, string>>;
   openSessionTab: (groupId: string, sessionId: string) => void;
   closeSessionTab: (groupId: string, sessionId: string) => void;
+  hideSessionTab: (groupId: string, sessionId: string, hiddenAt: string) => void;
+  restoreSessionTab: (groupId: string, sessionId: string) => void;
+  setHiddenSessionTabs: (
+    groupId: string,
+    tabs: Array<{ sessionId: string; hiddenAt: string }>,
+  ) => void;
   initSessionTabs: (groupId: string, sessionIds: string[]) => void;
   openArtifactTabsByGroup: Record<string, string[]>;
   activeArtifactIdsByGroup: Record<string, string | null>;
@@ -117,6 +120,7 @@ const initialNavigationState = {
   activeThreadId: null as string | null,
   lastSelectedSessionIdsByGroup: {} as Record<string, string>,
   openSessionTabsByGroup: {} as Record<string, string[]>,
+  hiddenSessionTabsByGroup: {} as Record<string, Record<string, string>>,
   openArtifactTabsByGroup: {} as Record<string, string[]>,
   activeArtifactIdsByGroup: {} as Record<string, string | null>,
   channelSubPage: null as ChannelSubPage,
@@ -198,6 +202,39 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
     }
     set(updates);
   },
+
+  hideSessionTab: (groupId: string, sessionId: string, hiddenAt: string) => {
+    set((s: UIState) => {
+      const openTabs = s.openSessionTabsByGroup[groupId] ?? [];
+      const nextTabs = openTabs.filter((id) => id !== sessionId);
+      return {
+        openSessionTabsByGroup: { ...s.openSessionTabsByGroup, [groupId]: nextTabs },
+        hiddenSessionTabsByGroup: {
+          ...s.hiddenSessionTabsByGroup,
+          [groupId]: { ...s.hiddenSessionTabsByGroup[groupId], [sessionId]: hiddenAt },
+        },
+        activeSessionId:
+          s.activeSessionId === sessionId ? (nextTabs[0] ?? null) : s.activeSessionId,
+      };
+    });
+  },
+
+  restoreSessionTab: (groupId: string, sessionId: string) => {
+    set((s: UIState) => {
+      const { [sessionId]: _, ...remaining } = s.hiddenSessionTabsByGroup[groupId] ?? {};
+      return {
+        hiddenSessionTabsByGroup: { ...s.hiddenSessionTabsByGroup, [groupId]: remaining },
+      };
+    });
+  },
+
+  setHiddenSessionTabs: (groupId: string, tabs: Array<{ sessionId: string; hiddenAt: string }>) =>
+    set((s: UIState) => ({
+      hiddenSessionTabsByGroup: {
+        ...s.hiddenSessionTabsByGroup,
+        [groupId]: Object.fromEntries(tabs.map((tab) => [tab.sessionId, tab.hiddenAt])),
+      },
+    })),
 
   initSessionTabs: (groupId: string, sessionIds: string[]) => {
     set((s: UIState) => {

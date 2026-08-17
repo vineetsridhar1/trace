@@ -260,6 +260,8 @@ enum EventType {
   session_runtime_disconnected
   session_runtime_reconnected
   session_group_visibility_updated
+  session_tab_hidden
+  session_tab_restored
   application_config_updated
   session_setup_script_started
   session_setup_script_completed
@@ -489,6 +491,7 @@ model User {
   integrationConnections        IntegrationConnection[]      @relation("IntegrationConnectionOwner")
   createdIntegrationConnections IntegrationConnection[]      @relation("IntegrationConnectionCreator")
   createdAppIntegrationBindings AppIntegrationBinding[]      @relation("AppIntegrationBindingCreator")
+  hiddenSessionTabs            HiddenSessionTab[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -838,6 +841,7 @@ model Session {
   queuedMessages QueuedMessage[]
   slackThread    SlackThreadSession?
   artifacts      Artifact[]
+  hiddenByUsers  HiddenSessionTab[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -846,6 +850,18 @@ model Session {
   @@index([organizationId, agentStatus])
   @@index([channelId, updatedAt])
   @@index([pendingGeneralWorkspaceCleanupRuntimeId])
+}
+
+model HiddenSessionTab {
+  userId    String
+  sessionId String
+  hiddenAt  DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, sessionId])
+  @@index([userId, hiddenAt])
+  @@index([sessionId])
 }
 
 model Artifact {

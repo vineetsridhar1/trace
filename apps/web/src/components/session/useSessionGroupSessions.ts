@@ -28,6 +28,7 @@ export function useSessionGroupSessions(
   sessionGroupId: string,
   openTabIds: string[] | undefined,
   activeSessionId: string | null,
+  hiddenSessionIds: ReadonlySet<string>,
 ) {
   const groupSessionIds = useSessionIdsByGroup(sessionGroupId);
   const groupSessionEntities = useEntitiesByIds("sessions", groupSessionIds);
@@ -42,17 +43,20 @@ export function useSessionGroupSessions(
   }, [groupSessions]);
 
   const sessionTabs = useMemo(() => {
-    if (!openTabIds) return sessionsByRecency;
+    if (!openTabIds)
+      return sessionsByRecency.filter((session) => !hiddenSessionIds.has(session.id));
     const openIndex = new Map(openTabIds.map((sessionId, index) => [sessionId, index]));
-    return [...sessionsByRecency].sort((a, b) => {
-      const aIndex = openIndex.get(a.id);
-      const bIndex = openIndex.get(b.id);
-      if (aIndex != null && bIndex != null) return aIndex - bIndex;
-      if (aIndex != null) return -1;
-      if (bIndex != null) return 1;
-      return 0;
-    });
-  }, [openTabIds, sessionsByRecency]);
+    return sessionsByRecency
+      .filter((session) => !hiddenSessionIds.has(session.id) || openIndex.has(session.id))
+      .sort((a, b) => {
+        const aIndex = openIndex.get(a.id);
+        const bIndex = openIndex.get(b.id);
+        if (aIndex != null && bIndex != null) return aIndex - bIndex;
+        if (aIndex != null) return -1;
+        if (bIndex != null) return 1;
+        return 0;
+      });
+  }, [hiddenSessionIds, openTabIds, sessionsByRecency]);
 
   const selectedSession = useMemo(
     () =>

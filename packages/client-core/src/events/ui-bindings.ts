@@ -15,6 +15,8 @@ export interface OrgEventUIBindings {
   markSessionDone(id: string): void;
   markSessionGroupDone(id: string): void;
   openSessionTab(groupId: string, sessionId: string): void;
+  hideSessionTab(groupId: string, sessionId: string, hiddenAt: string): void;
+  restoreSessionTab(groupId: string, sessionId: string): void;
   navigateToSession(channelId: string | null, sessionGroupId: string, sessionId: string): void;
 }
 
@@ -29,6 +31,8 @@ const NOOP_BINDINGS: OrgEventUIBindings = {
   markSessionDone: () => {},
   markSessionGroupDone: () => {},
   openSessionTab: () => {},
+  hideSessionTab: () => {},
+  restoreSessionTab: () => {},
   navigateToSession: () => {},
 };
 

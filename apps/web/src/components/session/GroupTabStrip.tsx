@@ -7,6 +7,7 @@ import {
   GitCompareArrows,
   MessageSquarePlus,
   Plus,
+  History,
   TerminalSquare,
   X,
 } from "lucide-react";
@@ -60,6 +61,8 @@ interface GroupTabStripProps {
   onSelectSession: (sessionId: string) => void;
   onCloseSession?: (sessionId: string) => void;
   canCloseSessions?: boolean;
+  hiddenSessionIds: ReadonlySet<string>;
+  onRestoreSession: (sessionId: string) => void;
   onSelectTerminal: (sessionId: string | null, terminalId: string) => void;
   onCloseTerminal: (terminalId: string) => void;
   onRenameTerminal: (terminalId: string, name: string) => void;
@@ -100,6 +103,8 @@ export function GroupTabStrip({
   onSelectSession,
   onCloseSession,
   canCloseSessions,
+  hiddenSessionIds,
+  onRestoreSession,
   onSelectTerminal,
   onCloseTerminal,
   onRenameTerminal,
@@ -119,6 +124,7 @@ export function GroupTabStrip({
     (s: { sessionDoneBadges: Record<string, boolean> }) => s.sessionDoneBadges,
   );
   const sessionById = new Map(groupSessions.map((s) => [s.id, s]));
+  const hiddenSessions = groupSessions.filter((session) => hiddenSessionIds.has(session.id));
   const tabRefs = useRef<Map<string, HTMLElement>>(new Map());
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [editingTerminalId, setEditingTerminalId] = useState<string | null>(null);
@@ -195,6 +201,7 @@ export function GroupTabStrip({
                 !trafficTabActive &&
                 selectedSessionId === session.id;
               const hasDoneBadge = !!sessionDoneBadges[session.id];
+              const isHidden = hiddenSessionIds.has(session.id);
               return (
                 <div
                   key={session.id}
@@ -203,6 +210,7 @@ export function GroupTabStrip({
                     tabBase,
                     "max-w-[260px] gap-0 p-0",
                     isActive ? tabActive : tabInactive,
+                    isHidden && "opacity-45 saturate-0",
                   )}
                 >
                   <button
@@ -403,6 +411,25 @@ export function GroupTabStrip({
                 </div>
               );
             })}
+
+            {hiddenSessions.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  className="inline-flex shrink-0 items-center justify-center px-2.5 py-2 text-muted-foreground transition-colors hover:text-foreground"
+                  title="Closed tabs"
+                >
+                  <History size={14} />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {hiddenSessions.map((session) => (
+                    <DropdownMenuItem key={session.id} onClick={() => onRestoreSession(session.id)}>
+                      <History size={14} />
+                      <span className="max-w-56 truncate opacity-60">{session.name}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
             <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
               <DropdownMenuTrigger

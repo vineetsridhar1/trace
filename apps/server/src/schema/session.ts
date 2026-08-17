@@ -93,6 +93,8 @@ export const sessionQueries = {
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx), ctx.userId);
   },
+  hiddenSessionTabs: (_: unknown, args: { sessionGroupId: string }, ctx: Context) =>
+    sessionService.listHiddenTabs(args.sessionGroupId, requireOrgContext(ctx), ctx.userId),
   sessions: (
     _: unknown,
     args: { organizationId: string; filters?: SessionFilters },
@@ -555,6 +557,12 @@ export const sessionMutations = {
   ) => {
     if (!ctx.userId) throw new AuthenticationError();
     return sessionService.updateDefaults(ctx.userId, args.input);
+  },
+  hideSessionTab: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const organizationId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, organizationId);
+    return sessionService.hideTab(args.sessionId, organizationId, ctx.userId, ctx.actorType);
   },
   sendSessionMessage: async (
     _: unknown,

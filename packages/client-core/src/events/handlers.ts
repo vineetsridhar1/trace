@@ -163,6 +163,27 @@ export function handleOrgEvent(event: Event): void {
 
   const scopeKey = `${event.scopeType}:${event.scopeId}`;
 
+  if (event.eventType === ("session_tab_hidden" as EventType)) {
+    const currentUserId = useAuthStore.getState().user?.id;
+    const sessionId = typeof payload.sessionId === "string" ? payload.sessionId : null;
+    const sessionGroupId =
+      typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
+    const hiddenAt = typeof payload.hiddenAt === "string" ? payload.hiddenAt : event.timestamp;
+    if (payload.userId === currentUserId && sessionId && sessionGroupId) {
+      ui.hideSessionTab(sessionGroupId, sessionId, hiddenAt);
+    }
+  }
+
+  if (event.eventType === ("session_tab_restored" as EventType)) {
+    const currentUserId = useAuthStore.getState().user?.id;
+    const sessionId = typeof payload.sessionId === "string" ? payload.sessionId : null;
+    const sessionGroupId =
+      typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
+    if (payload.userId === currentUserId && sessionId && sessionGroupId) {
+      ui.restoreSessionTab(sessionGroupId, sessionId);
+    }
+  }
+
   if (event.eventType === "artifact_created") {
     const artifact = asJsonObject(payload.artifact);
     if (artifact && typeof artifact.id === "string") {
@@ -637,7 +658,8 @@ export function handleOrgEvent(event: Event): void {
         if (typeof id === "string") batch.remove("designSystemCommitArtifacts", id);
       }
       for (const id of unpinnedSessionGroupIds) {
-        if (typeof id === "string") batch.patch("sessionGroups", id, { designSystemVersionId: null });
+        if (typeof id === "string")
+          batch.patch("sessionGroups", id, { designSystemVersionId: null });
       }
     }
 
@@ -931,9 +953,7 @@ export function handleOrgEvent(event: Event): void {
     const updates: Partial<SessionEntity> = {
       updatedAt: event.timestamp,
       ...(payload.agentStatus ? { agentStatus: payload.agentStatus as AgentStatus } : {}),
-      ...(payload.sessionStatus
-        ? { sessionStatus: payload.sessionStatus as SessionStatus }
-        : {}),
+      ...(payload.sessionStatus ? { sessionStatus: payload.sessionStatus as SessionStatus } : {}),
       ...(isConversationalMessage ? { lastMessageAt: event.timestamp } : {}),
       ...(isUserMessage ? { lastUserMessageAt: event.timestamp } : {}),
     };

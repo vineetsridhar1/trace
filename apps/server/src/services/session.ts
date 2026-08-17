@@ -1565,6 +1565,67 @@ export function isFullyUnloadedSession(
 }
 
 export class SessionService {
+  async listHiddenTabs(sessionGroupId: string, organizationId: string, userId: string) {
+    await assertSessionGroupAccess(sessionGroupId, userId, organizationId);
+    return prisma.hiddenSessionTab.findMany({
+      where: { userId, session: { sessionGroupId, organizationId } },
+      select: { sessionId: true, hiddenAt: true },
+      orderBy: { hiddenAt: "desc" },
+    });
+  }
+
+  async hideTab(sessionId: string, organizationId: string, userId: string, actorType: ActorType) {
+    const session = await prisma.session.findFirst({
+      where: { id: sessionId, organizationId },
+      select: { id: true, sessionGroupId: true },
+    });
+    if (!session) throw new ValidationError("Session not found");
+    if (session.sessionGroupId) {
+      await assertSessionGroupAccess(session.sessionGroupId, userId, organizationId);
+    }
+    const hiddenTab = await prisma.hiddenSessionTab.upsert({
+      where: { userId_sessionId: { userId, sessionId } },
+      create: { userId, sessionId },
+      update: { hiddenAt: new Date() },
+      select: { sessionId: true, hiddenAt: true },
+    });
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_tab_hidden" as EventType,
+      payload: {
+        sessionId,
+        sessionGroupId: session.sessionGroupId,
+        userId,
+        hiddenAt: hiddenTab.hiddenAt.toISOString(),
+      },
+      actorType,
+      actorId: userId,
+    });
+    return hiddenTab;
+  }
+
+  private async restoreHiddenTab(
+    sessionId: string,
+    sessionGroupId: string | null,
+    organizationId: string,
+    userId: string,
+    actorType: ActorType,
+  ) {
+    const result = await prisma.hiddenSessionTab.deleteMany({ where: { userId, sessionId } });
+    if (!result.count) return;
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_tab_restored" as EventType,
+      payload: { sessionId, sessionGroupId, userId },
+      actorType,
+      actorId: userId,
+    });
+  }
+
   private manualElementSaveQueues = new Map<string, Promise<void>>();
 
   private async findIdempotentStartedSession(input: {
@@ -5869,7 +5930,8 @@ export class SessionService {
           return deleted;
         },
       );
-      if (deletedDesignSystem) await this.deleteDesignSystemObjects(deletedDesignSystem.storageKeys);
+      if (deletedDesignSystem)
+        await this.deleteDesignSystemObjects(deletedDesignSystem.storageKeys);
       await eventService.create({
         organizationId: group.organizationId,
         scopeType: "session",
@@ -6869,6 +6931,15 @@ export class SessionService {
         branch: true,
       },
     });
+    if (actorType === "user") {
+      await this.restoreHiddenTab(
+        sessionId,
+        session.sessionGroupId,
+        session.organizationId,
+        actorId,
+        actorType,
+      );
+    }
     validateUploadKeysForOrganization(imageKeys, session.organizationId);
     const conn = this.parseConnection(session.connection);
     const allowToolFallback =
@@ -7362,7 +7433,7 @@ export class SessionService {
 
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
-      select: { worktreeDeleted: true, organizationId: true },
+      select: { worktreeDeleted: true, organizationId: true, sessionGroupId: true },
     });
     if (session.organizationId !== organizationId) {
       throw new Error("Session does not belong to this organization");
@@ -7380,6 +7451,9 @@ export class SessionService {
     }
 
     const orgId = session.organizationId;
+    if (actorType === "user") {
+      await this.restoreHiddenTab(sessionId, session.sessionGroupId, orgId, actorId, actorType);
+    }
 
     const queuedMessage = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const maxPos = await tx.queuedMessage.aggregate({

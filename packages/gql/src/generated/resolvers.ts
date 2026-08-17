@@ -857,6 +857,8 @@ export type EventType =
   | "session_setup_script_failed"
   | "session_setup_script_started"
   | "session_started"
+  | "session_tab_hidden"
+  | "session_tab_restored"
   | "session_terminated"
   | "terminal_created"
   | "terminal_destroyed"
@@ -867,6 +869,12 @@ export type EventType =
   | "ticket_unassigned"
   | "ticket_unlinked"
   | "ticket_updated";
+
+export type HiddenSessionTab = {
+  __typename?: "HiddenSessionTab";
+  hiddenAt: Scalars["DateTime"]["output"];
+  sessionId: Scalars["ID"]["output"];
+};
 
 export type HostingMode = "cloud" | "local";
 
@@ -1078,6 +1086,7 @@ export type Mutation = {
   enableSessionEndpointForwarding: SessionEndpoint;
   forkSession: Session;
   forwardSessionPort: SessionEndpoint;
+  hideSessionTab: HiddenSessionTab;
   /** Adopt an existing local worktree into a not-yet-started session's group (local hosting only). */
   importWorktree: SessionGroup;
   joinChannel: Channel;
@@ -1394,6 +1403,10 @@ export type MutationForwardSessionPortArgs = {
   label?: InputMaybe<Scalars["String"]["input"]>;
   port: Scalars["Int"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationHideSessionTabArgs = {
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationImportWorktreeArgs = {
@@ -1930,6 +1943,7 @@ export type Query = {
   designSystems: Array<DesignSystem>;
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
+  hiddenSessionTabs: Array<HiddenSessionTab>;
   inboxItems: Array<InboxItem>;
   integrationConnections: Array<IntegrationConnection>;
   linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
@@ -2119,6 +2133,10 @@ export type QueryEventsArgs = {
   organizationId: Scalars["ID"]["input"];
   scope?: InputMaybe<ScopeInput>;
   types?: InputMaybe<Array<Scalars["String"]["input"]>>;
+};
+
+export type QueryHiddenSessionTabsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryInboxItemsArgs = {
@@ -3277,6 +3295,7 @@ export type ResolversTypes = ResolversObject<{
   Event: ResolverTypeWrapper<Event>;
   EventType: EventType;
   Float: ResolverTypeWrapper<Scalars["Float"]["output"]>;
+  HiddenSessionTab: ResolverTypeWrapper<HiddenSessionTab>;
   HostingMode: HostingMode;
   ID: ResolverTypeWrapper<Scalars["ID"]["output"]>;
   InboxItem: ResolverTypeWrapper<InboxItem>;
@@ -3450,6 +3469,7 @@ export type ResolversParentTypes = ResolversObject<{
   EndpointTrafficEntry: EndpointTrafficEntry;
   Event: Event;
   Float: Scalars["Float"]["output"];
+  HiddenSessionTab: HiddenSessionTab;
   ID: Scalars["ID"]["output"];
   InboxItem: InboxItem;
   Int: Scalars["Int"]["output"];
@@ -4200,6 +4220,16 @@ export type EventResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type HiddenSessionTabResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["HiddenSessionTab"] =
+    ResolversParentTypes["HiddenSessionTab"],
+> = ResolversObject<{
+  hiddenAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  sessionId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type InboxItemResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["InboxItem"] = ResolversParentTypes["InboxItem"],
@@ -4666,6 +4696,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationForwardSessionPortArgs, "port" | "sessionGroupId">
+  >;
+  hideSessionTab?: Resolver<
+    ResolversTypes["HiddenSessionTab"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationHideSessionTabArgs, "sessionId">
   >;
   importWorktree?: Resolver<
     ResolversTypes["SessionGroup"],
@@ -5422,6 +5458,12 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QueryEventsArgs, "organizationId">
+  >;
+  hiddenSessionTabs?: Resolver<
+    Array<ResolversTypes["HiddenSessionTab"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryHiddenSessionTabsArgs, "sessionGroupId">
   >;
   inboxItems?: Resolver<
     Array<ResolversTypes["InboxItem"]>,
@@ -6452,6 +6494,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   DesignSystemVersion?: DesignSystemVersionResolvers<ContextType>;
   EndpointTrafficEntry?: EndpointTrafficEntryResolvers<ContextType>;
   Event?: EventResolvers<ContextType>;
+  HiddenSessionTab?: HiddenSessionTabResolvers<ContextType>;
   InboxItem?: InboxItemResolvers<ContextType>;
   IntegrationConnection?: IntegrationConnectionResolvers<ContextType>;
   JSON?: GraphQLScalarType;
