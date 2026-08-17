@@ -170,6 +170,7 @@ class TerminalService {
     sessionId,
     cols,
     rows,
+    clientMutationId,
     organizationId,
     userId,
     actorType,
@@ -178,12 +179,16 @@ class TerminalService {
     sessionId: string;
     cols: number;
     rows: number;
+    clientMutationId?: string;
     organizationId: string;
     userId: string;
     actorType: ActorType;
     agentSessionId?: string | null;
   }): Promise<{ id: string; sessionId: string }> {
     this.validateDimensions(cols, rows);
+    if (clientMutationId && clientMutationId.length > 128) {
+      throw new Error("clientMutationId must be 128 characters or fewer");
+    }
     const session = await prisma.session.findFirst({
       where: { id: sessionId, organizationId },
       select: {
@@ -256,6 +261,7 @@ class TerminalService {
       scopeId: sessionId,
       eventType: "terminal_created",
       payload: {
+        ...(clientMutationId ? { clientMutationId } : {}),
         terminal: {
           id: terminal.id,
           sessionId,

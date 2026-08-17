@@ -24,15 +24,17 @@ vi.mock("./TerminalInstance", () => ({
   ),
 }));
 
-vi.mock("./PinnedTerminalNotice", () => ({
-  PinnedTerminalNotice: () => <div data-pinned-terminal-notice />,
-}));
-
 describe("TerminalPanel", () => {
   let activeRenderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    });
+    vi.stubGlobal("history", { pushState: vi.fn(), replaceState: vi.fn() });
     query.mockReturnValue({
       toPromise: async () => ({
         data: { sessionTerminals: [{ id: "terminal-1", sessionId: "session-1" }] },
@@ -41,7 +43,7 @@ describe("TerminalPanel", () => {
     useTerminalStore.setState({
       terminals: {},
       pinnedTerminalIds: {},
-      pendingPinnedTerminalSessions: {},
+      terminalCreationIntents: {},
     });
     useTerminalStore
       .getState()
@@ -55,10 +57,10 @@ describe("TerminalPanel", () => {
     vi.unstubAllGlobals();
   });
 
-  async function renderPanel(): Promise<ReactTestRenderer> {
+  async function renderPanel(onClose = () => undefined): Promise<ReactTestRenderer> {
     let renderer: ReactTestRenderer | undefined;
     await act(async () => {
-      renderer = create(<TerminalPanel sessionId="session-1" onClose={() => undefined} fill />);
+      renderer = create(<TerminalPanel sessionId="session-1" onClose={onClose} fill />);
     });
     if (!renderer) throw new Error("Terminal panel did not render");
     activeRenderer = renderer;
@@ -69,15 +71,44 @@ describe("TerminalPanel", () => {
     const renderer = await renderPanel();
 
     expect(renderer.root.findAllByProps({ "data-terminal-instance": "terminal-1" })).toHaveLength(1);
-    expect(renderer.root.findAllByProps({ "data-pinned-terminal-notice": true })).toHaveLength(0);
+    expect(
+      renderer.root
+        .findAllByType("button")
+        .filter((button) => button.props["aria-label"] === "Open terminal in main panel"),
+    ).toHaveLength(0);
   });
 
-  it("replaces the sidebar instance with a deep-link notice while pinned", async () => {
+  it("replaces the sidebar instance with a working deep link while pinned", async () => {
     useTerminalStore.getState().pinTerminal("terminal-1");
+    const onClose = vi.fn();
+
+    const renderer = await renderPanel(onClose);
+
+    expect(renderer.root.findAllByProps({ "data-terminal-instance": "terminal-1" })).toHaveLength(0);
+    const openButton = renderer.root
+      .findAllByType("button")
+      .find((button) => button.props["aria-label"] === "Open terminal in main panel");
+    if (!openButton) throw new Error("Open terminal button was not rendered");
+    act(() => openButton.props.onClick());
+    expect(useUIStore.getState().activeTerminalId).toBe("terminal-1");
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("does not mount an unpinned sidebar terminal while another terminal is active in main", async () => {
+    useTerminalStore
+      .getState()
+      .addTerminal("terminal-2", "session-1", "group-1", "active");
+    useTerminalStore.getState().pinTerminal("terminal-2");
+    useUIStore.setState({ activeTerminalId: "terminal-2" });
 
     const renderer = await renderPanel();
 
     expect(renderer.root.findAllByProps({ "data-terminal-instance": "terminal-1" })).toHaveLength(0);
-    expect(renderer.root.findAllByProps({ "data-pinned-terminal-notice": true })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ "data-terminal-instance": "terminal-2" })).toHaveLength(0);
+    expect(
+      renderer.root
+        .findAllByType("button")
+        .filter((button) => button.props["aria-label"] === "Open terminal in main panel"),
+    ).toHaveLength(1);
   });
 });

@@ -40,7 +40,7 @@ describe("useTerminalActions", () => {
     useTerminalStore.setState({
       terminals: {},
       pinnedTerminalIds: {},
-      pendingPinnedTerminalSessions: {},
+      terminalCreationIntents: {},
     });
     useUIStore.setState({
       activeSessionGroupId: "group-1",
@@ -66,6 +66,10 @@ describe("useTerminalActions", () => {
 
     expect(useTerminalStore.getState().terminals).toEqual({});
     expect(useUIStore.getState().activeTerminalId).toBeNull();
+    const mutationVariables = mutation.mock.calls[0]?.[1] as
+      | { clientMutationId?: string }
+      | undefined;
+    expect(mutationVariables?.clientMutationId).toEqual(expect.any(String));
 
     act(() => {
       reconcileTerminalEvent({
@@ -75,6 +79,7 @@ describe("useTerminalActions", () => {
         scopeId: "session-1",
         timestamp: "2026-08-17T00:00:00.000Z",
         payload: {
+          clientMutationId: mutationVariables?.clientMutationId,
           terminal: {
             id: "terminal-1",
             sessionId: "session-1",

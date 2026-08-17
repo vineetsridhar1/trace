@@ -8,7 +8,6 @@ import { useTerminalStore } from "../../stores/terminal";
 const terminalFontFamily =
   "'Hack Nerd Font Mono', 'Hack Nerd Font', 'HackNerdFontComplete-Regular', 'Trace Nerd Symbols', 'JetBrainsMono Nerd Font Mono', 'JetBrainsMono Nerd Font', 'Symbols Nerd Font Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace";
 const terminalFontSize = 13;
-const initializedTerminalIds = new Set<string>();
 
 export function TerminalInstance({
   terminalId,
@@ -76,11 +75,10 @@ export function TerminalInstance({
         case "ready": {
           reconnectingRef.current = false;
           setTerminalStatus(terminalId, "active");
-          const entry = useTerminalStore.getState().terminals[terminalId];
-          if (entry?.initialCommand && !initializedTerminalIds.has(terminalId)) {
-            initializedTerminalIds.add(terminalId);
-            const suffix = entry.submitInitialCommand === false ? "" : "\n";
-            socket.write(entry.initialCommand + suffix);
+          const initialCommand = useTerminalStore.getState().claimInitialCommand(terminalId);
+          if (initialCommand) {
+            const suffix = initialCommand.submitInitialCommand ? "\n" : "";
+            socket.write(initialCommand.command + suffix);
           }
           break;
         }

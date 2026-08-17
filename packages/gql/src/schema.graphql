@@ -2232,7 +2232,7 @@ type Mutation {
   deleteCodexCredential: Boolean!
   registerPushToken(token: String!, platform: PushPlatform!): Boolean!
   unregisterPushToken(token: String!): Boolean!
-  createTerminal(sessionId: ID!, cols: Int!, rows: Int!): Terminal!
+  createTerminal(sessionId: ID!, cols: Int!, rows: Int!, clientMutationId: String): Terminal!
   createChannelTerminal(channelId: ID!, bridgeRuntimeId: ID!, cols: Int!, rows: Int!): Terminal!
   destroyTerminal(terminalId: ID!): Boolean!
   sendTerminalInput(terminalId: ID!, data: String!): Boolean!

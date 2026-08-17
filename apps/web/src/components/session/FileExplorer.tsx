@@ -146,7 +146,7 @@ export function FileExplorer({
   return (
     <div className="flex h-full flex-col bg-transparent">
       <div className="px-3 pb-3 pt-3">
-        <label className="flex h-9 items-center gap-2 rounded-lg border border-white/[0.1] bg-black/20 px-3 text-muted-foreground focus-within:border-white/20">
+        <label className="flex h-9 items-center gap-2 rounded-lg border border-border bg-background/20 px-3 text-muted-foreground focus-within:border-ring/50">
           <Search size={13} />
           <input
             value={search}
@@ -155,7 +155,7 @@ export function FileExplorer({
             placeholder="Search files"
             aria-label="Search files"
           />
-          <span className="rounded bg-white/[0.07] px-1.5 py-0.5 text-[8px]">⌘P</span>
+          <span className="rounded bg-muted px-1.5 py-0.5 text-[8px]">⌘P</span>
         </label>
       </div>
       <div className="flex h-8 shrink-0 items-center px-4">
@@ -165,7 +165,7 @@ export function FileExplorer({
         <span className="ml-auto text-[8px] text-muted-foreground">{loadedItemCount} loaded</span>
         <button
           onClick={() => void onRefresh()}
-          className="ml-2 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-white/[0.07] hover:text-foreground"
+          className="ml-2 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
           title="Refresh"
         >
           <RefreshCw size={12} />

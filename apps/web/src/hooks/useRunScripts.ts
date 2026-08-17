@@ -1,10 +1,7 @@
 import { useCallback } from "react";
 import { useEntityField, useEntityStore } from "@trace/client-core";
 import type { RepoApplicationConfig } from "@trace/gql";
-import { useUIStore, type UIState } from "../stores/ui";
-import { useTerminalStore } from "../stores/terminal";
-import { client } from "../lib/urql";
-import { CREATE_TERMINAL_MUTATION } from "@trace/client-core";
+import { requestSessionTerminal } from "../lib/terminal-creation";
 
 interface LegacyRunScript {
   name: string;
@@ -16,7 +13,6 @@ interface LegacyRunScript {
  * The Run button should use `hasRunScripts` to show/hide and `canRun` to enable/disable.
  */
 export function useRunScripts(sessionGroupId: string, selectedSessionId: string | null) {
-  const setShowTerminalPanel = useUIStore((s: UIState) => s.setShowTerminalPanel);
   const sessionGroupChannel = useEntityField("sessionGroups", sessionGroupId, "channel") as
     | { id: string }
     | null
@@ -58,21 +54,15 @@ export function useRunScripts(sessionGroupId: string, selectedSessionId: string 
 
   const handleRun = useCallback(async () => {
     if (!selectedSessionId || !runScripts) return;
-    const addTerminal = useTerminalStore.getState().addTerminal;
     for (const script of runScripts) {
-      const result = await client
-        .mutation(CREATE_TERMINAL_MUTATION, { sessionId: selectedSessionId, cols: 80, rows: 24 })
-        .toPromise();
-      if (result.data?.createTerminal) {
-        const { id } = result.data.createTerminal as { id: string };
-        addTerminal(id, selectedSessionId, sessionGroupId, "connecting", {
-          customName: script.name,
-          initialCommand: script.command,
-        });
-      }
+      await requestSessionTerminal({
+        sessionId: selectedSessionId,
+        customName: script.name,
+        initialCommand: script.command,
+        showPanel: true,
+      }).completion;
     }
-    setShowTerminalPanel(true);
-  }, [selectedSessionId, sessionGroupId, runScripts, setShowTerminalPanel]);
+  }, [selectedSessionId, runScripts]);
 
   return { hasRunScripts, canRun, handleRun };
 }

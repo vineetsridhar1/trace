@@ -39,7 +39,7 @@ export const terminalQueries = {
 export const terminalMutations = {
   createTerminal: async (
     _parent: unknown,
-    args: { sessionId: string; cols: number; rows: number },
+    args: { sessionId: string; cols: number; rows: number; clientMutationId?: string | null },
     ctx: Context,
   ) => {
     if (!ctx.userId) throw new AuthenticationError();
@@ -47,6 +47,7 @@ export const terminalMutations = {
       sessionId: args.sessionId,
       cols: args.cols,
       rows: args.rows,
+      clientMutationId: args.clientMutationId ?? undefined,
       organizationId: requireOrgContext(ctx),
       userId: ctx.userId,
       actorType: ctx.actorType,

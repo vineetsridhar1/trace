@@ -1,5 +1,5 @@
+import { useMemo } from "react";
 import { create } from "zustand";
-import { useShallow } from "zustand/react/shallow";
 
 export type TerminalStatus = "connecting" | "active" | "exited";
 
@@ -11,18 +11,29 @@ export interface TerminalEntry {
   customName?: string;
   initialCommand?: string;
   submitInitialCommand?: boolean;
+  initialCommandSent?: boolean;
+  creationIntentId?: string;
 }
 
-interface AddTerminalOptions {
+export interface AddTerminalOptions {
   customName?: string;
   initialCommand?: string;
   submitInitialCommand?: boolean;
+  creationIntentId?: string;
+}
+
+export interface TerminalCreationIntent extends AddTerminalOptions {
+  sessionId: string;
+  pin?: boolean;
+  select?: boolean;
+  showPanel?: boolean;
+  createdAt: number;
 }
 
 interface TerminalState {
   terminals: Record<string, TerminalEntry>;
   pinnedTerminalIds: Record<string, boolean>;
-  pendingPinnedTerminalSessions: Record<string, number>;
+  terminalCreationIntents: Record<string, TerminalCreationIntent>;
   addTerminal: (
     id: string,
     sessionId: string,
@@ -32,11 +43,17 @@ interface TerminalState {
   ) => void;
   setTerminalStatus: (id: string, status: TerminalStatus) => void;
   renameTerminal: (id: string, name: string) => void;
+  claimInitialCommand: (
+    id: string,
+  ) => { command: string; submitInitialCommand: boolean } | null;
   pinTerminal: (id: string) => void;
   unpinTerminal: (id: string) => void;
-  requestPinnedTerminal: (sessionId: string) => void;
-  cancelPinnedTerminalRequest: (sessionId: string) => void;
-  consumePinnedTerminalRequest: (sessionId: string) => boolean;
+  registerTerminalCreationIntent: (id: string, intent: TerminalCreationIntent) => void;
+  cancelTerminalCreationIntent: (id: string) => void;
+  consumeTerminalCreationIntent: (
+    id: string,
+    sessionId: string,
+  ) => TerminalCreationIntent | null;
   removeTerminal: (id: string) => void;
 }
 
@@ -45,7 +62,7 @@ type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
 export const useTerminalStore = create<TerminalState>((set: SetState<TerminalState>) => ({
   terminals: {},
   pinnedTerminalIds: {},
-  pendingPinnedTerminalSessions: {},
+  terminalCreationIntents: {},
 
   addTerminal: (
     id: string,
@@ -54,20 +71,27 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
     status?: TerminalStatus,
     opts?: AddTerminalOptions,
   ) =>
-    set((state: TerminalState) => ({
-      terminals: {
-        ...state.terminals,
-        [id]: {
-          id,
-          sessionId,
-          sessionGroupId,
-          status: status ?? "connecting",
-          customName: opts?.customName,
-          initialCommand: opts?.initialCommand,
-          submitInitialCommand: opts?.submitInitialCommand,
+    set((state: TerminalState) => {
+      const existing = state.terminals[id];
+      return {
+        terminals: {
+          ...state.terminals,
+          [id]: {
+            ...existing,
+            id,
+            sessionId,
+            sessionGroupId,
+            status: status ?? existing?.status ?? "connecting",
+            customName: opts?.customName ?? existing?.customName,
+            initialCommand: opts?.initialCommand ?? existing?.initialCommand,
+            submitInitialCommand:
+              opts?.submitInitialCommand ?? existing?.submitInitialCommand,
+            initialCommandSent: existing?.initialCommandSent,
+            creationIntentId: opts?.creationIntentId ?? existing?.creationIntentId,
+          },
         },
-      },
-    })),
+      };
+    }),
 
   setTerminalStatus: (id: string, status: TerminalStatus) =>
     set((state: TerminalState) => {
@@ -84,6 +108,25 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
       return { terminals: { ...state.terminals, [id]: { ...entry, customName } } };
     }),
 
+  claimInitialCommand: (id: string) => {
+    let claimed: { command: string; submitInitialCommand: boolean } | null = null;
+    set((state: TerminalState) => {
+      const entry = state.terminals[id];
+      if (!entry?.initialCommand || entry.initialCommandSent) return {};
+      claimed = {
+        command: entry.initialCommand,
+        submitInitialCommand: entry.submitInitialCommand !== false,
+      };
+      return {
+        terminals: {
+          ...state.terminals,
+          [id]: { ...entry, initialCommandSent: true },
+        },
+      };
+    });
+    return claimed;
+  },
+
   pinTerminal: (id: string) =>
     set((state: TerminalState) => {
       if (!state.terminals[id]) return {};
@@ -96,33 +139,31 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
       return { pinnedTerminalIds: rest };
     }),
 
-  requestPinnedTerminal: (sessionId: string) =>
-    set((state: TerminalState) => ({
-      pendingPinnedTerminalSessions: {
-        ...state.pendingPinnedTerminalSessions,
-        [sessionId]: (state.pendingPinnedTerminalSessions[sessionId] ?? 0) + 1,
-      },
-    })),
-
-  cancelPinnedTerminalRequest: (sessionId: string) =>
-    set((state: TerminalState) => ({
-      pendingPinnedTerminalSessions: decrementPendingRequest(
-        state.pendingPinnedTerminalSessions,
-        sessionId,
-      ),
-    })),
-
-  consumePinnedTerminalRequest: (sessionId: string) => {
-    let consumed = false;
+  registerTerminalCreationIntent: (id: string, intent: TerminalCreationIntent) =>
     set((state: TerminalState) => {
-      consumed = (state.pendingPinnedTerminalSessions[sessionId] ?? 0) > 0;
-      if (!consumed) return {};
-      return {
-        pendingPinnedTerminalSessions: decrementPendingRequest(
-          state.pendingPinnedTerminalSessions,
-          sessionId,
+      const cutoff = Date.now() - 5 * 60 * 1000;
+      const activeIntents = Object.fromEntries(
+        Object.entries(state.terminalCreationIntents).filter(([, candidate]) =>
+          candidate.createdAt >= cutoff,
         ),
-      };
+      );
+      return { terminalCreationIntents: { ...activeIntents, [id]: intent } };
+    }),
+
+  cancelTerminalCreationIntent: (id: string) =>
+    set((state: TerminalState) => {
+      const { [id]: _, ...rest } = state.terminalCreationIntents;
+      return { terminalCreationIntents: rest };
+    }),
+
+  consumeTerminalCreationIntent: (id: string, sessionId: string) => {
+    let consumed: TerminalCreationIntent | null = null;
+    set((state: TerminalState) => {
+      const intent = state.terminalCreationIntents[id];
+      if (!intent || intent.sessionId !== sessionId) return {};
+      consumed = intent;
+      const { [id]: _, ...rest } = state.terminalCreationIntents;
+      return { terminalCreationIntents: rest };
     });
     return consumed;
   },
@@ -135,24 +176,13 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
     }),
 }));
 
-function decrementPendingRequest(
-  requests: Record<string, number>,
-  sessionId: string,
-): Record<string, number> {
-  const count = requests[sessionId] ?? 0;
-  if (count <= 1) {
-    const { [sessionId]: _, ...rest } = requests;
-    return rest;
-  }
-  return { ...requests, [sessionId]: count - 1 };
-}
-
 export function useSessionGroupTerminals(sessionGroupId: string): TerminalEntry[] {
-  return useTerminalStore(
-    useShallow((state: TerminalState) =>
-      Object.values(state.terminals).filter(
+  const terminals = useTerminalStore((state: TerminalState) => state.terminals);
+  return useMemo(
+    () =>
+      Object.values(terminals).filter(
         (terminal: TerminalEntry) => terminal.sessionGroupId === sessionGroupId,
       ),
-    ),
+    [sessionGroupId, terminals],
   );
 }

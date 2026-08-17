@@ -32,9 +32,9 @@ export function FileTreeItem({
           }
         }}
         className={cn(
-          "relative flex h-6 w-full items-center gap-1.5 rounded-md pr-2 text-left text-[11px] text-foreground/85 transition-colors hover:bg-white/[0.06] hover:text-foreground",
+          "relative flex h-6 w-full items-center gap-1.5 rounded-md pr-2 text-left text-[11px] text-foreground/85 transition-colors hover:bg-muted/70 hover:text-foreground",
           "cursor-pointer",
-          activeFilePath === node.path && "bg-white/[0.08] text-foreground",
+          activeFilePath === node.path && "bg-muted text-foreground",
         )}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
       >

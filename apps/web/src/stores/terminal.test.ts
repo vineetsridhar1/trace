@@ -6,7 +6,7 @@ describe("terminal pinning", () => {
     useTerminalStore.setState({
       terminals: {},
       pinnedTerminalIds: {},
-      pendingPinnedTerminalSessions: {},
+      terminalCreationIntents: {},
     });
   });
 
@@ -32,15 +32,35 @@ describe("terminal pinning", () => {
     expect(useTerminalStore.getState().pinnedTerminalIds).toEqual({});
   });
 
-  it("tracks multiple pending pin requests for the same session", () => {
+  it("consumes only the creation intent with the matching request and session", () => {
     const store = useTerminalStore.getState();
-    store.requestPinnedTerminal("session-1");
-    store.requestPinnedTerminal("session-1");
+    store.registerTerminalCreationIntent("request-1", {
+      sessionId: "session-1",
+      pin: true,
+      createdAt: Date.now(),
+    });
 
-    expect(useTerminalStore.getState().consumePinnedTerminalRequest("session-1")).toBe(true);
-    expect(useTerminalStore.getState().pendingPinnedTerminalSessions).toEqual({ "session-1": 1 });
+    expect(
+      useTerminalStore.getState().consumeTerminalCreationIntent("request-1", "session-2"),
+    ).toBeNull();
+    expect(
+      useTerminalStore.getState().consumeTerminalCreationIntent("request-1", "session-1"),
+    ).toMatchObject({ pin: true });
+    expect(useTerminalStore.getState().terminalCreationIntents).toEqual({});
+  });
 
-    useTerminalStore.getState().cancelPinnedTerminalRequest("session-1");
-    expect(useTerminalStore.getState().pendingPinnedTerminalSessions).toEqual({});
+  it("claims an initial command only once and releases it with the terminal", () => {
+    const store = useTerminalStore.getState();
+    store.addTerminal("terminal-1", "session-1", "group-1", "active", {
+      initialCommand: "pnpm test",
+    });
+
+    expect(store.claimInitialCommand("terminal-1")).toEqual({
+      command: "pnpm test",
+      submitInitialCommand: true,
+    });
+    expect(store.claimInitialCommand("terminal-1")).toBeNull();
+    store.removeTerminal("terminal-1");
+    expect(useTerminalStore.getState().terminals).toEqual({});
   });
 });

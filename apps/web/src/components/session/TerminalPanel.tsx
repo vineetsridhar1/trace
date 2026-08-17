@@ -10,13 +10,13 @@ import { TerminalInstance } from "./TerminalInstance";
 import { client } from "../../lib/urql";
 import {
   SESSION_TERMINALS_QUERY,
-  CREATE_TERMINAL_MUTATION,
   DESTROY_TERMINAL_MUTATION,
 } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import type { Terminal } from "@trace/gql";
 import { useUIStore } from "../../stores/ui";
 import { PinnedTerminalNotice } from "./PinnedTerminalNotice";
+import { requestSessionTerminal } from "../../lib/terminal-creation";
 
 export function TerminalPanel({
   sessionId,
@@ -38,7 +38,7 @@ export function TerminalPanel({
   const setMainActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const setMainActiveTerminalId = useUIStore((s) => s.setActiveTerminalId);
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
-  const pendingCreationBaselineRef = useRef<Set<string> | null>(null);
+  const pendingCreationIntentRef = useRef<string | null>(null);
   const groupTerminals = useSessionGroupTerminals(sessionGroupId ?? "");
 
   const terminals = useMemo(
@@ -47,12 +47,12 @@ export function TerminalPanel({
   );
 
   useEffect(() => {
-    const pendingBaseline = pendingCreationBaselineRef.current;
-    const createdTerminal = pendingBaseline
-      ? terminals.find((terminal: TerminalEntry) => !pendingBaseline.has(terminal.id))
+    const pendingIntentId = pendingCreationIntentRef.current;
+    const createdTerminal = pendingIntentId
+      ? terminals.find((terminal: TerminalEntry) => terminal.creationIntentId === pendingIntentId)
       : undefined;
     if (createdTerminal) {
-      pendingCreationBaselineRef.current = null;
+      pendingCreationIntentRef.current = null;
       setActiveTerminalId(createdTerminal.id);
       return;
     }
@@ -62,15 +62,20 @@ export function TerminalPanel({
 
   const createNewTerminal = useCallback(async () => {
     if (!sessionGroupId) return;
-    pendingCreationBaselineRef.current = new Set(terminals.map((terminal) => terminal.id));
-    const result = await client
-      .mutation(CREATE_TERMINAL_MUTATION, { sessionId, cols: 80, rows: 24 })
-      .toPromise();
-    if (result.error) {
-      pendingCreationBaselineRef.current = null;
-      console.error("[terminal] failed to create terminal:", result.error.message);
+    const request = requestSessionTerminal({ sessionId });
+    pendingCreationIntentRef.current = request.clientMutationId;
+    try {
+      await request.completion;
+    } catch (error) {
+      if (pendingCreationIntentRef.current === request.clientMutationId) {
+        pendingCreationIntentRef.current = null;
+      }
+      console.error(
+        "[terminal] failed to create terminal:",
+        error instanceof Error ? error.message : error,
+      );
     }
-  }, [sessionGroupId, sessionId, terminals]);
+  }, [sessionGroupId, sessionId]);
 
   const destroyTerminal = useCallback(
     async (terminalId: string) => {
@@ -139,18 +144,26 @@ export function TerminalPanel({
         : undefined,
     [pinnedTerminalIds, selectedTerminalId, terminals],
   );
+  const activeMainTerminal = useMemo(
+    () =>
+      mainActiveTerminalId && pinnedTerminalIds[mainActiveTerminalId]
+        ? terminals.find((terminal) => terminal.id === mainActiveTerminalId)
+        : undefined,
+    [mainActiveTerminalId, pinnedTerminalIds, terminals],
+  );
+  const terminalInMainPanel = activeMainTerminal ?? pinnedSidebarTerminal;
 
   const openMainTerminal = useCallback(() => {
-    if (!pinnedSidebarTerminal) return;
-    setMainActiveSessionId(pinnedSidebarTerminal.sessionId);
-    setMainActiveTerminalId(pinnedSidebarTerminal.id);
+    if (!terminalInMainPanel) return;
+    setMainActiveSessionId(terminalInMainPanel.sessionId);
+    setMainActiveTerminalId(terminalInMainPanel.id);
     onClose();
-  }, [onClose, pinnedSidebarTerminal, setMainActiveSessionId, setMainActiveTerminalId]);
+  }, [onClose, setMainActiveSessionId, setMainActiveTerminalId, terminalInMainPanel]);
 
   return (
     <div
       className={cn(
-        "flex flex-col bg-[#0a0a0a]",
+        "flex flex-col bg-background",
         fill ? "h-full min-h-0" : "border-t border-border",
       )}
       style={fill ? undefined : { height: 300 }}
@@ -229,7 +242,7 @@ export function TerminalPanel({
       </div>
 
       <div className="relative flex-1 overflow-hidden">
-        {pinnedSidebarTerminal ? (
+        {terminalInMainPanel ? (
           <PinnedTerminalNotice onOpen={openMainTerminal} />
         ) : (
           terminals.map((terminal: TerminalEntry) => (

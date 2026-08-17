@@ -1314,7 +1314,7 @@ export function SessionGroupDetailView({
                       duration: prefersReducedMotion || isResizingSidebar ? 0 : 0.3,
                       ease: [0.16, 1, 0.3, 1],
                     }}
-                    className="relative h-full shrink-0 overflow-hidden border-l border-[#2d2d2d]"
+                    className="relative h-full shrink-0 overflow-hidden border-l border-border"
                   >
                     <div
                       onMouseDown={handleSidebarResizeStart}

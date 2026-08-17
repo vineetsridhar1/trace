@@ -26,7 +26,7 @@ describe("terminal lifecycle event reconciliation", () => {
     useTerminalStore.setState({
       terminals: {},
       pinnedTerminalIds: {},
-      pendingPinnedTerminalSessions: {},
+      terminalCreationIntents: {},
     });
     useUIStore.setState({ activeSessionId: null, activeTerminalId: null });
   });
@@ -67,10 +67,17 @@ describe("terminal lifecycle event reconciliation", () => {
   });
 
   it("pins and selects a created terminal when the client requested it", () => {
-    useTerminalStore.getState().requestPinnedTerminal("session-1");
+    useTerminalStore.getState().registerTerminalCreationIntent("request-1", {
+      sessionId: "session-1",
+      pin: true,
+      select: true,
+      customName: "Test terminal",
+      createdAt: Date.now(),
+    });
 
     reconcileTerminalEvent(
       terminalEvent("terminal_created", {
+        clientMutationId: "request-1",
         terminal: {
           id: "terminal-1",
           sessionId: "session-1",
@@ -82,9 +89,33 @@ describe("terminal lifecycle event reconciliation", () => {
     );
 
     expect(useTerminalStore.getState().pinnedTerminalIds).toEqual({ "terminal-1": true });
-    expect(useTerminalStore.getState().pendingPinnedTerminalSessions).toEqual({});
+    expect(useTerminalStore.getState().terminalCreationIntents).toEqual({});
+    expect(useTerminalStore.getState().terminals["terminal-1"]?.customName).toBe("Test terminal");
     expect(useUIStore.getState().activeSessionId).toBe("session-1");
     expect(useUIStore.getState().activeTerminalId).toBe("terminal-1");
+  });
+
+  it("does not consume an intent for an unrelated creation event", () => {
+    useTerminalStore.getState().registerTerminalCreationIntent("request-1", {
+      sessionId: "session-1",
+      pin: true,
+      createdAt: Date.now(),
+    });
+
+    reconcileTerminalEvent(
+      terminalEvent("terminal_created", {
+        clientMutationId: "request-2",
+        terminal: {
+          id: "terminal-2",
+          sessionId: "session-1",
+          sessionGroupId: "group-1",
+          closed: false,
+        },
+      }),
+    );
+
+    expect(useTerminalStore.getState().pinnedTerminalIds).toEqual({});
+    expect(useTerminalStore.getState().terminalCreationIntents).toHaveProperty("request-1");
   });
 
   it("ignores malformed lifecycle payloads", () => {

@@ -1294,6 +1294,7 @@ export type MutationCreateSessionEndpointPreviewArgs = {
 };
 
 export type MutationCreateTerminalArgs = {
+  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
   cols: Scalars["Int"]["input"];
   rows: Scalars["Int"]["input"];
   sessionId: Scalars["ID"]["input"];

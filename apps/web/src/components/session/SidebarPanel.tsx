@@ -62,15 +62,15 @@ export function SidebarPanel({
   const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess ?? null);
 
   return (
-    <aside className="flex h-full w-full bg-[#18181b] font-sans">
+    <aside className="flex h-full w-full bg-surface-deep font-sans">
       <nav
         aria-label="Session sidebar destinations"
-        className="flex w-12 shrink-0 flex-col items-center border-r border-white/[0.08] bg-black/15 py-2"
+        className="flex w-12 shrink-0 flex-col items-center border-r border-border bg-background/15 py-2"
       >
         <button
           type="button"
           onClick={onClose}
-          className="mb-4 flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/[0.07] hover:text-foreground"
+          className="mb-4 flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           aria-label="Close sidebar"
           title="Close sidebar"
         >
@@ -178,8 +178,8 @@ function SidebarDestination({
       className={cn(
         "relative mb-1 flex h-9 w-9 items-center justify-center rounded-lg border transition-colors",
         active
-          ? "border-white/[0.12] bg-white/[0.09] text-foreground"
-          : "border-transparent text-muted-foreground hover:bg-white/[0.06] hover:text-foreground",
+          ? "border-border bg-muted text-foreground"
+          : "border-transparent text-muted-foreground hover:bg-muted/70 hover:text-foreground",
       )}
     >
       <Icon size={14} />

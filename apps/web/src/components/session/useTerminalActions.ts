@@ -1,9 +1,10 @@
 import { useCallback } from "react";
 import { client } from "../../lib/urql";
-import { CREATE_TERMINAL_MUTATION, SESSION_TERMINALS_QUERY } from "@trace/client-core";
+import { SESSION_TERMINALS_QUERY } from "@trace/client-core";
 import { useTerminalStore } from "../../stores/terminal";
 import { useUIStore } from "../../stores/ui";
 import type { Terminal } from "@trace/gql";
+import { requestSessionTerminal } from "../../lib/terminal-creation";
 
 interface TerminalActionsArgs {
   sessionGroupId: string;
@@ -15,8 +16,6 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
   const setActiveTerminalId = useUIStore((s) => s.setActiveTerminalId);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const pinTerminal = useTerminalStore((s) => s.pinTerminal);
-  const requestPinnedTerminal = useTerminalStore((s) => s.requestPinnedTerminal);
-  const cancelPinnedTerminalRequest = useTerminalStore((s) => s.cancelPinnedTerminalRequest);
 
   const ensureSessionTerminals = useCallback(
     async (sessionId: string) => {
@@ -51,21 +50,12 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
         return;
       }
 
-      requestPinnedTerminal(session.id);
       setActiveSessionId(session.id);
-      const result = await client
-        .mutation(CREATE_TERMINAL_MUTATION, { sessionId: session.id, cols: 80, rows: 24 })
-        .toPromise();
-      if (result.error) {
-        cancelPinnedTerminalRequest(session.id);
-      }
+      await requestSessionTerminal({ sessionId: session.id, pin: true, select: true }).completion;
     },
     [
-      addTerminal,
-      cancelPinnedTerminalRequest,
       ensureSessionTerminals,
       pinTerminal,
-      requestPinnedTerminal,
       setActiveSessionId,
       setActiveTerminalId,
     ],
@@ -74,14 +64,10 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
   const handleCreateTerminal = useCallback(
     async (session: { id: string; _optimistic?: boolean } | null, terminalAllowed: boolean) => {
       if (!session || session._optimistic || !terminalAllowed) return;
-      requestPinnedTerminal(session.id);
       setActiveSessionId(session.id);
-      const result = await client
-        .mutation(CREATE_TERMINAL_MUTATION, { sessionId: session.id, cols: 80, rows: 24 })
-        .toPromise();
-      if (result.error) cancelPinnedTerminalRequest(session.id);
+      await requestSessionTerminal({ sessionId: session.id, pin: true, select: true }).completion;
     },
-    [cancelPinnedTerminalRequest, requestPinnedTerminal, setActiveSessionId],
+    [setActiveSessionId],
   );
 
   const handleSelectTerminal = useCallback(

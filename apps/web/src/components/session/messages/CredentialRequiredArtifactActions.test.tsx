@@ -45,7 +45,11 @@ async function renderActions(): Promise<ReactTestRenderer> {
 async function enterKey(root: ReactTestInstance) {
   const input = root.findByType("input");
   await act(async () => {
-    input.props.onChange({ target: { value: "sk-ant-secret" } });
+    input.props.onChange({
+      target: { value: "sk-ant-secret" },
+      currentTarget: { value: "sk-ant-secret" },
+      nativeEvent: {},
+    });
   });
 }
 

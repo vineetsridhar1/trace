@@ -12,7 +12,13 @@ export function PinnedTerminalNotice({ onOpen }: { onOpen: () => void }) {
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
           A terminal can only appear in one place at a time.
         </p>
-        <Button className="mt-4" size="sm" variant="secondary" onClick={onOpen}>
+        <Button
+          className="mt-4"
+          size="sm"
+          variant="secondary"
+          onClick={onOpen}
+          aria-label="Open terminal in main panel"
+        >
           Open terminal tab
           <ArrowUpRight />
         </Button>
