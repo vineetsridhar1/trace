@@ -14,7 +14,7 @@ import {
   type Modifier,
 } from "@dnd-kit/core";
 import { motion } from "framer-motion";
-import { Columns2, Columns3, Columns4, LayoutGrid, Plus, Rows2, Square, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -26,17 +26,8 @@ import {
 } from "react";
 import { cn } from "../../lib/utils";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
-import {
   MAX_SPATIAL_COLUMNS,
   activateSpatialTab,
-  applySpatialLayoutPreset,
   balanceSpatialGroups,
   countSpatialColumnsInRow,
   countSpatialRegions,
@@ -52,7 +43,6 @@ import {
   setSpatialSplitRatio,
   syncSpatialTabs,
   type SpatialEdge,
-  type SpatialLayoutPreset,
   type SpatialLayout,
   type SpatialNode,
   type SpatialRowPosition,
@@ -188,7 +178,6 @@ export function SpatialWorkspace({
     (args) => spatialCollisionDetection(args, dragDirectionRef.current),
     [],
   );
-  const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
   const [resizingSplitId, setResizingSplitId] = useState<string | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -219,7 +208,7 @@ export function SpatialWorkspace({
     }
   }, [layout, persistenceKey]);
 
-  const overlayVisible = draggedTabId !== null || layoutMenuOpen || resizingSplitId !== null;
+  const overlayVisible = draggedTabId !== null || resizingSplitId !== null;
   useEffect(() => {
     onOverlayVisibilityChange?.(overlayVisible);
   }, [onOverlayVisibilityChange, overlayVisible]);
@@ -297,10 +286,6 @@ export function SpatialWorkspace({
     dragStartLayoutRef.current = null;
   }, []);
 
-  const handleLayoutPreset = useCallback((preset: SpatialLayoutPreset) => {
-    setLayout((current) => applySpatialLayoutPreset(current, preset));
-  }, []);
-
   const handleResizeSplit = useCallback((splitId: string, ratio: number) => {
     setLayout((current) => setSpatialSplitRatio(current, splitId, ratio));
   }, []);
@@ -345,51 +330,6 @@ export function SpatialWorkspace({
       onDragEnd={handleDragEnd}
     >
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-surface-deep">
-        <div className="pointer-events-none absolute right-3 top-1.5 z-40 flex h-7 items-center gap-1 rounded-lg border border-border/70 bg-surface-mid/95 px-1.5 shadow-lg shadow-black/20 backdrop-blur">
-          <span className="px-1 text-[10px] text-muted-foreground">
-            {regionCount} {regionCount === 1 ? "region" : "regions"}
-          </span>
-          <DropdownMenu open={layoutMenuOpen} onOpenChange={setLayoutMenuOpen}>
-            <DropdownMenuTrigger
-              className="pointer-events-auto flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
-              aria-label="Choose workspace layout"
-              title="Choose workspace layout"
-            >
-              <LayoutGrid size={12} />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Arrange tabs</DropdownMenuLabel>
-                <LayoutPresetItem
-                  icon={Square}
-                  label="Single region"
-                  onClick={() => handleLayoutPreset("single")}
-                />
-                <LayoutPresetItem
-                  icon={Columns2}
-                  label="Two columns"
-                  onClick={() => handleLayoutPreset("columns")}
-                />
-                <LayoutPresetItem
-                  icon={Columns3}
-                  label="Three columns"
-                  onClick={() => handleLayoutPreset("three-columns")}
-                />
-                <LayoutPresetItem
-                  icon={Columns4}
-                  label="Four columns"
-                  onClick={() => handleLayoutPreset("four-columns")}
-                />
-                <LayoutPresetItem
-                  icon={Rows2}
-                  label="Two rows"
-                  onClick={() => handleLayoutPreset("rows")}
-                />
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
         <SpatialNodeView
           node={layout.root}
           tabById={tabById}
@@ -430,23 +370,6 @@ export function SpatialWorkspace({
         {draggedTab ? <DraggedTab tab={draggedTab} /> : null}
       </DragOverlay>
     </DndContext>
-  );
-}
-
-function LayoutPresetItem({
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  icon: typeof Square;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <DropdownMenuItem onClick={onClick} className="gap-2 py-1.5 text-xs">
-      <Icon size={13} />
-      {label}
-    </DropdownMenuItem>
   );
 }
 

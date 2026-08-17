@@ -34,7 +34,7 @@ describe("SpatialWorkspace", () => {
     vi.unstubAllGlobals();
   });
 
-  it("mounts the grouped layout menu without a Base UI context error", async () => {
+  it("mounts the grouped workspace", async () => {
     await act(async () => {
       renderer = create(
         <SpatialWorkspace
