@@ -8,6 +8,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragOverEvent,
   type CollisionDetection,
 } from "@dnd-kit/core";
@@ -90,8 +91,11 @@ const tabRailSpring = { type: "spring", stiffness: 520, damping: 42, mass: 0.7 }
 
 const spatialCollisionDetection: CollisionDetection = (args) => {
   const collisions = pointerWithin(args);
-  const tabCollision = collisions.find((collision) =>
-    String(collision.id).startsWith("tab-target:"),
+  const activeTabTargetId = `tab-target:${String(args.active.id)}`;
+  const tabCollision = collisions.find(
+    (collision) =>
+      String(collision.id).startsWith("tab-target:") &&
+      String(collision.id) !== activeTabTargetId,
   );
   if (tabCollision) return [tabCollision];
   const railCollision = collisions.find((collision) => String(collision.id).startsWith("tab-rail:"));
@@ -156,7 +160,7 @@ export function SpatialWorkspace({
     [onActivateTab],
   );
 
-  const handleDragOver = useCallback((event: DragOverEvent) => {
+  const handleDragMove = useCallback((event: DragMoveEvent) => {
     const move = getTabRailMove(event);
     if (!move) return;
     setLayout((current) =>
@@ -221,7 +225,7 @@ export function SpatialWorkspace({
         dragStartLayoutRef.current = layout;
         setDraggedTabId(String(active.id));
       }}
-      onDragOver={handleDragOver}
+      onDragMove={handleDragMove}
       onDragCancel={handleDragCancel}
       onDragEnd={handleDragEnd}
     >
@@ -703,7 +707,7 @@ function isTabRailDropData(value: unknown): value is TabRailDropData {
   );
 }
 
-function getTabRailMove(event: DragOverEvent | DragEndEvent) {
+function getTabRailMove(event: DragMoveEvent | DragOverEvent | DragEndEvent) {
   const over = event.over;
   if (!over) return null;
   const dropData: unknown = over.data.current;
