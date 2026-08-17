@@ -1,4 +1,11 @@
-import { app, BrowserWindow, WebContentsView } from "electron";
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  Menu,
+  type MenuItemConstructorOptions,
+  WebContentsView,
+} from "electron";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -166,6 +173,78 @@ export class BrowserWorkspaceManager {
     webContents.on("page-title-updated", sync);
     webContents.on("devtools-opened", sync);
     webContents.on("devtools-closed", sync);
+    webContents.on("context-menu", (_event, params) => {
+      const template: MenuItemConstructorOptions[] = [
+        {
+          label: "Back",
+          enabled: webContents.navigationHistory.canGoBack(),
+          click: () => void this.goBack(workspace.state.sessionGroupId),
+        },
+        {
+          label: "Forward",
+          enabled: webContents.navigationHistory.canGoForward(),
+          click: () => void this.goForward(workspace.state.sessionGroupId),
+        },
+        { label: "Reload", click: () => webContents.reload() },
+      ];
+
+      if (params.linkURL) {
+        template.push(
+          { type: "separator" },
+          {
+            label: "Open Link",
+            click: () =>
+              void this.navigate(workspace.state.sessionGroupId, params.linkURL).catch(
+                () => undefined,
+              ),
+          },
+          { label: "Copy Link", click: () => clipboard.writeText(params.linkURL) },
+        );
+      }
+
+      if (params.misspelledWord) {
+        template.push({ type: "separator" });
+        for (const suggestion of params.dictionarySuggestions) {
+          template.push({
+            label: suggestion,
+            click: () => webContents.replaceMisspelling(suggestion),
+          });
+        }
+        if (params.dictionarySuggestions.length === 0) {
+          template.push({ label: "No suggestions", enabled: false });
+        }
+        template.push({
+          label: "Add to Dictionary",
+          click: () => webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+        });
+      }
+
+      if (params.isEditable || params.selectionText) {
+        template.push({ type: "separator" });
+        if (params.isEditable) {
+          template.push(
+            { role: "cut", enabled: params.editFlags.canCut },
+            { role: "copy", enabled: params.editFlags.canCopy },
+            { role: "paste", enabled: params.editFlags.canPaste },
+          );
+        } else {
+          template.push({ role: "copy", enabled: params.editFlags.canCopy });
+        }
+        template.push({ role: "selectAll" });
+      }
+
+      template.push(
+        { type: "separator" },
+        {
+          label: "Inspect Element",
+          click: () => {
+            webContents.inspectElement(params.x, params.y);
+            webContents.openDevTools({ mode: "right", title: "Trace Browser DevTools" });
+          },
+        },
+      );
+      Menu.buildFromTemplate(template).popup({ window: this.window ?? undefined });
+    });
     webContents.on("destroyed", () => this.workspaces.delete(workspace.state.sessionGroupId));
   }
 
