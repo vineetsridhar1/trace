@@ -5,6 +5,7 @@ import {
   countSpatialRegions,
   createSpatialLayout,
   dockSpatialTab,
+  getSpatialAxisSpan,
   getSpatialGroups,
   moveSpatialTab,
   syncSpatialTabs,
@@ -28,6 +29,24 @@ describe("spatial workspace layout", () => {
 
     expect(countSpatialRegions(layout.root)).toBe(4);
     expect(capped).toBe(layout);
+  });
+
+  it("gives three same-direction regions equal top-level space", () => {
+    let layout = createSpatialLayout(["chat", "browser", "terminal"]);
+    layout = dockSpatialTab(layout, "browser", "region-1", "right");
+    layout = dockSpatialTab(layout, "terminal", "region-2", "right");
+
+    expect(layout.root).toMatchObject({ type: "split", direction: "horizontal" });
+    if (layout.root.type !== "split") throw new Error("Expected a split layout");
+    expect(layout.root.children.map((child) => getSpatialAxisSpan(child, "horizontal"))).toEqual([
+      1, 2,
+    ]);
+    expect(getSpatialAxisSpan(layout.root, "horizontal")).toBe(3);
+    expect(getSpatialGroups(layout.root).map((group) => group.tabIds)).toEqual([
+      ["chat"],
+      ["browser"],
+      ["terminal"],
+    ]);
   });
 
   it("collapses an empty source region when a tab moves into another group", () => {
@@ -85,5 +104,15 @@ describe("spatial workspace layout", () => {
       "chat",
       "terminal",
     ]);
+  });
+
+  it("offers an equal three-column arrangement", () => {
+    const layout = applySpatialLayoutPreset(
+      createSpatialLayout(["chat", "browser", "terminal"]),
+      "three-columns",
+    );
+
+    expect(getSpatialAxisSpan(layout.root, "horizontal")).toBe(3);
+    expect(getSpatialGroups(layout.root)).toHaveLength(3);
   });
 });

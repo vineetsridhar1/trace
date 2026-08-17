@@ -11,7 +11,7 @@ import {
   type CollisionDetection,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { Columns2, Grid2X2, LayoutGrid, Plus, Rows2, Square, X } from "lucide-react";
+import { Columns2, Columns3, Grid2X2, LayoutGrid, Plus, Rows2, Square, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -34,6 +34,7 @@ import {
   countSpatialRegions,
   createSpatialLayout,
   dockSpatialTab,
+  getSpatialAxisSpan,
   isSpatialLayout,
   moveSpatialTab,
   syncSpatialTabs,
@@ -186,6 +187,11 @@ export function SpatialWorkspace({
                 onClick={() => handleLayoutPreset("columns")}
               />
               <LayoutPresetItem
+                icon={Columns3}
+                label="Three columns"
+                onClick={() => handleLayoutPreset("three-columns")}
+              />
+              <LayoutPresetItem
                 icon={Rows2}
                 label="Two rows"
                 onClick={() => handleLayoutPreset("rows")}
@@ -273,12 +279,17 @@ function SpatialNodeView({
     );
   }
 
+  const firstSpan = getSpatialAxisSpan(node.children[0], node.direction);
+  const secondSpan = getSpatialAxisSpan(node.children[1], node.direction);
+
   return (
     <div
-      className={cn(
-        "grid min-h-0 min-w-0 flex-1 gap-px bg-border",
-        node.direction === "horizontal" ? "grid-cols-2" : "grid-rows-2",
-      )}
+      className="grid min-h-0 min-w-0 flex-1 gap-px bg-border"
+      style={
+        node.direction === "horizontal"
+          ? { gridTemplateColumns: `${firstSpan}fr ${secondSpan}fr` }
+          : { gridTemplateRows: `${firstSpan}fr ${secondSpan}fr` }
+      }
     >
       {node.children.map((child) => (
         <SpatialNodeView

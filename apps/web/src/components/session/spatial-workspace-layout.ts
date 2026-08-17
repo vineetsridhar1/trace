@@ -1,5 +1,5 @@
 export type SpatialEdge = "left" | "right" | "top" | "bottom";
-export type SpatialLayoutPreset = "single" | "columns" | "rows" | "grid";
+export type SpatialLayoutPreset = "single" | "columns" | "three-columns" | "rows" | "grid";
 
 export interface SpatialTabGroup {
   type: "group";
@@ -46,6 +46,17 @@ export function countSpatialRegions(node: SpatialNode): number {
 export function getSpatialGroups(node: SpatialNode): SpatialTabGroup[] {
   if (node.type === "group") return [node];
   return [...getSpatialGroups(node.children[0]), ...getSpatialGroups(node.children[1])];
+}
+
+export function getSpatialAxisSpan(
+  node: SpatialNode,
+  direction: SpatialSplit["direction"],
+): number {
+  if (node.type === "group" || node.direction !== direction) return 1;
+  return (
+    getSpatialAxisSpan(node.children[0], direction) +
+    getSpatialAxisSpan(node.children[1], direction)
+  );
 }
 
 export function findSpatialGroup(node: SpatialNode, groupId: string): SpatialTabGroup | null {
@@ -192,7 +203,10 @@ export function applySpatialLayoutPreset(
     return createSpatialLayout(tabIds, preferredActiveTabId);
   }
 
-  const requestedRegions = Math.min(preset === "grid" ? 4 : 2, tabIds.length);
+  const requestedRegions = Math.min(
+    preset === "grid" ? 4 : preset === "three-columns" ? 3 : 2,
+    tabIds.length,
+  );
   const groups = currentGroups.map((group) => ({
     ...group,
     tabIds: [...group.tabIds],
@@ -228,6 +242,9 @@ export function applySpatialLayoutPreset(
   let root: SpatialNode;
   if (preset === "columns") {
     root = createSplit(layout.nextSplitNumber, "horizontal", groups[0], groups[1]);
+  } else if (preset === "three-columns" && groups.length === 3) {
+    const right = createSplit(layout.nextSplitNumber + 1, "horizontal", groups[1], groups[2]);
+    root = createSplit(layout.nextSplitNumber, "horizontal", groups[0], right);
   } else if (preset === "rows") {
     root = createSplit(layout.nextSplitNumber, "vertical", groups[0], groups[1]);
   } else if (groups.length === 2) {
