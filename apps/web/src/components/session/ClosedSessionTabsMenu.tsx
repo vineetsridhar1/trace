@@ -26,11 +26,18 @@ export function ClosedSessionTabsMenu({ sessions, onRestoreSession }: ClosedSess
           <History size={13} />
         </DropdownMenuTrigger>
       </ActionTooltip>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent
+        align="end"
+        className="max-h-[min(20rem,var(--available-height))] w-64 max-w-80 border border-border shadow-[0_16px_48px_#0004] data-open:zoom-in-[0.98] data-open:duration-150 data-closed:zoom-out-[0.98] data-closed:duration-100"
+      >
         {sessions.map((session) => (
-          <DropdownMenuItem key={session.id} onClick={() => onRestoreSession(session.id)}>
+          <DropdownMenuItem
+            key={session.id}
+            onClick={() => onRestoreSession(session.id)}
+            className="h-8 cursor-pointer gap-2 rounded-sm px-2 text-foreground hover:bg-surface-hover focus:bg-surface-hover"
+          >
             <History size={14} />
-            <span className="max-w-56 truncate opacity-60">{session.name}</span>
+            <span className="min-w-0 flex-1 truncate opacity-60">{session.name}</span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
