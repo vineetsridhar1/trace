@@ -260,6 +260,93 @@ export class ChannelService {
     return channel;
   }
 
+  async linkRepo(
+    channelId: string,
+    repoId: string,
+    baseBranch: string | undefined,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.channel.findFirstOrThrow({
+        where: { id: channelId, ...visibleChannelWhere(actorId) },
+        select: { id: true, organizationId: true, repoId: true },
+      });
+
+      await tx.orgMember.findUniqueOrThrow({
+        where: {
+          userId_organizationId: { userId: actorId, organizationId: existing.organizationId },
+        },
+      });
+
+      const repo = await tx.repo.findFirst({
+        where: { id: repoId, organizationId: existing.organizationId },
+        select: { id: true, name: true, defaultBranch: true },
+      });
+      if (!repo) throw new NotFoundError("Repo", repoId);
+
+      if (existing.repoId) {
+        if (existing.repoId !== repoId) {
+          throw new ValidationError(
+            "Channel already has a linked repository; detach it before linking another",
+          );
+        }
+        return tx.channel.findUniqueOrThrow({
+          where: { id: channelId },
+          include: { repo: { select: { id: true, name: true } } },
+        });
+      }
+
+      const branch = baseBranch?.trim() || repo.defaultBranch;
+      const result = await tx.channel.updateMany({
+        where: { id: channelId, repoId: null },
+        data: { repoId, baseBranch: branch },
+      });
+      const updated = await tx.channel.findUniqueOrThrow({
+        where: { id: channelId },
+        include: { repo: { select: { id: true, name: true } } },
+      });
+      if (result.count === 0) {
+        if (updated.repoId !== repoId) {
+          throw new ValidationError(
+            "Channel already has a linked repository; detach it before linking another",
+          );
+        }
+        return updated;
+      }
+
+      await eventService.create(
+        {
+          organizationId: existing.organizationId,
+          scopeType: "system",
+          scopeId: existing.organizationId,
+          eventType: "channel_updated",
+          payload: {
+            channel: {
+              id: updated.id,
+              name: updated.name,
+              type: updated.type,
+              visibility: updated.visibility,
+              ownerId: updated.ownerId,
+              position: updated.position,
+              groupId: updated.groupId,
+              repoId: updated.repoId,
+              repo: updated.repo,
+              baseBranch: updated.baseBranch,
+              setupScript: updated.setupScript,
+              runScripts: updated.runScripts,
+            },
+          },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return updated;
+    });
+  }
+
   async join(channelId: string, actorType: ActorType, actorId: string) {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const channel = await tx.channel.findUniqueOrThrow({

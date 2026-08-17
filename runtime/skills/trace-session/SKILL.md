@@ -36,6 +36,8 @@ an unrelated command or call Trace's GraphQL API directly.
 "$TRACE_CLI" channel list --json
 "$TRACE_CLI" channel list --member-only --json
 "$TRACE_CLI" repo list --json
+"$TRACE_CLI" channel link-repo <channel-id> <repo-id> --json
+"$TRACE_CLI" repo attach-remote <repo-id> <remote-url> --json
 "$TRACE_CLI" session list --json
 "$TRACE_CLI" session list --status active --limit 50 --json
 "$TRACE_CLI" session get <session-id> --json
@@ -65,8 +67,13 @@ current worktree branch.
 
 Every new coding session needs a task prompt and a channel. Use `--channel` to choose a destination
 other than the current one; if it is omitted, Trace inherits the current session's channel when one
-exists. A channel supplies its linked repo; if it has none, also pass `--repo`. A repository alone
-is not a session destination.
+exists. A channel supplies its linked repo. When that repository should become persistent context
+for the project, use `channel link-repo` before starting the session; use `--repo` only for a
+one-off session override. A repository alone is not a session destination.
+
+`channel link-repo` only fills an empty channel link, and `repo attach-remote` only fills an empty
+remote URL. Both are idempotent for the same value and refuse replacement. Never invent a remote
+URL; attach one only when the user or workspace provides it.
 
 Select another existing group or an explicit destination when appropriate:
 
@@ -105,8 +112,9 @@ conversation and session identity are preserved:
 "$TRACE_CLI" session convert --kind animation --json
 ```
 
-The coding channel is the destination and normally supplies its linked repository. Add `--repo`
-only when the selected channel has no repository. App, Design, PDF, and Animation conversions do
+The coding channel is the destination and normally supplies its linked repository. When the
+repository should remain project context after conversion, use `channel link-repo` first; add
+`--repo` only for a one-off conversion. App, Design, PDF, and Animation conversions do
 not accept a channel or repo; Trace creates an isolated managed repo and moves the session to cloud.
 Design System authoring is not a standalone conversion target because it requires a source repo and
 its dedicated creation flow. Add `--tool`, `--model`, or `--reasoning` when the destination needs an

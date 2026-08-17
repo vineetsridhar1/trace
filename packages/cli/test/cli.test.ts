@@ -153,6 +153,91 @@ describe("Trace CLI", () => {
     );
   });
 
+  it("links a repository to a repo-less channel", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: URL, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as {
+          operationName: string;
+          variables: Record<string, unknown>;
+        };
+        expect(request.operationName).toBe("TraceCliLinkChannelRepo");
+        expect(request.variables).toEqual({
+          channelId: "channel-1",
+          repoId: "repo-1",
+          baseBranch: "develop",
+        });
+        return new Response(
+          JSON.stringify({
+            data: {
+              linkChannelRepo: {
+                id: "channel-1",
+                name: "Project",
+                baseBranch: "develop",
+                repo: {
+                  id: "repo-1",
+                  name: "app",
+                  remoteUrl: null,
+                  defaultBranch: "main",
+                },
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    await expect(
+      run(["channel", "link-repo", "channel-1", "repo-1", "--branch", "develop", "--json"]),
+    ).resolves.toBe(0);
+    expect(stdout.mock.calls.flat().join("")).toContain('"baseBranch":"develop"');
+  });
+
+  it("attaches a remote URL to a local-only repository", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: URL, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as {
+          operationName: string;
+          variables: Record<string, unknown>;
+        };
+        expect(request.operationName).toBe("TraceCliAttachRepoRemote");
+        expect(request.variables).toEqual({
+          repoId: "repo-1",
+          remoteUrl: "https://github.com/acme/app.git",
+        });
+        return new Response(
+          JSON.stringify({
+            data: {
+              attachRepoRemote: {
+                id: "repo-1",
+                name: "app",
+                provider: "github",
+                remoteUrl: "https://github.com/acme/app.git",
+                defaultBranch: "main",
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    await expect(
+      run(["repo", "attach-remote", "repo-1", "https://github.com/acme/app.git", "--json"]),
+    ).resolves.toBe(0);
+    expect(stdout.mock.calls.flat().join("")).toContain(
+      '"remoteUrl":"https://github.com/acme/app.git"',
+    );
+  });
+
   it("documents every command and group with actionable help metadata", () => {
     for (const command of commands) {
       expect(command.examples?.length, `${command.path.join(" ")} examples`).toBeGreaterThan(0);

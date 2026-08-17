@@ -1,6 +1,7 @@
 export const TRACE_CLI_CAPABILITIES = [
   "artifact:write",
   "resource:list",
+  "resource:configure",
   "integration:read",
   "integration:connect",
   "integration:configure",
@@ -389,6 +390,30 @@ export const traceCliOperations = {
     argumentPaths: ["organizationId"],
     document: `query TraceCliRepos($organizationId: ID!) {
       repos(organizationId: $organizationId) { id name provider remoteUrl defaultBranch }
+    }`,
+  }),
+  linkChannelRepo: operation({
+    name: "TraceCliLinkChannelRepo",
+    type: "mutation",
+    rootField: "linkChannelRepo",
+    capability: "resource:configure",
+    argumentPaths: ["channelId", "repoId", "baseBranch"],
+    document: `mutation TraceCliLinkChannelRepo($channelId: ID!, $repoId: ID!, $baseBranch: String) {
+      linkChannelRepo(channelId: $channelId, repoId: $repoId, baseBranch: $baseBranch) {
+        id name baseBranch repo { id name remoteUrl defaultBranch }
+      }
+    }`,
+  }),
+  attachRepoRemote: operation({
+    name: "TraceCliAttachRepoRemote",
+    type: "mutation",
+    rootField: "attachRepoRemote",
+    capability: "resource:configure",
+    argumentPaths: ["repoId", "remoteUrl"],
+    document: `mutation TraceCliAttachRepoRemote($repoId: ID!, $remoteUrl: String!) {
+      attachRepoRemote(repoId: $repoId, remoteUrl: $remoteUrl) {
+        id name provider remoteUrl defaultBranch
+      }
     }`,
   }),
   session: operation({

@@ -424,6 +424,73 @@ describe("OrganizationService", () => {
     ).rejects.toThrow("Chats cannot be linked to projects");
   });
 
+  it("attaches a remote to a local-only repository and emits a repo update", async () => {
+    prismaMock.repo.findFirstOrThrow.mockResolvedValueOnce({ id: "repo-1", remoteUrl: null });
+    prismaMock.repo.findUnique.mockResolvedValueOnce(null);
+    prismaMock.repo.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.repo.findUniqueOrThrow.mockResolvedValueOnce({
+      id: "repo-1",
+      organizationId: "org-1",
+      name: "local-only",
+      provider: "github",
+      remoteUrl: "https://github.com/acme/app.git",
+      defaultBranch: "main",
+      webhookId: null,
+      setupConfig: null,
+      projects: [],
+      sessions: [],
+    });
+
+    const service = new OrganizationService();
+    await service.attachRepoRemote(
+      "repo-1",
+      "org-1",
+      " https://github.com/acme/app.git ",
+      "user",
+      "user-1",
+    );
+
+    expect(prismaMock.repo.updateMany).toHaveBeenCalledWith({
+      where: { id: "repo-1", organizationId: "org-1", remoteUrl: null },
+      data: { remoteUrl: "https://github.com/acme/app.git" },
+    });
+    expect(prismaMock.repo.findUniqueOrThrow).toHaveBeenCalledWith({
+      where: { id: "repo-1" },
+      include: { projects: true, sessions: true },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "repo_updated",
+        payload: {
+          repo: expect.objectContaining({
+            id: "repo-1",
+            remoteUrl: "https://github.com/acme/app.git",
+          }),
+        },
+      }),
+      prismaMock,
+    );
+  });
+
+  it("refuses to replace an existing repository remote", async () => {
+    prismaMock.repo.findFirstOrThrow.mockResolvedValueOnce({
+      id: "repo-1",
+      remoteUrl: "https://github.com/acme/old.git",
+    });
+
+    const service = new OrganizationService();
+    await expect(
+      service.attachRepoRemote(
+        "repo-1",
+        "org-1",
+        "https://github.com/acme/new.git",
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("Repository already has a remote URL");
+    expect(prismaMock.repo.update).not.toHaveBeenCalled();
+  });
+
   it("deletes a repo while detaching records that should be retained", async () => {
     prismaMock.repo.findFirstOrThrow.mockResolvedValueOnce({
       id: "repo-1",

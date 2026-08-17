@@ -362,6 +362,30 @@ var traceCliOperations = {
       repos(organizationId: $organizationId) { id name provider remoteUrl defaultBranch }
     }`
   }),
+  linkChannelRepo: operation({
+    name: "TraceCliLinkChannelRepo",
+    type: "mutation",
+    rootField: "linkChannelRepo",
+    capability: "resource:configure",
+    argumentPaths: ["channelId", "repoId", "baseBranch"],
+    document: `mutation TraceCliLinkChannelRepo($channelId: ID!, $repoId: ID!, $baseBranch: String) {
+      linkChannelRepo(channelId: $channelId, repoId: $repoId, baseBranch: $baseBranch) {
+        id name baseBranch repo { id name remoteUrl defaultBranch }
+      }
+    }`
+  }),
+  attachRepoRemote: operation({
+    name: "TraceCliAttachRepoRemote",
+    type: "mutation",
+    rootField: "attachRepoRemote",
+    capability: "resource:configure",
+    argumentPaths: ["repoId", "remoteUrl"],
+    document: `mutation TraceCliAttachRepoRemote($repoId: ID!, $remoteUrl: String!) {
+      attachRepoRemote(repoId: $repoId, remoteUrl: $remoteUrl) {
+        id name provider remoteUrl defaultBranch
+      }
+    }`
+  }),
   session: operation({
     name: "TraceCliSession",
     type: "query",
@@ -1592,6 +1616,56 @@ var channelListCommand = defineCommand({
   }
 });
 
+// src/commands/channel/link-repo.ts
+var channelLinkRepoCommand = defineCommand({
+  path: ["channel", "link-repo"],
+  description: "Link a repository to a channel that does not have one",
+  examples: [
+    '"$TRACE_CLI" channel link-repo <channel-id> <repo-id> --json',
+    '"$TRACE_CLI" channel link-repo <channel-id> <repo-id> --branch develop --json'
+  ],
+  effects: ["Links the repository to the channel and emits a channel-updated event."],
+  output: "The channel, linked repository, and selected base branch.",
+  nextSteps: [
+    'If the repository has no remote URL, run "$TRACE_CLI" repo attach-remote <repo-id> <remote-url> --json.',
+    "New artifacts and sessions in the channel can now inherit the repository context."
+  ],
+  notes: [
+    "The command is idempotent for the same repository and refuses to replace an existing link."
+  ],
+  positionals: [
+    { name: "channel-id", required: true },
+    { name: "repo-id", required: true }
+  ],
+  options: [
+    {
+      name: "branch",
+      flag: "--branch",
+      kind: "string",
+      valueName: "NAME",
+      description: "Base branch; defaults to the repository default branch"
+    }
+  ],
+  async run(ctx, input) {
+    const channelId = input.positionals[0]?.trim();
+    const repoId = input.positionals[1]?.trim();
+    if (!channelId || !repoId) usage("A channel ID and repository ID are required");
+    const variables = {
+      channelId,
+      repoId,
+      baseBranch: optionString(input, "branch")
+    };
+    const result = await (await ctx.client()).graphql(
+      traceCliOperations.linkChannelRepo,
+      variables
+    );
+    ctx.output(
+      { channel: result.linkChannelRepo },
+      `Linked ${result.linkChannelRepo.name} to ${result.linkChannelRepo.repo.name} (${result.linkChannelRepo.baseBranch})`
+    );
+  }
+});
+
 // src/commands/context.ts
 var contextCommand = defineCommand({
   path: ["context"],
@@ -2021,6 +2095,38 @@ var repoListCommand = defineCommand({
     ctx.output(
       { repos: result.repos },
       result.repos.length ? result.repos.map((repo) => `${repo.id}	${repo.name}	${repo.provider}	${repo.defaultBranch}`).join("\n") : "No repositories found"
+    );
+  }
+});
+
+// src/commands/repo/attach-remote.ts
+var repoAttachRemoteCommand = defineCommand({
+  path: ["repo", "attach-remote"],
+  description: "Attach a remote URL to a repository that does not have one",
+  examples: ['"$TRACE_CLI" repo attach-remote <repo-id> https://github.com/acme/app.git --json'],
+  effects: ["Adds the remote URL to the repository and emits a repo-updated event."],
+  output: "The repository and its attached remote URL.",
+  nextSteps: [
+    'Run "$TRACE_CLI" repo list --json to verify the repository.',
+    'Use "$TRACE_CLI" channel link-repo <channel-id> <repo-id> --json to provide channel context.'
+  ],
+  notes: ["The command is idempotent for the same URL and refuses to replace an existing remote."],
+  positionals: [
+    { name: "repo-id", required: true },
+    { name: "remote-url", required: true }
+  ],
+  async run(ctx, input) {
+    const repoId = input.positionals[0]?.trim();
+    const remoteUrl = input.positionals[1]?.trim();
+    if (!repoId || !remoteUrl) usage("A repository ID and remote URL are required");
+    const variables = { repoId, remoteUrl };
+    const result = await (await ctx.client()).graphql(
+      traceCliOperations.attachRepoRemote,
+      variables
+    );
+    ctx.output(
+      { repo: result.attachRepoRemote },
+      `Attached ${result.attachRepoRemote.remoteUrl} to ${result.attachRepoRemote.name}`
     );
   }
 });
@@ -3100,7 +3206,9 @@ var commands = [
   ...integrationCommands,
   ...portCommands,
   channelListCommand,
+  channelLinkRepoCommand,
   repoListCommand,
+  repoAttachRemoteCommand,
   ...sessionCommands,
   ...terminalCommands,
   artifactCommand
@@ -3217,9 +3325,13 @@ var commandGroups = [
     description: "Discover channels available to the session owner",
     workflow: [
       'Run "$TRACE_CLI" channel list --member-only --json to list eligible destinations.',
+      'If a project has no repository, run "$TRACE_CLI" channel link-repo <channel-id> <repo-id> --json.',
       'Choose a channel ID and pass it to "$TRACE_CLI" session start --channel <channel-id>.'
     ],
-    examples: ['"$TRACE_CLI" channel list --member-only --json'],
+    examples: [
+      '"$TRACE_CLI" channel list --member-only --json',
+      '"$TRACE_CLI" channel link-repo <channel-id> <repo-id> --json'
+    ],
     notes: ["Channels are the collaboration and session destination in Trace."]
   },
   {
@@ -3227,10 +3339,14 @@ var commandGroups = [
     description: "Discover repositories in the current organization",
     workflow: [
       'Run "$TRACE_CLI" repo list --json to find a repository ID.',
-      'Use the repository ID with a channel that has no linked repository: "$TRACE_CLI" session start --channel <channel-id> --repo <repo-id>.'
+      'If the repository is local-only, run "$TRACE_CLI" repo attach-remote <repo-id> <remote-url> --json.',
+      'Link it to a project with "$TRACE_CLI" channel link-repo <channel-id> <repo-id> --json.'
     ],
-    examples: ['"$TRACE_CLI" repo list --json'],
-    notes: ["Repositories support coding channels; they are not standalone session destinations."]
+    examples: [
+      '"$TRACE_CLI" repo list --json',
+      '"$TRACE_CLI" repo attach-remote <repo-id> https://github.com/acme/app.git --json'
+    ],
+    notes: ["Repositories provide optional context for projects, artifacts, and sessions."]
   },
   {
     name: "artifact",

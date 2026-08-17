@@ -403,6 +403,89 @@ export class OrganizationService {
     return repo;
   }
 
+  async attachRepoRemote(
+    id: string,
+    organizationId: string,
+    remoteUrlInput: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    const remoteUrl = remoteUrlInput.trim();
+    if (!remoteUrl) throw new ValidationError("Remote URL is required");
+
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.repo.findFirstOrThrow({
+        where: { id, organizationId },
+        select: { id: true, remoteUrl: true },
+      });
+
+      if (existing.remoteUrl) {
+        if (existing.remoteUrl !== remoteUrl) {
+          throw new ValidationError(
+            "Repository already has a remote URL; remove it before attaching another",
+          );
+        }
+        return tx.repo.findUniqueOrThrow({
+          where: { id },
+          include: { projects: true, sessions: true },
+        });
+      }
+
+      const duplicate = await tx.repo.findUnique({
+        where: { organizationId_remoteUrl: { organizationId, remoteUrl } },
+        select: { id: true },
+      });
+      if (duplicate) {
+        throw new ValidationError("Another repository in this organization uses that remote URL");
+      }
+
+      const result = await tx.repo.updateMany({
+        where: { id, organizationId, remoteUrl: null },
+        data: { remoteUrl },
+      });
+      const repo = await tx.repo.findUniqueOrThrow({
+        where: { id },
+        include: { projects: true, sessions: true },
+      });
+      if (result.count === 0) {
+        if (repo.remoteUrl !== remoteUrl) {
+          throw new ValidationError(
+            "Repository already has a remote URL; remove it before attaching another",
+          );
+        }
+        return repo;
+      }
+      const applicationConfig = repoApplicationConfigService.parseApplicationConfig(
+        repo.setupConfig,
+      );
+
+      await eventService.create(
+        {
+          organizationId: repo.organizationId,
+          scopeType: "system",
+          scopeId: repo.id,
+          eventType: "repo_updated",
+          payload: {
+            repo: {
+              id: repo.id,
+              name: repo.name,
+              provider: repo.provider,
+              remoteUrl: repo.remoteUrl,
+              defaultBranch: repo.defaultBranch,
+              webhookActive: !!repo.webhookId,
+              applicationConfig,
+            },
+          },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return repo;
+    });
+  }
+
   async deleteRepo(
     id: string,
     organizationId: string,

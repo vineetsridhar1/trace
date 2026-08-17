@@ -53,6 +53,19 @@ export const channelMutations = {
     await assertChannelAccess(args.id, ctx.userId);
     return channelService.update(args.id, args.input, ctx.actorType, ctx.userId);
   },
+  linkChannelRepo: (
+    _: unknown,
+    args: { channelId: string; repoId: string; baseBranch?: string },
+    ctx: Context,
+  ) => {
+    return channelService.linkRepo(
+      args.channelId,
+      args.repoId,
+      args.baseBranch,
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
   deleteChannel: async (_: unknown, args: { id: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     return channelService.delete(args.id, orgId, ctx.actorType, ctx.userId);

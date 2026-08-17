@@ -1043,6 +1043,7 @@ export type Mutation = {
    * mid-session. Returns the message Event that kicks off the agent.
    */
   attachDesignToSession: Event;
+  attachRepoRemote: Repo;
   clearEndpointTraffic: Scalars["Boolean"]["output"];
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
@@ -1092,6 +1093,7 @@ export type Mutation = {
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
+  linkChannelRepo: Channel;
   linkEntityToProject: Project;
   linkLinkedCheckoutRepo: LinkedCheckoutActionResult;
   linkSessionPullRequest: SessionGroup;
@@ -1216,6 +1218,11 @@ export type MutationAssignTicketArgs = {
 export type MutationAttachDesignToSessionArgs = {
   designSessionGroupId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
+};
+
+export type MutationAttachRepoRemoteArgs = {
+  remoteUrl: Scalars["String"]["input"];
+  repoId: Scalars["ID"]["input"];
 };
 
 export type MutationClearEndpointTrafficArgs = {
@@ -1428,6 +1435,12 @@ export type MutationLeaveChannelArgs = {
 
 export type MutationLeaveChatArgs = {
   chatId: Scalars["ID"]["input"];
+};
+
+export type MutationLinkChannelRepoArgs = {
+  baseBranch?: InputMaybe<Scalars["String"]["input"]>;
+  channelId: Scalars["ID"]["input"];
+  repoId: Scalars["ID"]["input"];
 };
 
 export type MutationLinkEntityToProjectArgs = {
