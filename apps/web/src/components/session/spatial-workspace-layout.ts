@@ -1,5 +1,10 @@
 export type SpatialEdge = "left" | "right" | "top" | "bottom";
-export type SpatialLayoutPreset = "single" | "columns" | "three-columns" | "rows" | "grid";
+export type SpatialLayoutPreset =
+  | "single"
+  | "columns"
+  | "three-columns"
+  | "four-columns"
+  | "rows";
 
 export interface SpatialTabGroup {
   type: "group";
@@ -139,13 +144,10 @@ export function syncSpatialTabs(
 export function dockSpatialTab(
   layout: SpatialLayout,
   tabId: string,
-  targetGroupId: string,
   edge: SpatialEdge,
 ): SpatialLayout {
-  if (countSpatialRegions(layout.root) >= MAX_SPATIAL_REGIONS) return layout;
   const sourceGroup = getSpatialGroups(layout.root).find((group) => group.tabIds.includes(tabId));
-  const targetGroup = findSpatialGroup(layout.root, targetGroupId);
-  if (!sourceGroup || !targetGroup) return layout;
+  if (!sourceGroup) return layout;
 
   const withoutTab = mapGroups(layout.root, (group) => {
     if (group.id !== sourceGroup.id) return group;
@@ -165,17 +167,28 @@ export function dockSpatialTab(
   };
   const horizontal = edge === "left" || edge === "right";
   const newFirst = edge === "left" || edge === "top";
-  const nextRoot = replaceGroup(withoutTab, targetGroupId, (currentTarget) => ({
-    type: "split",
-    id: `split-${layout.nextSplitNumber}`,
-    direction: horizontal ? "horizontal" : "vertical",
-    children: newFirst ? [newGroup, currentTarget] : [currentTarget, newGroup],
-  }));
+  let remainingGroups = getSpatialGroups(collapseEmptyGroups(withoutTab) ?? newGroup).filter(
+    (group) => group.id !== newGroup.id,
+  );
+  if (remainingGroups.length === 0) return layout;
+
+  if (!horizontal) {
+    remainingGroups = [mergeSpatialGroups(remainingGroups)];
+  } else if (remainingGroups.length >= MAX_SPATIAL_REGIONS) {
+    return layout;
+  }
+
+  const groups = newFirst ? [newGroup, ...remainingGroups] : [...remainingGroups, newGroup];
+  const nextRoot = createFlatSpatialSplit(
+    groups,
+    horizontal ? "horizontal" : "vertical",
+    layout.nextSplitNumber,
+  );
 
   return {
-    root: collapseEmptyGroups(nextRoot) ?? newGroup,
+    root: nextRoot,
     nextGroupNumber: layout.nextGroupNumber + 1,
-    nextSplitNumber: layout.nextSplitNumber + 1,
+    nextSplitNumber: layout.nextSplitNumber + groups.length - 1,
   };
 }
 
@@ -223,7 +236,7 @@ export function applySpatialLayoutPreset(
   }
 
   const requestedRegions = Math.min(
-    preset === "grid" ? 4 : preset === "three-columns" ? 3 : 2,
+    preset === "four-columns" ? 4 : preset === "three-columns" ? 3 : 2,
     tabIds.length,
   );
   const groups = currentGroups.map((group) => ({
@@ -259,29 +272,28 @@ export function applySpatialLayoutPreset(
   }
 
   let root: SpatialNode;
-  if (preset === "columns") {
-    root = createSplit(layout.nextSplitNumber, "horizontal", groups[0], groups[1]);
-  } else if (preset === "three-columns" && groups.length === 3) {
-    const right = createSplit(layout.nextSplitNumber + 1, "horizontal", groups[1], groups[2]);
-    root = createSplit(layout.nextSplitNumber, "horizontal", groups[0], right);
-  } else if (preset === "rows") {
-    root = createSplit(layout.nextSplitNumber, "vertical", groups[0], groups[1]);
-  } else if (groups.length === 2) {
-    root = createSplit(layout.nextSplitNumber, "horizontal", groups[0], groups[1]);
-  } else if (groups.length === 3) {
-    const right = createSplit(layout.nextSplitNumber + 1, "vertical", groups[1], groups[2]);
-    root = createSplit(layout.nextSplitNumber, "horizontal", groups[0], right);
-  } else {
-    const left = createSplit(layout.nextSplitNumber + 1, "vertical", groups[0], groups[2]);
-    const right = createSplit(layout.nextSplitNumber + 2, "vertical", groups[1], groups[3]);
-    root = createSplit(layout.nextSplitNumber, "horizontal", left, right);
-  }
+  root = createFlatSpatialSplit(
+    groups,
+    preset === "rows" ? "vertical" : "horizontal",
+    layout.nextSplitNumber,
+  );
 
   return {
     root,
     nextGroupNumber: layout.nextGroupNumber + groupsCreated,
     nextSplitNumber: layout.nextSplitNumber + groups.length - 1,
   };
+}
+
+export function normalizeSpatialLayout(layout: SpatialLayout): SpatialLayout {
+  const groups = getSpatialGroups(layout.root);
+  if (groups.length < 2) return layout;
+  if (layout.root.type === "split" && layout.root.direction === "vertical") {
+    return applySpatialLayoutPreset(layout, "rows");
+  }
+  const preset: SpatialLayoutPreset =
+    groups.length >= 4 ? "four-columns" : groups.length === 3 ? "three-columns" : "columns";
+  return applySpatialLayoutPreset(layout, preset);
 }
 
 export function isSpatialLayout(value: unknown): value is SpatialLayout {
@@ -327,21 +339,6 @@ function mapGroups(node: SpatialNode, mapper: (group: SpatialTabGroup) => Spatia
   };
 }
 
-function replaceGroup(
-  node: SpatialNode,
-  groupId: string,
-  replacement: (group: SpatialTabGroup) => SpatialNode,
-): SpatialNode {
-  if (node.type === "group") return node.id === groupId ? replacement(node) : node;
-  return {
-    ...node,
-    children: [
-      replaceGroup(node.children[0], groupId, replacement),
-      replaceGroup(node.children[1], groupId, replacement),
-    ],
-  };
-}
-
 function collapseEmptyGroups(node: SpatialNode): SpatialNode | null {
   if (node.type === "group") return node.tabIds.length > 0 ? node : null;
   const first = collapseEmptyGroups(node.children[0]);
@@ -362,5 +359,28 @@ function createSplit(
     id: `split-${number}`,
     direction,
     children: [first, second],
+  };
+}
+
+function createFlatSpatialSplit(
+  groups: SpatialTabGroup[],
+  direction: SpatialSplit["direction"],
+  firstSplitNumber: number,
+): SpatialNode {
+  if (groups.length === 1) return groups[0];
+  let root: SpatialNode = groups[groups.length - 1];
+  for (let index = groups.length - 2; index >= 0; index -= 1) {
+    root = createSplit(firstSplitNumber + groups.length - 2 - index, direction, groups[index], root);
+  }
+  return root;
+}
+
+function mergeSpatialGroups(groups: SpatialTabGroup[]): SpatialTabGroup {
+  const tabIds = groups.flatMap((group) => group.tabIds);
+  const requestedActiveTabId = groups.find((group) => group.activeTabId)?.activeTabId;
+  return {
+    ...groups[0],
+    tabIds,
+    activeTabId: resolveActiveTab(tabIds, requestedActiveTabId),
   };
 }

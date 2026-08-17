@@ -11,7 +11,7 @@ import {
   type CollisionDetection,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { Columns2, Columns3, Grid2X2, LayoutGrid, Plus, Rows2, Square, X } from "lucide-react";
+import { Columns2, Columns3, Columns4, LayoutGrid, Plus, Rows2, Square, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -39,6 +39,7 @@ import {
   insertSpatialTab,
   isSpatialLayout,
   moveSpatialTab,
+  normalizeSpatialLayout,
   syncSpatialTabs,
   type SpatialEdge,
   type SpatialLayoutPreset,
@@ -66,10 +67,10 @@ interface SpatialWorkspaceProps {
 }
 
 const edgeLabels: Record<SpatialEdge, string> = {
-  left: "Create left region",
-  right: "Create right region",
-  top: "Create top region",
-  bottom: "Create bottom region",
+  left: "Add column on left",
+  right: "Add column on right",
+  top: "Split into top row",
+  bottom: "Split into bottom row",
 };
 
 const spatialCollisionDetection: CollisionDetection = (args) => {
@@ -141,7 +142,7 @@ export function SpatialWorkspace({
 
     const [kind, groupId, edge] = overId.split(":");
     if (kind === "snap" && isSpatialEdge(edge)) {
-      setLayout((current) => dockSpatialTab(current, tabId, groupId, edge));
+      setLayout((current) => dockSpatialTab(current, tabId, edge));
       return;
     }
     if (kind === "region") {
@@ -203,14 +204,14 @@ export function SpatialWorkspace({
                   onClick={() => handleLayoutPreset("three-columns")}
                 />
                 <LayoutPresetItem
+                  icon={Columns4}
+                  label="Four columns"
+                  onClick={() => handleLayoutPreset("four-columns")}
+                />
+                <LayoutPresetItem
                   icon={Rows2}
                   label="Two rows"
                   onClick={() => handleLayoutPreset("rows")}
-                />
-                <LayoutPresetItem
-                  icon={Grid2X2}
-                  label="Four regions"
-                  onClick={() => handleLayoutPreset("grid")}
                 />
               </DropdownMenuGroup>
             </DropdownMenuContent>
@@ -222,12 +223,14 @@ export function SpatialWorkspace({
           tabById={tabById}
           compact={compact}
           dragging={draggedTabId !== null}
-          canSplit={regionCount < MAX_SPATIAL_REGIONS}
           onActivate={handleActivate}
           onCloseTab={onCloseTab}
           onNewTab={handleNewTab}
           renderTab={renderTab}
         />
+        {draggedTabId ? (
+          <SpatialWorkspaceSnapTargets canAddColumn={regionCount < MAX_SPATIAL_REGIONS} />
+        ) : null}
       </div>
 
       <DragOverlay dropAnimation={{ duration: 160, easing: "cubic-bezier(.16,1,.3,1)" }}>
@@ -259,7 +262,6 @@ function SpatialNodeView({
   tabById,
   compact,
   dragging,
-  canSplit,
   onActivate,
   onCloseTab,
   onNewTab,
@@ -269,7 +271,6 @@ function SpatialNodeView({
   tabById: Map<string, SpatialWorkspaceTab>;
   compact: boolean;
   dragging: boolean;
-  canSplit: boolean;
   onActivate: (groupId: string, tabId: string) => void;
   onCloseTab: (tabId: string) => void;
   onNewTab: (groupId: string) => void;
@@ -282,7 +283,6 @@ function SpatialNodeView({
         tabById={tabById}
         compact={compact}
         dragging={dragging}
-        canSplit={canSplit}
         onActivate={onActivate}
         onCloseTab={onCloseTab}
         onNewTab={onNewTab}
@@ -310,7 +310,6 @@ function SpatialNodeView({
           tabById={tabById}
           compact={compact}
           dragging={dragging}
-          canSplit={canSplit}
           onActivate={onActivate}
           onCloseTab={onCloseTab}
           onNewTab={onNewTab}
@@ -326,7 +325,6 @@ function SpatialRegion({
   tabById,
   compact,
   dragging,
-  canSplit,
   onActivate,
   onCloseTab,
   onNewTab,
@@ -336,7 +334,6 @@ function SpatialRegion({
   tabById: Map<string, SpatialWorkspaceTab>;
   compact: boolean;
   dragging: boolean;
-  canSplit: boolean;
   onActivate: (groupId: string, tabId: string) => void;
   onCloseTab: (tabId: string) => void;
   onNewTab: (groupId: string) => void;
@@ -392,7 +389,7 @@ function SpatialRegion({
       </div>
 
       {dragging ? (
-        <SpatialSnapTargets groupId={group.id} canSplit={canSplit} groupIsOver={isOver} />
+        <SpatialGroupDropTarget groupIsOver={isOver} />
       ) : null}
     </section>
   );
@@ -467,22 +464,9 @@ function SpatialTabButton({
   );
 }
 
-function SpatialSnapTargets({
-  groupId,
-  canSplit,
-  groupIsOver,
-}: {
-  groupId: string;
-  canSplit: boolean;
-  groupIsOver: boolean;
-}) {
+function SpatialGroupDropTarget({ groupIsOver }: { groupIsOver: boolean }) {
   return (
     <div className="pointer-events-none absolute inset-2 z-30">
-      {canSplit
-        ? (["left", "right", "top", "bottom"] as const).map((edge) => (
-            <SpatialSnapTarget key={edge} groupId={groupId} edge={edge} />
-          ))
-        : null}
       <div
         className={cn(
           "absolute inset-[34%] flex items-center justify-center rounded-xl border text-center text-[10px] font-medium transition-colors",
@@ -497,8 +481,23 @@ function SpatialSnapTargets({
   );
 }
 
-function SpatialSnapTarget({ groupId, edge }: { groupId: string; edge: SpatialEdge }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `snap:${groupId}:${edge}` });
+function SpatialWorkspaceSnapTargets({ canAddColumn }: { canAddColumn: boolean }) {
+  return (
+    <div className="pointer-events-none absolute inset-2 z-40">
+      {canAddColumn
+        ? (["left", "right"] as const).map((edge) => (
+            <SpatialSnapTarget key={edge} edge={edge} />
+          ))
+        : null}
+      {(["top", "bottom"] as const).map((edge) => (
+        <SpatialSnapTarget key={edge} edge={edge} />
+      ))}
+    </div>
+  );
+}
+
+function SpatialSnapTarget({ edge }: { edge: SpatialEdge }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `snap:workspace:${edge}` });
   return (
     <div
       ref={setNodeRef}
@@ -543,7 +542,9 @@ function readLayout(
       const stored = localStorage.getItem(key);
       if (stored) {
         const parsed: unknown = JSON.parse(stored);
-        if (isSpatialLayout(parsed)) return syncSpatialTabs(parsed, tabIds, preferredActiveTabId);
+        if (isSpatialLayout(parsed)) {
+          return syncSpatialTabs(normalizeSpatialLayout(parsed), tabIds, preferredActiveTabId);
+        }
       }
     } catch {
       // Fall through to a clean layout.
