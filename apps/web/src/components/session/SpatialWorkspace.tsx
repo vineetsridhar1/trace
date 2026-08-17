@@ -23,6 +23,7 @@ import { cn } from "../../lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
@@ -184,32 +185,34 @@ export function SpatialWorkspace({
               <LayoutGrid size={12} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuLabel>Arrange tabs</DropdownMenuLabel>
-              <LayoutPresetItem
-                icon={Square}
-                label="Single region"
-                onClick={() => handleLayoutPreset("single")}
-              />
-              <LayoutPresetItem
-                icon={Columns2}
-                label="Two columns"
-                onClick={() => handleLayoutPreset("columns")}
-              />
-              <LayoutPresetItem
-                icon={Columns3}
-                label="Three columns"
-                onClick={() => handleLayoutPreset("three-columns")}
-              />
-              <LayoutPresetItem
-                icon={Rows2}
-                label="Two rows"
-                onClick={() => handleLayoutPreset("rows")}
-              />
-              <LayoutPresetItem
-                icon={Grid2X2}
-                label="Four regions"
-                onClick={() => handleLayoutPreset("grid")}
-              />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Arrange tabs</DropdownMenuLabel>
+                <LayoutPresetItem
+                  icon={Square}
+                  label="Single region"
+                  onClick={() => handleLayoutPreset("single")}
+                />
+                <LayoutPresetItem
+                  icon={Columns2}
+                  label="Two columns"
+                  onClick={() => handleLayoutPreset("columns")}
+                />
+                <LayoutPresetItem
+                  icon={Columns3}
+                  label="Three columns"
+                  onClick={() => handleLayoutPreset("three-columns")}
+                />
+                <LayoutPresetItem
+                  icon={Rows2}
+                  label="Two rows"
+                  onClick={() => handleLayoutPreset("rows")}
+                />
+                <LayoutPresetItem
+                  icon={Grid2X2}
+                  label="Four regions"
+                  onClick={() => handleLayoutPreset("grid")}
+                />
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
