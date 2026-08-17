@@ -382,8 +382,12 @@ ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null
   bridge.setAuthContext(organizationId);
   return true;
 });
-ipcMain.handle("browser-activate", (_event, input: { sessionGroupId: string; browserId: string }) =>
-  browserWorkspaces.activate(input.sessionGroupId, input.browserId),
+ipcMain.handle(
+  "browser-activate",
+  (_event, input: { sessionGroupId: string; browserId: string; useAppSession?: boolean }) =>
+    browserWorkspaces.activate(input.sessionGroupId, input.browserId, {
+      useAppSession: input.useAppSession,
+    }),
 );
 ipcMain.handle("browser-hide", (_event, input: { sessionGroupId: string; browserId: string }) =>
   browserWorkspaces.hide(input.sessionGroupId, input.browserId),

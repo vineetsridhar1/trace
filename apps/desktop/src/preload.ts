@@ -36,8 +36,11 @@ contextBridge.exposeInMainWorld("trace", {
     ipcRenderer.on("menu-command", listener);
     return () => ipcRenderer.removeListener("menu-command", listener);
   },
-  activateBrowser: (input: { sessionGroupId: string; browserId: string }) =>
-    ipcRenderer.invoke("browser-activate", input),
+  activateBrowser: (input: {
+    sessionGroupId: string;
+    browserId: string;
+    useAppSession?: boolean;
+  }) => ipcRenderer.invoke("browser-activate", input),
   hideBrowser: (input: { sessionGroupId: string; browserId: string }) =>
     ipcRenderer.invoke("browser-hide", input),
   setBrowserBounds: (input: {

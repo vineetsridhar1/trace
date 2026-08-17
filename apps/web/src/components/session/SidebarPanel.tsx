@@ -17,13 +17,7 @@ import { TerminalPanel } from "./TerminalPanel";
 import { BrowserWorkspacePanel } from "./BrowserWorkspacePanel";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
-export type SidebarTab =
-  | "applications"
-  | "browser"
-  | "trace"
-  | "terminal"
-  | "files"
-  | "changes";
+export type SidebarTab = "applications" | "browser" | "trace" | "terminal" | "files" | "changes";
 
 interface SidebarPanelProps {
   sessionGroupId: string;
@@ -220,10 +214,13 @@ export function WorkspaceSurfaceContent({
           sessionGroupId={sessionGroupId}
           browserId={browserId}
           initialUrl={traceHomeUrl()}
+          embeddedApp
           onTitleChange={onBrowserTitleChange}
         />
       ) : surface === "terminal" ? (
-        activeSessionId ? <TerminalPanel sessionId={activeSessionId} onClose={onClose} fill /> : null
+        activeSessionId ? (
+          <TerminalPanel sessionId={activeSessionId} onClose={onClose} fill />
+        ) : null
       ) : surface === "files" ? (
         <FileExplorer
           tree={fileTree}
