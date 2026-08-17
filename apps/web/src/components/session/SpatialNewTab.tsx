@@ -157,9 +157,6 @@ export function SpatialNewTab({
         <h1 className="text-center text-xl font-semibold tracking-tight text-foreground">
           What do you want to work on?
         </h1>
-        <p className="mt-2 text-center text-xs text-muted-foreground">
-          New tabs start as chats, or convert this tab into another workspace surface.
-        </p>
 
         <div className="mt-7">
           <SessionComposer
@@ -220,9 +217,6 @@ export function SpatialNewTab({
             );
           })}
         </div>
-        <p className="mt-4 text-center text-[10px] text-muted-foreground">
-          Drag any tab toward an edge to create a region.
-        </p>
       </div>
     </div>
   );
