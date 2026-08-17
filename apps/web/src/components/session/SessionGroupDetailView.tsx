@@ -68,6 +68,48 @@ import { ArtifactTabContent } from "../artifact/ArtifactTabContent";
 
 const EMPTY_ARTIFACT_IDS: string[] = [];
 const EMPTY_HIDDEN_SESSION_TABS: Record<string, string> = {};
+const SESSION_WORKSPACE_TABS_KEY_PREFIX = "trace:session-workspace-tabs:";
+
+function isWorkspaceSurface(value: unknown): value is WorkspaceSurface {
+  return (
+    value === "applications" ||
+    value === "browser" ||
+    value === "terminal" ||
+    value === "files" ||
+    value === "changes"
+  );
+}
+
+function getStoredWorkspaceTabs(
+  sessionGroupId: string,
+): Array<{ id: string; surface: WorkspaceSurface | null }> {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem(`${SESSION_WORKSPACE_TABS_KEY_PREFIX}${sessionGroupId}`);
+    if (!stored) return [];
+    const parsed: unknown = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (tab): tab is { id: string; surface: WorkspaceSurface | null } =>
+        !!tab &&
+        typeof tab === "object" &&
+        typeof (tab as Record<string, unknown>).id === "string" &&
+        ((tab as Record<string, unknown>).surface === null ||
+          isWorkspaceSurface((tab as Record<string, unknown>).surface)),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function workspaceSurfaceIcon(surface: WorkspaceSurface | null) {
+  if (surface === "browser") return <Globe size={12} />;
+  if (surface === "terminal") return <TerminalSquare size={12} />;
+  if (surface === "files") return <Files size={12} />;
+  if (surface === "changes") return <GitCompareArrows size={12} />;
+  if (surface === "applications") return <AppWindow size={12} />;
+  return <Bot size={12} />;
+}
 
 const HIDDEN_SESSION_TABS_QUERY = gql`
   query HiddenSessionTabs($sessionGroupId: ID!) {
@@ -323,7 +365,18 @@ export function SessionGroupDetailView({
   const [groupLoadError, setGroupLoadError] = useState<string | null>(null);
   const [draftWorkspaceTabs, setDraftWorkspaceTabs] = useState<
     Array<{ id: string; surface: WorkspaceSurface | null }>
-  >([]);
+  >(() => getStoredWorkspaceTabs(sessionGroupId));
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        `${SESSION_WORKSPACE_TABS_KEY_PREFIX}${sessionGroupId}`,
+        JSON.stringify(draftWorkspaceTabs),
+      );
+    } catch {
+      // Persistence is optional when browser storage is unavailable.
+    }
+  }, [draftWorkspaceTabs, sessionGroupId]);
 
   const handleOpenForkDialog = useCallback((eventId: string) => {
     setForkEventId(eventId);
@@ -887,45 +940,6 @@ export function SessionGroupDetailView({
     }));
 
     tabs.push(
-      {
-        id: "surface:browser",
-        label: "Browser",
-        icon: <Globe size={12} />,
-        status: "live",
-        closable: false,
-      },
-      {
-        id: "surface:terminal",
-        label: "Terminal",
-        icon: <TerminalSquare size={12} />,
-        closable: false,
-      },
-      {
-        id: "surface:files",
-        label: "Files",
-        icon: <Files size={12} />,
-        closable: false,
-      },
-      {
-        id: "surface:changes",
-        label: "Files changed",
-        icon: <GitCompareArrows size={12} />,
-        status: "changed",
-        closable: false,
-      },
-    );
-
-    if (showApplicationsSidebarTab) {
-      tabs.push({
-        id: "surface:applications",
-        label: "Applications",
-        icon: <AppWindow size={12} />,
-        status: "live",
-        closable: false,
-      });
-    }
-
-    tabs.push(
       ...openArtifactIds.map((artifactId) => ({
         id: `artifact:${artifactId}`,
         label: "Artifact",
@@ -952,7 +966,7 @@ export function SessionGroupDetailView({
             ? "Files changed"
             : `${draft.surface[0].toUpperCase()}${draft.surface.slice(1)}`
           : "New tab",
-        icon: draft.surface ? <AppWindow size={12} /> : <Bot size={12} />,
+        icon: workspaceSurfaceIcon(draft.surface),
       })),
     );
 
@@ -985,7 +999,7 @@ export function SessionGroupDetailView({
           ? "traffic"
           : selectedSession
             ? `session:${selectedSession.id}`
-            : "surface:files";
+            : draftWorkspaceTabs[0]?.id ?? null;
 
   const handleActivateWorkspaceTab = useCallback(
     (tabId: string) => {
