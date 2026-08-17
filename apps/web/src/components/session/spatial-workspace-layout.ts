@@ -235,11 +235,25 @@ export function moveSpatialTab(
   layout: SpatialLayout,
   tabId: string,
   targetGroupId: string,
+  targetIndex?: number,
 ): SpatialLayout {
   const sourceGroup = getSpatialGroups(layout.root).find((group) => group.tabIds.includes(tabId));
   const targetGroup = findSpatialGroup(layout.root, targetGroupId);
   if (!sourceGroup || !targetGroup) return layout;
-  if (sourceGroup.id === targetGroup.id) return activateSpatialTab(layout, targetGroupId, tabId);
+  const sourceIndex = sourceGroup.tabIds.indexOf(tabId);
+  let insertionIndex = targetIndex ?? targetGroup.tabIds.length;
+  if (sourceGroup.id === targetGroup.id) {
+    if (sourceIndex < insertionIndex) insertionIndex -= 1;
+    const nextIds = sourceGroup.tabIds.filter((id) => id !== tabId);
+    const clampedIndex = Math.max(0, Math.min(insertionIndex, nextIds.length));
+    nextIds.splice(clampedIndex, 0, tabId);
+    return {
+      ...layout,
+      root: mapGroups(layout.root, (group) =>
+        group.id === sourceGroup.id ? { ...group, tabIds: nextIds, activeTabId: tabId } : group,
+      ),
+    };
+  }
 
   let root = mapGroups(layout.root, (group) => {
     if (group.id === sourceGroup.id) {
@@ -251,9 +265,12 @@ export function moveSpatialTab(
       };
     }
     if (group.id === targetGroup.id) {
+      const nextIds = group.tabIds.filter((id) => id !== tabId);
+      const clampedIndex = Math.max(0, Math.min(insertionIndex, nextIds.length));
+      nextIds.splice(clampedIndex, 0, tabId);
       return {
         ...group,
-        tabIds: group.tabIds.includes(tabId) ? group.tabIds : [...group.tabIds, tabId],
+        tabIds: nextIds,
         activeTabId: tabId,
       };
     }

@@ -128,6 +128,31 @@ describe("spatial workspace layout", () => {
     ]);
   });
 
+  it("reorders tabs within a rail at the requested insertion point", () => {
+    const layout = moveSpatialTab(
+      createSpatialLayout(["chat", "browser", "terminal"]),
+      "terminal",
+      "region-1",
+      0,
+    );
+
+    expect(getSpatialGroups(layout.root)[0]).toMatchObject({
+      tabIds: ["terminal", "chat", "browser"],
+      activeTabId: "terminal",
+    });
+  });
+
+  it("inserts a cross-pane tab at a specific rail position", () => {
+    let layout = createSpatialLayout(["chat", "browser", "terminal"]);
+    layout = dockSpatialTab(layout, "browser", "right");
+    layout = moveSpatialTab(layout, "terminal", "region-2", 0);
+
+    expect(getSpatialGroups(layout.root).map((group) => group.tabIds)).toEqual([
+      ["chat"],
+      ["terminal", "browser"],
+    ]);
+  });
+
   it("inserts a new tab into the region that created it", () => {
     let layout = createSpatialLayout(["chat", "browser"]);
     layout = dockSpatialTab(layout, "browser", "right");

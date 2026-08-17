@@ -68,6 +68,13 @@ interface SpatialWorkspaceProps {
   renderTab: (tabId: string, compact: boolean) => ReactNode;
 }
 
+interface TabRailDropData {
+  type: "tab-rail";
+  groupId: string;
+  targetIndex: number;
+  targetTabId?: string;
+}
+
 const edgeLabels: Record<SpatialEdge, string> = {
   left: "Add column on left",
   right: "Add column on right",
@@ -77,6 +84,12 @@ const edgeLabels: Record<SpatialEdge, string> = {
 
 const spatialCollisionDetection: CollisionDetection = (args) => {
   const collisions = pointerWithin(args);
+  const tabCollision = collisions.find((collision) =>
+    String(collision.id).startsWith("tab-target:"),
+  );
+  if (tabCollision) return [tabCollision];
+  const railCollision = collisions.find((collision) => String(collision.id).startsWith("tab-rail:"));
+  if (railCollision) return [railCollision];
   const snapCollision = collisions.find((collision) => String(collision.id).startsWith("snap:"));
   return snapCollision ? [snapCollision] : collisions;
 };
@@ -139,16 +152,26 @@ export function SpatialWorkspace({
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setDraggedTabId(null);
     const tabId = String(event.active.id);
-    const overId = event.over?.id ? String(event.over.id) : "";
-    if (!overId) return;
+    const over = event.over;
+    if (!over) return;
+    const overId = String(over.id);
 
     const [kind, targetId, edge] = overId.split(":");
     if (kind === "snap" && isSpatialRowPosition(targetId) && isSpatialEdge(edge)) {
       setLayout((current) => dockSpatialTab(current, tabId, edge, targetId));
       return;
     }
-    if (kind === "region") {
-      setLayout((current) => moveSpatialTab(current, tabId, targetId));
+    const dropData: unknown = over.data.current;
+    if (isTabRailDropData(dropData)) {
+      if (dropData.targetTabId === tabId) return;
+      let targetIndex = dropData.targetIndex;
+      if (dropData.targetTabId) {
+        const activeRect = event.active.rect.current.translated;
+        if (activeRect && activeRect.left + activeRect.width / 2 > over.rect.left + over.rect.width / 2) {
+          targetIndex += 1;
+        }
+      }
+      setLayout((current) => moveSpatialTab(current, tabId, dropData.groupId, targetIndex));
     }
   }, []);
 
@@ -353,16 +376,15 @@ function SpatialRegion({
   onNewTab: (groupId: string) => void;
   renderTab: (tabId: string, compact: boolean) => ReactNode;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `region:${group.id}` });
+  const { setNodeRef: setRailNodeRef, isOver: isRailOver } = useDroppable({
+    id: `tab-rail:${group.id}`,
+    data: { type: "tab-rail", groupId: group.id, targetIndex: group.tabIds.length },
+  });
   const activeTabId = group.activeTabId ?? group.tabIds[0] ?? null;
 
   return (
     <section
-      ref={setNodeRef}
-      className={cn(
-        "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background",
-        isOver && dragging && "ring-1 ring-inset ring-blue-400/60",
-      )}
+      className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
       aria-label="Workspace region"
     >
       <div
@@ -371,14 +393,22 @@ function SpatialRegion({
           compact ? "h-10" : "h-11",
         )}
       >
-        <div className="app-region-no-drag no-scrollbar flex min-w-0 flex-1 items-end gap-1 overflow-x-auto pr-32">
-          {group.tabIds.map((tabId) => {
+        <div
+          ref={setRailNodeRef}
+          className={cn(
+            "app-region-no-drag no-scrollbar flex min-w-0 flex-1 items-end gap-1 overflow-x-auto pr-32 transition-colors",
+            dragging && isRailOver && "bg-blue-500/10",
+          )}
+        >
+          {group.tabIds.map((tabId, index) => {
             const tab = tabById.get(tabId);
             if (!tab) return null;
             return (
               <SpatialTabButton
                 key={tabId}
                 tab={tab}
+                groupId={group.id}
+                targetIndex={index}
                 active={tabId === activeTabId}
                 compact={compact}
                 onActivate={() => onActivate(group.id, tabId)}
@@ -402,27 +432,45 @@ function SpatialRegion({
         {activeTabId ? renderTab(activeTabId, compact) : null}
       </div>
 
-      {dragging ? (
-        <SpatialGroupDropTarget groupIsOver={isOver} />
-      ) : null}
     </section>
   );
 }
 
 function SpatialTabButton({
   tab,
+  groupId,
+  targetIndex,
   active,
   compact,
   onActivate,
   onClose,
 }: {
   tab: SpatialWorkspaceTab;
+  groupId: string;
+  targetIndex: number;
   active: boolean;
   compact: boolean;
   onActivate: () => void;
   onClose: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: tab.id });
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDraggableNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({ id: tab.id });
+  const { setNodeRef: setDroppableNodeRef, isOver } = useDroppable({
+    id: `tab-target:${tab.id}`,
+    data: { type: "tab-rail", groupId, targetIndex, targetTabId: tab.id },
+  });
+  const setNodeRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      setDraggableNodeRef(node);
+      setDroppableNodeRef(node);
+    },
+    [setDraggableNodeRef, setDroppableNodeRef],
+  );
 
   return (
     <div
@@ -435,6 +483,7 @@ function SpatialTabButton({
           ? "border-blue-400 bg-background text-foreground"
           : "border-transparent text-muted-foreground hover:bg-surface-hover/70 hover:text-foreground",
         isDragging && "opacity-20",
+        isOver && !isDragging && "ring-1 ring-inset ring-blue-400/70",
       )}
     >
       <button
@@ -474,23 +523,6 @@ function SpatialTabButton({
           <X size={11} />
         </button>
       ) : null}
-    </div>
-  );
-}
-
-function SpatialGroupDropTarget({ groupIsOver }: { groupIsOver: boolean }) {
-  return (
-    <div className="pointer-events-none absolute inset-2 z-30">
-      <div
-        className={cn(
-          "absolute inset-[34%] flex items-center justify-center rounded-xl border text-center text-[10px] font-medium transition-colors",
-          groupIsOver
-            ? "border-blue-400 bg-blue-500/25 text-blue-100 shadow-[inset_0_0_0_1px_rgb(96_165_250/.15)]"
-            : "border-border/70 bg-surface-mid/75 text-muted-foreground",
-        )}
-      >
-        Add to this tab group
-      </div>
     </div>
   );
 }
@@ -624,4 +656,15 @@ function isSpatialEdge(value: string): value is SpatialEdge {
 
 function isSpatialRowPosition(value: string): value is SpatialRowPosition {
   return value === "full" || value === "top" || value === "bottom";
+}
+
+function isTabRailDropData(value: unknown): value is TabRailDropData {
+  if (!value || typeof value !== "object") return false;
+  const data = value as Record<string, unknown>;
+  return (
+    data.type === "tab-rail" &&
+    typeof data.groupId === "string" &&
+    typeof data.targetIndex === "number" &&
+    (data.targetTabId === undefined || typeof data.targetTabId === "string")
+  );
 }
