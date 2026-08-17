@@ -39,7 +39,7 @@ export function ClosedSessionTabsMenu({ sessions, onRestoreSession }: ClosedSess
             className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-sm px-2 text-left text-sm text-foreground outline-hidden select-none hover:bg-surface-hover focus:bg-surface-hover"
           >
             <History size={14} />
-            <span className="min-w-0 truncate opacity-60">{session.name}</span>
+            <span className="min-w-0 truncate text-foreground">{session.name}</span>
           </button>
         ))}
       </PopoverContent>
