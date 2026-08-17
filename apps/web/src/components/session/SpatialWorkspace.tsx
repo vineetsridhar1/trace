@@ -368,7 +368,9 @@ function SpatialRegion({
         {activeTabId ? renderTab(activeTabId, compact) : null}
       </div>
 
-      {dragging && canSplit ? <SpatialSnapTargets groupId={group.id} /> : null}
+      {dragging ? (
+        <SpatialSnapTargets groupId={group.id} canSplit={canSplit} groupIsOver={isOver} />
+      ) : null}
     </section>
   );
 }
@@ -442,12 +444,32 @@ function SpatialTabButton({
   );
 }
 
-function SpatialSnapTargets({ groupId }: { groupId: string }) {
+function SpatialSnapTargets({
+  groupId,
+  canSplit,
+  groupIsOver,
+}: {
+  groupId: string;
+  canSplit: boolean;
+  groupIsOver: boolean;
+}) {
   return (
     <div className="pointer-events-none absolute inset-2 z-30">
-      {(["left", "right", "top", "bottom"] as const).map((edge) => (
-        <SpatialSnapTarget key={edge} groupId={groupId} edge={edge} />
-      ))}
+      {canSplit
+        ? (["left", "right", "top", "bottom"] as const).map((edge) => (
+            <SpatialSnapTarget key={edge} groupId={groupId} edge={edge} />
+          ))
+        : null}
+      <div
+        className={cn(
+          "absolute inset-[34%] flex items-center justify-center rounded-xl border text-center text-[10px] font-medium transition-colors",
+          groupIsOver
+            ? "border-blue-400 bg-blue-500/25 text-blue-100 shadow-[inset_0_0_0_1px_rgb(96_165_250/.15)]"
+            : "border-border/70 bg-surface-mid/75 text-muted-foreground",
+        )}
+      >
+        Add to this tab group
+      </div>
     </div>
   );
 }

@@ -185,48 +185,66 @@ export function applySpatialLayoutPreset(
   layout: SpatialLayout,
   preset: SpatialLayoutPreset,
 ): SpatialLayout {
-  const tabIds = getSpatialGroups(layout.root).flatMap((group) => group.tabIds);
-  const preferredActiveTabId =
-    getSpatialGroups(layout.root).find((group) => group.activeTabId)?.activeTabId ?? tabIds[0] ?? null;
+  const currentGroups = getSpatialGroups(layout.root);
+  const tabIds = currentGroups.flatMap((group) => group.tabIds);
+  const preferredActiveTabId = currentGroups.find((group) => group.activeTabId)?.activeTabId;
   if (preset === "single" || tabIds.length < 2) {
     return createSpatialLayout(tabIds, preferredActiveTabId);
   }
 
-  const requestedRegions = preset === "grid" ? 4 : 2;
-  const regionCount = Math.min(requestedRegions, tabIds.length);
-  const groups = Array.from({ length: regionCount }, (_, index): SpatialTabGroup => ({
-    type: "group",
-    id: `region-${layout.nextGroupNumber + index}`,
-    tabIds: [],
-    activeTabId: null,
+  const requestedRegions = Math.min(preset === "grid" ? 4 : 2, tabIds.length);
+  const groups = currentGroups.map((group) => ({
+    ...group,
+    tabIds: [...group.tabIds],
   }));
-  tabIds.forEach((tabId, index) => groups[index % regionCount].tabIds.push(tabId));
-  groups.forEach((group) => {
-    group.activeTabId = resolveActiveTab(group.tabIds, preferredActiveTabId);
-  });
+
+  if (groups.length > requestedRegions) {
+    const retainedGroups = groups.slice(0, requestedRegions);
+    const overflowTabs = groups.slice(requestedRegions).flatMap((group) => group.tabIds);
+    const lastGroup = retainedGroups[retainedGroups.length - 1];
+    lastGroup.tabIds.push(...overflowTabs);
+    lastGroup.activeTabId = resolveActiveTab(lastGroup.tabIds, lastGroup.activeTabId);
+    groups.splice(0, groups.length, ...retainedGroups);
+  }
+
+  let groupsCreated = 0;
+  while (groups.length < requestedRegions) {
+    const source = [...groups]
+      .filter((group) => group.tabIds.length > 1)
+      .sort((left, right) => right.tabIds.length - left.tabIds.length)[0];
+    if (!source) break;
+    const movedTabId = source.activeTabId ?? source.tabIds[source.tabIds.length - 1];
+    source.tabIds = source.tabIds.filter((tabId) => tabId !== movedTabId);
+    source.activeTabId = resolveActiveTab(source.tabIds, null);
+    groups.push({
+      type: "group",
+      id: `region-${layout.nextGroupNumber + groupsCreated}`,
+      tabIds: [movedTabId],
+      activeTabId: movedTabId,
+    });
+    groupsCreated += 1;
+  }
 
   let root: SpatialNode;
-  let splitsCreated: number;
   if (preset === "columns") {
     root = createSplit(layout.nextSplitNumber, "horizontal", groups[0], groups[1]);
-    splitsCreated = 1;
   } else if (preset === "rows") {
     root = createSplit(layout.nextSplitNumber, "vertical", groups[0], groups[1]);
-    splitsCreated = 1;
-  } else if (groups.length < 4) {
+  } else if (groups.length === 2) {
     root = createSplit(layout.nextSplitNumber, "horizontal", groups[0], groups[1]);
-    splitsCreated = 1;
+  } else if (groups.length === 3) {
+    const right = createSplit(layout.nextSplitNumber + 1, "vertical", groups[1], groups[2]);
+    root = createSplit(layout.nextSplitNumber, "horizontal", groups[0], right);
   } else {
     const left = createSplit(layout.nextSplitNumber + 1, "vertical", groups[0], groups[2]);
     const right = createSplit(layout.nextSplitNumber + 2, "vertical", groups[1], groups[3]);
     root = createSplit(layout.nextSplitNumber, "horizontal", left, right);
-    splitsCreated = 3;
   }
 
   return {
     root,
-    nextGroupNumber: layout.nextGroupNumber + regionCount,
-    nextSplitNumber: layout.nextSplitNumber + splitsCreated,
+    nextGroupNumber: layout.nextGroupNumber + groupsCreated,
+    nextSplitNumber: layout.nextSplitNumber + groups.length - 1,
   };
 }
 

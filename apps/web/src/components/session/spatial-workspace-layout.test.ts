@@ -39,6 +39,18 @@ describe("spatial workspace layout", () => {
     expect(getSpatialGroups(layout.root)[0].tabIds).toEqual(["chat", "terminal"]);
   });
 
+  it("moves individual tabs between regions without splitting their siblings", () => {
+    let layout = createSpatialLayout(["chat", "browser", "terminal", "changes"]);
+    layout = applySpatialLayoutPreset(layout, "rows");
+    layout = moveSpatialTab(layout, "browser", "region-2");
+
+    expect(countSpatialRegions(layout.root)).toBe(2);
+    expect(getSpatialGroups(layout.root).map((group) => group.tabIds)).toEqual([
+      ["terminal", "changes"],
+      ["chat", "browser"],
+    ]);
+  });
+
   it("keeps tab identity and active state while syncing live tabs", () => {
     let layout = createSpatialLayout(["chat", "browser"], "chat");
     layout = activateSpatialTab(layout, "region-1", "browser");
@@ -50,14 +62,22 @@ describe("spatial workspace layout", () => {
     });
   });
 
-  it("applies explicit row, column, and grid arrangements", () => {
+  it("preserves tab groups while applying row, column, and grid arrangements", () => {
     const single = createSpatialLayout(["chat", "browser", "terminal", "changes"]);
     const columns = applySpatialLayoutPreset(single, "columns");
     const rows = applySpatialLayoutPreset(columns, "rows");
     const grid = applySpatialLayoutPreset(rows, "grid");
 
     expect(columns.root).toMatchObject({ type: "split", direction: "horizontal" });
+    expect(getSpatialGroups(columns.root).map((group) => group.tabIds)).toEqual([
+      ["browser", "terminal", "changes"],
+      ["chat"],
+    ]);
     expect(rows.root).toMatchObject({ type: "split", direction: "vertical" });
+    expect(getSpatialGroups(rows.root).map((group) => group.tabIds)).toEqual([
+      ["browser", "terminal", "changes"],
+      ["chat"],
+    ]);
     expect(countSpatialRegions(grid.root)).toBe(4);
     expect(getSpatialGroups(grid.root).flatMap((group) => group.tabIds).sort()).toEqual([
       "browser",
