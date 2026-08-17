@@ -172,6 +172,7 @@ enum TurnRole {
 
 enum EventType {
   artifact_created
+  artifact_approved
   session_converted
   message_sent
   message_edited
@@ -426,6 +427,7 @@ model User {
   slackAccounts                SlackAccount[]
   slackChannelBindings         SlackChannelBinding[]
   createdArtifacts             Artifact[]            @relation("ArtifactCreator")
+  approvedArtifacts            Artifact[]            @relation("ArtifactApprover")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -640,7 +642,8 @@ model Session {
   projects       SessionProject[]
   queuedMessages QueuedMessage[]
   slackThread    SlackThreadSession?
-  artifacts      Artifact[]
+  artifacts      Artifact[] @relation("ArtifactSourceSession")
+  implementationArtifacts Artifact[] @relation("ArtifactImplementationSession")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -651,26 +654,49 @@ model Session {
   @@index([pendingGeneralWorkspaceCleanupRuntimeId])
 }
 
+enum ArtifactApprovalStatus {
+  PENDING
+  PROCESSING
+  APPROVED
+}
+
+enum ArtifactApprovalAction {
+  NEW_SESSION
+  KEEP_CONTEXT
+}
+
 model Artifact {
-  id             String       @id @default(uuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sessionId      String
-  session        Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  type           String
-  key            String
-  bundleDigest   String
-  manifest       Json
-  storageKey     String
-  byteSize       Int
-  createdById    String
-  createdBy      User         @relation("ArtifactCreator", fields: [createdById], references: [id])
-  idempotencyKey String       @unique
-  createdAt      DateTime     @default(now())
+  id                      String                  @id @default(uuid())
+  organizationId          String
+  organization            Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionId               String
+  session                 Session                 @relation("ArtifactSourceSession", fields: [sessionId], references: [id], onDelete: Cascade)
+  type                    String
+  key                     String
+  bundleDigest            String
+  manifest                Json
+  storageKey              String
+  byteSize                Int
+  createdById             String
+  createdBy               User                    @relation("ArtifactCreator", fields: [createdById], references: [id])
+  idempotencyKey          String                  @unique
+  approvalStatus          ArtifactApprovalStatus?
+  approvalAction          ArtifactApprovalAction?
+  approvalPromptDigest    String?
+  processingStartedAt     DateTime?
+  approvedAt              DateTime?
+  approvedById            String?
+  approvedBy              User?                   @relation("ArtifactApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  implementationSessionId String?
+  implementationSession   Session?                @relation("ArtifactImplementationSession", fields: [implementationSessionId], references: [id], onDelete: SetNull)
+  createdAt               DateTime                @default(now())
 
   @@index([organizationId, createdAt])
   @@index([sessionId, type, key, createdAt])
   @@index([bundleDigest])
+  @@index([approvalStatus])
+  @@index([approvedById])
+  @@index([implementationSessionId])
 }
 
 model SessionSetupScriptRun {

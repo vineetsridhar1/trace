@@ -1,7 +1,17 @@
 import type { Artifact } from "@trace/gql";
 import { MediaArtifact } from "./MediaArtifact";
+import { VisualPlanArtifact } from "./VisualPlanArtifact";
 
-export function ArtifactContent({ artifact }: { artifact: Artifact }) {
+export function ArtifactContent({
+  artifact,
+  onPlanContent,
+}: {
+  artifact: Artifact;
+  onPlanContent?: (content: string) => void;
+}) {
+  if (artifact.type === "trace.visual-plan.v1") {
+    return <VisualPlanArtifact artifact={artifact} onContent={onPlanContent} />;
+  }
   if (artifact.type === "trace.image.v1" || artifact.type === "trace.video.v1") {
     return <MediaArtifact artifact={artifact} />;
   }

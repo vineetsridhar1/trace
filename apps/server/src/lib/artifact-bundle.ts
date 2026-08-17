@@ -1,6 +1,8 @@
 import { createHash } from "crypto";
+import { createGunzip } from "zlib";
 import { posix } from "path";
-import { Parser } from "tar";
+import { Readable } from "stream";
+import tar from "tar-stream";
 import { ValidationError } from "./errors.js";
 
 const MAX_FILES = 256;
@@ -46,7 +48,10 @@ function normalizePath(input: string): string {
 }
 
 function mediaType(path: string): string {
-  switch (posix.extname(path).toLowerCase()) {
+  const extension = posix.extname(path).toLowerCase();
+  switch (extension) {
+    case ".html":
+      return "text/html";
     case ".md":
       return "text/markdown";
     case ".mdx":
@@ -74,7 +79,15 @@ function mediaType(path: string): string {
 }
 
 function canonicalManifest(manifest: ArtifactBundleManifest): string {
-  return JSON.stringify(manifest);
+  return JSON.stringify({
+    schemaVersion: manifest.schemaVersion,
+    files: manifest.files.map((file) => ({
+      path: file.path,
+      mediaType: file.mediaType,
+      size: file.size,
+      digest: file.digest,
+    })),
+  });
 }
 
 export async function parseArtifactArchive(archive: Buffer): Promise<ParsedArtifactBundle> {
@@ -84,7 +97,7 @@ export async function parseArtifactArchive(archive: Buffer): Promise<ParsedArtif
 
   const files = new Map<string, Buffer>();
   let totalBytes = 0;
-  const parser = new Parser({ preservePaths: true });
+  const extract = tar.extract();
 
   await new Promise<void>((resolve, reject) => {
     let settled = false;
@@ -94,60 +107,66 @@ export async function parseArtifactArchive(archive: Buffer): Promise<ParsedArtif
       reject(error instanceof Error ? error : new Error(String(error)));
     };
 
-    parser.on("entry", (entry) => {
-      if (entry.type === "Directory") {
-        entry.resume();
+    extract.on("entry", (header, stream, next) => {
+      if (header.type === "directory") {
+        stream.resume();
+        stream.on("end", next);
         return;
       }
-      if (entry.type !== "File" && entry.type !== "OldFile" && entry.type !== "ContiguousFile") {
-        entry.resume();
-        fail(new ValidationError(`Artifact contains unsupported ${entry.type} entry`));
+      if (header.type !== "file") {
+        stream.resume();
+        const entryType = header.type === "symlink" ? "SymbolicLink" : header.type;
+        fail(new ValidationError(`Artifact contains unsupported ${entryType} entry`));
         return;
       }
 
       let path: string;
       try {
-        path = normalizePath(entry.path);
+        path = normalizePath(header.name);
       } catch (error) {
-        entry.resume();
+        stream.resume();
         fail(error);
         return;
       }
       if (files.has(path)) {
-        entry.resume();
+        stream.resume();
         fail(new ValidationError(`Artifact contains duplicate path: ${path}`));
         return;
       }
       if (files.size >= MAX_FILES) {
-        entry.resume();
+        stream.resume();
         fail(new ValidationError(`Artifact contains more than ${MAX_FILES} files`));
         return;
       }
 
       const chunks: Buffer[] = [];
       let size = 0;
-      entry.on("data", (chunk: Buffer) => {
+      stream.on("data", (chunk: Buffer) => {
         size += chunk.length;
         totalBytes += chunk.length;
         if (size > MAX_FILE_BYTES || totalBytes > MAX_BUNDLE_BYTES) {
-          entry.destroy(new ValidationError("Artifact exceeds its uncompressed size limit"));
+          stream.destroy(new ValidationError("Artifact exceeds its uncompressed size limit"));
           return;
         }
         chunks.push(chunk);
       });
-      entry.on("error", fail);
-      entry.on("end", () => {
+      stream.on("error", fail);
+      stream.on("end", () => {
         if (settled) return;
         files.set(path, Buffer.concat(chunks));
+        next();
       });
     });
-    parser.on("close", () => {
+    extract.on("finish", () => {
       if (settled) return;
       settled = true;
       resolve();
     });
-    parser.on("error", () => fail(new ValidationError("Artifact is not a valid gzip archive")));
-    parser.end(archive);
+    extract.on("error", fail);
+
+    const gunzip = createGunzip();
+    gunzip.on("error", () => fail(new ValidationError("Artifact is not a valid gzip archive")));
+    Readable.from(archive).pipe(gunzip).pipe(extract);
   });
 
   if (files.size === 0) throw new ValidationError("Artifact contains no files");
@@ -164,7 +183,11 @@ export async function parseArtifactArchive(archive: Buffer): Promise<ParsedArtif
       .sort((left, right) => left.path.localeCompare(right.path)),
   };
 
-  return { manifest, bundleDigest: sha256(canonicalManifest(manifest)), files };
+  return {
+    manifest,
+    bundleDigest: sha256(canonicalManifest(manifest)),
+    files,
+  };
 }
 
 export async function readArtifactFile(archive: Buffer, filePath: string): Promise<Buffer | null> {

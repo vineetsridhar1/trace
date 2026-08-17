@@ -108,11 +108,16 @@ export type ApplicationProcessStatus =
 
 export type Artifact = {
   __typename?: "Artifact";
+  approvalAction?: Maybe<ArtifactApprovalAction>;
+  approvalStatus?: Maybe<ArtifactApprovalStatus>;
+  approvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  approvedBy?: Maybe<User>;
   bundleDigest: Scalars["String"]["output"];
   byteSize: Scalars["Int"]["output"];
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
   id: Scalars["ID"]["output"];
+  implementationSession?: Maybe<Session>;
   key: Scalars["String"]["output"];
   manifest: ArtifactManifest;
   organizationId: Scalars["ID"]["output"];
@@ -120,6 +125,16 @@ export type Artifact = {
   sessionId: Scalars["ID"]["output"];
   type: Scalars["String"]["output"];
 };
+
+export type ArtifactApprovalAction = "KEEP_CONTEXT" | "NEW_SESSION";
+
+export type ArtifactApprovalResult = {
+  __typename?: "ArtifactApprovalResult";
+  artifact: Artifact;
+  implementationSession: Session;
+};
+
+export type ArtifactApprovalStatus = "APPROVED" | "PENDING" | "PROCESSING";
 
 export type ArtifactFile = {
   __typename?: "ArtifactFile";
@@ -133,6 +148,12 @@ export type ArtifactManifest = {
   __typename?: "ArtifactManifest";
   files: Array<ArtifactFile>;
   schemaVersion: Scalars["Int"]["output"];
+};
+
+export type ArtifactPage = {
+  __typename?: "ArtifactPage";
+  hasMore: Scalars["Boolean"]["output"];
+  items: Array<Artifact>;
 };
 
 export type Branch = {
@@ -469,6 +490,7 @@ export type EventType =
   | "agent_environment_deleted"
   | "agent_environment_updated"
   | "application_config_updated"
+  | "artifact_approved"
   | "artifact_created"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
@@ -670,6 +692,7 @@ export type Mutation = {
   addChannelMember: Channel;
   addChatMember: Chat;
   addOrgMember: OrgMember;
+  approveArtifact: ArtifactApprovalResult;
   approveBridgeAccessRequest: BridgeAccessGrant;
   archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
@@ -801,6 +824,12 @@ export type MutationAddOrgMemberArgs = {
   organizationId: Scalars["ID"]["input"];
   role?: InputMaybe<UserRole>;
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationApproveArtifactArgs = {
+  action: ArtifactApprovalAction;
+  artifactId: Scalars["ID"]["input"];
+  prompt: Scalars["String"]["input"];
 };
 
 export type MutationApproveBridgeAccessRequestArgs = {
@@ -1458,6 +1487,7 @@ export type Query = {
    * listing surface (the sidebar Apps section).
    */
   appSessionGroups: Array<SessionGroup>;
+  artifactPage: ArtifactPage;
   artifacts: Array<Artifact>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
@@ -1543,10 +1573,18 @@ export type QueryAppSessionGroupsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
+export type QueryArtifactPageArgs = {
+  before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeId?: InputMaybe<Scalars["ID"]["input"]>;
+  key?: InputMaybe<Scalars["String"]["input"]>;
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
+  type?: InputMaybe<Scalars["String"]["input"]>;
+};
+
 export type QueryArtifactsArgs = {
   key?: InputMaybe<Scalars["String"]["input"]>;
-  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
-  sessionId?: InputMaybe<Scalars["ID"]["input"]>;
+  sessionId: Scalars["ID"]["input"];
   type?: InputMaybe<Scalars["String"]["input"]>;
 };
 
@@ -2609,6 +2647,47 @@ export type WorktreeChangesResult = {
   truncated: Scalars["Boolean"]["output"];
 };
 
+export type SessionGroupArtifactPageQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  limit: Scalars["Int"]["input"];
+  before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeId?: InputMaybe<Scalars["ID"]["input"]>;
+}>;
+
+export type SessionGroupArtifactPageQuery = {
+  __typename?: "Query";
+  artifactPage: {
+    __typename?: "ArtifactPage";
+    hasMore: boolean;
+    items: Array<{
+      __typename?: "Artifact";
+      id: string;
+      organizationId: string;
+      sessionId: string;
+      type: string;
+      key: string;
+      bundleDigest: string;
+      byteSize: number;
+      createdAt: string;
+      approvalStatus?: ArtifactApprovalStatus | null;
+      approvalAction?: ArtifactApprovalAction | null;
+      approvedAt?: string | null;
+      manifest: {
+        __typename?: "ArtifactManifest";
+        schemaVersion: number;
+        files: Array<{
+          __typename?: "ArtifactFile";
+          path: string;
+          mediaType: string;
+          size: number;
+          digest: string;
+        }>;
+      };
+      session: { __typename?: "Session"; id: string; name: string; sessionGroupId?: string | null };
+    }>;
+  };
+};
+
 export type AddChannelMemberMutationVariables = Exact<{
   input: AddChannelMemberInput;
 }>;
@@ -3005,6 +3084,25 @@ export type SessionGroupWorktreeChangesForCommitButtonQueryVariables = Exact<{
 export type SessionGroupWorktreeChangesForCommitButtonQuery = {
   __typename?: "Query";
   sessionGroupWorktreeChanges: { __typename?: "WorktreeChangesResult"; totalCount: number };
+};
+
+export type ApproveArtifactMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
+  action: ArtifactApprovalAction;
+  prompt: Scalars["String"]["input"];
+}>;
+
+export type ApproveArtifactMutation = {
+  __typename?: "Mutation";
+  approveArtifact: {
+    __typename?: "ArtifactApprovalResult";
+    implementationSession: {
+      __typename?: "Session";
+      id: string;
+      sessionGroupId?: string | null;
+      channel?: { __typename?: "Channel"; id: string } | null;
+    };
+  };
 };
 
 export type SessionDetailQueryVariables = Exact<{
@@ -4789,6 +4887,136 @@ export const CreationGroupFragmentDoc = {
     },
   ],
 } as unknown as DocumentNode<CreationGroupFragment, unknown>;
+export const SessionGroupArtifactPageDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionGroupArtifactPage" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "before" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "DateTime" } },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "beforeId" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "artifactPage" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "limit" },
+                value: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "before" },
+                value: { kind: "Variable", name: { kind: "Name", value: "before" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "beforeId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "beforeId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "hasMore" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "items" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                      { kind: "Field", name: { kind: "Name", value: "type" } },
+                      { kind: "Field", name: { kind: "Name", value: "key" } },
+                      { kind: "Field", name: { kind: "Name", value: "bundleDigest" } },
+                      { kind: "Field", name: { kind: "Name", value: "byteSize" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "approvalStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "approvalAction" } },
+                      { kind: "Field", name: { kind: "Name", value: "approvedAt" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "manifest" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "schemaVersion" } },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "files" },
+                              selectionSet: {
+                                kind: "SelectionSet",
+                                selections: [
+                                  { kind: "Field", name: { kind: "Name", value: "path" } },
+                                  { kind: "Field", name: { kind: "Name", value: "mediaType" } },
+                                  { kind: "Field", name: { kind: "Name", value: "size" } },
+                                  { kind: "Field", name: { kind: "Name", value: "digest" } },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "session" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SessionGroupArtifactPageQuery, SessionGroupArtifactPageQueryVariables>;
 export const AddChannelMemberDocument = {
   kind: "Document",
   definitions: [
@@ -6137,6 +6365,92 @@ export const SessionGroupWorktreeChangesForCommitButtonDocument = {
   SessionGroupWorktreeChangesForCommitButtonQuery,
   SessionGroupWorktreeChangesForCommitButtonQueryVariables
 >;
+export const ApproveArtifactDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ApproveArtifact" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "action" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ArtifactApprovalAction" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "prompt" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "approveArtifact" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "action" },
+                value: { kind: "Variable", name: { kind: "Name", value: "action" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "prompt" },
+                value: { kind: "Variable", name: { kind: "Name", value: "prompt" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "implementationSession" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "channel" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ApproveArtifactMutation, ApproveArtifactMutationVariables>;
 export const SessionDetailDocument = {
   kind: "Document",
   definitions: [

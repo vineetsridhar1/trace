@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
   ArrowLeft,
+  Boxes,
   History,
   WifiOff,
   Monitor,
@@ -33,6 +34,7 @@ import { TraceLoader } from "../ui/trace-loader";
 import { GitHubActions } from "./GitHubActions";
 import { ActionTooltip } from "../ui/ActionTooltip";
 import { SessionUsageBadge } from "./SessionUsageBadge";
+import { SessionGroupArtifactsDialog } from "../artifact/SessionGroupArtifactsDialog";
 
 /** How long to show "Reconnecting…" before switching to "Connection Lost" */
 const CONNECTION_LOST_BANNER_DELAY_MS = 60_000;
@@ -87,6 +89,7 @@ export function SessionHeader({
     (s: { toggleFullscreen: () => void }) => s.toggleFullscreen,
   );
   const [showHistory, setShowHistory] = useState(false);
+  const [showArtifacts, setShowArtifacts] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
   const prUrl = groupPrUrl ?? null;
 
@@ -99,12 +102,11 @@ export function SessionHeader({
   const bridgeInteractionAllowed = isBridgeInteractionAllowed(moveBridgeAccess);
   const mergedUnavailable = sessionStatus === "merged" && worktreeDeleted !== false;
   const canMoveSession = !mergedUnavailable && bridgeInteractionAllowed;
-  const moveDisabledReason =
-    mergedUnavailable
-      ? "Cannot move a merged session"
-      : !bridgeInteractionAllowed
-        ? "You don't have access to this bridge"
-        : undefined;
+  const moveDisabledReason = mergedUnavailable
+    ? "Cannot move a merged session"
+    : !bridgeInteractionAllowed
+      ? "You don't have access to this bridge"
+      : undefined;
 
   // Show "Reconnecting" for a grace period before showing "Connection Lost"
   const [pastGracePeriod, setPastGracePeriod] = useState(false);
@@ -268,6 +270,25 @@ export function SessionHeader({
           disabled={!canMoveSession}
           disabledReason={moveDisabledReason}
         />
+
+        {sessionGroupId ? (
+          <>
+            <ActionTooltip label="Artifacts">
+              <button
+                onClick={() => setShowArtifacts(true)}
+                className={headerIconButtonClass}
+                aria-label="Artifacts"
+              >
+                <Boxes size={13} />
+              </button>
+            </ActionTooltip>
+            <SessionGroupArtifactsDialog
+              sessionGroupId={sessionGroupId}
+              open={showArtifacts}
+              onOpenChange={setShowArtifacts}
+            />
+          </>
+        ) : null}
 
         <div className="relative" ref={historyRef}>
           <ActionTooltip label="Session history">

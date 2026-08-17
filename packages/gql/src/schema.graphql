@@ -293,6 +293,7 @@ enum TurnRole {
 
 enum EventType {
   artifact_created
+  artifact_approved
   message_sent
   message_edited
   message_deleted
@@ -650,7 +651,33 @@ type Artifact {
   byteSize: Int!
   createdBy: User!
   session: Session!
+  approvalStatus: ArtifactApprovalStatus
+  approvalAction: ArtifactApprovalAction
+  approvedAt: DateTime
+  approvedBy: User
+  implementationSession: Session
   createdAt: DateTime!
+}
+
+enum ArtifactApprovalStatus {
+  PENDING
+  PROCESSING
+  APPROVED
+}
+
+enum ArtifactApprovalAction {
+  NEW_SESSION
+  KEEP_CONTEXT
+}
+
+type ArtifactApprovalResult {
+  artifact: Artifact!
+  implementationSession: Session!
+}
+
+type ArtifactPage {
+  items: [Artifact!]!
+  hasMore: Boolean!
 }
 
 type QueuedMessage {
@@ -1469,7 +1496,15 @@ type Query {
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
-  artifacts(sessionId: ID, sessionGroupId: ID, type: String, key: String): [Artifact!]!
+  artifacts(sessionId: ID!, type: String, key: String): [Artifact!]!
+  artifactPage(
+    sessionGroupId: ID!
+    limit: Int = 50
+    before: DateTime
+    beforeId: ID
+    type: String
+    key: String
+  ): ArtifactPage!
   mySessions(
     organizationId: ID!
     agentStatus: AgentStatus
@@ -1647,6 +1682,11 @@ enum LinkedCheckoutErrorCode {
 # --- Mutations ---
 
 type Mutation {
+  approveArtifact(
+    artifactId: ID!
+    action: ArtifactApprovalAction!
+    prompt: String!
+  ): ArtifactApprovalResult!
   createChannel(input: CreateChannelInput!): Channel!
   createAgentEnvironment(input: CreateAgentEnvironmentInput!): AgentEnvironment!
   updateAgentEnvironment(input: UpdateAgentEnvironmentInput!): AgentEnvironment!

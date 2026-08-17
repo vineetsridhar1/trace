@@ -28,6 +28,7 @@ import { PRCard, type PRCardKind } from "./PRCard";
 import { ReadGlobGroup } from "./ReadGlobGroup";
 import { SystemBadge } from "./SystemBadge";
 import { UserMessageBubble } from "./UserMessageBubble";
+import { VisualPlanArtifactCard } from "./VisualPlanArtifactCard";
 import { renderSessionOutput } from "./event-output";
 import type { NodeRenderContext } from "./render-context";
 
@@ -311,6 +312,20 @@ const EventNode = memo(function EventNode({ id, context }: EventNodeProps) {
 
     case "session_output":
       return payload ? renderSessionOutput(payload, context) : null;
+
+    case "artifact_created": {
+      const artifact = asJsonObject(payload?.artifact);
+      const manifest = asJsonObject(artifact?.manifest);
+      const files = Array.isArray(manifest?.files) ? manifest.files : [];
+      const filePath = files
+        .map(asJsonObject)
+        .find((file) => file?.mediaType === "text/html" && typeof file.path === "string")?.path;
+      return artifact?.type === "trace.visual-plan.v1" &&
+        typeof artifact.id === "string" &&
+        typeof filePath === "string" ? (
+        <VisualPlanArtifactCard artifactId={artifact.id} filePath={filePath} />
+      ) : null;
+    }
 
     case "session_pr_opened":
       return <PRCard kind="opened" prUrl={prUrlFrom(payload)} />;

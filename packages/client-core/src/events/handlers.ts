@@ -160,7 +160,7 @@ export function handleOrgEvent(event: Event): void {
 
   const scopeKey = `${event.scopeType}:${event.scopeId}`;
 
-  if (event.eventType === "artifact_created") {
+  if (event.eventType === "artifact_created" || event.eventType === "artifact_approved") {
     const artifact = asJsonObject(payload.artifact);
     if (artifact && typeof artifact.id === "string") {
       batch.upsert("artifacts", artifact.id, artifact as unknown as Artifact);
@@ -845,7 +845,7 @@ export function handleSessionEvent(sessionId: string, event: Event & { id: strin
   upsertSessionEventWithOptimisticResolution(sessionId, event);
 
   const payload = asJsonObject(event.payload) ?? ({} as JsonObject);
-  if (event.eventType === "artifact_created") {
+  if (event.eventType === "artifact_created" || event.eventType === "artifact_approved") {
     const artifact = asJsonObject(payload.artifact);
     if (artifact && typeof artifact.id === "string") {
       const batch = new StoreBatchWriter();

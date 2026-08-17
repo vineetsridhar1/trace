@@ -6371,6 +6371,17 @@ export class SessionService {
             runtimeId: conn.runtimeInstanceId ?? null,
             runtimeLabel: conn.runtimeLabel ?? null,
           };
+    if (clientMutationId) {
+      const existing = await prisma.event.findFirst({
+        where: {
+          scopeType: "session",
+          scopeId: sessionId,
+          eventType: "message_sent",
+          payload: { path: ["clientMutationId"], equals: clientMutationId },
+        },
+      });
+      if (existing) return existing;
+    }
     const activeTool = runtimeBinding.fallbackTool ?? session.tool;
     const activeModel =
       activeTool !== session.tool

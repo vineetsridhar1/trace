@@ -173,6 +173,7 @@ function willEventRender(event: Event | undefined): boolean {
     case "session_pr_opened":
     case "session_pr_merged":
     case "session_pr_closed":
+    case "artifact_created":
       return true;
     case "session_output": {
       const payload = asJsonObject(event.payload);

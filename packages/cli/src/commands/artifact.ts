@@ -12,7 +12,10 @@ const UPLOAD_TIMEOUT_MS = 2 * 60 * 1_000;
 export const artifactCommand = defineCommand({
   path: ["artifact", "push"],
   description: "Upload an immutable artifact from an active Trace invocation",
-  examples: ['"$TRACE_CLI" artifact push video output/demo.mp4 --json'],
+  examples: [
+    '"$TRACE_CLI" artifact push visual-plan docs/plan --key primary --json',
+    '"$TRACE_CLI" artifact push video output/demo.mp4 --json',
+  ],
   effects: [
     "Packages the supplied file or directory and creates an immutable Trace artifact.",
     "Retries transient upload failures once with the same idempotency key.",
@@ -50,7 +53,9 @@ export const artifactCommand = defineCommand({
     const type = input.positionals[0] ?? usage("Artifact type is required");
     const sourceArg = input.positionals[1] ?? usage("Artifact file or directory is required");
     const source = resolve(sourceArg);
-    const key = optionString(input, "key") ?? "default";
+    const key =
+      optionString(input, "key") ??
+      (type === "visual-plan" || type === "trace.visual-plan.v1" ? "primary" : "default");
     const idempotencyKey = optionString(input, "idempotencyKey") ?? randomUUID();
     if (idempotencyKey.length > 200) usage("--idempotency-key must be at most 200 characters");
     if (!existsSync(source)) usage(`Path does not exist: ${source}`);

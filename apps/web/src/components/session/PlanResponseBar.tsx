@@ -20,14 +20,30 @@ import {
 } from "./planCommentPrompts";
 import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
 import { PendingRichTextInput } from "./PendingRichTextInput";
+import { gql } from "@urql/core";
 
 interface PlanResponseBarProps {
   sessionId: string;
   planContent: string;
+  artifactId?: string;
   planComments?: MarkdownSteerCommentsByBlock;
   onClearPlanComments?: () => void;
   onDismiss: () => void;
 }
+
+const APPROVE_ARTIFACT_MUTATION = gql`
+  mutation ApproveArtifact($artifactId: ID!, $action: ArtifactApprovalAction!, $prompt: String!) {
+    approveArtifact(artifactId: $artifactId, action: $action, prompt: $prompt) {
+      implementationSession {
+        id
+        sessionGroupId
+        channel {
+          id
+        }
+      }
+    }
+  }
+`;
 
 const APPROVE_NEW_SESSION = "Approve (new session)";
 const APPROVE_KEEP_CONTEXT = "Approve (keep context)";
@@ -43,6 +59,7 @@ function getApprovalLabel(label: string, hasComments: boolean): string {
 export function PlanResponseBar({
   sessionId,
   planContent,
+  artifactId,
   planComments,
   onClearPlanComments,
   onDismiss,
@@ -83,131 +100,179 @@ export function PlanResponseBar({
   const branch = useEntityField("sessions", sessionId, "branch") as string | undefined;
   const defaultHosting = resolveSupportedHostingForRepo(hosting ?? "local", repo) ?? "local";
 
-  const handleClearContext = useCallback(async (noteOverride?: string) => {
-    if (sending || !sessionGroupId) return;
-    setSending(true);
-    try {
-      const note = noteOverride ?? feedback;
-      const prompt = hasComments
-        ? buildApproveWithCommentsPrompt({
-            planContent,
-            commentGroups,
-            note: note.trim(),
+  const handleClearContext = useCallback(
+    async (noteOverride?: string) => {
+      if (sending || !sessionGroupId) return;
+      setSending(true);
+      try {
+        const note = noteOverride ?? feedback;
+        const prompt = hasComments
+          ? buildApproveWithCommentsPrompt({
+              planContent,
+              commentGroups,
+              note: note.trim(),
+            })
+          : `Implement the following plan:\n\n${planContent}`;
+        if (artifactId) {
+          const approval = await client
+            .mutation(APPROVE_ARTIFACT_MUTATION, {
+              artifactId,
+              action: "NEW_SESSION",
+              prompt,
+            })
+            .toPromise();
+          if (approval.error) throw approval.error;
+          const implementationSession = approval.data?.approveArtifact?.implementationSession;
+          if (!implementationSession?.id)
+            throw new Error("Implementation session was not returned");
+          if (implementationSession.sessionGroupId) {
+            openSessionTab(implementationSession.sessionGroupId, implementationSession.id);
+            navigateToSession(
+              implementationSession.channel?.id ?? null,
+              implementationSession.sessionGroupId,
+              implementationSession.id,
+            );
+          }
+          if (hasComments) {
+            setFeedback("");
+            onClearPlanComments?.();
+          }
+          return;
+        }
+        const result = await client
+          .mutation(START_SESSION_MUTATION, {
+            input: {
+              tool: tool ?? "claude_code",
+              model,
+              reasoningEffort,
+              hosting: defaultHosting,
+              channelId: channel?.id,
+              repoId: repo?.id,
+              branch,
+              sessionGroupId,
+              sourceSessionId: sessionId,
+              prompt,
+            },
           })
-        : `Implement the following plan:\n\n${planContent}`;
-      const result = await client
-        .mutation(START_SESSION_MUTATION, {
-          input: {
+          .toPromise();
+
+        const newSessionId = result.data?.startSession?.id;
+        if (newSessionId) {
+          optimisticallyInsertSession({
+            id: newSessionId,
+            sessionGroupId,
             tool: tool ?? "claude_code",
             model,
             reasoningEffort,
             hosting: defaultHosting,
-            channelId: channel?.id,
-            repoId: repo?.id,
+            channel,
+            repo,
             branch,
-            sessionGroupId,
-            sourceSessionId: sessionId,
-            prompt,
-          },
-        })
-        .toPromise();
-
-      const newSessionId = result.data?.startSession?.id;
-      if (newSessionId) {
-        optimisticallyInsertSession({
-          id: newSessionId,
-          sessionGroupId,
-          tool: tool ?? "claude_code",
-          model,
-          reasoningEffort,
-          hosting: defaultHosting,
-          channel,
-          repo,
-          branch,
+          });
+          await client.mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt }).toPromise();
+          openSessionTab(sessionGroupId, newSessionId);
+          navigateToSession(channel?.id ?? null, sessionGroupId, newSessionId);
+          await client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
+          if (hasComments) {
+            setFeedback("");
+            onClearPlanComments?.();
+          }
+        }
+      } catch (error) {
+        toast.error("Failed to create session", {
+          description: error instanceof Error ? error.message : "Try again in a moment.",
         });
-        await client.mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt }).toPromise();
-        openSessionTab(sessionGroupId, newSessionId);
-        navigateToSession(channel?.id ?? null, sessionGroupId, newSessionId);
-        await client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
+      } finally {
+        setSending(false);
+      }
+    },
+    [
+      sending,
+      sessionGroupId,
+      planContent,
+      hasComments,
+      commentGroups,
+      feedback,
+      onClearPlanComments,
+      tool,
+      model,
+      defaultHosting,
+      channel?.id,
+      repo?.id,
+      branch,
+      sessionId,
+      openSessionTab,
+      artifactId,
+    ],
+  );
+
+  const handleKeepContext = useCallback(
+    async (noteOverride?: string) => {
+      if (sending) return;
+      setSending(true);
+      try {
+        const note = noteOverride ?? feedback;
+        const text = hasComments
+          ? buildApproveWithCommentsPrompt({
+              commentGroups,
+              note: note.trim(),
+            })
+          : "Approved. Implement this plan.";
+        if (artifactId) {
+          const approval = await client
+            .mutation(APPROVE_ARTIFACT_MUTATION, {
+              artifactId,
+              action: "KEEP_CONTEXT",
+              prompt: text,
+            })
+            .toPromise();
+          if (approval.error) throw approval.error;
+        } else {
+          await client
+            .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+              sessionId,
+              text,
+            })
+            .toPromise();
+        }
         if (hasComments) {
           setFeedback("");
           onClearPlanComments?.();
         }
+      } catch (error) {
+        toast.error("Failed to approve plan", {
+          description: error instanceof Error ? error.message : "Try again in a moment.",
+        });
+      } finally {
+        setSending(false);
       }
-    } catch (error) {
-      toast.error("Failed to create session", {
-        description: error instanceof Error ? error.message : "Try again in a moment.",
-      });
-    } finally {
-      setSending(false);
-    }
-  }, [
-    sending,
-    sessionGroupId,
-    planContent,
-    hasComments,
-    commentGroups,
-    feedback,
-    onClearPlanComments,
-    tool,
-    model,
-    defaultHosting,
-    channel?.id,
-    repo?.id,
-    branch,
-    sessionId,
-    openSessionTab,
-  ]);
+    },
+    [artifactId, commentGroups, feedback, hasComments, onClearPlanComments, sessionId, sending],
+  );
 
-  const handleKeepContext = useCallback(async (noteOverride?: string) => {
-    if (sending) return;
-    setSending(true);
-    try {
-      const note = noteOverride ?? feedback;
-      await client
-        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-          sessionId,
-          text: hasComments
-            ? buildApproveWithCommentsPrompt({
-                commentGroups,
-                note: note.trim(),
-              })
-            : "Approved. Implement this plan.",
-        })
-        .toPromise();
-      if (hasComments) {
+  const handleRevise = useCallback(
+    async (textOverride?: string) => {
+      const text = (textOverride ?? feedback).trim();
+      if ((!text && !hasComments) || sending) return;
+      setSending(true);
+      try {
+        await client
+          .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+            sessionId,
+            text: hasComments
+              ? buildCommentPrompt(commentGroups, text)
+              : `Please revise the plan: ${text}`,
+            interactionMode: "plan",
+          })
+          .toPromise();
         setFeedback("");
-        onClearPlanComments?.();
+        if (hasComments) onClearPlanComments?.();
+      } finally {
+        setSending(false);
       }
-    } catch (error) {
-      toast.error("Failed to approve plan", {
-        description: error instanceof Error ? error.message : "Try again in a moment.",
-      });
-    } finally {
-      setSending(false);
-    }
-  }, [commentGroups, feedback, hasComments, onClearPlanComments, sessionId, sending]);
-
-  const handleRevise = useCallback(async (textOverride?: string) => {
-    const text = (textOverride ?? feedback).trim();
-    if ((!text && !hasComments) || sending) return;
-    setSending(true);
-    try {
-      await client
-        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-          sessionId,
-          text: hasComments
-            ? buildCommentPrompt(commentGroups, text)
-            : `Please revise the plan: ${text}`,
-          interactionMode: "plan",
-        })
-        .toPromise();
-      setFeedback("");
-      if (hasComments) onClearPlanComments?.();
-    } finally {
-      setSending(false);
-    }
-  }, [commentGroups, feedback, hasComments, onClearPlanComments, sending, sessionId]);
+    },
+    [commentGroups, feedback, hasComments, onClearPlanComments, sending, sessionId],
+  );
 
   const handleApprovalClick = useCallback(
     (label: string) => {

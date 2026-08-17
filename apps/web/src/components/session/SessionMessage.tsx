@@ -325,6 +325,7 @@ export const SessionMessage = memo(function SessionMessage({
         if (!file || typeof file.path !== "string" || typeof file.mediaType !== "string") {
           return false;
         }
+        if (artifactType === "trace.visual-plan.v1") return file.mediaType === "text/html";
         return file.mediaType.startsWith(artifactType === "trace.image.v1" ? "image/" : "video/");
       });
       return typeof artifact?.type === "string" && typeof artifact.id === "string" ? (

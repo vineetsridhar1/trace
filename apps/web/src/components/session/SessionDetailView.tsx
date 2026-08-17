@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { gql } from "@urql/core";
-import type { QueuedMessage } from "@trace/gql";
+import type { Artifact, QueuedMessage } from "@trace/gql";
 import { toast } from "sonner";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useSessionPromptIndex } from "../../hooks/useSessionPromptIndex";
@@ -49,6 +49,10 @@ import { uploadFile } from "../../lib/upload";
 import type { FileAttachment } from "./ImageAttachmentBar";
 import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
 import { findActiveQuestion, findReplacedQuestionIds } from "./questionHistory";
+import { useVisualPlanDocument } from "../artifact/useVisualPlanDocument";
+import { visualPlanHtmlPath } from "../artifact/visual-plan-file";
+import { PlanReviewPendingBar } from "./PlanReviewPendingBar";
+import { findLatestTimelineInputRequest } from "./visualPlanReview";
 
 const RUNTIME_BOOTING_STATES = new Set([
   "pending",
@@ -228,6 +232,33 @@ export function SessionDetailView({
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
     | string
     | undefined;
+  const latestPlanArtifact = useEntityStore((state) => {
+    let latest: Artifact | null = null;
+    for (const artifact of Object.values(state.artifacts)) {
+      if (
+        artifact.sessionId === sessionId &&
+        artifact.type === "trace.visual-plan.v1" &&
+        (!latest || artifact.createdAt > latest.createdAt)
+      ) {
+        latest = artifact;
+      }
+    }
+    return latest;
+  });
+  const timelineInputRequest = useMemo(
+    () => findLatestTimelineInputRequest(eventIds, events),
+    [eventIds, events],
+  );
+  const visiblePlanArtifact =
+    sessionStatus !== "needs_input"
+      ? null
+      : timelineInputRequest?.kind === "visual-plan"
+        ? timelineInputRequest.artifact
+        : timelineInputRequest
+          ? null
+          : latestPlanArtifact;
+  const { implementationContent: artifactPlanContent, error: artifactPlanError } =
+    useVisualPlanDocument(visiblePlanArtifact?.id ?? null, visualPlanHtmlPath(visiblePlanArtifact));
   const connection = useEntityField("sessions", sessionId, "connection") as
     | Record<string, unknown>
     | null
@@ -446,10 +477,19 @@ export function SessionDetailView({
     }
     return null;
   }, [nodes, sessionStatus]);
+  const planReviewContent = visiblePlanArtifact
+    ? artifactPlanContent
+    : (activePlan?.node.planContent ?? "");
 
   const activeQuestion = useMemo(() => {
+    if (
+      timelineInputRequest?.kind === "visual-plan" ||
+      timelineInputRequest?.kind === "native-plan"
+    ) {
+      return null;
+    }
     return findActiveQuestion(nodes, events);
-  }, [events, nodes]);
+  }, [events, nodes, timelineInputRequest?.kind]);
   const replacedQuestionIds = useMemo(
     () => findReplacedQuestionIds(nodes, events),
     [events, nodes],
@@ -459,7 +499,7 @@ export function SessionDetailView({
 
   useEffect(() => {
     setPlanComments({});
-  }, [activePlan?.node.id]);
+  }, [activePlan?.node.id, visiblePlanArtifact?.id]);
 
   const handleAddPlanComment = useCallback((block: MarkdownSteerBlock, text: string) => {
     setPlanComments((current) => ({
@@ -570,6 +610,7 @@ export function SessionDetailView({
     bridgeInteractionAllowed &&
     !showQuestion &&
     !activePlan &&
+    !visiblePlanArtifact &&
     !worktreeDeleted &&
     !(isDisconnected(connection) && !isNotStarted);
 
@@ -740,14 +781,19 @@ export function SessionDetailView({
                   </>
                 ) : null}
               </>
-            ) : activePlan ? (
-              <PlanResponseBar
-                sessionId={sessionId}
-                planContent={activePlan.node.planContent}
-                planComments={planComments}
-                onClearPlanComments={handleClearPlanComments}
-                onDismiss={handleDismissPlan}
-              />
+            ) : activePlan || visiblePlanArtifact ? (
+              planReviewContent ? (
+                <PlanResponseBar
+                  sessionId={sessionId}
+                  planContent={planReviewContent}
+                  artifactId={visiblePlanArtifact?.id}
+                  planComments={planComments}
+                  onClearPlanComments={handleClearPlanComments}
+                  onDismiss={handleDismissPlan}
+                />
+              ) : (
+                <PlanReviewPendingBar error={artifactPlanError} onDismiss={handleDismissPlan} />
+              )
             ) : (
               <>
                 {agentStatus === "active" && latestTodos && <StickyTodoList todos={latestTodos} />}

@@ -67,6 +67,38 @@ describe("ArtifactService.create storage lifecycle", () => {
     } as never);
   });
 
+  it("stores a validated browser video and emits its artifact event", async () => {
+    const created = {
+      id: "artifact-video",
+      ...createInput,
+      type: "trace.video.v1",
+      manifest: {
+        schemaVersion: 1,
+        files: [{ path: "browser-proof.webm", mediaType: "video/webm", size: 5 }],
+      },
+    };
+    asMock(prisma.artifact.create).mockResolvedValue(created as never);
+
+    const result = await artifactService.create({ ...createInput, archive: videoArchive() });
+
+    expect(result.id).toBe("artifact-video");
+    expect(storage.putObject).toHaveBeenCalledWith(
+      expect.stringContaining("artifacts/org-1/"),
+      expect.any(Buffer),
+      "application/gzip",
+      { ifAbsent: true },
+    );
+    const { eventService } = await import("./event.js");
+    expect(eventService.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "artifact_created",
+        payload: expect.objectContaining({ artifact: created }),
+      }),
+      prisma,
+    );
+    expect(eventService.publishCreated).toHaveBeenCalled();
+  });
+
   it("removes the uploaded bundle when the database transaction fails", async () => {
     asMock(prisma.artifact.create).mockRejectedValue(new Error("database unavailable"));
 

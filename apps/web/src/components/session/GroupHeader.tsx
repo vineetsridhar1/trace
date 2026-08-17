@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   AppWindow,
+  Boxes,
   Circle,
   Cloud,
   Monitor,
@@ -21,6 +22,7 @@ import { SessionMoveButton } from "./SessionMoveButton";
 import { GitHubActions } from "./GitHubActions";
 import { GroupUsageBadge } from "./GroupUsageBadge";
 import { ActionTooltip } from "../ui/ActionTooltip";
+import { SessionGroupArtifactsDialog } from "../artifact/SessionGroupArtifactsDialog";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
@@ -83,6 +85,7 @@ export function GroupHeader({
   onToggleApplicationsSidebar,
 }: GroupHeaderProps) {
   const [showHistory, setShowHistory] = useState(false);
+  const [showArtifacts, setShowArtifacts] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
   const { hasRunScripts, canRun, handleRun } = useRunScripts(sessionGroupId, selectedSessionId);
   const linkedCheckout = useLinkedCheckoutHeaderState({
@@ -189,6 +192,25 @@ export function GroupHeader({
           disabled={!canMoveSession}
           disabledReason={moveDisabledReason}
         />
+      ) : null}
+
+      {!compactAppMode ? (
+        <>
+          <ActionTooltip label="Artifacts">
+            <button
+              onClick={() => setShowArtifacts(true)}
+              className={headerIconButtonClass}
+              aria-label="Artifacts"
+            >
+              <Boxes size={13} />
+            </button>
+          </ActionTooltip>
+          <SessionGroupArtifactsDialog
+            sessionGroupId={sessionGroupId}
+            open={showArtifacts}
+            onOpenChange={setShowArtifacts}
+          />
+        </>
       ) : null}
 
       {!compactAppMode ? (
