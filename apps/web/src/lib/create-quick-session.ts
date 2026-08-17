@@ -3,6 +3,7 @@ import { client } from "./urql";
 import { START_SESSION_MUTATION, useEntityStore } from "@trace/client-core";
 import { navigateToSession, navigateToSessionGroup } from "../stores/ui";
 import type { CreatableGeneratedProjectKind } from "../components/sidebar/generated-project-types";
+import { buildQuickSessionStartInput, type QuickSessionOptions } from "./quick-session-input";
 
 const pendingQuickSessionChannels = new Set<string>();
 const pendingGeneratedProjectKinds = new Set<CreatableGeneratedProjectKind>();
@@ -28,7 +29,7 @@ export function getChannelRepoId(channelId: string): string | undefined {
  */
 export async function createQuickSession(
   channelId: string,
-  options: { sessionGroupId?: string; visibility?: "public" | "private"; tool?: string } = {},
+  options: QuickSessionOptions = {},
 ): Promise<void> {
   if (pendingQuickSessionChannels.has(channelId)) return;
   pendingQuickSessionChannels.add(channelId);
@@ -38,14 +39,7 @@ export async function createQuickSession(
   try {
     const result = await client
       .mutation(START_SESSION_MUTATION, {
-        input: {
-          deferRuntimeSelection: true,
-          channelId,
-          repoId: channelRepoId ?? undefined,
-          sessionGroupId: options.sessionGroupId,
-          visibility: options.visibility,
-          tool: options.tool,
-        },
+        input: buildQuickSessionStartInput(channelId, channelRepoId, options),
       })
       .toPromise();
 
@@ -77,6 +71,17 @@ export async function createQuickSession(
   } finally {
     pendingQuickSessionChannels.delete(channelId);
   }
+}
+
+/**
+ * Start flexible work in a project. The general session inherits the project's
+ * repository as context and can later convert in place to coding or an artifact.
+ */
+export function createProjectSession(
+  channelId: string,
+  options: Omit<QuickSessionOptions, "kind" | "sessionGroupId"> = {},
+): Promise<void> {
+  return createQuickSession(channelId, { ...options, kind: "general" });
 }
 
 export async function createAppSession(): Promise<boolean> {

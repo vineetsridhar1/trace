@@ -23,7 +23,7 @@ import { useSessionGroupRows } from "../channel/useSessionGroupRows";
 import { sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { cn, timeAgo } from "../../lib/utils";
-import { createQuickSession } from "../../lib/create-quick-session";
+import { createProjectSession } from "../../lib/create-quick-session";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { client } from "../../lib/urql";
 import { sidebarNestedFullWidthRowClass } from "./sidebarItemStyles";
@@ -153,7 +153,7 @@ export const ChannelOwnedSessions = memo(function ChannelOwnedSessions({
                   "flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-1.5 text-left text-xs text-foreground/45 transition-colors hover:bg-white/10 hover:text-foreground/70",
                   sidebarNestedFullWidthRowClass,
               )}
-                onClick={() => createQuickSession(channelId)}
+                onClick={() => createProjectSession(channelId)}
               >
                 <Plus size={14} className="shrink-0" />
                 <span className="truncate">Create a session</span>

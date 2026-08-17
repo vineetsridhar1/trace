@@ -20,7 +20,7 @@ import { DeleteChannelDialog } from "../channel/DeleteChannelDialog";
 import { AddPeopleDialog } from "../channel/AddPeopleDialog";
 import { RenameProjectDialog } from "./RenameProjectDialog";
 import { cn } from "../../lib/utils";
-import { createQuickSession } from "../../lib/create-quick-session";
+import { createProjectSession } from "../../lib/create-quick-session";
 import type { SidebarSessionScope } from "./ChannelOwnedSessions";
 
 export const ChannelItem = memo(function ChannelItem({
@@ -216,7 +216,7 @@ export const ChannelItem = memo(function ChannelItem({
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                createQuickSession(id);
+                createProjectSession(id);
               }}
               onPointerDown={(event) => event.stopPropagation()}
             >
