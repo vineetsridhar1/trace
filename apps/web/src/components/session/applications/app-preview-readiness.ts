@@ -1,8 +1,8 @@
 type PreviewEndpoint = {
   id: string;
   sessionGroupId: string;
-  appConfigId: string;
-  processConfigId: string;
+  appConfigId?: string | null;
+  processConfigId?: string | null;
   status: string;
   url?: string | null;
 };

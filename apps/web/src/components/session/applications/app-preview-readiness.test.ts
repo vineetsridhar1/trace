@@ -45,6 +45,16 @@ describe("findReadyPreviewEndpoint", () => {
     ).toBeUndefined();
   });
 
+  it("ignores manually forwarded endpoints without an app configuration", () => {
+    expect(
+      findReadyPreviewEndpoint({
+        sessionGroupId: "group-1",
+        endpoints: [{ ...endpoint, appConfigId: null }],
+        processes: [{ ...endpoint, status: "running" }],
+      }),
+    ).toBeUndefined();
+  });
+
   it("ignores a running process left behind by a replaced runtime", () => {
     expect(
       findReadyPreviewEndpoint({
