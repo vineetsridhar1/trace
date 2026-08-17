@@ -3106,6 +3106,7 @@ export type UpdateChannelGroupInput = {
 export type UpdateChannelInput = {
   baseBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
   runScripts?: InputMaybe<Scalars["JSON"]["input"]>;
   setupScript?: InputMaybe<Scalars["String"]["input"]>;
 };

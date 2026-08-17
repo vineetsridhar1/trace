@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
-import { ChevronRight, Mail, Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { ChevronRight, FolderGit2, Mail, Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -22,6 +22,7 @@ import { RenameProjectDialog } from "./RenameProjectDialog";
 import { cn } from "../../lib/utils";
 import { createProjectSession } from "../../lib/create-quick-session";
 import type { SidebarSessionScope } from "./ChannelOwnedSessions";
+import { AttachProjectRepoDialog } from "./AttachProjectRepoDialog";
 
 export const ChannelItem = memo(function ChannelItem({
   id,
@@ -54,6 +55,7 @@ export const ChannelItem = memo(function ChannelItem({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
+  const [repoOpen, setRepoOpen] = useState(false);
 
   const sortableData = useMemo(
     () => ({ type: "channel" as const, id, groupId: groupId ?? null }),
@@ -147,6 +149,10 @@ export const ChannelItem = memo(function ChannelItem({
               <ContextMenuItem onClick={() => setMembersOpen(true)}>
                 <UserPlus size={15} />
                 Add people
+              </ContextMenuItem>
+              <ContextMenuItem onClick={() => setRepoOpen(true)}>
+                <FolderGit2 size={15} />
+                Project repository
               </ContextMenuItem>
             </ContextMenuGroup>
             <ContextMenuSeparator className="my-1" />
@@ -253,6 +259,7 @@ export const ChannelItem = memo(function ChannelItem({
         open={membersOpen}
         onOpenChange={setMembersOpen}
       />
+      <AttachProjectRepoDialog projectId={id} open={repoOpen} onOpenChange={setRepoOpen} />
     </>
   );
 });

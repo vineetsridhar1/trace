@@ -1559,6 +1559,7 @@ input CreateChannelInput {
 
 input UpdateChannelInput {
   name: String
+  repoId: ID
   baseBranch: String
   setupScript: String
   runScripts: JSON

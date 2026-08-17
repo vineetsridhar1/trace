@@ -1,16 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { Code, FolderPlus, MessageSquare, Plus } from "lucide-react";
-import type {
-  ChannelType,
-  ChannelVisibility,
-  CodingTool,
-  SessionRuntimeInstance,
-} from "@trace/gql";
+import { useEffect, useState } from "react";
+import { Code, FolderPlus, Plus } from "lucide-react";
+import type { ChannelVisibility } from "@trace/gql";
 import { gql } from "@urql/core";
-import { BranchCombobox } from "../channel/BranchCombobox";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { AVAILABLE_RUNTIMES_QUERY } from "@trace/client-core";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -19,15 +12,10 @@ import {
   ResponsiveDialogTitle as DialogTitle,
 } from "../ui/responsive-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { DisabledReasonHint } from "../ui/DisabledReasonHint";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { client } from "../../lib/urql";
-import { features } from "../../lib/features";
 import { useAuthStore } from "@trace/client-core";
-import { useEntityField, useEntityIds } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
-import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
-import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
 
 const CREATE_CHANNEL_MUTATION = gql`
   mutation CreateChannel($input: CreateChannelInput!) {
@@ -44,22 +32,6 @@ const CREATE_GROUP_MUTATION = gql`
     }
   }
 `;
-
-const CODING_CHANNEL_TOOL: CodingTool = "claude_code";
-
-const ALL_TYPE_OPTIONS: Array<{
-  value: ChannelType;
-  label: string;
-  description: string;
-  icon: typeof Code;
-}> = [
-  { value: "coding", label: "Coding", description: "For AI coding sessions", icon: Code },
-  { value: "text", label: "Text", description: "For team messaging", icon: MessageSquare },
-];
-
-const TYPE_OPTIONS = features.messaging
-  ? ALL_TYPE_OPTIONS
-  : ALL_TYPE_OPTIONS.filter((o) => o.value !== "text");
 
 type CreateMode = "choose" | "channel" | "group";
 
@@ -84,67 +56,24 @@ export function CreateChannelDialog({
 
   const [mode, setMode] = useState<CreateMode>("choose");
   const [name, setName] = useState("");
-  const [channelType, setChannelType] = useState<ChannelType>("coding");
   const [visibility, setVisibility] = useState<ChannelVisibility>("public");
-  const [repoId, setRepoId] = useState<string | undefined>(undefined);
-  const [baseBranch, setBaseBranch] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
-  const repoIds = useEntityIds("repos");
   const isMobile = useIsMobile();
-  const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
 
   useEffect(() => {
     if (!open) return;
 
     setMode(defaultGroupId ? "channel" : "choose");
     setName("");
-    setChannelType("coding");
     setVisibility("public");
-    setRepoId(undefined);
-    setBaseBranch("");
     setError(null);
   }, [open, defaultGroupId]);
 
-  useEffect(() => {
-    if (!open || channelType !== "coding") return;
-    let cancelled = false;
-    client
-      .query(AVAILABLE_RUNTIMES_QUERY, { tool: CODING_CHANNEL_TOOL, sessionGroupId: null })
-      .toPromise()
-      .then((result: { data?: { availableRuntimes?: SessionRuntimeInstance[] } }) => {
-        if (cancelled) return;
-        setRuntimes(result.data?.availableRuntimes ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setRuntimes([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, channelType]);
-
-  // Repos already cloned on at least one connected local bridge. When no local
-  // bridge is connected we skip the filter so cloud-only users can still pick
-  // any repo (cloud clones on demand).
-  const accessibleLocalRuntimes = useMemo(
-    () => runtimes.filter(isAccessibleLocalRuntime),
-    [runtimes],
-  );
-  const clonedRepoIds = useMemo(() => {
-    const set = new Set<string>();
-    for (const runtime of accessibleLocalRuntimes) {
-      for (const id of runtime.registeredRepoIds) set.add(id);
-    }
-    return set;
-  }, [accessibleLocalRuntimes]);
-  const hasLocalBridge = accessibleLocalRuntimes.length > 0;
-  const isRepoCloned = (id: string) => !hasLocalBridge || clonedRepoIds.has(id);
-
   async function handleCreateChannel(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !activeOrgId || (channelType === "coding" && !repoId)) return;
+    if (!name.trim() || !activeOrgId) return;
 
     setCreating(true);
     setError(null);
@@ -154,10 +83,8 @@ export function CreateChannelDialog({
           input: {
             organizationId: activeOrgId,
             name: name.trim(),
-            type: channelType,
+            type: "coding",
             visibility,
-            repoId,
-            baseBranch: baseBranch || undefined,
             groupId: defaultGroupId ?? null,
           },
         })
@@ -167,10 +94,7 @@ export function CreateChannelDialog({
 
       const newChannelId = result.data?.createChannel?.id as string | undefined;
       setName("");
-      setChannelType("coding");
       setVisibility("public");
-      setRepoId(undefined);
-      setBaseBranch("");
       setOpen(false);
       if (newChannelId) {
         useUIStore.getState().setActiveChannelId(newChannelId);
@@ -219,11 +143,7 @@ export function CreateChannelDialog({
     setOpen(true);
   }
 
-  const canCreateChannel =
-    Boolean(name.trim()) &&
-    Boolean(activeOrgId) &&
-    !creating &&
-    (channelType === "text" || Boolean(repoId));
+  const canCreateChannel = Boolean(name.trim()) && Boolean(activeOrgId) && !creating;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -286,40 +206,6 @@ export function CreateChannelDialog({
                   autoFocus={!isMobile}
                 />
               </div>
-              {TYPE_OPTIONS.length > 1 && (
-                <div>
-                  <label className="mb-1.5 block text-sm text-muted-foreground">Project type</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {TYPE_OPTIONS.map((opt) => {
-                      const Icon = opt.icon;
-                      const selected = channelType === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => {
-                            setChannelType(opt.value);
-                            setError(null);
-                            if (opt.value === "text") {
-                              setRepoId(undefined);
-                              setBaseBranch("");
-                            }
-                          }}
-                          className={`flex flex-col items-center gap-1 rounded-lg border p-3 text-sm transition-colors ${
-                            selected
-                              ? "border-primary bg-primary/5 text-foreground"
-                              : "border-border text-muted-foreground hover:border-primary/50"
-                          }`}
-                        >
-                          <Icon size={20} />
-                          <span className="font-medium">{opt.label}</span>
-                          <span className="text-xs text-muted-foreground">{opt.description}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
               <div>
                 <label className="mb-1.5 block text-sm text-muted-foreground">Visibility</label>
                 <Select
@@ -337,51 +223,6 @@ export function CreateChannelDialog({
                   </SelectContent>
                 </Select>
               </div>
-              {channelType === "coding" && (
-                <div>
-                  <label className="mb-1.5 block text-sm text-muted-foreground">Repository</label>
-                  {repoIds.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      Link a repository to your organization first.
-                    </p>
-                  ) : (
-                    <Select
-                      value={repoId ?? "__none__"}
-                      onValueChange={(value: string | null) => {
-                        setRepoId(value && value !== "__none__" ? value : undefined);
-                        setBaseBranch("");
-                        setError(null);
-                      }}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue>
-                          <SelectedRepoValue id={repoId} />
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">Select a repo...</SelectItem>
-                        {repoIds.map((id) => (
-                          <RepoOptionItem
-                            key={id}
-                            id={id}
-                            localUnavailable={!isRepoCloned(id)}
-                            cloudOnly={!hasLocalBridge}
-                          />
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-              )}
-              {channelType === "coding" && repoId && (
-                <div>
-                  <label className="mb-1.5 block text-sm text-muted-foreground">Base branch</label>
-                  <BranchCombobox repoId={repoId} value={baseBranch} onChange={setBaseBranch} />
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Sessions in this project will merge into this branch.
-                  </p>
-                </div>
-              )}
               {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
             <DialogFooter>
@@ -426,43 +267,5 @@ export function CreateChannelDialog({
         )}
       </DialogContent>
     </Dialog>
-  );
-}
-
-function SelectedRepoValue({ id }: { id: string | undefined }) {
-  const name = useEntityField("repos", id ?? "", "name");
-  return <>{id ? (name ?? id) : "Select a repo..."}</>;
-}
-
-function RepoOptionItem({
-  id,
-  localUnavailable,
-  cloudOnly,
-}: {
-  id: string;
-  localUnavailable?: boolean;
-  cloudOnly?: boolean;
-}) {
-  const name = useEntityField("repos", id, "name");
-  const remoteUrl = useEntityField("repos", id, "remoteUrl") as string | null | undefined;
-  const remoteUnavailable = !!cloudOnly && repoRemoteKnownMissing({ remoteUrl });
-  const disabled = localUnavailable || remoteUnavailable;
-  const disabledReason = remoteUnavailable
-    ? CLOUD_REPO_REMOTE_REQUIRED
-    : localUnavailable
-      ? "This repo is not cloned on any connected local runtime."
-      : undefined;
-  return (
-    <SelectItem value={id} disabled={disabled}>
-      <span className="flex items-center gap-1.5">
-        {name ?? id}
-        {localUnavailable && disabledReason && (
-          <DisabledReasonHint message={disabledReason}>not cloned</DisabledReasonHint>
-        )}
-        {remoteUnavailable && disabledReason && (
-          <DisabledReasonHint message={disabledReason}>remote required</DisabledReasonHint>
-        )}
-      </span>
-    </SelectItem>
   );
 }

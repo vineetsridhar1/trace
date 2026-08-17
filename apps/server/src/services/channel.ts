@@ -104,9 +104,6 @@ export class ChannelService {
       });
 
       const channelType = input.type ?? "coding";
-      if (channelType === "coding" && !input.repoId) {
-        throw new ValidationError("repoId is required for coding channels");
-      }
       let repoName: string | null = null;
       if (input.repoId) {
         const repo = await tx.repo.findFirst({
@@ -185,6 +182,18 @@ export class ChannelService {
       });
 
       const data: Record<string, unknown> = {};
+      const updatesRepo = Object.prototype.hasOwnProperty.call(input, "repoId");
+      if (updatesRepo) {
+        if (input.repoId) {
+          const repo = await tx.repo.findFirst({
+            where: { id: input.repoId, organizationId: existing.organizationId },
+            select: { id: true },
+          });
+          if (!repo) throw new NotFoundError("Repo", input.repoId);
+        }
+        data.repoId = input.repoId ?? null;
+        if (!input.repoId) data.baseBranch = null;
+      }
       if (input.name !== undefined && input.name !== null) data.name = input.name;
       if (input.baseBranch !== undefined) data.baseBranch = input.baseBranch || null;
       if (input.setupScript !== undefined) data.setupScript = input.setupScript || null;
@@ -211,7 +220,11 @@ export class ChannelService {
         return tx.channel.findUniqueOrThrow({ where: { id: channelId } });
       }
 
-      const updated = await tx.channel.update({ where: { id: channelId }, data });
+      const updated = await tx.channel.update({
+        where: { id: channelId },
+        data,
+        include: { repo: { select: { id: true, name: true } } },
+      });
 
       await eventService.create(
         {
@@ -229,6 +242,7 @@ export class ChannelService {
               position: updated.position,
               groupId: updated.groupId,
               repoId: updated.repoId,
+              repo: updated.repo,
               baseBranch: updated.baseBranch,
               setupScript: updated.setupScript,
               runScripts: updated.runScripts,

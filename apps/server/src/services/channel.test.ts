@@ -178,29 +178,6 @@ describe("ChannelService", () => {
     expect(prismaMock.channel.create).not.toHaveBeenCalled();
   });
 
-  it("requires a repo when creating a coding channel", async () => {
-    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
-      userId: "user-1",
-      organizationId: "org-1",
-    });
-
-    const service = new ChannelService();
-
-    await expect(
-      service.create(
-        {
-          organizationId: "org-1",
-          name: "backend",
-          type: "coding",
-        },
-        "user",
-        "user-1",
-      ),
-    ).rejects.toThrow("repoId is required for coding channels");
-
-    expect(prismaMock.channel.create).not.toHaveBeenCalled();
-  });
-
   it("rejects channel creation when the group is outside the organization", async () => {
     prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
       userId: "user-1",
@@ -261,7 +238,7 @@ describe("ChannelService", () => {
     expect(prismaMock.channel.create).not.toHaveBeenCalled();
   });
 
-  it("allows a user org member to create a channel and adds the AI user as a default member", async () => {
+  it("allows a user to create a repo-less project and adds the AI user as a default member", async () => {
     const createdAt = new Date("2026-04-02T00:00:00.000Z");
     prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
       userId: "user-1",
@@ -270,7 +247,7 @@ describe("ChannelService", () => {
     prismaMock.channel.create.mockResolvedValueOnce({
       id: "channel-1",
       name: "general",
-      type: "text",
+      type: "coding",
       visibility: "public",
       ownerId: "user-1",
       position: 0,
@@ -296,7 +273,7 @@ describe("ChannelService", () => {
       {
         organizationId: "org-1",
         name: "general",
-        type: "text",
+        type: "coding",
         position: 0,
       } as any,
       "user",
@@ -584,6 +561,61 @@ describe("ChannelService", () => {
       select: { organizationId: true },
     });
     expect(prismaMock.channel.update).not.toHaveBeenCalled();
+  });
+
+  it("attaches a repository to an existing project", async () => {
+    prismaMock.channel.findFirstOrThrow.mockResolvedValueOnce({ organizationId: "org-1" });
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      organizationId: "org-1",
+    });
+    prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+    prismaMock.channel.update.mockResolvedValueOnce({
+      id: "channel-1",
+      name: "Launch",
+      type: "coding",
+      visibility: "public",
+      ownerId: "user-1",
+      position: 0,
+      groupId: null,
+      repoId: "repo-1",
+      repo: { id: "repo-1", name: "launch" },
+      baseBranch: "main",
+      setupScript: null,
+      runScripts: [],
+    });
+
+    const service = new ChannelService();
+    await service.update(
+      "channel-1",
+      { repoId: "repo-1", baseBranch: "main" },
+      "user",
+      "user-1",
+    );
+
+    expect(prismaMock.repo.findFirst).toHaveBeenCalledWith({
+      where: { id: "repo-1", organizationId: "org-1" },
+      select: { id: true },
+    });
+    expect(prismaMock.channel.update).toHaveBeenCalledWith({
+      where: { id: "channel-1" },
+      data: { repoId: "repo-1", baseBranch: "main" },
+      include: { repo: { select: { id: true, name: true } } },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "channel_updated",
+        payload: {
+          channel: expect.objectContaining({
+            id: "channel-1",
+            repoId: "repo-1",
+            repo: { id: "repo-1", name: "launch" },
+            baseBranch: "main",
+          }),
+        },
+      }),
+      expect.anything(),
+    );
   });
 
   it("includes repo metadata in the join event payload", async () => {
