@@ -120,48 +120,48 @@ export function BranchChangesPanel({ sessionGroupId, onFileClick }: BranchChange
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-1.5">
-        <span className="text-[11px] text-muted-foreground">
+      <div className="mx-2 flex h-8 shrink-0 items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
           {files.length} file{files.length !== 1 ? "s" : ""} changed
         </span>
         <div className="flex items-center gap-1">
-          <div className="flex items-center rounded-md border border-border bg-surface-deep p-0.5">
+          <div className="flex items-center rounded-md bg-white/5 p-0.5">
             <button
               type="button"
               onClick={() => setViewMode("tree")}
               className={cn(
-                "flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground",
-                viewMode === "tree" && "bg-surface-elevated text-foreground",
+                "flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground",
+                viewMode === "tree" && "bg-white/10 text-foreground",
               )}
               title="Tree view"
               aria-pressed={viewMode === "tree"}
             >
-              <ListTree size={12} />
+              <ListTree size={14} />
             </button>
             <button
               type="button"
               onClick={() => setViewMode("flat")}
               className={cn(
-                "flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground",
-                viewMode === "flat" && "bg-surface-elevated text-foreground",
+                "flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground",
+                viewMode === "flat" && "bg-white/10 text-foreground",
               )}
               title="Flat view"
               aria-pressed={viewMode === "flat"}
             >
-              <List size={12} />
+              <List size={14} />
             </button>
           </div>
           <button
             type="button"
             onClick={fetchDiff}
-            className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
             title="Refresh"
           >
-            <RefreshCw size={12} />
+            <RefreshCw size={14} />
           </button>
         </div>
       </div>
-      <div className="native-scrollbar min-h-0 flex-1 overflow-y-auto">
+      <div className="native-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {viewMode === "tree" ? (
           <BranchChangesTree files={files} onFileClick={onFileClick} />
         ) : (

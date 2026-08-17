@@ -67,7 +67,7 @@ export function FileExplorer({
   const virtualizer = useVirtualizer({
     count: flattenedRows.length,
     getScrollElement: () => scrollContainerRef.current,
-    estimateSize: () => 24,
+    estimateSize: () => 32,
     overscan: 12,
   });
 
@@ -145,30 +145,32 @@ export function FileExplorer({
 
   return (
     <div className="flex h-full flex-col bg-transparent">
-      <div className="px-3 pb-3 pt-3">
-        <label className="flex h-9 items-center gap-2 rounded-lg border border-border bg-background/20 px-3 text-muted-foreground focus-within:border-ring/50">
-          <Search size={13} />
+      <div className="px-2 py-2">
+        <label className="flex h-8 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-2 text-muted-foreground focus-within:border-ring/50">
+          <Search size={16} />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            className="min-w-0 flex-1 bg-transparent text-[11px] text-foreground outline-none placeholder:text-muted-foreground"
+            className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
             placeholder="Search files"
             aria-label="Search files"
           />
-          <span className="rounded bg-muted px-1.5 py-0.5 text-[8px]">⌘P</span>
+          <span className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[9px]">
+            ⌘P
+          </span>
         </label>
       </div>
-      <div className="flex h-8 shrink-0 items-center px-4">
-        <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+      <div className="flex h-8 shrink-0 items-center px-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
           Workspace
         </span>
-        <span className="ml-auto text-[8px] text-muted-foreground">{loadedItemCount} loaded</span>
+        <span className="ml-auto text-[10px] text-muted-foreground">{loadedItemCount} loaded</span>
         <button
           onClick={() => void onRefresh()}
-          className="ml-2 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="ml-1 flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-white/10 hover:text-foreground"
           title="Refresh"
         >
-          <RefreshCw size={12} />
+          <RefreshCw size={14} />
         </button>
       </div>
       <div
@@ -196,7 +198,7 @@ export function FileExplorer({
                 ) : (
                   <div
                     className={cn(
-                      "h-6 truncate text-[11px] italic leading-6",
+                      "h-8 truncate text-sm italic leading-8",
                       row.destructive ? "text-destructive" : "text-muted-foreground",
                     )}
                     style={{ paddingLeft: `${row.depth * 14 + 28}px` }}
@@ -209,7 +211,7 @@ export function FileExplorer({
           })}
         </div>
         {visibleTree.length === 0 && search.trim() ? (
-          <p className="px-3 py-5 text-center text-[10px] text-muted-foreground">
+          <p className="px-3 py-5 text-center text-xs text-muted-foreground">
             No matching files
           </p>
         ) : null}

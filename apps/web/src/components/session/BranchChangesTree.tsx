@@ -96,13 +96,13 @@ function BranchChangesTreeNode({
       <button
         type="button"
         onClick={() => onToggle(node.path)}
-        className="flex w-full items-center gap-1 py-[1px] pr-2 text-left text-[12px] leading-[22px] text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
-        style={{ paddingLeft: `${depth * 8 + 4}px` }}
+        className="flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+        style={{ paddingLeft: `${depth * 14 + 8}px` }}
       >
         <span className="flex h-4 w-4 shrink-0 items-center justify-center">
           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </span>
-        <Icon size={15} className={cn("shrink-0", "text-blue-400/80")} />
+        <Icon size={16} className={cn("shrink-0", "text-blue-400/80")} />
         <span className="truncate">{node.name}</span>
       </button>
       {isExpanded &&

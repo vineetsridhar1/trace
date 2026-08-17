@@ -31,20 +31,17 @@ export function FileTreeItem({
             onFileClick(node.path);
           }
         }}
-        className={cn(
-          "relative flex h-6 w-full items-center gap-1.5 rounded-md pr-2 text-left text-[11px] text-foreground/85 transition-colors hover:bg-muted/70 hover:text-foreground",
+      className={cn(
+          "flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-sm text-foreground transition-colors hover:bg-white/10",
           "cursor-pointer",
-          activeFilePath === node.path && "bg-muted text-foreground",
+          activeFilePath === node.path && "bg-white/10 font-medium",
         )}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
       >
-        {activeFilePath === node.path ? (
-          <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-primary" />
-        ) : null}
         {node.isDirectory ? (
-          <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
+          <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
             {node.isLoading ? (
-              <Loader2 size={12} className="animate-spin" />
+              <Loader2 size={14} className="animate-spin" />
             ) : isExpanded ? (
               <ChevronDown size={14} />
             ) : (
@@ -52,9 +49,9 @@ export function FileTreeItem({
             )}
           </span>
         ) : (
-          <span className="h-4 w-4 shrink-0" />
+          <span className="size-4 shrink-0" />
         )}
-        {!node.isDirectory ? <FileIcon path={node.path} size={14} /> : null}
+        {!node.isDirectory ? <FileIcon path={node.path} size={16} /> : null}
         <span className="truncate">{node.name}</span>
     </button>
   );

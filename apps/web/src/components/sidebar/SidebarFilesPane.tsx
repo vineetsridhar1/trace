@@ -17,16 +17,16 @@ export function SidebarFilesPane({ sessionGroupId }: { sessionGroupId: string })
     useSessionGroupDirectoryTree(sessionGroupId);
 
   return (
-    <div className="flex size-full flex-col text-sidebar-foreground">
+    <div className="flex size-full flex-col font-sans text-sidebar-foreground">
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-white/10 px-2">
         <button
           type="button"
           onClick={closeFiles}
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+          className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
           aria-label="Back to sidebar"
           title="Back to sidebar"
         >
-          <ArrowLeft size={15} />
+          <ArrowLeft size={16} />
         </button>
         <div className="flex min-w-0 flex-1 items-center rounded-md bg-white/5 p-0.5">
           {(["files", "changes"] as const).map((item) => (
@@ -35,7 +35,7 @@ export function SidebarFilesPane({ sessionGroupId }: { sessionGroupId: string })
               type="button"
               onClick={() => setView(item)}
               className={cn(
-                "h-6 min-w-0 flex-1 rounded px-2 text-[11px] font-medium capitalize text-muted-foreground transition-colors hover:text-foreground",
+                "h-7 min-w-0 flex-1 rounded px-2 text-xs font-semibold capitalize text-muted-foreground transition-colors hover:text-foreground",
                 view === item && "bg-white/10 text-foreground shadow-sm",
               )}
               aria-pressed={view === item}

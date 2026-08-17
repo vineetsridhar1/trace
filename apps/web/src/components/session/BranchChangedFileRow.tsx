@@ -28,14 +28,14 @@ export function BranchChangedFileRow({
       type="button"
       onClick={() => onFileClick(file.path, file.status)}
       className={cn(
-        "flex w-full items-center gap-2 py-1 pr-3 text-left transition-colors hover:bg-surface-hover",
-        depth === undefined && "px-3",
+        "flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-sm transition-colors hover:bg-white/10",
+        depth === undefined && "px-2",
       )}
-      style={depth === undefined ? undefined : { paddingLeft: `${depth * 8 + 12}px` }}
+      style={depth === undefined ? undefined : { paddingLeft: `${depth * 14 + 8}px` }}
     >
       <Circle size={6} className={cn("shrink-0", color)} />
-      <FileIcon path={file.path} size={14} />
-      <span className="min-w-0 flex-1 truncate text-[11px]">
+      <FileIcon path={file.path} size={16} />
+      <span className="min-w-0 flex-1 truncate">
         {pathPosition === "before" && dirName && (
           <span className="text-muted-foreground">{dirName}/</span>
         )}
