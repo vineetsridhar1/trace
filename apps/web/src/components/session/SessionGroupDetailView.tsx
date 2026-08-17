@@ -66,7 +66,6 @@ const MIN_SESSION_SIDEBAR_WIDTH = 320;
 const MAX_SESSION_SIDEBAR_WIDTH = 560;
 const EMPTY_ARTIFACT_IDS: string[] = [];
 const EMPTY_HIDDEN_SESSION_TABS: Record<string, string> = {};
-const SESSION_BROWSER_STATE_KEY_PREFIX = "trace:session-browser-open:";
 
 const HIDDEN_SESSION_TABS_QUERY = gql`
   query HiddenSessionTabs($sessionGroupId: ID!) {
@@ -102,7 +101,11 @@ function getStoredSessionSidebarWidth(): number {
 
 function isSidebarTab(value: unknown): value is SidebarTab {
   return (
-    value === "applications" || value === "terminal" || value === "files" || value === "changes"
+    value === "applications" ||
+    value === "browser" ||
+    value === "terminal" ||
+    value === "files" ||
+    value === "changes"
   );
 }
 
@@ -128,11 +131,6 @@ function getStoredSessionSidebarState(sessionGroupId: string): {
   } catch {
     return fallback;
   }
-}
-
-function getStoredSessionBrowserOpen(sessionGroupId: string): boolean {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem(`${SESSION_BROWSER_STATE_KEY_PREFIX}${sessionGroupId}`) === "true";
 }
 
 const SESSION_GROUP_DETAIL_QUERY = gql`
@@ -377,7 +375,6 @@ export function SessionGroupDetailView({
   const [forkDialogOpen, setForkDialogOpen] = useState(false);
   const [forkEventId, setForkEventId] = useState<string | null>(null);
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
-  const [browserOpen, setBrowserOpen] = useState(() => getStoredSessionBrowserOpen(sessionGroupId));
   const [groupLoadError, setGroupLoadError] = useState<string | null>(null);
   const sidebarResizeCleanupRef = useRef<(() => void) | null>(null);
 
@@ -387,13 +384,6 @@ export function SessionGroupDetailView({
       JSON.stringify({ open: showSidebar, tab: sidebarTab }),
     );
   }, [sessionGroupId, showSidebar, sidebarTab]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      `${SESSION_BROWSER_STATE_KEY_PREFIX}${sessionGroupId}`,
-      String(browserOpen),
-    );
-  }, [browserOpen, sessionGroupId]);
 
   const handleOpenForkDialog = useCallback((eventId: string) => {
     setForkEventId(eventId);
@@ -622,6 +612,12 @@ export function SessionGroupDetailView({
     }
   }, [selectedSession, showApplicationsSidebarTab, sidebarTab]);
 
+  useEffect(() => {
+    if (sidebarTab === "browser" && typeof window.trace === "undefined") {
+      setSidebarTab("files");
+    }
+  }, [sidebarTab]);
+
   const selectedSessionStatus = getSessionGroupDisplayStatus(
     groupSessions.map((session) => session.sessionStatus),
     groupArchivedAt ?? null,
@@ -760,10 +756,6 @@ export function SessionGroupDetailView({
 
   const handleToggleFilePalette = useCallback(() => {
     setFilePaletteOpen((open) => !open);
-  }, []);
-
-  const handleToggleBrowser = useCallback(() => {
-    setBrowserOpen((open) => !open);
   }, []);
 
   const handleOpenTerminalCmd = useCallback(() => {
@@ -1121,14 +1113,11 @@ export function SessionGroupDetailView({
               showApplicationsSidebar={showSidebar && sidebarTab === "applications"}
               canShowApplications={showApplicationsSidebarTab}
               compactCanvasMode={isCanvasWorkspace}
-              browserOpen={browserOpen}
-              canShowBrowser={typeof window.trace !== "undefined"}
               onToggleFullscreen={toggleFullscreen}
               onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
               onToggleApplicationsSidebar={
                 selectedSessionIsOptimistic ? () => {} : handleToggleApplicationsSidebar
               }
-              onToggleBrowser={handleToggleBrowser}
             />
             <div className="flex min-h-0 flex-1 overflow-hidden">
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -1166,7 +1155,7 @@ export function SessionGroupDetailView({
                   />
                 ) : null}
                 <div className="min-h-0 flex-1 overflow-hidden">
-                  {browserOpen ? (
+                  {showSidebar && sidebarTab === "browser" ? (
                   <BrowserWorkspacePanel sessionGroupId={sessionGroupId} />
                 ) : activeArtifactId ? (
                   <ArtifactTabContent artifactId={activeArtifactId} />
@@ -1344,6 +1333,7 @@ export function SessionGroupDetailView({
                         filesLoading={sessionGroupFileTreeLoading}
                         filesError={sessionGroupFileTreeError}
                         canShowApplications={showApplicationsSidebarTab}
+                        canShowBrowser={typeof window.trace !== "undefined"}
                         onTabChange={handleSidebarTabChange}
                         onClose={() => setShowSidebar(false)}
                         onFileClick={handleFileClick}

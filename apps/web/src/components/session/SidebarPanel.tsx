@@ -1,4 +1,11 @@
-import { AppWindow, Files, GitCompareArrows, PanelRightClose, TerminalSquare } from "lucide-react";
+import {
+  AppWindow,
+  Files,
+  GitCompareArrows,
+  Globe,
+  PanelRightClose,
+  TerminalSquare,
+} from "lucide-react";
 import { cn } from "../../lib/utils";
 import { BranchChangesPanel } from "./BranchChangesPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
@@ -8,7 +15,7 @@ import { SessionApplicationsPanel } from "./applications/SessionApplicationsPane
 import { TerminalPanel } from "./TerminalPanel";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
-export type SidebarTab = "applications" | "terminal" | "files" | "changes";
+export type SidebarTab = "applications" | "browser" | "terminal" | "files" | "changes";
 
 interface SidebarPanelProps {
   sessionGroupId: string;
@@ -19,6 +26,7 @@ interface SidebarPanelProps {
   filesLoading: boolean;
   filesError: string | null;
   canShowApplications: boolean;
+  canShowBrowser: boolean;
   onTabChange: (tab: SidebarTab) => void;
   onClose: () => void;
   onFileClick: (filePath: string) => void;
@@ -39,6 +47,7 @@ export function SidebarPanel({
   filesLoading,
   filesError,
   canShowApplications,
+  canShowBrowser,
   onTabChange,
   onClose,
   onFileClick,
@@ -75,6 +84,14 @@ export function SidebarPanel({
             onClick={() => onTabChange("applications")}
           />
         ) : null}
+        {canShowBrowser ? (
+          <SidebarDestination
+            active={activeTab === "browser"}
+            icon={Globe}
+            label="Browser"
+            onClick={() => onTabChange("browser")}
+          />
+        ) : null}
         <SidebarDestination
           active={activeTab === "terminal"}
           icon={TerminalSquare}
@@ -96,7 +113,7 @@ export function SidebarPanel({
       </nav>
 
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {!bridgeInteractionAllowed ? (
+        {!bridgeInteractionAllowed && activeTab !== "browser" ? (
           <div className="p-3">
             <BridgeAccessNotice
               access={bridgeAccess ?? null}
@@ -110,6 +127,8 @@ export function SidebarPanel({
             onOpenTraffic={onOpenTraffic}
             embedded
           />
+        ) : activeTab === "browser" ? (
+          <div className="p-3 text-sm text-muted-foreground">Browser is open in the workspace.</div>
         ) : activeTab === "terminal" ? (
           activeSessionId ? (
             <TerminalPanel sessionId={activeSessionId} onClose={onClose} fill />
