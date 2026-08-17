@@ -8,6 +8,7 @@ const FATAL_TERMINAL_ERRORS = new Set([
   "Invalid token",
   "Terminal not found",
   "Access denied",
+  "Bridge access revoked",
 ]);
 const FATAL_TERMINAL_CLOSE_CODES = new Set([1008]);
 

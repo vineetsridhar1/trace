@@ -218,14 +218,30 @@ describe("TerminalRelay runtime identity", () => {
   it("does not let a stale distributed detach clear a replacement frontend", async () => {
     const relay = new TerminalRelay();
     const terminalId = relay.createTerminal(
-      "session-1", "group-1", "org-1", "bridge-1", "user-1", 80, 24, "/repo",
+      "session-1",
+      "group-1",
+      "org-1",
+      "bridge-1",
+      "user-1",
+      80,
+      24,
+      "/repo",
     );
     const attach = mocks.backplaneHandlers.get("terminal_frontend_attach")?.at(-1);
     const detach = mocks.backplaneHandlers.get("terminal_frontend_detach")?.at(-1);
 
-    attach?.({ sourceReplicaId: "replica-frontend", payload: { terminalId, attachmentId: "attachment-old" } });
-    attach?.({ sourceReplicaId: "replica-frontend", payload: { terminalId, attachmentId: "attachment-new" } });
-    detach?.({ sourceReplicaId: "replica-frontend", payload: { terminalId, attachmentId: "attachment-old" } });
+    attach?.({
+      sourceReplicaId: "replica-frontend",
+      payload: { terminalId, attachmentId: "attachment-old", userId: "user-1" },
+    });
+    attach?.({
+      sourceReplicaId: "replica-frontend",
+      payload: { terminalId, attachmentId: "attachment-new", userId: "user-1" },
+    });
+    detach?.({
+      sourceReplicaId: "replica-frontend",
+      payload: { terminalId, attachmentId: "attachment-old" },
+    });
     mocks.backplaneSend.mockClear();
 
     await relay.relayFromBridge(
@@ -242,5 +258,119 @@ describe("TerminalRelay runtime identity", () => {
         messages: [JSON.stringify({ type: "output", data: "still connected" })],
       },
     );
+  });
+
+  it("accepts commands only from the current distributed attachment", () => {
+    const relay = new TerminalRelay();
+    const terminalId = relay.createTerminal(
+      "session-1",
+      "group-1",
+      "org-1",
+      "bridge-1",
+      "user-1",
+      80,
+      24,
+      "/repo",
+    );
+    const attach = mocks.backplaneHandlers.get("terminal_frontend_attach")?.at(-1);
+    const command = mocks.backplaneHandlers.get("terminal_frontend_command")?.at(-1);
+
+    attach?.({
+      sourceReplicaId: "replica-frontend",
+      payload: { terminalId, attachmentId: "attachment-old", userId: "user-1" },
+    });
+    attach?.({
+      sourceReplicaId: "replica-frontend",
+      payload: { terminalId, attachmentId: "attachment-new", userId: "user-1" },
+    });
+    mocks.sendAsync.mockClear();
+
+    command?.({
+      sourceReplicaId: "replica-frontend",
+      payload: {
+        terminalId,
+        attachmentId: "attachment-old",
+        commandType: "input",
+        payload: { data: "stale" },
+      },
+    });
+    expect(mocks.sendAsync).not.toHaveBeenCalled();
+
+    command?.({
+      sourceReplicaId: "replica-frontend",
+      payload: {
+        terminalId,
+        attachmentId: "attachment-new",
+        commandType: "input",
+        payload: { data: "current" },
+      },
+    });
+    expect(mocks.sendAsync).toHaveBeenCalledWith(
+      "session-1",
+      { type: "terminal_input", terminalId, data: "current" },
+      { expectedHomeRuntimeId: "bridge-1", organizationId: "org-1" },
+    );
+  });
+
+  it("forwards proxy commands with the active attachment identity", async () => {
+    const relay = new TerminalRelay();
+    const ws = createOpenWs();
+    mocks.terminalDirectoryGet.mockResolvedValue({
+      terminalId: "term-remote",
+      frontendReplicaId: "replica-owner",
+    });
+
+    await relay.attachFrontendDistributed("term-remote", ws as never, "user-1");
+    const attachPayload = mocks.backplaneSend.mock.calls.at(-1)?.[2] as
+      | { attachmentId?: string }
+      | undefined;
+    mocks.backplaneSend.mockClear();
+
+    relay.relayFromFrontend("term-remote", "input", { data: "hello" });
+    await vi.waitFor(() => {
+      expect(mocks.backplaneSend).toHaveBeenCalledWith(
+        "replica-owner",
+        "terminal_frontend_command",
+        {
+          terminalId: "term-remote",
+          attachmentId: attachPayload?.attachmentId,
+          commandType: "input",
+          payload: { data: "hello" },
+        },
+      );
+    });
+  });
+
+  it("revokes a remotely attached terminal for its authenticated user", () => {
+    const relay = new TerminalRelay();
+    const terminalId = relay.createTerminal(
+      "session-1",
+      "group-1",
+      "org-1",
+      "bridge-1",
+      "user-1",
+      80,
+      24,
+      "/repo",
+    );
+    const attach = mocks.backplaneHandlers.get("terminal_frontend_attach")?.at(-1);
+    attach?.({
+      sourceReplicaId: "replica-frontend",
+      payload: { terminalId, attachmentId: "attachment-1", userId: "user-1" },
+    });
+    mocks.backplaneSend.mockClear();
+
+    relay.destroyTerminalsForUser("user-1", new Set(["session-1"]));
+
+    expect(mocks.backplaneSend).toHaveBeenCalledWith(
+      "replica-frontend",
+      "terminal_frontend_messages",
+      {
+        terminalId,
+        attachmentId: "attachment-1",
+        messages: [JSON.stringify({ type: "error", message: "Bridge access revoked" })],
+      },
+    );
+    expect(relay.getTerminalAuthContext(terminalId)).toBeNull();
   });
 });
