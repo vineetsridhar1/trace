@@ -63,6 +63,7 @@ const DEFAULT_SESSION_SIDEBAR_WIDTH = 300;
 const MIN_SESSION_SIDEBAR_WIDTH = 240;
 const MAX_SESSION_SIDEBAR_WIDTH = 560;
 const EMPTY_ARTIFACT_IDS: string[] = [];
+const EMPTY_HIDDEN_SESSION_TABS: Record<string, string> = {};
 
 const HIDDEN_SESSION_TABS_QUERY = gql`
   query HiddenSessionTabs($sessionGroupId: ID!) {
@@ -276,7 +277,7 @@ export function SessionGroupDetailView({
   );
   const hiddenSessionTabs = useUIStore(
     (s: { hiddenSessionTabsByGroup: Record<string, Record<string, string>> }) =>
-      s.hiddenSessionTabsByGroup[sessionGroupId] ?? {},
+      s.hiddenSessionTabsByGroup[sessionGroupId] ?? EMPTY_HIDDEN_SESSION_TABS,
   );
   const setHiddenSessionTabs = useUIStore(
     (s: { setHiddenSessionTabs: UIState["setHiddenSessionTabs"] }) => s.setHiddenSessionTabs,
