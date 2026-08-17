@@ -27,6 +27,7 @@ import { artifactContentRouter } from "./routes/artifact-content.js";
 import { nangoRouter } from "./routes/nango.js";
 import { appIntegrationsRouter } from "./routes/app-integrations.js";
 import { appDeploymentCallbackRouter } from "./routes/app-deployment-callback.js";
+import { appDeploymentSourceRouter } from "./routes/app-deployment-source.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -285,6 +286,7 @@ async function main() {
   app.use(authRouter);
   app.use(uploadRouter);
   app.use(appDeploymentCallbackRouter);
+  app.use(appDeploymentSourceRouter);
 
   // GraphQL subscriptions
   const wsServer = new WebSocketServer({ noServer: true });

@@ -1,4 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { spawn } from "node:child_process";
+import type { Readable } from "node:stream";
 import { Prisma, type AppDeployment, type AppDeploymentStatus } from "@prisma/client";
 import type { DeployAppSessionInput } from "@trace/gql";
 import type { AppDeploymentSpec } from "@trace/shared";
@@ -210,6 +212,11 @@ export type AppDeploymentCallback = {
   errorMessage?: string;
 };
 
+export type AppDeploymentSource = {
+  commitSha: string;
+  stream: Readable;
+};
+
 export class AppDeploymentService {
   constructor(private readonly dispatcher: AppDeploymentDispatcher = appDeploymentDispatcher) {}
 
@@ -399,6 +406,7 @@ export class AppDeploymentService {
         organizationId: claimed.organizationId,
         sessionGroupId: claimed.sessionGroupId,
         repoId: claimed.repoId,
+        checkpointId: claimed.commitSha,
         commitSha: claimed.commitSha,
         appSlug: claimed.appSlug,
         spec: claimed.spec as unknown as AppDeploymentSpec,
@@ -509,6 +517,23 @@ export class AppDeploymentService {
     }
     await emitUpdated(result.deployment, "app-deployment-callback");
     return { deployment: result.deployment, accepted: true };
+  }
+
+  async openSourceArchive(deploymentId: string, token: string): Promise<AppDeploymentSource> {
+    const deployment = await prisma.appDeployment.findUnique({ where: { id: deploymentId } });
+    if (!deployment || !validCallbackToken(deployment.callbackTokenHash, token)) {
+      throw new AuthorizationError("Invalid deployment source credentials");
+    }
+    const repoPath = gitStorage.resolveRepoPath(deployment.organizationId, deployment.repoId);
+    const archive = spawn(
+      "git",
+      ["--git-dir", repoPath, "archive", "--format=tar.gz", deployment.commitSha],
+      {
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    archive.stderr.resume();
+    return { commitSha: deployment.commitSha, stream: archive.stdout };
   }
 }
 
