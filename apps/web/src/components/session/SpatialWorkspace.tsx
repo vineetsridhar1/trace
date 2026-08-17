@@ -11,7 +11,7 @@ import {
   type CollisionDetection,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { LayoutGrid, Plus, RotateCcw, X } from "lucide-react";
+import { Columns2, Grid2X2, LayoutGrid, Plus, Rows2, Square, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -21,8 +21,16 @@ import {
 } from "react";
 import { cn } from "../../lib/utils";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import {
   MAX_SPATIAL_REGIONS,
   activateSpatialTab,
+  applySpatialLayoutPreset,
   countSpatialRegions,
   createSpatialLayout,
   dockSpatialTab,
@@ -30,6 +38,7 @@ import {
   moveSpatialTab,
   syncSpatialTabs,
   type SpatialEdge,
+  type SpatialLayoutPreset,
   type SpatialNode,
   type SpatialTabGroup,
 } from "./spatial-workspace-layout";
@@ -122,9 +131,9 @@ export function SpatialWorkspace({
     }
   }, []);
 
-  const handleReset = useCallback(() => {
-    setLayout(createSpatialLayout(tabIds, preferredActiveTabId));
-  }, [preferredActiveTabId, tabIds]);
+  const handleLayoutPreset = useCallback((preset: SpatialLayoutPreset) => {
+    setLayout((current) => applySpatialLayoutPreset(current, preset));
+  }, []);
 
   const draggedTab = draggedTabId ? tabById.get(draggedTabId) : null;
 
@@ -138,21 +147,41 @@ export function SpatialWorkspace({
     >
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-surface-deep">
         <div className="pointer-events-none absolute right-3 top-1.5 z-40 flex h-7 items-center gap-1 rounded-lg border border-border/70 bg-surface-mid/95 px-1.5 shadow-lg shadow-black/20 backdrop-blur">
-          <LayoutGrid size={12} className="text-muted-foreground" />
           <span className="px-1 text-[10px] text-muted-foreground">
             {regionCount} {regionCount === 1 ? "region" : "regions"}
           </span>
-          {regionCount > 1 ? (
-            <button
-              type="button"
-              onClick={handleReset}
+          <DropdownMenu>
+            <DropdownMenuTrigger
               className="pointer-events-auto flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
-              aria-label="Reset workspace layout"
-              title="Reset workspace layout"
+              aria-label="Choose workspace layout"
+              title="Choose workspace layout"
             >
-              <RotateCcw size={11} />
-            </button>
-          ) : null}
+              <LayoutGrid size={12} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuLabel>Arrange tabs</DropdownMenuLabel>
+              <LayoutPresetItem
+                icon={Square}
+                label="Single region"
+                onClick={() => handleLayoutPreset("single")}
+              />
+              <LayoutPresetItem
+                icon={Columns2}
+                label="Two columns"
+                onClick={() => handleLayoutPreset("columns")}
+              />
+              <LayoutPresetItem
+                icon={Rows2}
+                label="Two rows"
+                onClick={() => handleLayoutPreset("rows")}
+              />
+              <LayoutPresetItem
+                icon={Grid2X2}
+                label="Four regions"
+                onClick={() => handleLayoutPreset("grid")}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <SpatialNodeView
@@ -172,6 +201,23 @@ export function SpatialWorkspace({
         {draggedTab ? <DraggedTab tab={draggedTab} /> : null}
       </DragOverlay>
     </DndContext>
+  );
+}
+
+function LayoutPresetItem({
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  icon: typeof Square;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <DropdownMenuItem onClick={onClick} className="gap-2 py-1.5 text-xs">
+      <Icon size={13} />
+      {label}
+    </DropdownMenuItem>
   );
 }
 
@@ -276,7 +322,7 @@ function SpatialRegion({
           compact ? "h-10" : "h-11",
         )}
       >
-        <div className="app-region-no-drag no-scrollbar flex min-w-0 flex-1 items-end gap-1 overflow-x-auto pr-24">
+        <div className="app-region-no-drag no-scrollbar flex min-w-0 flex-1 items-end gap-1 overflow-x-auto pr-32">
           {group.tabIds.map((tabId) => {
             const tab = tabById.get(tabId);
             if (!tab) return null;

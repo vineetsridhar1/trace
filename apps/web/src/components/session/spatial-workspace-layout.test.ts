@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   activateSpatialTab,
+  applySpatialLayoutPreset,
   countSpatialRegions,
   createSpatialLayout,
   dockSpatialTab,
@@ -47,5 +48,22 @@ describe("spatial workspace layout", () => {
       tabIds: ["chat", "browser", "changes"],
       activeTabId: "browser",
     });
+  });
+
+  it("applies explicit row, column, and grid arrangements", () => {
+    const single = createSpatialLayout(["chat", "browser", "terminal", "changes"]);
+    const columns = applySpatialLayoutPreset(single, "columns");
+    const rows = applySpatialLayoutPreset(columns, "rows");
+    const grid = applySpatialLayoutPreset(rows, "grid");
+
+    expect(columns.root).toMatchObject({ type: "split", direction: "horizontal" });
+    expect(rows.root).toMatchObject({ type: "split", direction: "vertical" });
+    expect(countSpatialRegions(grid.root)).toBe(4);
+    expect(getSpatialGroups(grid.root).flatMap((group) => group.tabIds).sort()).toEqual([
+      "browser",
+      "changes",
+      "chat",
+      "terminal",
+    ]);
   });
 });

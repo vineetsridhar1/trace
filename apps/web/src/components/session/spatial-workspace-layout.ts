@@ -1,4 +1,5 @@
 export type SpatialEdge = "left" | "right" | "top" | "bottom";
+export type SpatialLayoutPreset = "single" | "columns" | "rows" | "grid";
 
 export interface SpatialTabGroup {
   type: "group";
@@ -180,6 +181,55 @@ export function moveSpatialTab(
   return { ...layout, root };
 }
 
+export function applySpatialLayoutPreset(
+  layout: SpatialLayout,
+  preset: SpatialLayoutPreset,
+): SpatialLayout {
+  const tabIds = getSpatialGroups(layout.root).flatMap((group) => group.tabIds);
+  const preferredActiveTabId =
+    getSpatialGroups(layout.root).find((group) => group.activeTabId)?.activeTabId ?? tabIds[0] ?? null;
+  if (preset === "single" || tabIds.length < 2) {
+    return createSpatialLayout(tabIds, preferredActiveTabId);
+  }
+
+  const requestedRegions = preset === "grid" ? 4 : 2;
+  const regionCount = Math.min(requestedRegions, tabIds.length);
+  const groups = Array.from({ length: regionCount }, (_, index): SpatialTabGroup => ({
+    type: "group",
+    id: `region-${layout.nextGroupNumber + index}`,
+    tabIds: [],
+    activeTabId: null,
+  }));
+  tabIds.forEach((tabId, index) => groups[index % regionCount].tabIds.push(tabId));
+  groups.forEach((group) => {
+    group.activeTabId = resolveActiveTab(group.tabIds, preferredActiveTabId);
+  });
+
+  let root: SpatialNode;
+  let splitsCreated: number;
+  if (preset === "columns") {
+    root = createSplit(layout.nextSplitNumber, "horizontal", groups[0], groups[1]);
+    splitsCreated = 1;
+  } else if (preset === "rows") {
+    root = createSplit(layout.nextSplitNumber, "vertical", groups[0], groups[1]);
+    splitsCreated = 1;
+  } else if (groups.length < 4) {
+    root = createSplit(layout.nextSplitNumber, "horizontal", groups[0], groups[1]);
+    splitsCreated = 1;
+  } else {
+    const left = createSplit(layout.nextSplitNumber + 1, "vertical", groups[0], groups[2]);
+    const right = createSplit(layout.nextSplitNumber + 2, "vertical", groups[1], groups[3]);
+    root = createSplit(layout.nextSplitNumber, "horizontal", left, right);
+    splitsCreated = 3;
+  }
+
+  return {
+    root,
+    nextGroupNumber: layout.nextGroupNumber + regionCount,
+    nextSplitNumber: layout.nextSplitNumber + splitsCreated,
+  };
+}
+
 export function isSpatialLayout(value: unknown): value is SpatialLayout {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
@@ -245,4 +295,18 @@ function collapseEmptyGroups(node: SpatialNode): SpatialNode | null {
   if (!first) return second;
   if (!second) return first;
   return { ...node, children: [first, second] };
+}
+
+function createSplit(
+  number: number,
+  direction: SpatialSplit["direction"],
+  first: SpatialNode,
+  second: SpatialNode,
+): SpatialSplit {
+  return {
+    type: "split",
+    id: `split-${number}`,
+    direction,
+    children: [first, second],
+  };
 }
