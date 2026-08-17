@@ -679,7 +679,7 @@ function SpatialSnapTarget({
         edge === "bottom" && "inset-x-[33%] bottom-0 h-[32%]",
         isOver
           ? "border-blue-400 bg-blue-500/25 opacity-100 shadow-[inset_0_0_0_1px_rgb(96_165_250/.15)]"
-          : "border-transparent bg-blue-500/5 opacity-30",
+          : "border-transparent bg-transparent opacity-0",
       )}
       aria-label={edgeLabels[edge]}
     >
@@ -694,7 +694,7 @@ function SpatialSnapTarget({
 
 function DraggedTab({ tab }: { tab: SpatialWorkspaceTab }) {
   return (
-    <div className="flex h-9 w-48 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-xs text-foreground shadow-2xl shadow-black/60">
+    <div className="flex size-full items-center gap-2 rounded-lg border border-border bg-surface px-3 text-xs text-foreground shadow-2xl shadow-black/60">
       <span className="text-muted-foreground">{tab.icon}</span>
       <span className="min-w-0 flex-1 truncate">{tab.label}</span>
       {tab.status ? <span className="size-1.5 rounded-full bg-emerald-400" /> : null}
