@@ -29,10 +29,11 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import {
-  MAX_SPATIAL_REGIONS,
+  MAX_SPATIAL_COLUMNS,
   activateSpatialTab,
   applySpatialLayoutPreset,
   countSpatialRegions,
+  countSpatialColumnsForTab,
   createSpatialLayout,
   dockSpatialTab,
   getSpatialAxisSpan,
@@ -163,6 +164,10 @@ export function SpatialWorkspace({
   );
 
   const draggedTab = draggedTabId ? tabById.get(draggedTabId) : null;
+  const draggedRowColumnCount = draggedTabId
+    ? countSpatialColumnsForTab(layout.root, draggedTabId)
+    : 0;
+  const hasVerticalSplit = layout.root.type === "split" && layout.root.direction === "vertical";
 
   return (
     <DndContext
@@ -229,7 +234,10 @@ export function SpatialWorkspace({
           renderTab={renderTab}
         />
         {draggedTabId ? (
-          <SpatialWorkspaceSnapTargets canAddColumn={regionCount < MAX_SPATIAL_REGIONS} />
+          <SpatialWorkspaceSnapTargets
+            canAddColumn={draggedRowColumnCount < MAX_SPATIAL_COLUMNS}
+            canAddRow={!hasVerticalSplit}
+          />
         ) : null}
       </div>
 
@@ -481,7 +489,13 @@ function SpatialGroupDropTarget({ groupIsOver }: { groupIsOver: boolean }) {
   );
 }
 
-function SpatialWorkspaceSnapTargets({ canAddColumn }: { canAddColumn: boolean }) {
+function SpatialWorkspaceSnapTargets({
+  canAddColumn,
+  canAddRow,
+}: {
+  canAddColumn: boolean;
+  canAddRow: boolean;
+}) {
   return (
     <div className="pointer-events-none absolute inset-2 z-40">
       {canAddColumn
@@ -489,9 +503,11 @@ function SpatialWorkspaceSnapTargets({ canAddColumn }: { canAddColumn: boolean }
             <SpatialSnapTarget key={edge} edge={edge} />
           ))
         : null}
-      {(["top", "bottom"] as const).map((edge) => (
-        <SpatialSnapTarget key={edge} edge={edge} />
-      ))}
+      {canAddRow
+        ? (["top", "bottom"] as const).map((edge) => (
+            <SpatialSnapTarget key={edge} edge={edge} />
+          ))
+        : null}
     </div>
   );
 }

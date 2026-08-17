@@ -35,7 +35,7 @@ describe("spatial workspace layout", () => {
     expect(getSpatialAxisSpan(layout.root, "horizontal")).toBe(4);
   });
 
-  it("turns any layout into exactly two full-width rows on a vertical drop", () => {
+  it("creates two rows without flattening the existing horizontal plane", () => {
     let layout = applySpatialLayoutPreset(
       createSpatialLayout(["chat", "browser", "terminal"]),
       "three-columns",
@@ -43,11 +43,29 @@ describe("spatial workspace layout", () => {
     layout = dockSpatialTab(layout, "browser", "bottom");
 
     expect(layout.root).toMatchObject({ type: "split", direction: "vertical" });
-    expect(countSpatialRegions(layout.root)).toBe(2);
+    expect(countSpatialRegions(layout.root)).toBe(3);
     expect(getSpatialGroups(layout.root).flatMap((group) => group.tabIds).sort()).toEqual([
       "browser",
       "chat",
       "terminal",
+    ]);
+  });
+
+  it("preserves a vertical split when a tab is split horizontally in one row", () => {
+    let layout = createSpatialLayout(["chat", "browser", "terminal"]);
+    layout = dockSpatialTab(layout, "browser", "bottom");
+    layout = insertSpatialTab(layout, "draft:new", "region-2");
+    layout = dockSpatialTab(layout, "draft:new", "right");
+
+    expect(layout.root).toMatchObject({ type: "split", direction: "vertical" });
+    if (layout.root.type !== "split") throw new Error("Expected a vertical split");
+    expect(getSpatialGroups(layout.root.children[0]).map((group) => group.tabIds)).toEqual([
+      ["chat", "terminal"],
+    ]);
+    expect(layout.root.children[1]).toMatchObject({ type: "split", direction: "horizontal" });
+    expect(getSpatialGroups(layout.root.children[1]).map((group) => group.tabIds)).toEqual([
+      ["browser"],
+      ["draft:new"],
     ]);
   });
 
@@ -126,11 +144,13 @@ describe("spatial workspace layout", () => {
     ]);
     expect(rows.root).toMatchObject({ type: "split", direction: "vertical" });
     expect(getSpatialGroups(rows.root).map((group) => group.tabIds)).toEqual([
-      ["browser", "terminal", "changes"],
+      ["terminal", "changes"],
       ["chat"],
+      ["browser"],
     ]);
     expect(countSpatialRegions(fourColumns.root)).toBe(4);
-    expect(getSpatialAxisSpan(fourColumns.root, "horizontal")).toBe(4);
+    if (fourColumns.root.type !== "split") throw new Error("Expected a vertical split");
+    expect(getSpatialAxisSpan(fourColumns.root.children[0], "horizontal")).toBe(3);
     expect(getSpatialGroups(fourColumns.root).flatMap((group) => group.tabIds).sort()).toEqual([
       "browser",
       "changes",
