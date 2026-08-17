@@ -98,6 +98,7 @@ function getStoredWorkspaceTabs(
         !!tab &&
         typeof tab === "object" &&
         typeof (tab as Record<string, unknown>).id === "string" &&
+        (tab as Record<string, unknown>).surface !== "terminal" &&
         ((tab as Record<string, unknown>).surface === null ||
           isWorkspaceSurface((tab as Record<string, unknown>).surface)),
     );
@@ -411,10 +412,11 @@ export function SessionGroupDetailView({
       });
   }, [sessionGroupId, setHiddenSessionTabs]);
 
-  const { handleOpenTerminal, handleSelectTerminal: selectTerminal } = useTerminalActions({
-    sessionGroupId,
-    terminals,
-  });
+  const {
+    handleOpenTerminal,
+    handleCreateTerminal,
+    handleSelectTerminal: selectTerminal,
+  } = useTerminalActions({ sessionGroupId, terminals });
   const {
     files: sessionGroupFiles,
     loading: sessionGroupFilesLoading,
@@ -1109,17 +1111,33 @@ export function SessionGroupDetailView({
             canStartChat={
               !!selectedSession && !selectedSession._optimistic && bridgeInteractionAllowed
             }
+            canStartTerminal={!!selectedSession && terminalAllowed}
             canShowApplications={showApplicationsSidebarTab}
             defaultTool={selectedSession?.tool}
             defaultModel={selectedSession?.model}
             defaultReasoningEffort={selectedSession?.reasoningEffort}
-            onConvert={(surface) =>
+            onConvert={(surface) => {
+              if (surface === "terminal") {
+                if (!selectedSession || !terminalAllowed) return;
+                void handleCreateTerminal(selectedSession, terminalAllowed)
+                  .then(() => {
+                    setDraftWorkspaceTabs((drafts) =>
+                      drafts.filter((candidate) => candidate.id !== tabId),
+                    );
+                  })
+                  .catch((error: unknown) => {
+                    toast.error("Failed to create terminal", {
+                      description: error instanceof Error ? error.message : undefined,
+                    });
+                  });
+                return;
+              }
               setDraftWorkspaceTabs((drafts) =>
                 drafts.map((candidate) =>
                   candidate.id === tabId ? { ...candidate, surface } : candidate,
                 ),
-              )
-            }
+              );
+            }}
             onStartChat={async (input) => {
               const sessionId = await handleNewChat(input);
               if (!sessionId) return false;
@@ -1273,6 +1291,7 @@ export function SessionGroupDetailView({
       generatedProjectCanvasReady,
       groupRepo?.defaultBranch,
       groupSessions,
+      handleCreateTerminal,
       handleDiffFileClick,
       handleFileClick,
       handleNewChat,
@@ -1300,6 +1319,7 @@ export function SessionGroupDetailView({
       sessionsByRecency,
       setFileBuffer,
       showApplicationsSidebarTab,
+      terminalAllowed,
     ],
   );
 

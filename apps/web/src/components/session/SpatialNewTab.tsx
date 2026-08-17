@@ -29,6 +29,7 @@ export interface SpatialNewChatInput {
 
 interface SpatialNewTabProps {
   canStartChat: boolean;
+  canStartTerminal: boolean;
   canShowApplications: boolean;
   defaultTool?: string | null;
   defaultModel?: string | null;
@@ -67,6 +68,7 @@ const quickStarts: Array<{
 
 export function SpatialNewTab({
   canStartChat,
+  canStartTerminal,
   canShowApplications,
   defaultTool,
   defaultModel,
@@ -198,12 +200,14 @@ export function SpatialNewTab({
         <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
           {availableStarts.slice(0, 4).map((item) => {
             const Icon = item.icon;
+            const disabled = item.surface === "terminal" && !canStartTerminal;
             return (
               <button
                 key={item.surface}
                 type="button"
                 onClick={() => onConvert(item.surface)}
-                className="group rounded-xl border border-border bg-surface-mid p-3 text-left transition-colors hover:border-muted-foreground/50 hover:bg-surface-hover"
+                disabled={disabled}
+                className="group rounded-xl border border-border bg-surface-mid p-3 text-left transition-colors hover:border-muted-foreground/50 hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <span className="flex items-center gap-2 text-xs font-medium text-foreground">
                   <Icon size={13} className="text-muted-foreground group-hover:text-foreground" />
