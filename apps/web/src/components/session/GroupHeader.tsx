@@ -21,6 +21,7 @@ import { GitHubActions } from "./GitHubActions";
 import { GroupUsageBadge } from "./GroupUsageBadge";
 import { ActionTooltip } from "../ui/ActionTooltip";
 import { ClosedSessionTabsMenu } from "./ClosedSessionTabsMenu";
+import { SessionApplicationsPopover } from "./applications/SessionApplicationsPopover";
 import type { SessionEntity } from "@trace/client-core";
 
 interface GroupHeaderProps {
@@ -39,6 +40,10 @@ interface GroupHeaderProps {
   selectedHosting?: string;
   selectedConnection?: Record<string, unknown> | null;
   selectedWorktreeDeleted?: boolean;
+  canShowApplications: boolean;
+  applicationPanelOpen: boolean;
+  onApplicationPanelOpenChange: (open: boolean) => void;
+  onOpenTraffic: (endpointId: string) => void;
   closedSessions: SessionEntity[];
   onRestoreClosedSession: (sessionId: string) => void;
   canMoveSession: boolean;
@@ -71,6 +76,10 @@ export function GroupHeader({
   selectedHosting,
   selectedConnection,
   selectedWorktreeDeleted,
+  canShowApplications,
+  applicationPanelOpen,
+  onApplicationPanelOpenChange,
+  onOpenTraffic,
   closedSessions,
   onRestoreClosedSession,
   canMoveSession,
@@ -148,6 +157,15 @@ export function GroupHeader({
       <LinkedCheckoutActions state={linkedCheckout} />
 
       <ClosedSessionTabsMenu sessions={closedSessions} onRestoreSession={onRestoreClosedSession} />
+
+      {canShowApplications ? (
+        <SessionApplicationsPopover
+          sessionGroupId={sessionGroupId}
+          open={applicationPanelOpen}
+          onOpenChange={onApplicationPanelOpenChange}
+          onOpenTraffic={onOpenTraffic}
+        />
+      ) : null}
 
       <ActionTooltip label={filesOpen ? "Close files and changes" : "Files and changes"}>
         <button
