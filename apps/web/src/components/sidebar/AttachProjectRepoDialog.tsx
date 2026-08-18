@@ -36,6 +36,12 @@ export function AttachProjectRepoDialog({
   const [branch, setBranch] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // BranchCombobox falls back to the repo default when no branch is picked, so
+  // save that same value instead of clearing the project's base branch.
+  const selectedRepoDefaultBranch = useEntityField("repos", repoId, "defaultBranch") as
+    | string
+    | null
+    | undefined;
 
   useEffect(() => {
     if (!open) return;
@@ -55,7 +61,7 @@ export function AttachProjectRepoDialog({
           id: projectId,
           input: {
             repoId: repoId || null,
-            baseBranch: repoId ? branch || null : null,
+            baseBranch: repoId ? branch || selectedRepoDefaultBranch || null : null,
           },
         })
         .toPromise();

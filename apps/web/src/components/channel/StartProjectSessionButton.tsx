@@ -23,7 +23,7 @@ export function StartProjectSessionButton({ channelId }: { channelId: string }) 
           <button
             type="button"
             disabled={starting}
-            aria-label="New session (⌘N)"
+            aria-label="New general session"
             onClick={() => void handleStart()}
             className="flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:cursor-wait disabled:opacity-60"
           />
@@ -31,7 +31,7 @@ export function StartProjectSessionButton({ channelId }: { channelId: string }) 
       >
         {starting ? <LoaderCircle size={16} className="animate-spin" /> : <Plus size={16} />}
       </TooltipTrigger>
-      <TooltipContent>New general session (⌘N)</TooltipContent>
+      <TooltipContent>New general session</TooltipContent>
     </Tooltip>
   );
 }

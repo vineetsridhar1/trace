@@ -115,7 +115,7 @@ running server through its authenticated GraphQL endpoint. The installed CLI (`$
 at production, so CLI behavior was verified through the branch's own runtime bundle
 (`node runtime/bin/trace.mjs`) for help/parsing only — no production mutations were run.
 
-**53 checks executed: 51 pass, 2 defects.**
+**53 checks executed: 51 pass, 2 defects. Both defects have since been fixed and re-verified.**
 
 | Group | Result |
 |-------|--------|
@@ -142,8 +142,11 @@ Observed: selecting `healthcare` (default branch `main`) and saving produced
 This also makes the two attach paths disagree — `linkChannelRepo` explicitly defaults to
 `repo.defaultBranch` (verified: E1 returned `baseBranch: "main"`), the dialog does not.
 
-Fix: seed `branch` from the selected repo's `defaultBranch` when the channel has none, or send
-`branch || defaultBranch`.
+**Fixed.** `AttachProjectRepoDialog` now reads the selected repo's `defaultBranch` and submits
+`branch || selectedRepoDefaultBranch || null`, so it persists the value it displays. Re-verified in
+the browser: resetting `qa-branch` to no repo, then picking `healthcare` and saving without
+touching the branch field now yields `{ repo: healthcare, baseBranch: "main" }`. The detach path is
+unchanged (`repoId` empty still clears both fields).
 
 ### Defect 2 — `⌘N` does not do what the new button advertises
 
@@ -152,8 +155,12 @@ Fix: seed `branch` from the selected repo's `defaultBranch` when the channel has
 focusing the Home composer — it never creates a session in the current project.
 
 The label predates this PR (carried over from the deleted `StartSessionDialog`), but the PR
-restates it more specifically. Either drop the `(⌘N)` hint or wire ⌘N to `createProjectSession`
-when a project is active.
+restates it more specifically.
+
+**Fixed** by dropping the `(⌘N)` hint — the button is now labelled `New general session`. Global
+⌘N behaviour was left alone: opening Home and focusing the universal composer is deliberate
+(documented in the comment above `App.tsx:116`), so rebinding it would be a product change rather
+than a bug fix.
 
 ### Notable passes
 
