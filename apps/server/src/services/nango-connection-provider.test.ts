@@ -93,10 +93,9 @@ describe("NangoConnectionProvider", () => {
       provider.listTools({
         connectionId: "nango-connection-1",
         providerConfigKey: "linear-mcp",
+        source: "native_mcp",
       }),
-    ).resolves.toEqual([
-      expect.objectContaining({ id: "provider:search_issues", name: "search_issues" }),
-    ]);
+    ).resolves.toEqual([expect.objectContaining({ id: "search_issues", name: "search_issues" })]);
     const providerRequest = fetchMock.mock.calls.find(([url]) =>
       String(url).endsWith("/proxy/mcp"),
     );
@@ -109,7 +108,7 @@ describe("NangoConnectionProvider", () => {
   it("routes a discovered tool back to its Nango MCP source", async () => {
     process.env.NANGO_SECRET_KEY = "secret";
     const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
-      if (!String(url).endsWith("/proxy/mcp")) return new Response("Not found", { status: 404 });
+      if (new URL(url).pathname !== "/mcp") return new Response("Not found", { status: 404 });
       if (init?.method === "DELETE") return new Response(null, { status: 200 });
       const request = JSON.parse(String(init?.body)) as { id?: unknown; method: string };
       if (request.method === "notifications/initialized")
@@ -144,14 +143,15 @@ describe("NangoConnectionProvider", () => {
       provider.callTool({
         connectionId: "nango-connection-1",
         providerConfigKey: "linear-mcp",
-        toolId: "provider:search_issues",
+        source: "nango_actions",
+        toolId: "search_issues",
         arguments: { query: "login" },
       }),
     ).resolves.toEqual({ content: [{ type: "text", text: "issue-1" }] });
     const toolCall = fetchMock.mock.calls.find(([, init]) =>
       String(init?.body).includes('"method":"tools/call"'),
     );
-    expect(String(toolCall?.[0])).toMatch(/\/proxy\/mcp$/);
+    expect(String(toolCall?.[0])).toBe("https://api.nango.dev/mcp");
     const request = JSON.parse(String(toolCall?.[1]?.body)) as {
       method: string;
       params: unknown;

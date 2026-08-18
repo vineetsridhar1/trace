@@ -1,6 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { createHmac, timingSafeEqual } from "crypto";
+import type { AgentToolSource } from "../config/supported-integrations.js";
 import { ValidationError } from "../lib/errors.js";
 import type {
   IntegrationConnectionProvider,
@@ -12,10 +13,10 @@ import type {
 const DEFAULT_NANGO_BASE_URL = "https://api.nango.dev";
 const DEFAULT_NANGO_TIMEOUT_MS = 30_000;
 const DEFAULT_NANGO_MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
-const NANGO_MCP_SOURCES = [
-  { id: "provider", path: "/proxy/mcp" },
-  { id: "action", path: "/mcp" },
-] as const;
+const NANGO_MCP_PATHS: Record<Exclude<AgentToolSource, "none">, string> = {
+  native_mcp: "/proxy/mcp",
+  nango_actions: "/mcp",
+};
 
 type NangoConnectSessionResponse = {
   data?: {
@@ -181,54 +182,31 @@ export class NangoConnectionProvider
   async listTools(input: {
     connectionId: string;
     providerConfigKey: string;
+    source: Exclude<AgentToolSource, "none">;
   }): Promise<IntegrationToolDefinition[]> {
-    const attempts = await Promise.allSettled(
-      NANGO_MCP_SOURCES.map(async (source) => {
-        const result = await this.withMcpClient(source.path, input, (client) =>
-          client.listTools({}, { timeout: positiveIntegerEnv("NANGO_REQUEST_TIMEOUT_MS", 30_000) }),
-        );
-        return result.tools.map(
-          (tool): IntegrationToolDefinition => ({
-            id: `${source.id}:${tool.name}`,
-            name: tool.name,
-            description: tool.description ?? null,
-            inputSchema: tool.inputSchema,
-          }),
-        );
+    const result = await this.withMcpClient(NANGO_MCP_PATHS[input.source], input, (client) =>
+      client.listTools({}, { timeout: positiveIntegerEnv("NANGO_REQUEST_TIMEOUT_MS", 30_000) }),
+    );
+    return result.tools.map(
+      (tool): IntegrationToolDefinition => ({
+        id: tool.name,
+        name: tool.name,
+        description: tool.description ?? null,
+        inputSchema: tool.inputSchema,
       }),
     );
-    const successful = attempts.filter(
-      (attempt): attempt is PromiseFulfilledResult<IntegrationToolDefinition[]> =>
-        attempt.status === "fulfilled",
-    );
-    if (successful.length === 0) {
-      const failure = attempts.find(
-        (attempt): attempt is PromiseRejectedResult => attempt.status === "rejected",
-      );
-      throw failure?.reason instanceof Error
-        ? failure.reason
-        : new Error("Nango MCP tool discovery failed");
-    }
-    const unique = new Map<string, IntegrationToolDefinition>();
-    for (const attempt of successful) {
-      for (const tool of attempt.value) unique.set(tool.id, tool);
-    }
-    return [...unique.values()];
   }
 
   async callTool(input: {
     connectionId: string;
     providerConfigKey: string;
+    source: Exclude<AgentToolSource, "none">;
     toolId: string;
     arguments: Record<string, unknown>;
   }): Promise<Record<string, unknown>> {
-    const separator = input.toolId.indexOf(":");
-    const sourceId = input.toolId.slice(0, separator);
-    const toolName = input.toolId.slice(separator + 1);
-    const source = NANGO_MCP_SOURCES.find((candidate) => candidate.id === sourceId);
-    if (!source || !toolName) throw new ValidationError("Unknown integration tool");
-    const result = await this.withMcpClient(source.path, input, (client) =>
-      client.callTool({ name: toolName, arguments: input.arguments }, undefined, {
+    if (!input.toolId) throw new ValidationError("Unknown integration tool");
+    const result = await this.withMcpClient(NANGO_MCP_PATHS[input.source], input, (client) =>
+      client.callTool({ name: input.toolId, arguments: input.arguments }, undefined, {
         timeout: positiveIntegerEnv("NANGO_REQUEST_TIMEOUT_MS", 30_000),
       }),
     );

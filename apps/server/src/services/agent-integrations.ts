@@ -1,4 +1,8 @@
 import type { Prisma } from "@prisma/client";
+import {
+  supportedIntegrationByProviderConfigKey,
+  type AgentToolSource,
+} from "../config/supported-integrations.js";
 import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import type { AgentInvocationAuthSubject } from "../lib/agent-invocation-auth.js";
 import { prisma } from "../lib/db.js";
@@ -21,6 +25,10 @@ type PersonalConnection = {
   nangoConnectionId: string;
   displayName: string;
   updatedAt: Date;
+};
+
+type AgentToolConnection = PersonalConnection & {
+  agentToolSource: Exclude<AgentToolSource, "none">;
 };
 
 export type AgentIntegrationTool = {
@@ -62,7 +70,9 @@ export class AgentIntegrationService {
     if (!Number.isInteger(limit) || limit < 1 || limit > MAX_SEARCH_LIMIT) {
       throw new ValidationError(`Tool search limit must be between 1 and ${MAX_SEARCH_LIMIT}`);
     }
-    const connections = await this.personalConnections(subject);
+    const connections = (await this.personalConnections(subject))
+      .map((connection) => this.agentToolConnection(connection))
+      .filter((connection): connection is AgentToolConnection => connection !== null);
     const discovered = await Promise.all(
       connections.map(async (connection) => {
         try {
@@ -112,7 +122,11 @@ export class AgentIntegrationService {
       },
     });
     if (!connection) throw new NotFoundError("Integration connection", input.connectionId);
-    const tools = await this.toolsForConnection(connection);
+    const agentToolConnection = this.agentToolConnection(connection);
+    if (!agentToolConnection) {
+      throw new AuthorizationError("This integration does not expose agent tools");
+    }
+    const tools = await this.toolsForConnection(agentToolConnection);
     if (!tools.some((tool) => tool.id === input.toolId)) {
       throw new AuthorizationError("This integration tool is unavailable");
     }
@@ -122,6 +136,7 @@ export class AgentIntegrationService {
       const result = await this.provider.callTool({
         connectionId: connection.nangoConnectionId,
         providerConfigKey: connection.providerConfigKey,
+        source: agentToolConnection.agentToolSource,
         toolId: input.toolId,
         arguments: input.arguments,
       });
@@ -176,20 +191,29 @@ export class AgentIntegrationService {
     });
   }
 
-  private async toolsForConnection(connection: PersonalConnection) {
-    const key = `${connection.id}:${connection.updatedAt.getTime()}`;
+  private agentToolConnection(connection: PersonalConnection): AgentToolConnection | null {
+    const source = supportedIntegrationByProviderConfigKey(
+      connection.providerConfigKey,
+    )?.agentToolSource;
+    if (!source || source === "none") return null;
+    return { ...connection, agentToolSource: source };
+  }
+
+  private async toolsForConnection(connection: AgentToolConnection) {
+    const key = `${connection.id}:${connection.agentToolSource}:${connection.updatedAt.getTime()}`;
     const cached = this.cache.get(key);
     if (cached && cached.expiresAt > Date.now()) return cached.tools;
     const tools = await this.provider.listTools({
       connectionId: connection.nangoConnectionId,
       providerConfigKey: connection.providerConfigKey,
+      source: connection.agentToolSource,
     });
     this.cache.set(key, { expiresAt: Date.now() + TOOL_CACHE_TTL_MS, tools });
     return tools;
   }
 
   private publicTool(
-    connection: PersonalConnection,
+    connection: AgentToolConnection,
     tool: IntegrationToolDefinition,
   ): AgentIntegrationTool {
     return {

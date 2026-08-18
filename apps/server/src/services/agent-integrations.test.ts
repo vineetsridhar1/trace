@@ -7,6 +7,11 @@ vi.mock("../lib/db.js", async () => {
 
 vi.mock("./event.js", () => ({ eventService: { create: vi.fn() } }));
 
+vi.mock("../config/supported-integrations.js", () => ({
+  supportedIntegrationByProviderConfigKey: (providerConfigKey: string) =>
+    providerConfigKey === "linear-mcp" ? { agentToolSource: "native_mcp" } : undefined,
+}));
+
 import type { AgentInvocationAuthSubject } from "../lib/agent-invocation-auth.js";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
@@ -45,7 +50,7 @@ describe("AgentIntegrationService", () => {
     eventMock.create.mockResolvedValue({});
     vi.mocked(provider.listTools).mockResolvedValue([
       {
-        id: "provider:search_issues",
+        id: "search_issues",
         name: "search_issues",
         description: "Search Linear issues",
         inputSchema: { type: "object", properties: { query: { type: "string" } } },
@@ -60,7 +65,7 @@ describe("AgentIntegrationService", () => {
     await expect(service.searchTools(subject, "linear issues")).resolves.toEqual([
       expect.objectContaining({
         connectionId: "trace-connection-1",
-        toolId: "provider:search_issues",
+        toolId: "search_issues",
         name: "search_issues",
       }),
     ]);
@@ -77,6 +82,7 @@ describe("AgentIntegrationService", () => {
     expect(provider.listTools).toHaveBeenCalledWith({
       connectionId: "nango-connection-1",
       providerConfigKey: "linear-mcp",
+      source: "native_mcp",
     });
   });
 
@@ -90,7 +96,7 @@ describe("AgentIntegrationService", () => {
     await expect(
       service.callTool(subject, {
         connectionId: "trace-connection-1",
-        toolId: "provider:search_issues",
+        toolId: "search_issues",
         arguments: { query: "login" },
       }),
     ).resolves.toEqual({ content: [{ type: "text", text: "issue-1" }] });
@@ -107,7 +113,8 @@ describe("AgentIntegrationService", () => {
     expect(provider.callTool).toHaveBeenCalledWith({
       connectionId: "nango-connection-1",
       providerConfigKey: "linear-mcp",
-      toolId: "provider:search_issues",
+      source: "native_mcp",
+      toolId: "search_issues",
       arguments: { query: "login" },
     });
     expect(eventMock.create).toHaveBeenCalledWith(
@@ -131,5 +138,15 @@ describe("AgentIntegrationService", () => {
       }),
     ).rejects.toThrow("unavailable");
     expect(provider.callTool).not.toHaveBeenCalled();
+  });
+
+  it("skips connections not tagged for agent tools", async () => {
+    prismaMock.integrationConnection.findMany.mockResolvedValue([
+      { ...connection, providerConfigKey: "linear-rest" },
+    ]);
+    const service = new AgentIntegrationService(provider);
+
+    await expect(service.searchTools(subject, "linear")).resolves.toEqual([]);
+    expect(provider.listTools).not.toHaveBeenCalled();
   });
 });
