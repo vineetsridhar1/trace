@@ -1,5 +1,5 @@
 export function QuestionTrayFooter({
-  reviewing,
+  isLastQuestion,
   total,
   disabled,
   sending,
@@ -7,7 +7,7 @@ export function QuestionTrayFooter({
   onPrimary,
   onBack,
 }: {
-  reviewing: boolean;
+  isLastQuestion: boolean;
   total: number;
   disabled: boolean;
   sending: boolean;
@@ -17,7 +17,7 @@ export function QuestionTrayFooter({
 }) {
   const primary = sending
     ? "Sending…"
-    : reviewing
+    : isLastQuestion
       ? `Send ${total} answer${total === 1 ? "" : "s"}`
       : "Next";
   return (
