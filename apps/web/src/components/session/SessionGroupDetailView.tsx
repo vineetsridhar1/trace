@@ -326,6 +326,8 @@ export function SessionGroupDetailView({
   const [forkEventId, setForkEventId] = useState<string | null>(null);
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
   const [applicationPanelOpen, setApplicationPanelOpen] = useState(false);
+  const [workspaceInteractionActive, setWorkspaceInteractionActive] = useState(false);
+  const [modalOverlayVisible, setModalOverlayVisible] = useState(false);
   const [groupLoadError, setGroupLoadError] = useState<string | null>(null);
   const {
     browserTitles,
@@ -1035,19 +1037,34 @@ export function SessionGroupDetailView({
     return id;
   }, []);
 
-  const handleWorkspaceOverlayVisibility = useCallback(
-    (visible: boolean) => {
-      for (const draft of draftWorkspaceTabs) {
-        if (draft.surface !== "browser") continue;
-        void window.trace?.setBrowserOverlayHidden({
-          sessionGroupId,
-          browserId: draft.id,
-          hidden: visible,
-        });
-      }
-    },
-    [draftWorkspaceTabs, sessionGroupId],
-  );
+  const browserOverlayHidden = workspaceInteractionActive || modalOverlayVisible;
+
+  useEffect(() => {
+    const updateModalOverlayVisibility = () => {
+      setModalOverlayVisible(
+        document.querySelector('[data-slot="dialog-overlay"], [data-slot="sheet-overlay"]') !== null,
+      );
+    };
+    updateModalOverlayVisibility();
+    const observer = new MutationObserver(updateModalOverlayVisibility);
+    observer.observe(document.body, { childList: true });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    for (const draft of draftWorkspaceTabs) {
+      if (draft.surface !== "browser") continue;
+      void window.trace?.setBrowserOverlayHidden({
+        sessionGroupId,
+        browserId: draft.id,
+        hidden: browserOverlayHidden,
+      });
+    }
+  }, [browserOverlayHidden, draftWorkspaceTabs, sessionGroupId]);
+
+  const handleWorkspaceOverlayVisibility = useCallback((visible: boolean) => {
+    setWorkspaceInteractionActive(visible);
+  }, []);
 
   const renderWorkspaceTab = useCallback(
     (tabId: string) => {
