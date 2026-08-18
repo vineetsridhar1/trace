@@ -1527,10 +1527,10 @@ var browserCommands = [
     description: "Open a website in a new browser tab in the current Trace workspace",
     examples: ['"$TRACE_CLI" browser open https://example.com --json'],
     effects: [
-      "Creates and selects a browser tab for the requesting user in the current session group."
+      "Requests a browser tab for the requesting user in the current session group."
     ],
-    output: "A confirmation containing the requested website URL.",
-    nextSteps: ["The new browser tab opens in the current Trace workspace."],
+    output: "A request confirmation containing the website URL.",
+    nextSteps: ["The tab opens when an eligible Trace client receives the request."],
     positionals: [{ name: "url", required: true }],
     async run(ctx, input) {
       const variables = {
@@ -1541,7 +1541,7 @@ var browserCommands = [
         traceCliOperations.openWorkspaceBrowser,
         variables
       );
-      ctx.output({ opened: true, url: variables.url }, `Opened ${variables.url}`);
+      ctx.output({ requested: true, url: variables.url }, `Requested ${variables.url}`);
     }
   })
 ];
@@ -3109,10 +3109,10 @@ var commandGroups = [
   {
     name: "browser",
     description: "Open websites in the current Trace workspace",
-    workflow: ['Run "$TRACE_CLI" browser open <url> --json to create and select a browser tab.'],
+    workflow: ['Run "$TRACE_CLI" browser open <url> --json to request a browser tab.'],
     examples: ['"$TRACE_CLI" browser open https://example.com --json'],
     notes: [
-      "Browser tabs open only for the requesting user and only in the current session group."
+      "Browser requests target only the requesting user and the current session group."
     ]
   },
   {
