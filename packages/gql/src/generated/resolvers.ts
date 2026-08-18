@@ -803,6 +803,7 @@ export type EventType =
   | "integration_connection_created"
   | "integration_connection_deleted"
   | "integration_connection_updated"
+  | "integration_tool_called"
   | "managed_git_token_minted"
   | "manual_element_saved"
   | "member_joined"

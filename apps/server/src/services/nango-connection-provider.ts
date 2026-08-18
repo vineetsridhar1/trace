@@ -1,13 +1,21 @@
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { createHmac, timingSafeEqual } from "crypto";
 import { ValidationError } from "../lib/errors.js";
 import type {
   IntegrationConnectionProvider,
   IntegrationProxyResponse,
+  IntegrationToolDefinition,
+  IntegrationToolProvider,
 } from "./integration-connection-provider.js";
 
 const DEFAULT_NANGO_BASE_URL = "https://api.nango.dev";
 const DEFAULT_NANGO_TIMEOUT_MS = 30_000;
 const DEFAULT_NANGO_MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
+const NANGO_MCP_SOURCES = [
+  { id: "provider", path: "/proxy/mcp" },
+  { id: "action", path: "/mcp" },
+] as const;
 
 type NangoConnectSessionResponse = {
   data?: {
@@ -76,7 +84,9 @@ async function nangoError(response: Response): Promise<Error> {
   return new Error(`Nango request failed (${response.status})${message ? `: ${message}` : ""}`);
 }
 
-export class NangoConnectionProvider implements IntegrationConnectionProvider {
+export class NangoConnectionProvider
+  implements IntegrationConnectionProvider, IntegrationToolProvider
+{
   isConfigured(): boolean {
     return Boolean(process.env.NANGO_SECRET_KEY?.trim());
   }
@@ -166,6 +176,87 @@ export class NangoConnectionProvider implements IntegrationConnectionProvider {
       contentType: response.headers.get("content-type"),
       body: await readBoundedBody(response),
     };
+  }
+
+  async listTools(input: {
+    connectionId: string;
+    providerConfigKey: string;
+  }): Promise<IntegrationToolDefinition[]> {
+    const attempts = await Promise.allSettled(
+      NANGO_MCP_SOURCES.map(async (source) => {
+        const result = await this.withMcpClient(source.path, input, (client) =>
+          client.listTools({}, { timeout: positiveIntegerEnv("NANGO_REQUEST_TIMEOUT_MS", 30_000) }),
+        );
+        return result.tools.map(
+          (tool): IntegrationToolDefinition => ({
+            id: `${source.id}:${tool.name}`,
+            name: tool.name,
+            description: tool.description ?? null,
+            inputSchema: tool.inputSchema,
+          }),
+        );
+      }),
+    );
+    const successful = attempts.filter(
+      (attempt): attempt is PromiseFulfilledResult<IntegrationToolDefinition[]> =>
+        attempt.status === "fulfilled",
+    );
+    if (successful.length === 0) {
+      const failure = attempts.find(
+        (attempt): attempt is PromiseRejectedResult => attempt.status === "rejected",
+      );
+      throw failure?.reason instanceof Error
+        ? failure.reason
+        : new Error("Nango MCP tool discovery failed");
+    }
+    const unique = new Map<string, IntegrationToolDefinition>();
+    for (const attempt of successful) {
+      for (const tool of attempt.value) unique.set(tool.id, tool);
+    }
+    return [...unique.values()];
+  }
+
+  async callTool(input: {
+    connectionId: string;
+    providerConfigKey: string;
+    toolId: string;
+    arguments: Record<string, unknown>;
+  }): Promise<Record<string, unknown>> {
+    const separator = input.toolId.indexOf(":");
+    const sourceId = input.toolId.slice(0, separator);
+    const toolName = input.toolId.slice(separator + 1);
+    const source = NANGO_MCP_SOURCES.find((candidate) => candidate.id === sourceId);
+    if (!source || !toolName) throw new ValidationError("Unknown integration tool");
+    const result = await this.withMcpClient(source.path, input, (client) =>
+      client.callTool({ name: toolName, arguments: input.arguments }, undefined, {
+        timeout: positiveIntegerEnv("NANGO_REQUEST_TIMEOUT_MS", 30_000),
+      }),
+    );
+    return result as unknown as Record<string, unknown>;
+  }
+
+  private async withMcpClient<T>(
+    path: string,
+    input: { connectionId: string; providerConfigKey: string },
+    run: (client: Client) => Promise<T>,
+  ): Promise<T> {
+    const transport = new StreamableHTTPClientTransport(new URL(`${nangoBaseUrl()}${path}`), {
+      requestInit: {
+        headers: {
+          Authorization: `Bearer ${nangoSecretKey()}`,
+          "Connection-Id": input.connectionId,
+          "Provider-Config-Key": input.providerConfigKey,
+        },
+        signal: nangoRequestSignal(),
+      },
+    });
+    const client = new Client({ name: "trace-integrations", version: "1.0.0" });
+    try {
+      await client.connect(transport);
+      return await run(client);
+    } finally {
+      await client.close().catch(() => undefined);
+    }
   }
 
   verifyWebhook(rawBody: Buffer, signature: string | undefined): boolean {

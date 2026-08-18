@@ -26,6 +26,7 @@ import { agentArtifactRouter } from "./routes/agent-artifact.js";
 import { artifactContentRouter } from "./routes/artifact-content.js";
 import { nangoRouter } from "./routes/nango.js";
 import { appIntegrationsRouter } from "./routes/app-integrations.js";
+import { agentMcpRouter } from "./routes/agent-mcp.js";
 import { appDeploymentCallbackRouter } from "./routes/app-deployment-callback.js";
 import { appDeploymentSourceRouter } from "./routes/app-deployment-source.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
@@ -249,6 +250,7 @@ async function main() {
   app.use(express.json());
   app.use(artifactContentRouter);
   app.use(appIntegrationsRouter);
+  app.use(agentMcpRouter);
   app.post("/runtime/codex-auth", async (req: express.Request, res: express.Response) => {
     const token = readBearerToken(req);
     const runtime = token ? authenticateProvisionedRuntimeToken(token) : null;
