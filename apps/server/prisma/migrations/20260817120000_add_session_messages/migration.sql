@@ -25,3 +25,12 @@ CREATE INDEX "SessionMessage_organizationId_createdAt_id_idx" ON "SessionMessage
 ALTER TABLE "SessionMessage"
   ADD CONSTRAINT "SessionMessage_sessionId_fkey"
   FOREIGN KEY ("sessionId") REFERENCES "Session"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+CREATE TABLE "SessionMessageBackfillCursor" (
+    "name" TEXT NOT NULL,
+    "timestamp" TIMESTAMP(3) NOT NULL,
+    "eventId" TEXT NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SessionMessageBackfillCursor_pkey" PRIMARY KEY ("name")
+);

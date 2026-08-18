@@ -6,6 +6,7 @@ const parsedBatchSize = Number(process.env.SESSION_MESSAGE_BACKFILL_BATCH_SIZE ?
 const batchSize = Number.isInteger(parsedBatchSize)
   ? Math.max(1, Math.min(parsedBatchSize, 1_000))
   : 500;
+const BACKFILL_NAME = "session-messages-v1";
 
 type Cursor = { timestamp: Date; id: string };
 
@@ -20,7 +21,12 @@ function afterCursor(cursor: Cursor | undefined): Prisma.EventWhereInput | undef
 }
 
 async function main(): Promise<void> {
-  let cursor: Cursor | undefined;
+  const savedCursor = await prisma.sessionMessageBackfillCursor.findUnique({
+    where: { name: BACKFILL_NAME },
+  });
+  let cursor: Cursor | undefined = savedCursor
+    ? { timestamp: savedCursor.timestamp, id: savedCursor.eventId }
+    : undefined;
   let scanned = 0;
   let batches = 0;
 
@@ -40,11 +46,18 @@ async function main(): Promise<void> {
       const message = sessionMessageCreateDataFromEvent(event);
       return message ? [message] : [];
     });
-    if (messages.length > 0) {
-      await prisma.sessionMessage.createMany({ data: messages, skipDuplicates: true });
-    }
-
     const last = events.at(-1)!;
+    await prisma.$transaction(async (tx) => {
+      if (messages.length > 0) {
+        await tx.sessionMessage.createMany({ data: messages, skipDuplicates: true });
+      }
+      await tx.sessionMessageBackfillCursor.upsert({
+        where: { name: BACKFILL_NAME },
+        create: { name: BACKFILL_NAME, timestamp: last.timestamp, eventId: last.id },
+        update: { timestamp: last.timestamp, eventId: last.id },
+      });
+    });
+
     cursor = { timestamp: last.timestamp, id: last.id };
     scanned += events.length;
     batches += 1;
