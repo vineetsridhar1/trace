@@ -1107,6 +1107,7 @@ export type Mutation = {
   queueSessionMessage: QueuedMessage;
   refreshDesignSystemSource: DesignSystem;
   registerPushToken: Scalars["Boolean"]["output"];
+  registerRepo: Repo;
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars["Boolean"]["output"];
   removeQueuedMessage: Scalars["Boolean"]["output"];
@@ -1506,6 +1507,10 @@ export type MutationRefreshDesignSystemSourceArgs = {
 export type MutationRegisterPushTokenArgs = {
   platform: PushPlatform;
   token: Scalars["String"]["input"];
+};
+
+export type MutationRegisterRepoArgs = {
+  input: CreateRepoInput;
 };
 
 export type MutationRegisterRepoWebhookArgs = {
@@ -4863,6 +4868,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationRegisterPushTokenArgs, "platform" | "token">
+  >;
+  registerRepo?: Resolver<
+    ResolversTypes["Repo"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRegisterRepoArgs, "input">
   >;
   registerRepoWebhook?: Resolver<
     ResolversTypes["Repo"],

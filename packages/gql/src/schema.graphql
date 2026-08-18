@@ -2253,6 +2253,7 @@ type Mutation {
   linkEntityToProject(entityType: EntityType!, entityId: ID!, projectId: ID!): Project!
   createOrganization(input: CreateOrganizationInput!): OrgMember!
   createRepo(input: CreateRepoInput!): Repo!
+  registerRepo(input: CreateRepoInput!): Repo!
   updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
   attachRepoRemote(repoId: ID!, remoteUrl: String!): Repo!
   deleteRepo(id: ID!): Boolean!

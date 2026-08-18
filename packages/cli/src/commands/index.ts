@@ -9,6 +9,7 @@ import { integrationCommands } from "./integration/index.js";
 import { portCommands } from "./port/index.js";
 import { repoListCommand } from "./repo/list.js";
 import { repoAttachRemoteCommand } from "./repo/attach-remote.js";
+import { repoCreateCommand } from "./repo/create.js";
 import { sessionCommands } from "./session/index.js";
 import { terminalCommands } from "./terminal/index.js";
 
@@ -21,6 +22,7 @@ export const commands: readonly CommandDefinition[] = [
   channelListCommand,
   channelLinkRepoCommand,
   repoListCommand,
+  repoCreateCommand,
   repoAttachRemoteCommand,
   ...sessionCommands,
   ...terminalCommands,
@@ -150,14 +152,16 @@ export const commandGroups: readonly CommandGroupDefinition[] = [
   },
   {
     name: "repo",
-    description: "Discover repositories in the current organization",
+    description: "Create and discover repositories in the current organization",
     workflow: [
       'Run "$TRACE_CLI" repo list --json to find a repository ID.',
+      'If the repository is not registered yet, run "$TRACE_CLI" repo create <name> --json.',
       'If the repository is local-only, run "$TRACE_CLI" repo attach-remote <repo-id> <remote-url> --json.',
       'Link it to a project with "$TRACE_CLI" channel link-repo <channel-id> <repo-id> --json.',
     ],
     examples: [
       '"$TRACE_CLI" repo list --json',
+      '"$TRACE_CLI" repo create app --json',
       '"$TRACE_CLI" repo attach-remote <repo-id> https://github.com/acme/app.git --json',
     ],
     notes: ["Repositories provide optional context for projects, artifacts, and sessions."],

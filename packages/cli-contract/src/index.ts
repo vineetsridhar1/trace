@@ -392,6 +392,21 @@ export const traceCliOperations = {
       repos(organizationId: $organizationId) { id name provider remoteUrl defaultBranch }
     }`,
   }),
+  registerRepo: operation({
+    name: "TraceCliRegisterRepo",
+    type: "mutation",
+    rootField: "registerRepo",
+    capability: "resource:configure",
+    argumentPaths: [
+      "input.organizationId",
+      "input.name",
+      "input.remoteUrl",
+      "input.defaultBranch",
+    ],
+    document: `mutation TraceCliRegisterRepo($input: CreateRepoInput!) {
+      registerRepo(input: $input) { id name provider remoteUrl defaultBranch }
+    }`,
+  }),
   linkChannelRepo: operation({
     name: "TraceCliLinkChannelRepo",
     type: "mutation",

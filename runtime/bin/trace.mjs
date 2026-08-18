@@ -362,6 +362,21 @@ var traceCliOperations = {
       repos(organizationId: $organizationId) { id name provider remoteUrl defaultBranch }
     }`
   }),
+  registerRepo: operation({
+    name: "TraceCliRegisterRepo",
+    type: "mutation",
+    rootField: "registerRepo",
+    capability: "resource:configure",
+    argumentPaths: [
+      "input.organizationId",
+      "input.name",
+      "input.remoteUrl",
+      "input.defaultBranch"
+    ],
+    document: `mutation TraceCliRegisterRepo($input: CreateRepoInput!) {
+      registerRepo(input: $input) { id name provider remoteUrl defaultBranch }
+    }`
+  }),
   linkChannelRepo: operation({
     name: "TraceCliLinkChannelRepo",
     type: "mutation",
@@ -2131,6 +2146,65 @@ var repoAttachRemoteCommand = defineCommand({
   }
 });
 
+// src/commands/repo/create.ts
+var repoCreateCommand = defineCommand({
+  path: ["repo", "create"],
+  description: "Register a repository in the current organization",
+  examples: [
+    '"$TRACE_CLI" repo create app --json',
+    '"$TRACE_CLI" repo create app --remote-url https://github.com/acme/app.git --default-branch main --json'
+  ],
+  effects: ["Creates a repository record and emits a repo-created event."],
+  output: "The new repository ID, name, remote URL, and default branch.",
+  nextSteps: [
+    'Link it to a project with "$TRACE_CLI" channel link-repo <channel-id> <repo-id> --json.',
+    'For a local-only repository, add a Git remote and run "$TRACE_CLI" repo attach-remote <repo-id> <remote-url> --json before starting a cloud coding session.'
+  ],
+  notes: [
+    "This registers repository metadata in Trace; use git init separately to create a local Git repository.",
+    "A matching remote URL returns the existing repository instead of creating a duplicate.",
+    "This command does not create another project or channel."
+  ],
+  positionals: [{ name: "name", required: true }],
+  options: [
+    {
+      name: "remoteUrl",
+      flag: "--remote-url",
+      kind: "string",
+      valueName: "URL",
+      description: "Git remote URL; may be attached later"
+    },
+    {
+      name: "defaultBranch",
+      flag: "--default-branch",
+      kind: "string",
+      valueName: "NAME",
+      description: "Default branch (defaults to main)"
+    }
+  ],
+  async run(ctx, input) {
+    const name = input.positionals[0]?.trim();
+    if (!name) usage("A repository name is required");
+    const client = await ctx.client();
+    const variables = {
+      input: {
+        organizationId: requireOrganizationId(client.organizationId),
+        name,
+        remoteUrl: optionString(input, "remoteUrl")?.trim() || null,
+        defaultBranch: optionString(input, "defaultBranch")?.trim() || "main"
+      }
+    };
+    const result = await client.graphql(
+      traceCliOperations.registerRepo,
+      variables
+    );
+    ctx.output(
+      { repo: result.registerRepo },
+      `Registered ${result.registerRepo.name} (${result.registerRepo.id})`
+    );
+  }
+});
+
 // src/commands/session/shared.ts
 var AGENT_STATUSES = ["not_started", "active", "done", "failed", "stopped"];
 var CODING_TOOLS = [
@@ -3207,6 +3281,7 @@ var commands = [
   channelListCommand,
   channelLinkRepoCommand,
   repoListCommand,
+  repoCreateCommand,
   repoAttachRemoteCommand,
   ...sessionCommands,
   ...terminalCommands,
@@ -3335,14 +3410,16 @@ var commandGroups = [
   },
   {
     name: "repo",
-    description: "Discover repositories in the current organization",
+    description: "Create and discover repositories in the current organization",
     workflow: [
       'Run "$TRACE_CLI" repo list --json to find a repository ID.',
+      'If the repository is not registered yet, run "$TRACE_CLI" repo create <name> --json.',
       'If the repository is local-only, run "$TRACE_CLI" repo attach-remote <repo-id> <remote-url> --json.',
       'Link it to a project with "$TRACE_CLI" channel link-repo <channel-id> <repo-id> --json.'
     ],
     examples: [
       '"$TRACE_CLI" repo list --json',
+      '"$TRACE_CLI" repo create app --json',
       '"$TRACE_CLI" repo attach-remote <repo-id> https://github.com/acme/app.git --json'
     ],
     notes: ["Repositories provide optional context for projects, artifacts, and sessions."]

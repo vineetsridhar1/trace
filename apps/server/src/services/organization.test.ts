@@ -380,6 +380,50 @@ describe("OrganizationService", () => {
     expect(eventServiceMock.publishCreated).toHaveBeenNthCalledWith(2, { id: "event-channel" });
   });
 
+  it("registers a repo without creating another channel", async () => {
+    prismaMock.repo.create.mockResolvedValueOnce({
+      id: "repo-1",
+      organizationId: "org-1",
+      name: "local-only",
+      provider: "github",
+      remoteUrl: null,
+      defaultBranch: "trunk",
+      webhookId: null,
+    });
+    eventServiceMock.create.mockResolvedValueOnce({ id: "event-repo" });
+
+    const service = new OrganizationService();
+    const repo = await service.createRepo(
+      {
+        organizationId: "org-1",
+        name: "local-only",
+        defaultBranch: "trunk",
+      } as CreateRepoInput,
+      "agent",
+      "agent-1",
+      false,
+    );
+
+    expect(repo.id).toBe("repo-1");
+    expect(prismaMock.channel.create).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).toHaveBeenCalledTimes(1);
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "repo_created",
+        payload: {
+          repo: expect.objectContaining({
+            id: "repo-1",
+            name: "local-only",
+            remoteUrl: null,
+            defaultBranch: "trunk",
+          }),
+        },
+      }),
+      prismaMock,
+    );
+    expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "event-repo" });
+  });
+
   it("updates repos, creates projects, and links entities", async () => {
     prismaMock.repo.findFirstOrThrow.mockResolvedValueOnce({ id: "repo-1" });
     prismaMock.repo.update.mockResolvedValueOnce({

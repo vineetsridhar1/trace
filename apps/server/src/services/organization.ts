@@ -232,7 +232,12 @@ export class OrganizationService {
     return member;
   }
 
-  async createRepo(input: CreateRepoInput, actorType: ActorType, actorId: string) {
+  async createRepo(
+    input: CreateRepoInput,
+    actorType: ActorType,
+    actorId: string,
+    createChannel = true,
+  ) {
     await prisma.$transaction((tx: Prisma.TransactionClient) =>
       assertActorOrgAccess(tx, input.organizationId, actorType, actorId),
     );
@@ -266,15 +271,17 @@ export class OrganizationService {
           include: { projects: true, sessions: true },
         });
 
-        const { channel, channelPayload } = await createChannelInTransaction(tx, {
-          organizationId: input.organizationId,
-          name: repo.name,
-          type: "coding",
-          actorType,
-          actorId,
-          repo: { id: repo.id, name: repo.name },
-          baseBranch: repo.defaultBranch,
-        });
+        const channelResult = createChannel
+          ? await createChannelInTransaction(tx, {
+              organizationId: input.organizationId,
+              name: repo.name,
+              type: "coding",
+              actorType,
+              actorId,
+              repo: { id: repo.id, name: repo.name },
+              baseBranch: repo.defaultBranch,
+            })
+          : null;
 
         const repoEvent = await eventService.create(
           {
@@ -299,28 +306,30 @@ export class OrganizationService {
           tx,
         );
 
-        const channelEvent = await eventService.create(
-          {
-            organizationId: input.organizationId,
-            scopeType: "channel",
-            scopeId: channel.id,
-            eventType: "channel_created",
-            payload: {
-              channel: channelPayload,
-            },
-            actorType,
-            actorId,
-            deferPublish: true,
-          },
-          tx,
-        );
+        const channelEvent = channelResult
+          ? await eventService.create(
+              {
+                organizationId: input.organizationId,
+                scopeType: "channel",
+                scopeId: channelResult.channel.id,
+                eventType: "channel_created",
+                payload: {
+                  channel: channelResult.channelPayload,
+                },
+                actorType,
+                actorId,
+                deferPublish: true,
+              },
+              tx,
+            )
+          : null;
 
         return [repo, repoEvent, channelEvent] as const;
       },
     );
 
     eventService.publishCreated(repoEvent);
-    eventService.publishCreated(channelEvent);
+    if (channelEvent) eventService.publishCreated(channelEvent);
 
     return repo;
   }

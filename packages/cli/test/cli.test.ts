@@ -228,6 +228,58 @@ describe("Trace CLI", () => {
     expect(stdout.mock.calls.flat().join("")).toContain('"baseBranch":"develop"');
   });
 
+  it("registers a repository without creating another channel", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: URL, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as {
+          operationName: string;
+          variables: Record<string, unknown>;
+        };
+        expect(request.operationName).toBe("TraceCliRegisterRepo");
+        expect(request.variables).toEqual({
+          input: {
+            organizationId: "org-1",
+            name: "app",
+            remoteUrl: "https://github.com/acme/app.git",
+            defaultBranch: "trunk",
+          },
+        });
+        return new Response(
+          JSON.stringify({
+            data: {
+              registerRepo: {
+                id: "repo-1",
+                name: "app",
+                provider: "github",
+                remoteUrl: "https://github.com/acme/app.git",
+                defaultBranch: "trunk",
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    await expect(
+      run([
+        "repo",
+        "create",
+        "app",
+        "--remote-url",
+        "https://github.com/acme/app.git",
+        "--default-branch",
+        "trunk",
+        "--json",
+      ]),
+    ).resolves.toBe(0);
+    expect(stdout.mock.calls.flat().join("")).toContain('"id":"repo-1"');
+  });
+
   it("attaches a remote URL to a local-only repository", async () => {
     vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
     vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
