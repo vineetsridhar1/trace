@@ -5,11 +5,17 @@ const mkdirSyncMock = vi.fn();
 const execFileMock = vi.fn();
 const getUsedSlugsMock = vi.fn();
 const generateAnimalSlugMock = vi.fn();
+const readdirMock = vi.fn();
+const rmMock = vi.fn();
 
 vi.mock("fs", () => ({
   default: {
     existsSync: existsSyncMock,
     mkdirSync: mkdirSyncMock,
+    promises: {
+      readdir: readdirMock,
+      rm: rmMock,
+    },
   },
 }));
 
@@ -29,10 +35,14 @@ describe("createWorktree", () => {
     execFileMock.mockReset();
     getUsedSlugsMock.mockReset();
     generateAnimalSlugMock.mockReset();
+    readdirMock.mockReset();
+    rmMock.mockReset();
   });
 
-  it("quarantines a worktree before removing it in the background", async () => {
+  it("quarantines a worktree, then drains the quarantine in the background", async () => {
     existsSyncMock.mockReturnValue(true);
+    readdirMock.mockResolvedValue(["otter-abc", "gibbon-def"]);
+    rmMock.mockResolvedValue(undefined);
     execFileMock.mockImplementation(
       (
         _command: string,
@@ -55,13 +65,50 @@ describe("createWorktree", () => {
       expect.any(Function),
     );
     await vi.waitFor(() => {
+      // Deletes leftovers from earlier runs too, so quarantine cannot accumulate.
+      expect(rmMock).toHaveBeenCalledWith("/tmp/sessions/.trace-trash/otter-abc", {
+        recursive: true,
+        force: true,
+      });
+      expect(rmMock).toHaveBeenCalledWith("/tmp/sessions/.trace-trash/gibbon-def", {
+        recursive: true,
+        force: true,
+      });
       expect(execFileMock).toHaveBeenCalledWith(
         "git",
-        ["worktree", "remove", expect.stringContaining("/.trace-trash/otter-")],
+        ["worktree", "prune"],
         expect.objectContaining({ cwd: "/tmp/repo" }),
         expect.any(Function),
       );
     });
+  });
+
+  it("never deletes outside the quarantine directory", async () => {
+    existsSyncMock.mockReturnValue(true);
+    readdirMock.mockResolvedValue(["../../escape", "otter-abc"]);
+    rmMock.mockResolvedValue(undefined);
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        _args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout: string, stderr: string) => void,
+      ) => {
+        callback(null, "", "");
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { removeWorktree } = await import("./worktree.js");
+    await removeWorktree({ repoPath: "/tmp/repo", worktreePath: "/tmp/sessions/otter" });
+
+    await vi.waitFor(() => {
+      expect(rmMock).toHaveBeenCalledWith("/tmp/sessions/.trace-trash/otter-abc", {
+        recursive: true,
+        force: true,
+      });
+    });
+    expect(rmMock).toHaveBeenCalledTimes(1);
   });
 
   afterEach(() => {

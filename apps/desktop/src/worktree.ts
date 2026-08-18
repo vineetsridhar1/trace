@@ -24,7 +24,6 @@ type ExecErrorWithOutput = Error & {
 const GIT_OPERATION_TIMEOUT_MS = 60_000;
 /** Network fetches on a large repo routinely outlast the local-operation budget. */
 const GIT_FETCH_TIMEOUT_MS = 10 * 60_000;
-const WORKTREE_REMOVAL_TIMEOUT_MS = 5 * 60_000;
 const backgroundRemovalByRepo = new Map<string, Promise<void>>();
 
 function execFileAsync(
@@ -459,24 +458,41 @@ export async function removeWorktree({
   const previousRemoval = backgroundRemovalByRepo.get(repoPath) ?? Promise.resolve();
   const removal = previousRemoval
     .catch(() => undefined)
-    .then(async () => {
-      await execFileAsync("git", ["worktree", "remove", quarantinedPath], {
-        cwd: repoPath,
-        timeout: WORKTREE_REMOVAL_TIMEOUT_MS,
-      });
-    });
+    .then(() => drainQuarantine(repoPath, quarantineDir));
   backgroundRemovalByRepo.set(repoPath, removal);
   void removal
     .catch((error: unknown) => {
-      console.warn(
-        `[worktree] failed to remove quarantined worktree ${quarantinedPath}: ${getErrorMessage(error)}`,
-      );
+      console.warn(`[worktree] failed to drain ${quarantineDir}: ${getErrorMessage(error)}`);
     })
     .finally(() => {
       if (backgroundRemovalByRepo.get(repoPath) === removal) {
         backgroundRemovalByRepo.delete(repoPath);
       }
     });
+}
+
+/**
+ * Delete every quarantined workspace, then drop the worktree registrations those
+ * deletions invalidated.
+ *
+ * A plain recursive delete rather than `git worktree remove`: the directory is
+ * already detached from its session, so neither a dirty tree nor a lock file may
+ * stop it, and there is no command timeout that could leave it half done and
+ * orphaned. Draining the whole directory also reclaims anything an app quit
+ * interrupted, so quarantined workspaces cannot accumulate across restarts.
+ */
+async function drainQuarantine(repoPath: string, quarantineDir: string): Promise<void> {
+  const resolvedQuarantineDir = path.resolve(quarantineDir);
+  const entries = await fs.promises.readdir(resolvedQuarantineDir).catch(() => [] as string[]);
+  for (const entry of entries) {
+    const target = path.resolve(resolvedQuarantineDir, entry);
+    // Never recurse outside the quarantine directory, whatever the entry name is.
+    if (path.dirname(target) !== resolvedQuarantineDir) continue;
+    await fs.promises.rm(target, { recursive: true, force: true });
+  }
+  // Registrations for the deleted directories are now stale; pruning them keeps
+  // `git worktree list` and slug generation honest.
+  await execFileAsync("git", ["worktree", "prune"], { cwd: repoPath });
 }
 
 /** Absolute path to the shared git dir backing a repo or worktree, or null. */
