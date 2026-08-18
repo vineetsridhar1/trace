@@ -12,7 +12,7 @@ import {
 import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { client } from "../../lib/urql";
-import { StartSessionDialog } from "./StartSessionDialog";
+import { StartProjectSessionButton } from "./StartProjectSessionButton";
 import { SessionsTable } from "./SessionsTable";
 import { MergedArchivedPage } from "./MergedArchivedPage";
 import { ConnectionStatus } from "../ConnectionStatus";
@@ -177,7 +177,7 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
             <Archive size={15} />
           </Button>
         )}
-        {viewerIsMember && <StartSessionDialog channelId={channelId} />}
+        {viewerIsMember && <StartProjectSessionButton channelId={channelId} />}
       </div>
 
       <div className="flex-1 overflow-hidden">
