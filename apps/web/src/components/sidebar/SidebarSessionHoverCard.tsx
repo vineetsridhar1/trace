@@ -1,5 +1,5 @@
 import { useMemo, type ReactElement } from "react";
-import { AppWindow, Calendar, GitBranch, Laptop } from "lucide-react";
+import { AppWindow, Calendar, GitBranch, GitPullRequest, Laptop } from "lucide-react";
 import { useEntityField, useEntityStore } from "@trace/client-core";
 import type { SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
 import { useAttachedCheckoutsForGroup, useDesktopBridgeInfo } from "../../stores/bridges";
@@ -22,6 +22,7 @@ type SidebarSessionGroupInfo = {
   name?: string | null;
   repo?: SidebarRepoRef;
   branch?: string | null;
+  prUrl?: string | null;
 } | null;
 
 type SpotlightDetail = {
@@ -60,6 +61,10 @@ export function SidebarSessionHoverCard({
   const resolvedSessionId = sessionId ?? "";
   const lastMessageAt = useEntityField("sessions", resolvedSessionId, "lastMessageAt");
   const branch = useEntityField("sessions", resolvedSessionId, "branch");
+  const sessionPrUrl = useEntityField("sessions", resolvedSessionId, "prUrl") as
+    | string
+    | null
+    | undefined;
   const createdBy = useEntityField("sessions", resolvedSessionId, "createdBy") as
     | SidebarUserRef
     | undefined;
@@ -67,6 +72,10 @@ export function SidebarSessionHoverCard({
     | SidebarSessionGroupInfo
     | undefined;
   const groupBranch = useEntityField("sessionGroups", sessionGroupId, "branch") as
+    | string
+    | null
+    | undefined;
+  const groupPrUrl = useEntityField("sessionGroups", sessionGroupId, "prUrl") as
     | string
     | null
     | undefined;
@@ -100,12 +109,13 @@ export function SidebarSessionHoverCard({
         align="start"
         sideOffset={10}
         alignOffset={-6}
-        className="pointer-events-none w-80 rounded-xl border border-white/10 !bg-zinc-900/72 p-3.5 text-foreground shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-2xl"
+        className="w-80 rounded-xl border border-white/10 !bg-zinc-900/72 p-3.5 text-foreground shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-2xl"
       >
         <SidebarSessionHoverContent
           branch={branch ?? groupBranch ?? sessionGroup?.branch ?? null}
           createdBy={createdBy}
           lastMessageAt={lastMessageAt ?? groupUpdatedAt}
+          prUrl={sessionPrUrl ?? groupPrUrl ?? sessionGroup?.prUrl ?? null}
           sessionGroupName={sessionGroupName ?? sessionGroup?.name ?? null}
           spotlightDetails={spotlightDetails}
           applicationDetails={applicationDetails}
@@ -119,6 +129,7 @@ function SidebarSessionHoverContent({
   branch,
   createdBy,
   lastMessageAt,
+  prUrl,
   sessionGroupName,
   spotlightDetails,
   applicationDetails,
@@ -126,6 +137,7 @@ function SidebarSessionHoverContent({
   branch: string | null;
   createdBy: SidebarUserRef | undefined;
   lastMessageAt: string | null | undefined;
+  prUrl: string | null;
   sessionGroupName: string | null;
   spotlightDetails: SpotlightDetail[];
   applicationDetails: ApplicationDetail[];
@@ -149,6 +161,17 @@ function SidebarSessionHoverContent({
             <GitBranch size={11} className="shrink-0" />
             <span className="min-w-0 break-words font-mono">{branch}</span>
           </p>
+        )}
+        {prUrl && (
+          <a
+            href={prUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex w-fit items-center gap-1.5 text-sky-400 transition-colors hover:text-sky-300 hover:underline"
+          >
+            <GitPullRequest size={11} className="shrink-0" />
+            <span>View pull request</span>
+          </a>
         )}
       </div>
 
