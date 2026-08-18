@@ -98,6 +98,7 @@ const electronMocks = vi.hoisted(() => {
     };
 
     async loadURL(url: string) {
+      this.operations.push(`load:${url}`);
       this.url = url;
       this.emit("did-navigate");
     }
@@ -239,6 +240,32 @@ beforeEach(() => {
 });
 
 describe("BrowserWorkspaceManager", () => {
+  it("does not load blank workspaces or duplicate a restored navigation", async () => {
+    const blankManager = new BrowserWorkspaceManager({
+      snapshotStore: new MemorySnapshotStore(),
+    });
+    blankManager.setWindow(createWindow());
+    await blankManager.activate("group-blank", "browser-blank");
+    expect(latestContents().operations).not.toContain("load:about:blank");
+
+    const store = new MemorySnapshotStore();
+    store.value = [
+      {
+        sessionGroupId: "group-restored",
+        browserId: "browser-restored",
+        url: "https://google.com/",
+      },
+    ];
+    const restoredManager = new BrowserWorkspaceManager({ snapshotStore: store });
+    restoredManager.setWindow(createWindow());
+    await restoredManager.activate("group-restored", "browser-restored");
+    await restoredManager.navigate("group-restored", "browser-restored", "https://google.com/");
+
+    expect(
+      latestContents().operations.filter((operation) => operation === "load:https://google.com/"),
+    ).toHaveLength(1);
+  });
+
   it("scales native bounds with the Trace window zoom factor", async () => {
     const manager = new BrowserWorkspaceManager({ snapshotStore: new MemorySnapshotStore() });
     manager.setWindow(createWindow(0.8));

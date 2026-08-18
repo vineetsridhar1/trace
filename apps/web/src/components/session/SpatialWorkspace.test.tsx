@@ -23,11 +23,14 @@ function NewTabHarness() {
 }
 
 function ForegroundTabHarness() {
-  const [preferredTabId, setPreferredTabId] = useState("chat");
+  const [foregroundTabId, setForegroundTabId] = useState<string | null>(null);
   return (
     <>
-      <button type="button" onClick={() => setPreferredTabId("browser")}>
+      <button type="button" onClick={() => setForegroundTabId("browser")}>
         Foreground browser
+      </button>
+      <button type="button" onClick={() => setForegroundTabId(null)}>
+        Clear foreground request
       </button>
       <SpatialWorkspace
         persistenceKey="spatial-workspace-foreground-test"
@@ -35,7 +38,8 @@ function ForegroundTabHarness() {
           { id: "chat", label: "Chat", icon: null },
           { id: "browser", label: "Browser", icon: null },
         ]}
-        preferredActiveTabId={preferredTabId}
+        preferredActiveTabId="chat"
+        foregroundTabId={foregroundTabId}
         onActivateTab={() => undefined}
         onCloseTab={() => undefined}
         onNewTab={() => "draft:new"}
@@ -99,6 +103,12 @@ describe("SpatialWorkspace", () => {
 
     await act(async () => {
       renderer?.root.findByProps({ children: "Foreground browser" }).props.onClick();
+    });
+
+    expect(renderer.root.findByProps({ "data-rendered-tab": "browser" })).toBeDefined();
+
+    await act(async () => {
+      renderer?.root.findByProps({ children: "Clear foreground request" }).props.onClick();
     });
 
     expect(renderer.root.findByProps({ "data-rendered-tab": "browser" })).toBeDefined();

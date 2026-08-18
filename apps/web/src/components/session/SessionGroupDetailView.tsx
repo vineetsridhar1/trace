@@ -1122,9 +1122,7 @@ export function SessionGroupDetailView({
     trafficEndpointId,
   ]);
 
-  const preferredWorkspaceTabId = requestedActiveWorkspaceTabId
-    ? requestedActiveWorkspaceTabId
-    : activeArtifactId
+  const preferredWorkspaceTabId = activeArtifactId
     ? `artifact:${activeArtifactId}`
     : activeFilePath
       ? `file:${activeFilePath}`
@@ -1528,6 +1526,7 @@ export function SessionGroupDetailView({
                 persistenceKey={`trace:spatial-workspace:${sessionGroupId}`}
                 tabs={workspaceTabs}
                 preferredActiveTabId={preferredWorkspaceTabId}
+                foregroundTabId={requestedActiveWorkspaceTabId}
                 tabReplacements={workspaceTabReplacements}
                 onActivateTab={handleActivateWorkspaceTab}
                 onCloseTab={handleCloseWorkspaceTab}

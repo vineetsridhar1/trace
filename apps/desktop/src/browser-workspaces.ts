@@ -53,6 +53,7 @@ type BrowserWorkspace = {
   lastActivatedOrder: number;
   reopenDevToolsOnActivate: boolean;
   overlayHidden: boolean;
+  pendingNavigation: { url: string; promise: Promise<void> } | null;
 };
 
 type PermissionRequestHandler = NonNullable<Parameters<Session["setPermissionRequestHandler"]>[0]>;
@@ -201,7 +202,11 @@ export class BrowserWorkspaceManager {
     rawUrl: string,
   ): Promise<BrowserWorkspaceState> {
     const workspace = this.requireActiveWorkspace(sessionGroupId, browserId);
-    await workspace.view.webContents.loadURL(normalizeUrl(rawUrl));
+    const url = normalizeUrl(rawUrl);
+    if (workspace.view.webContents.getURL() === url && !workspace.pendingNavigation) {
+      return workspace.state;
+    }
+    await this.loadWorkspaceUrl(workspace, url);
     return workspace.state;
   }
 
@@ -295,15 +300,36 @@ export class BrowserWorkspaceManager {
       lastActivatedOrder: ++this.activationOrder,
       reopenDevToolsOnActivate: false,
       overlayHidden: false,
+      pendingNavigation: null,
     };
     this.workspaces.set(key, workspace);
     this.configureSession(view.webContents.session);
     this.bindWorkspaceEvents(workspace);
     this.configureWindowOpening(view.webContents);
-    void view.webContents.loadURL(workspace.state.url).catch((error: unknown) => {
-      console.warn("[browser] failed to restore browser workspace", error);
-    });
+    if (workspace.state.url !== "about:blank") {
+      void this.loadWorkspaceUrl(workspace, workspace.state.url).catch((error: unknown) => {
+        console.warn("[browser] failed to restore browser workspace", error);
+      });
+    }
     return workspace;
+  }
+
+  private loadWorkspaceUrl(workspace: BrowserWorkspace, url: string): Promise<void> {
+    if (workspace.pendingNavigation?.url === url) return workspace.pendingNavigation.promise;
+
+    const promise = workspace.view.webContents
+      .loadURL(url)
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        if (!isAbortedNavigation(error)) throw error;
+      })
+      .finally(() => {
+        if (workspace.pendingNavigation?.promise === promise) {
+          workspace.pendingNavigation = null;
+        }
+      });
+    workspace.pendingNavigation = { url, promise };
+    return promise;
   }
 
   private bindWorkspaceEvents(workspace: BrowserWorkspace) {
@@ -715,4 +741,10 @@ function isFileNotFoundError(error: unknown): boolean {
     "code" in error &&
     (error as Error & { code?: string }).code === "ENOENT"
   );
+}
+
+function isAbortedNavigation(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const navigationError = error as { code?: unknown; errno?: unknown };
+  return navigationError.code === "ERR_ABORTED" || navigationError.errno === -3;
 }

@@ -62,6 +62,7 @@ interface SpatialWorkspaceProps {
   persistenceKey: string;
   tabs: SpatialWorkspaceTab[];
   preferredActiveTabId?: string | null;
+  foregroundTabId?: string | null;
   onActivateTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;
   onNewTab: (groupId: string) => string;
@@ -155,6 +156,7 @@ export function SpatialWorkspace({
   persistenceKey,
   tabs,
   preferredActiveTabId,
+  foregroundTabId,
   onActivateTab,
   onCloseTab,
   onNewTab,
@@ -170,6 +172,7 @@ export function SpatialWorkspace({
   const tabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs]);
   const [layout, setLayout] = useState(() => readLayout(persistenceKey, tabIds, preferredActiveTabId));
   const previousPreferredActiveTabIdRef = useRef(preferredActiveTabId);
+  const previousForegroundTabIdRef = useRef<string | null>(null);
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
   const dragStartLayoutRef = useRef<SpatialLayout | null>(null);
   const lastDragPointerXRef = useRef<number | null>(null);
@@ -187,6 +190,14 @@ export function SpatialWorkspace({
     const preferredTabChanged =
       previousPreferredActiveTabIdRef.current !== preferredActiveTabId;
     previousPreferredActiveTabIdRef.current = preferredActiveTabId;
+    const foregroundTabChanged = previousForegroundTabIdRef.current !== foregroundTabId;
+    previousForegroundTabIdRef.current = foregroundTabId ?? null;
+    const requestedTabId =
+      foregroundTabChanged && foregroundTabId
+        ? foregroundTabId
+        : preferredTabChanged
+          ? preferredActiveTabId
+          : null;
     setLayout((current) => {
       const replaced = Object.entries(tabReplacements).reduce(
         (next, [source, replacement]) => replaceSpatialTab(next, source, replacement),
@@ -195,10 +206,10 @@ export function SpatialWorkspace({
       return syncSpatialTabs(
         replaced,
         tabIds,
-        preferredTabChanged ? preferredActiveTabId : null,
+        requestedTabId,
       );
     });
-  }, [preferredActiveTabId, tabIdsKey, tabReplacementsKey]);
+  }, [foregroundTabId, preferredActiveTabId, tabIdsKey, tabReplacementsKey]);
 
   useEffect(() => {
     try {
