@@ -354,14 +354,7 @@ export function SessionDetailView({
   const hasSetupScript = Boolean(channelSetupScript?.trim());
   const setupBlocking = hasSetupScript && setupStatus === "running";
 
-  const showTerminalPanel = useUIStore((s: UIState) => s.showTerminalPanel);
-  const setShowTerminalPanel = useUIStore((s: UIState) => s.setShowTerminalPanel);
   const [retryingSetup, setRetryingSetup] = useState(false);
-
-  // Reset terminal panel when switching sessions
-  useEffect(() => {
-    setShowTerminalPanel(false);
-  }, [sessionId, setShowTerminalPanel]);
 
   const canAccessTerminal =
     bridgeInteractionAllowed &&
@@ -771,14 +764,8 @@ export function SessionDetailView({
               </div>
             )}
 
-            {!hideHeader && (showTerminal || showTerminalPanel) && canAccessTerminal && (
-              <TerminalPanel
-                sessionId={sessionId}
-                onClose={() => {
-                  setShowTerminal(false);
-                  setShowTerminalPanel(false);
-                }}
-              />
+            {!hideHeader && showTerminal && canAccessTerminal && (
+              <TerminalPanel sessionId={sessionId} onClose={() => setShowTerminal(false)} />
             )}
           </div>
           <div

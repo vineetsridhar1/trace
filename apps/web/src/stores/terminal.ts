@@ -27,7 +27,6 @@ export interface TerminalCreationIntent extends AddTerminalOptions {
   replaceWorkspaceTabId?: string;
   pin?: boolean;
   select?: boolean;
-  showPanel?: boolean;
   createdAt: number;
 }
 
@@ -44,17 +43,12 @@ interface TerminalState {
   ) => void;
   setTerminalStatus: (id: string, status: TerminalStatus) => void;
   renameTerminal: (id: string, name: string) => void;
-  claimInitialCommand: (
-    id: string,
-  ) => { command: string; submitInitialCommand: boolean } | null;
+  claimInitialCommand: (id: string) => { command: string; submitInitialCommand: boolean } | null;
   pinTerminal: (id: string) => void;
   unpinTerminal: (id: string) => void;
   registerTerminalCreationIntent: (id: string, intent: TerminalCreationIntent) => void;
   cancelTerminalCreationIntent: (id: string) => void;
-  consumeTerminalCreationIntent: (
-    id: string,
-    sessionId: string,
-  ) => TerminalCreationIntent | null;
+  consumeTerminalCreationIntent: (id: string, sessionId: string) => TerminalCreationIntent | null;
   removeTerminal: (id: string) => void;
 }
 
@@ -85,8 +79,7 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
             status: status ?? existing?.status ?? "connecting",
             customName: opts?.customName ?? existing?.customName,
             initialCommand: opts?.initialCommand ?? existing?.initialCommand,
-            submitInitialCommand:
-              opts?.submitInitialCommand ?? existing?.submitInitialCommand,
+            submitInitialCommand: opts?.submitInitialCommand ?? existing?.submitInitialCommand,
             initialCommandSent: existing?.initialCommandSent,
             creationIntentId: opts?.creationIntentId ?? existing?.creationIntentId,
           },
@@ -144,8 +137,8 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
     set((state: TerminalState) => {
       const cutoff = Date.now() - 5 * 60 * 1000;
       const activeIntents = Object.fromEntries(
-        Object.entries(state.terminalCreationIntents).filter(([, candidate]) =>
-          candidate.createdAt >= cutoff,
+        Object.entries(state.terminalCreationIntents).filter(
+          ([, candidate]) => candidate.createdAt >= cutoff,
         ),
       );
       return { terminalCreationIntents: { ...activeIntents, [id]: intent } };

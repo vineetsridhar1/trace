@@ -303,7 +303,7 @@ var traceCliOperations = {
     type: "mutation",
     rootField: "createTerminal",
     capability: "terminal:control",
-    argumentPaths: ["sessionId", "cols", "rows", "openInWorkspace"],
+    argumentPaths: ["sessionId", "cols", "rows"],
     document: `mutation TraceCliOpenTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) { createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows, openInWorkspace: true) { ${TERMINAL_FIELDS} } }`
   }),
   openWorkspaceBrowser: operation({
@@ -367,12 +367,7 @@ var traceCliOperations = {
     type: "mutation",
     rootField: "registerRepo",
     capability: "resource:configure",
-    argumentPaths: [
-      "input.organizationId",
-      "input.name",
-      "input.remoteUrl",
-      "input.defaultBranch"
-    ],
+    argumentPaths: ["input.organizationId", "input.name", "input.remoteUrl", "input.defaultBranch"],
     document: `mutation TraceCliRegisterRepo($input: CreateRepoInput!) {
       registerRepo(input: $input) { id name provider remoteUrl defaultBranch }
     }`
@@ -1565,11 +1560,14 @@ var browserCommands = [
     path: ["browser", "open"],
     description: "Open a website in a new browser tab in the current Trace workspace",
     examples: ['"$TRACE_CLI" browser open https://example.com --json'],
-    effects: [
-      "Requests a browser tab for the requesting user in the current session group."
-    ],
+    effects: ["Requests a browser tab for the requesting user in the current session group."],
     output: "A request confirmation containing the website URL.",
-    nextSteps: ["The tab opens when an eligible Trace client receives the request."],
+    nextSteps: [
+      "The request is queued for the requesting user; it is not a confirmation that a tab opened."
+    ],
+    notes: [
+      "The embedded browser renders only in the Trace desktop app. Web clients show the URL as a link instead, so do not rely on this command to load a page you then need to read."
+    ],
     positionals: [{ name: "url", required: true }],
     async run(ctx, input) {
       const variables = {
@@ -3294,7 +3292,8 @@ var commandGroups = [
     workflow: ['Run "$TRACE_CLI" browser open <url> --json to request a browser tab.'],
     examples: ['"$TRACE_CLI" browser open https://example.com --json'],
     notes: [
-      "Browser requests target only the requesting user and the current session group."
+      "Browser requests target only the requesting user and the current session group.",
+      "The embedded browser renders only in the Trace desktop app; web clients show the URL as a link."
     ]
   },
   {

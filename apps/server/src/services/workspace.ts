@@ -1,23 +1,17 @@
 import type { ActorType } from "@trace/gql";
+import { normalizeWorkspaceBrowserUrl, WorkspaceBrowserUrlError } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { AuthorizationError, NotFoundError, ValidationError } from "../lib/errors.js";
 import { canViewSessionGroup } from "./access.js";
 import { eventService } from "./event.js";
 
 function normalizeBrowserUrl(value: string): string {
-  const input = value.trim();
-  if (!input) throw new ValidationError("Browser URL is required");
-  const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(input) ? input : `https://${input}`;
-  let url: URL;
   try {
-    url = new URL(candidate);
-  } catch {
-    throw new ValidationError("Browser URL is invalid");
+    return normalizeWorkspaceBrowserUrl(value);
+  } catch (error: unknown) {
+    if (error instanceof WorkspaceBrowserUrlError) throw new ValidationError(error.message);
+    throw error;
   }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new ValidationError("Browser URL must use HTTP or HTTPS");
-  }
-  return url.toString();
 }
 
 class WorkspaceService {

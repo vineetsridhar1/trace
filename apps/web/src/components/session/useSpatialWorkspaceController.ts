@@ -21,6 +21,7 @@ interface SpatialWorkspaceControllerOptions {
   preferredActiveTabId?: string | null;
   foregroundTabId?: string | null;
   tabReplacements: Record<string, string>;
+  onTabReplacementsApplied?: (sourceTabIds: string[]) => void;
   onActivateTab: (tabId: string) => void;
   onNewTab: (groupId: string) => string;
   onOverlayVisibilityChange?: (visible: boolean) => void;
@@ -32,6 +33,7 @@ export function useSpatialWorkspaceController({
   preferredActiveTabId,
   foregroundTabId,
   tabReplacements,
+  onTabReplacementsApplied,
   onActivateTab,
   onNewTab,
   onOverlayVisibilityChange,
@@ -42,7 +44,10 @@ export function useSpatialWorkspaceController({
     .map(([source, replacement]) => `${source}\u0000${replacement}`)
     .join("\u0001");
   const tabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs]);
-  const [layout, setLayout] = useState(() => readLayout(persistenceKey, tabIds, preferredActiveTabId));
+  const [layout, setLayout] = useState(() =>
+    readLayout(persistenceKey, tabIds, preferredActiveTabId),
+  );
+  const layoutRef = useRef(layout);
   const [resizingSplitId, setResizingSplitId] = useState<string | null>(null);
   const previousPreferredActiveTabIdRef = useRef(preferredActiveTabId);
   const previousForegroundTabIdRef = useRef<string | null>(null);
@@ -66,15 +71,39 @@ export function useSpatialWorkspaceController({
       );
       return syncSpatialTabs(replaced, tabIds, requestedTabId);
     });
-  }, [foregroundTabId, preferredActiveTabId, tabIdsKey, tabReplacementsKey]);
+    // A replacement is a one-shot instruction. Reporting it back lets the
+    // producer drop it, so the map does not grow for the life of the session
+    // and every later sync does not replay the whole history.
+    const applied = Object.keys(tabReplacements);
+    if (applied.length > 0) onTabReplacementsApplied?.(applied);
+    // tabIds/tabReplacements are read through their serialized keys so that a
+    // new array or object identity alone does not re-run the sync.
+  }, [
+    foregroundTabId,
+    onTabReplacementsApplied,
+    preferredActiveTabId,
+    tabIdsKey,
+    tabReplacementsKey,
+  ]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(persistenceKey, JSON.stringify(layout));
-    } catch {
-      // Persistence is optional when browser storage is unavailable.
-    }
-  }, [layout, persistenceKey]);
+    layoutRef.current = layout;
+  }, [layout]);
+
+  useEffect(
+    () => () => {
+      persistLayout(persistenceKey, layoutRef.current);
+    },
+    [persistenceKey],
+  );
+
+  // Panel resizing drives setLayout from pointermove, so persisting on every
+  // layout change would serialize and write the whole tree once per frame.
+  // Hold the write until the drag settles.
+  useEffect(() => {
+    if (resizingSplitId !== null) return;
+    persistLayout(persistenceKey, layout);
+  }, [layout, persistenceKey, resizingSplitId]);
 
   const overlayVisible = drag.draggedTabId !== null || resizingSplitId !== null;
   useEffect(() => {
@@ -94,20 +123,27 @@ export function useSpatialWorkspaceController({
     setLayout((current) => setSpatialSplitRatio(current, splitId, ratio));
   }, []);
   const handleFocusPanel = useCallback((groupId: string) => {
-    setLayout((current) => current.focusedGroupId ? focusSpatialGroup(current, groupId) : current);
+    setLayout((current) =>
+      current.focusedGroupId ? focusSpatialGroup(current, groupId) : current,
+    );
   }, []);
   const handleTogglePanelFocus = useCallback((groupId: string) => {
-    setLayout((current) => current.focusedGroupId ? balanceSpatialGroups(current) : focusSpatialGroup(current, groupId));
+    setLayout((current) =>
+      current.focusedGroupId ? balanceSpatialGroups(current) : focusSpatialGroup(current, groupId),
+    );
   }, []);
-  const handleNewTab = useCallback((groupId: string) => {
-    const tabId = onNewTab(groupId);
-    setLayout((current) => insertSpatialTab(current, tabId, groupId));
-  }, [onNewTab]);
+  const handleNewTab = useCallback(
+    (groupId: string) => {
+      const tabId = onNewTab(groupId);
+      setLayout((current) => insertSpatialTab(current, tabId, groupId));
+    },
+    [onNewTab],
+  );
 
   return {
     collisionDetection: drag.collisionDetection,
     compact: countRegions(layout.root) > 2,
-    draggedTab: drag.draggedTabId ? tabById.get(drag.draggedTabId) ?? null : null,
+    draggedTab: drag.draggedTabId ? (tabById.get(drag.draggedTabId) ?? null) : null,
     draggedTabId: drag.draggedTabId,
     handleActivate,
     handleDragCancel: drag.handleDragCancel,
@@ -144,7 +180,16 @@ function readLayout(key: string, tabIds: string[], preferredActiveTabId?: string
   return createSpatialLayout(tabIds, preferredActiveTabId);
 }
 
-function countRegions(node: SpatialLayout["root"]): number {
-  return node.type === "group" ? 1 : countRegions(node.children[0]) + countRegions(node.children[1]);
+function persistLayout(key: string, layout: SpatialLayout) {
+  try {
+    localStorage.setItem(key, JSON.stringify(layout));
+  } catch {
+    // Persistence is optional when browser storage is unavailable.
+  }
 }
 
+function countRegions(node: SpatialLayout["root"]): number {
+  return node.type === "group"
+    ? 1
+    : countRegions(node.children[0]) + countRegions(node.children[1]);
+}

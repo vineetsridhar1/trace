@@ -45,6 +45,40 @@ describe("WorkspaceService", () => {
     );
   });
 
+  it("refuses a private session group the requester does not own", async () => {
+    vi.mocked(prisma.sessionGroup.findFirst).mockResolvedValueOnce({
+      id: "group-1",
+      visibility: "private",
+      ownerUserId: "owner-1",
+    } as never);
+
+    await expect(
+      workspaceService.openBrowser({
+        sessionGroupId: "group-1",
+        url: "https://example.com",
+        organizationId: "org-1",
+        userId: "intruder-1",
+        actorType: "agent",
+      }),
+    ).rejects.toThrow("Not authorized for this session group");
+    expect(eventService.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses a session group in another organization", async () => {
+    vi.mocked(prisma.sessionGroup.findFirst).mockResolvedValueOnce(null as never);
+
+    await expect(
+      workspaceService.openBrowser({
+        sessionGroupId: "group-1",
+        url: "https://example.com",
+        organizationId: "org-2",
+        userId: "user-1",
+        actorType: "agent",
+      }),
+    ).rejects.toThrow();
+    expect(eventService.create).not.toHaveBeenCalled();
+  });
+
   it("rejects non-web URL schemes", async () => {
     vi.mocked(prisma.sessionGroup.findFirst).mockResolvedValueOnce({
       id: "group-1",

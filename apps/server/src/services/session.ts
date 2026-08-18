@@ -1622,6 +1622,29 @@ export class SessionService {
     return hiddenTab;
   }
 
+  /** Explicitly reopen a tab the user previously closed. */
+  async restoreTab(
+    sessionId: string,
+    organizationId: string,
+    userId: string,
+    actorType: ActorType,
+  ) {
+    await assertSessionAccess(sessionId, userId, organizationId);
+    const session = await prisma.session.findFirst({
+      where: { id: sessionId, organizationId },
+      select: { id: true, sessionGroupId: true },
+    });
+    if (!session) throw new ValidationError("Session not found");
+    await this.restoreHiddenTab(
+      sessionId,
+      session.sessionGroupId,
+      organizationId,
+      userId,
+      actorType,
+    );
+    return true;
+  }
+
   private async restoreHiddenTab(
     sessionId: string,
     sessionGroupId: string | null,

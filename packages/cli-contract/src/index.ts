@@ -333,7 +333,7 @@ export const traceCliOperations = {
     type: "mutation",
     rootField: "createTerminal",
     capability: "terminal:control",
-    argumentPaths: ["sessionId", "cols", "rows", "openInWorkspace"],
+    argumentPaths: ["sessionId", "cols", "rows"],
     document: `mutation TraceCliOpenTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) { createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows, openInWorkspace: true) { ${TERMINAL_FIELDS} } }`,
   }),
   openWorkspaceBrowser: operation({
@@ -397,12 +397,7 @@ export const traceCliOperations = {
     type: "mutation",
     rootField: "registerRepo",
     capability: "resource:configure",
-    argumentPaths: [
-      "input.organizationId",
-      "input.name",
-      "input.remoteUrl",
-      "input.defaultBranch",
-    ],
+    argumentPaths: ["input.organizationId", "input.name", "input.remoteUrl", "input.defaultBranch"],
     document: `mutation TraceCliRegisterRepo($input: CreateRepoInput!) {
       registerRepo(input: $input) { id name provider remoteUrl defaultBranch }
     }`,

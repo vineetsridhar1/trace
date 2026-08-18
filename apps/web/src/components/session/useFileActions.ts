@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useUIStore } from "../../stores/ui";
-import type { OpenFileTab } from "./GroupTabStrip";
+import type { OpenFileTab } from "./openFileTab";
 import type { FileOpenRequest } from "./FileOpenContext";
 import type { FileEditorBuffer } from "./file-editor-buffer";
 import type {

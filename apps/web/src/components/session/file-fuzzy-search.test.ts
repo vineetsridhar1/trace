@@ -12,14 +12,14 @@ describe("file fuzzy search", () => {
     const results = searchFilePaths(
       [
         "apps/web/src/components/session/SessionGroupDetailView.tsx",
-        "apps/web/src/components/session/GroupTabStrip.tsx",
+        "apps/web/src/components/session/GroupHeader.tsx",
         "packages/shared/src/models.ts",
       ],
       "group",
       10,
     );
 
-    expect(results[0]?.path).toBe("apps/web/src/components/session/GroupTabStrip.tsx");
+    expect(results[0]?.path).toBe("apps/web/src/components/session/GroupHeader.tsx");
   });
 
   it("requires every space-separated token to match", () => {

@@ -1118,6 +1118,7 @@ export type Mutation = {
   resizeTerminal: Scalars["Boolean"]["output"];
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
+  restoreSessionTab: Scalars["Boolean"]["output"];
   retryDesignSystemCommitArtifact: DesignSystem;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
@@ -1574,6 +1575,10 @@ export type MutationRestoreLinkedCheckoutArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationRestoreSessionTabArgs = {
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationRetryDesignSystemCommitArtifactArgs = {

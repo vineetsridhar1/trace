@@ -45,8 +45,7 @@ export function reconcileTerminalEvent(event: Event): void {
       useTerminalStore.getState().pinTerminal(terminal.id);
     }
     const openedForCurrentUser =
-      payload.openInWorkspace === true &&
-      payload.targetUserId === useAuthStore.getState().user?.id;
+      payload.openInWorkspace === true && payload.targetUserId === useAuthStore.getState().user?.id;
     const shouldSelect = intent?.select === true || openedForCurrentUser;
     const ui = useUIStore.getState();
     const groupIsActive = ui.activeSessionGroupId === terminal.sessionGroupId;
@@ -64,7 +63,6 @@ export function reconcileTerminalEvent(event: Event): void {
         select: shouldSelect,
       });
     }
-    if (intent?.showPanel) useUIStore.getState().setShowTerminalPanel(true);
     return;
   }
 

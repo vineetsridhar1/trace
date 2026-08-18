@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import {
@@ -27,7 +22,7 @@ import { SessionGroupContentArea } from "./SessionGroupContentArea";
 import { ProjectPreviewWorkspace } from "./ProjectPreviewWorkspace";
 import { AttachmentOpenContext, UploadedAttachmentOpenContext } from "./AttachmentOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
-import { WorkspaceSurfaceContent, type WorkspaceSurface } from "./SidebarPanel";
+import { WorkspaceSurfaceContent } from "./SidebarPanel";
 import { SpatialWorkspace } from "./SpatialWorkspace";
 import { SpatialNewTab, type SpatialNewChatInput } from "./SpatialNewTab";
 import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
@@ -61,7 +56,7 @@ import type { RegisteredCommand } from "../../stores/command-registry";
 import { ArtifactOpenContext } from "../artifact/ArtifactOpenContext";
 import { ArtifactTabContent } from "../artifact/ArtifactTabContent";
 import { useWorkspaceTabRequests } from "./useWorkspaceTabRequests";
-import { useSessionWorkspaceTabs } from "./useSessionWorkspaceTabs";
+import { CANVAS_TAB_ID, useSessionWorkspaceTabs } from "./useSessionWorkspaceTabs";
 
 const EMPTY_ARTIFACT_IDS: string[] = [];
 const EMPTY_HIDDEN_SESSION_TABS: Record<string, string> = {};
@@ -80,6 +75,12 @@ const HIDE_SESSION_TAB_MUTATION = gql`
       sessionId
       hiddenAt
     }
+  }
+`;
+
+const RESTORE_SESSION_TAB_MUTATION = gql`
+  mutation RestoreSessionTab($sessionId: ID!) {
+    restoreSessionTab(sessionId: $sessionId)
   }
 `;
 
@@ -332,6 +333,7 @@ export function SessionGroupDetailView({
     setDraftTabs: setDraftWorkspaceTabs,
     setForegroundTabId: setRequestedActiveWorkspaceTabId,
     tabReplacements: workspaceTabReplacements,
+    handleTabReplacementsApplied,
   } = useWorkspaceTabRequests({
     sessionGroupId,
     setActiveSessionId,
@@ -406,7 +408,10 @@ export function SessionGroupDetailView({
   useEffect(() => {
     if (!sidebarFileOpenRequest || sidebarFileOpenRequest.sessionGroupId !== sessionGroupId) return;
     if (sidebarFileOpenRequest.kind === "diff") {
-      handleDiffFileClick(sidebarFileOpenRequest.filePath, sidebarFileOpenRequest.status ?? "modified");
+      handleDiffFileClick(
+        sidebarFileOpenRequest.filePath,
+        sidebarFileOpenRequest.status ?? "modified",
+      );
     } else {
       handleFileClick(sidebarFileOpenRequest.filePath);
     }
@@ -708,81 +713,84 @@ export function SessionGroupDetailView({
     !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed;
   const canOpenTerminalCmd = !selectedSessionIsOptimistic && terminalAllowed;
 
-  const handleNewChat = useCallback(async (input?: Partial<SpatialNewChatInput>) => {
-    if (!selectedSession || selectedSession._optimistic || !bridgeInteractionAllowed) return null;
-    const resolvedChannelId =
-      getSessionGroupChannelId(
-        useEntityStore.getState().sessionGroups[sessionGroupId] ?? null,
-        groupSessions,
-      ) ?? getSessionChannelId(selectedSession);
-    const selectedRepo =
-      groupRepo ??
-      (selectedSession.repo as { id: string; remoteUrl?: string | null } | null | undefined);
-    if (selectedSession.hosting === "cloud" && repoRemoteKnownMissing(selectedRepo)) {
-      toast.error("Cloud is unavailable for this repo", {
-        description: CLOUD_REPO_REMOTE_REQUIRED,
+  const handleNewChat = useCallback(
+    async (input?: Partial<SpatialNewChatInput>) => {
+      if (!selectedSession || selectedSession._optimistic || !bridgeInteractionAllowed) return null;
+      const resolvedChannelId =
+        getSessionGroupChannelId(
+          useEntityStore.getState().sessionGroups[sessionGroupId] ?? null,
+          groupSessions,
+        ) ?? getSessionChannelId(selectedSession);
+      const selectedRepo =
+        groupRepo ??
+        (selectedSession.repo as { id: string; remoteUrl?: string | null } | null | undefined);
+      if (selectedSession.hosting === "cloud" && repoRemoteKnownMissing(selectedRepo)) {
+        toast.error("Cloud is unavailable for this repo", {
+          description: CLOUD_REPO_REMOTE_REQUIRED,
+        });
+        return null;
+      }
+      const selectedHosting = resolveSupportedHostingForRepo(selectedSession.hosting, selectedRepo);
+      const nextTool = input?.tool ?? selectedSession.tool;
+      const nextModel = input?.model === undefined ? selectedSession.model : input.model;
+      const nextReasoningEffort =
+        input?.reasoningEffort === undefined
+          ? selectedSession.reasoningEffort
+          : input.reasoningEffort;
+      const result = await client
+        .mutation(START_SESSION_MUTATION, {
+          input: {
+            tool: nextTool,
+            model: nextModel ?? undefined,
+            reasoningEffort: nextReasoningEffort ?? undefined,
+            channelId: resolvedChannelId ?? undefined,
+            repoId: selectedRepo?.id,
+            branch: groupBranch ?? selectedSession.branch ?? undefined,
+            sessionGroupId,
+            sourceSessionId: selectedSession.id,
+          },
+        })
+        .toPromise();
+
+      if (result.error) {
+        toast.error("Failed to create session", { description: result.error.message });
+        return null;
+      }
+
+      const newSessionId = result.data?.startSession?.id;
+      if (!newSessionId) {
+        toast.error("Failed to create session");
+        return null;
+      }
+
+      optimisticallyInsertSession({
+        id: newSessionId,
+        sessionGroupId,
+        tool: nextTool,
+        model: nextModel,
+        reasoningEffort: nextReasoningEffort,
+        hosting: selectedHosting ?? selectedSession.hosting,
+        channel: resolvedChannelId ? { id: resolvedChannelId } : null,
+        repo: selectedRepo,
+        branch: groupBranch ?? selectedSession.branch,
       });
-      return null;
-    }
-    const selectedHosting = resolveSupportedHostingForRepo(selectedSession.hosting, selectedRepo);
-    const nextTool = input?.tool ?? selectedSession.tool;
-    const nextModel = input?.model === undefined ? selectedSession.model : input.model;
-    const nextReasoningEffort =
-      input?.reasoningEffort === undefined
-        ? selectedSession.reasoningEffort
-        : input.reasoningEffort;
-    const result = await client
-      .mutation(START_SESSION_MUTATION, {
-        input: {
-          tool: nextTool,
-          model: nextModel ?? undefined,
-          reasoningEffort: nextReasoningEffort ?? undefined,
-          channelId: resolvedChannelId ?? undefined,
-          repoId: selectedRepo?.id,
-          branch: groupBranch ?? selectedSession.branch ?? undefined,
-          sessionGroupId,
-          sourceSessionId: selectedSession.id,
-        },
-      })
-      .toPromise();
-
-    if (result.error) {
-      toast.error("Failed to create session", { description: result.error.message });
-      return null;
-    }
-
-    const newSessionId = result.data?.startSession?.id;
-    if (!newSessionId) {
-      toast.error("Failed to create session");
-      return null;
-    }
-
-    optimisticallyInsertSession({
-      id: newSessionId,
+      openSessionTab(sessionGroupId, newSessionId);
+      setActiveSessionId(newSessionId);
+      setActiveArtifactId(null);
+      return newSessionId;
+    },
+    [
+      groupSessions,
+      groupBranch,
+      bridgeInteractionAllowed,
+      groupRepo,
+      openSessionTab,
+      selectedSession,
       sessionGroupId,
-      tool: nextTool,
-      model: nextModel,
-      reasoningEffort: nextReasoningEffort,
-      hosting: selectedHosting ?? selectedSession.hosting,
-      channel: resolvedChannelId ? { id: resolvedChannelId } : null,
-      repo: selectedRepo,
-      branch: groupBranch ?? selectedSession.branch,
-    });
-    openSessionTab(sessionGroupId, newSessionId);
-    setActiveSessionId(newSessionId);
-    setActiveArtifactId(null);
-    return newSessionId;
-  }, [
-    groupSessions,
-    groupBranch,
-    bridgeInteractionAllowed,
-    groupRepo,
-    openSessionTab,
-    selectedSession,
-    sessionGroupId,
-    setActiveArtifactId,
-    setActiveSessionId,
-  ]);
+      setActiveArtifactId,
+      setActiveSessionId,
+    ],
+  );
 
   // Close whatever tab is currently shown. Files/terminals/traffic reveal the
   // session beneath them; closing the last session tab returns to the table.
@@ -889,8 +897,21 @@ export function SessionGroupDetailView({
 
   const handleRestoreSession = useCallback(
     (sessionId: string) => {
-      openSessionTab(sessionGroupId, sessionId);
-      handleSelectSession(sessionId);
+      // The session_tab_restored event clears the hidden entry; without the
+      // mutation the tab reappears locally and is hidden again on reload.
+      void client
+        .mutation(RESTORE_SESSION_TAB_MUTATION, { sessionId })
+        .toPromise()
+        .then((result) => {
+          if (result.error) throw result.error;
+          openSessionTab(sessionGroupId, sessionId);
+          handleSelectSession(sessionId);
+        })
+        .catch((error: unknown) => {
+          toast.error("Failed to restore session tab", {
+            description: error instanceof Error ? error.message : undefined,
+          });
+        });
     },
     [handleSelectSession, openSessionTab, sessionGroupId],
   );
@@ -923,8 +944,11 @@ export function SessionGroupDetailView({
     drafts: draftWorkspaceTabs,
     browserTitles,
     trafficEndpointId,
+    canvas: isCanvasWorkspace,
   });
 
+  // Explicitly opened surfaces still win, but a canvas workspace with nothing
+  // else open lands on its preview rather than on the chat tab.
   const preferredWorkspaceTabId = activeArtifactId
     ? `artifact:${activeArtifactId}`
     : activeFilePath
@@ -933,9 +957,11 @@ export function SessionGroupDetailView({
         ? `terminal:${activeTerminalId}`
         : activeWorkflowTab === "traffic" && trafficEndpointId
           ? "traffic"
-          : selectedSession
-            ? `session:${selectedSession.id}`
-            : draftWorkspaceTabs[0]?.id ?? null;
+          : isCanvasWorkspace
+            ? CANVAS_TAB_ID
+            : selectedSession
+              ? `session:${selectedSession.id}`
+              : (draftWorkspaceTabs[0]?.id ?? null);
 
   const handleActivateWorkspaceTab = useCallback(
     (tabId: string) => {
@@ -1061,12 +1087,11 @@ export function SessionGroupDetailView({
                 if (!selectedSession || !terminalAllowed) return;
                 void handleCreateTerminal(selectedSession, terminalAllowed, {
                   replaceWorkspaceTabId: tabId,
-                })
-                  .catch((error: unknown) => {
-                    toast.error("Failed to create terminal", {
-                      description: error instanceof Error ? error.message : undefined,
-                    });
+                }).catch((error: unknown) => {
+                  toast.error("Failed to create terminal", {
+                    description: error instanceof Error ? error.message : undefined,
                   });
+                });
                 return;
               }
               if (surface === "browser") {
@@ -1099,88 +1124,64 @@ export function SessionGroupDetailView({
         );
       }
 
-      if (tabId.startsWith("surface:")) {
-        if (tabId === "surface:browser" && isCanvasWorkspace) {
-          const canvasReady = isAppGroup
-            ? appCanvasReady
-            : isAnimationGroup
-              ? animationCanvasReady
-              : generatedProjectCanvasReady;
-          const canvasKey = isAppGroup
-            ? "app-canvas"
-            : isAnimationGroup
-              ? "animation-canvas"
-              : "generated-project-canvas";
-          const emptyState = isAppGroup ? (
-            <AppSessionPreviewPanel sessionGroupId={sessionGroupId} />
-          ) : isAnimationGroup ? (
-            <AnimationSessionPreviewPanel sessionGroupId={sessionGroupId} />
-          ) : (
-            <GeneratedProjectPreviewPanel
-              sessionGroupId={sessionGroupId}
-              projectKind={projectWorkspaceKind === "pdf" ? "pdf" : "design"}
-            />
-          );
-
-          return (
-            <ProjectPreviewWorkspace
-              onOpenArtifact={handleOpenArtifact}
-              sessionId={selectedSession?.id ?? null}
-              scrollToEventId={scrollToEventId}
-              onScrollComplete={handleScrollComplete}
-              onForkSession={handleOpenForkDialog}
-              canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
-              canvasReady={canvasReady}
-              canvasKey={canvasKey}
-              floatingChat={floatingProjectChat}
-              manualSessionGroupId={isGeneratedProjectGroup ? sessionGroupId : undefined}
-              showCanvasWhileLoading={
-                projectWorkspaceKind === "design" || projectWorkspaceKind === "design_system"
-              }
-              canvas={
-                <SessionGroupContentArea
-                  sessionGroupId={sessionGroupId}
-                  activeFilePath={null}
-                  openFiles={openFiles}
-                  activeTerminalId={null}
-                  activeTrafficEndpointId={null}
-                  selectedSession={null}
-                  sessionsByRecency={sessionsByRecency}
-                  canStartNewChat={false}
-                  onStartNewChat={handleNewChat}
-                  defaultBranch={groupRepo?.defaultBranch ?? "main"}
-                  getFileBuffer={getFileBuffer}
-                  setFileBuffer={setFileBuffer}
-                  scrollToEventId={null}
-                  onScrollComplete={handleScrollComplete}
-                  onForkSession={handleOpenForkDialog}
-                  canForkSession={false}
-                  emptyState={emptyState}
-                />
-              }
-            />
-          );
-        }
+      if (tabId === CANVAS_TAB_ID) {
+        const canvasReady = isAppGroup
+          ? appCanvasReady
+          : isAnimationGroup
+            ? animationCanvasReady
+            : generatedProjectCanvasReady;
+        const canvasKey = isAppGroup
+          ? "app-canvas"
+          : isAnimationGroup
+            ? "animation-canvas"
+            : "generated-project-canvas";
+        const emptyState = isAppGroup ? (
+          <AppSessionPreviewPanel sessionGroupId={sessionGroupId} />
+        ) : isAnimationGroup ? (
+          <AnimationSessionPreviewPanel sessionGroupId={sessionGroupId} />
+        ) : (
+          <GeneratedProjectPreviewPanel
+            sessionGroupId={sessionGroupId}
+            projectKind={projectWorkspaceKind === "pdf" ? "pdf" : "design"}
+          />
+        );
 
         return (
-          <WorkspaceSurfaceContent
-            sessionGroupId={sessionGroupId}
-            browserId={tabId}
-            surface={tabId.slice("surface:".length) as WorkspaceSurface}
-            activeSessionId={selectedSession?.id ?? null}
-            activeFilePath={activeFilePath}
-            fileTree={sessionGroupFileTree}
-            filesLoading={sessionGroupFileTreeLoading}
-            filesError={sessionGroupFileTreeError}
-            onClose={() => undefined}
-            onFileClick={handleFileClick}
-            onRefreshFiles={refreshTree}
-            onLoadDirectory={loadDirectory}
-            onDiffFileClick={handleDiffFileClick}
-            onOpenTraffic={handleOpenTrafficTab}
-            onBrowserTitleChange={handleBrowserTitleChange}
-            bridgeAccess={bridgeAccess}
-            onBridgeAccessRequested={refreshBridgeAccess}
+          <ProjectPreviewWorkspace
+            onOpenArtifact={handleOpenArtifact}
+            sessionId={selectedSession?.id ?? null}
+            scrollToEventId={scrollToEventId}
+            onScrollComplete={handleScrollComplete}
+            onForkSession={handleOpenForkDialog}
+            canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
+            canvasReady={canvasReady}
+            canvasKey={canvasKey}
+            floatingChat={floatingProjectChat}
+            manualSessionGroupId={isGeneratedProjectGroup ? sessionGroupId : undefined}
+            showCanvasWhileLoading={
+              projectWorkspaceKind === "design" || projectWorkspaceKind === "design_system"
+            }
+            canvas={
+              <SessionGroupContentArea
+                sessionGroupId={sessionGroupId}
+                activeFilePath={null}
+                openFiles={openFiles}
+                activeTerminalId={null}
+                activeTrafficEndpointId={null}
+                selectedSession={null}
+                sessionsByRecency={sessionsByRecency}
+                canStartNewChat={false}
+                onStartNewChat={handleNewChat}
+                defaultBranch={groupRepo?.defaultBranch ?? "main"}
+                getFileBuffer={getFileBuffer}
+                setFileBuffer={setFileBuffer}
+                scrollToEventId={null}
+                onScrollComplete={handleScrollComplete}
+                onForkSession={handleOpenForkDialog}
+                canForkSession={false}
+                emptyState={emptyState}
+              />
+            }
           />
         );
       }
@@ -1193,9 +1194,7 @@ export function SessionGroupDetailView({
         ? (groupSessions.find((session) => session.id === tabId.slice("session:".length)) ?? null)
         : null;
       const tabFilePath = tabId.startsWith("file:") ? tabId.slice("file:".length) : null;
-      const tabTerminalId = tabId.startsWith("terminal:")
-        ? tabId.slice("terminal:".length)
-        : null;
+      const tabTerminalId = tabId.startsWith("terminal:") ? tabId.slice("terminal:".length) : null;
       const tabTrafficEndpointId = tabId === "traffic" ? trafficEndpointId : null;
 
       return (
@@ -1319,6 +1318,7 @@ export function SessionGroupDetailView({
                 preferredActiveTabId={preferredWorkspaceTabId}
                 foregroundTabId={requestedActiveWorkspaceTabId}
                 tabReplacements={workspaceTabReplacements}
+                onTabReplacementsApplied={handleTabReplacementsApplied}
                 onActivateTab={handleActivateWorkspaceTab}
                 onCloseTab={handleCloseWorkspaceTab}
                 onNewTab={handleNewWorkspaceTab}

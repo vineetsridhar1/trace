@@ -19,11 +19,14 @@ export const browserCommands = [
     path: ["browser", "open"],
     description: "Open a website in a new browser tab in the current Trace workspace",
     examples: ['"$TRACE_CLI" browser open https://example.com --json'],
-    effects: [
-      "Requests a browser tab for the requesting user in the current session group.",
-    ],
+    effects: ["Requests a browser tab for the requesting user in the current session group."],
     output: "A request confirmation containing the website URL.",
-    nextSteps: ["The tab opens when an eligible Trace client receives the request."],
+    nextSteps: [
+      "The request is queued for the requesting user; it is not a confirmation that a tab opened.",
+    ],
+    notes: [
+      "The embedded browser renders only in the Trace desktop app. Web clients show the URL as a link instead, so do not rely on this command to load a page you then need to read.",
+    ],
     positionals: [{ name: "url", required: true }],
     async run(ctx, input) {
       const variables = {

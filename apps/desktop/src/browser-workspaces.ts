@@ -1,3 +1,4 @@
+import { isWorkspaceBrowserUrl, normalizeWorkspaceBrowserUrl } from "@trace/shared";
 import {
   app,
   BrowserWindow,
@@ -659,23 +660,14 @@ function browserWebPreferences(): Electron.WebPreferences {
 }
 
 function normalizeUrl(rawUrl: string): string {
-  const trimmed = rawUrl.trim();
-  const candidate = /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(trimmed) ? trimmed : `https://${trimmed}`;
-  const url = new URL(candidate);
-  if (!isAllowedBrowserUrl(url.toString())) {
+  try {
+    return normalizeWorkspaceBrowserUrl(rawUrl);
+  } catch {
     throw new Error("Only web URLs are supported in the Trace browser.");
   }
-  return url.toString();
 }
 
-function isAllowedBrowserUrl(rawUrl: string): boolean {
-  try {
-    const url = new URL(rawUrl);
-    return url.protocol === "http:" || url.protocol === "https:" || url.href === "about:blank";
-  } catch {
-    return false;
-  }
-}
+const isAllowedBrowserUrl = isWorkspaceBrowserUrl;
 
 function permissionOrigin(rawUrl: string): string | null {
   try {

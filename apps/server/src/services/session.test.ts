@@ -426,6 +426,24 @@ describe("SessionService", () => {
   });
 
   describe("hidden tabs", () => {
+    // The suite's beforeEach only clears call history, so a persistent
+    // findFirst implementation would leak into later describes.
+    afterEach(() => {
+      prismaMock.session.findFirst.mockReset();
+      prismaMock.hiddenSessionTab.upsert.mockReset();
+      prismaMock.hiddenSessionTab.findMany.mockReset();
+      prismaMock.hiddenSessionTab.deleteMany.mockReset();
+    });
+
+    function mockAccessibleSession() {
+      prismaMock.session.findFirst.mockResolvedValue({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        sessionGroup: { visibility: "public", ownerUserId: "user-1" },
+      } as never);
+    }
+
     it("authorizes and records a per-user hidden tab event", async () => {
       prismaMock.session.findFirst.mockResolvedValue({
         id: "session-1",
@@ -441,7 +459,9 @@ describe("SessionService", () => {
       await service.hideTab("session-1", "org-1", "user-1", "user");
 
       expect(prismaMock.hiddenSessionTab.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { userId_sessionId: { userId: "user-1", sessionId: "session-1" } } }),
+        expect.objectContaining({
+          where: { userId_sessionId: { userId: "user-1", sessionId: "session-1" } },
+        }),
       );
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -449,6 +469,67 @@ describe("SessionService", () => {
           payload: expect.objectContaining({ sessionId: "session-1", userId: "user-1" }),
         }),
       );
+    });
+
+    it("clears the hidden row and announces the restore", async () => {
+      mockAccessibleSession();
+      prismaMock.hiddenSessionTab.deleteMany.mockResolvedValue({ count: 1 } as never);
+
+      await expect(service.restoreTab("session-1", "org-1", "user-1", "user")).resolves.toBe(true);
+
+      expect(prismaMock.hiddenSessionTab.deleteMany).toHaveBeenCalledWith({
+        where: { userId: "user-1", sessionId: "session-1" },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_tab_restored",
+          payload: expect.objectContaining({
+            sessionId: "session-1",
+            sessionGroupId: "group-1",
+            userId: "user-1",
+          }),
+        }),
+      );
+    });
+
+    it("stays silent when restoring a tab that was not hidden", async () => {
+      mockAccessibleSession();
+      prismaMock.hiddenSessionTab.deleteMany.mockResolvedValue({ count: 0 } as never);
+
+      await expect(service.restoreTab("session-1", "org-1", "user-1", "user")).resolves.toBe(true);
+
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+
+    it("scopes the hidden tab listing to the caller and the requested group", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        visibility: "public",
+        ownerUserId: "owner-1",
+      } as never);
+      prismaMock.hiddenSessionTab.findMany.mockResolvedValue([] as never);
+
+      await service.listHiddenTabs("group-1", "org-1", "user-1");
+
+      expect(prismaMock.hiddenSessionTab.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            userId: "user-1",
+            session: { sessionGroupId: "group-1", organizationId: "org-1" },
+          },
+        }),
+      );
+    });
+
+    it("refuses to list hidden tabs for a private group the caller does not own", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        visibility: "private",
+        ownerUserId: "owner-1",
+      } as never);
+
+      await expect(service.listHiddenTabs("group-1", "org-1", "intruder-1")).rejects.toThrow();
+      expect(prismaMock.hiddenSessionTab.findMany).not.toHaveBeenCalled();
     });
   });
 
