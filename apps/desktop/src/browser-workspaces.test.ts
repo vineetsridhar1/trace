@@ -411,26 +411,23 @@ describe("BrowserWorkspaceManager", () => {
     expect(electronMocks.sharedSession.devicePermissionHandler?.()).toBe(false);
   });
 
-  it("allows hardened web popups and rejects non-web popup protocols", async () => {
+  it("opens web popups as Trace browser tabs and rejects non-web popup protocols", async () => {
     const manager = new BrowserWorkspaceManager({ snapshotStore: new MemorySnapshotStore() });
-    manager.setWindow(createWindow());
+    const window = createWindow();
+    manager.setWindow(window);
     await manager.activate("group-a");
+    vi.mocked(window.webContents.send).mockClear();
     const handler = latestContents().windowOpenHandler;
     if (!handler) throw new Error("Expected a popup handler.");
 
     const allowed = handler({ url: "https://accounts.example.com/login" });
-    expect(allowed).toMatchObject({
-      action: "allow",
-      overrideBrowserWindowOptions: {
-        webPreferences: {
-          contextIsolation: true,
-          nodeIntegration: false,
-          partition: "persist:trace-browser",
-          sandbox: true,
-        },
-      },
+    expect(allowed).toEqual({ action: "deny" });
+    expect(window.webContents.send).toHaveBeenCalledWith("browser-tab-open-requested", {
+      sessionGroupId: "group-a",
+      url: "https://accounts.example.com/login",
     });
     expect(handler({ url: "file:///etc/passwd" })).toEqual({ action: "deny" });
+    expect(window.webContents.send).toHaveBeenCalledTimes(1);
   });
 
   it("rejects non-web URLs restored from persisted workspace state", async () => {
