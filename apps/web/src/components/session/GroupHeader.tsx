@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  AppWindow,
   Boxes,
-  Circle,
   Cloud,
-  Monitor,
-  PanelRight,
+  FolderTree,
   History,
+  Monitor,
   Maximize2,
   Minimize2,
   Play,
@@ -14,6 +12,7 @@ import {
 import { cn } from "../../lib/utils";
 import { sessionStatusColor, sessionStatusLabel } from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
+import { AgentStatusIcon } from "./AgentStatusIcon";
 import { useRunScripts } from "../../hooks/useRunScripts";
 import { useLinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
 import { LinkedCheckoutSubtitle } from "./LinkedCheckoutSubtitle";
@@ -23,6 +22,8 @@ import { GitHubActions } from "./GitHubActions";
 import { GroupUsageBadge } from "./GroupUsageBadge";
 import { ActionTooltip } from "../ui/ActionTooltip";
 import { SessionGroupArtifactsDialog } from "../artifact/SessionGroupArtifactsDialog";
+import { ClosedSessionTabsMenu } from "./ClosedSessionTabsMenu";
+import type { SessionEntity } from "@trace/client-core";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
@@ -36,21 +37,21 @@ interface GroupHeaderProps {
   selectedSessionStatus: string;
   selectedSessionId: string | null;
   selectedAgentStatus?: string;
+  displayAgentStatus?: string;
   selectedHosting?: string;
   selectedConnection?: Record<string, unknown> | null;
   selectedWorktreeDeleted?: boolean;
+  closedSessions: SessionEntity[];
+  onRestoreClosedSession: (sessionId: string) => void;
   canMoveSession: boolean;
   moveDisabledReason?: string;
   groupPrUrl: string | null | undefined;
   panelMode?: boolean;
   isFullscreen: boolean;
-  showSidebar: boolean;
-  showApplicationsSidebar: boolean;
-  canShowApplications: boolean;
   compactAppMode?: boolean;
+  filesOpen: boolean;
+  onToggleFiles: () => void;
   onToggleFullscreen: () => void;
-  onToggleSidebar: () => void;
-  onToggleApplicationsSidebar: () => void;
 }
 
 const headerIconButtonClass =
@@ -68,21 +69,21 @@ export function GroupHeader({
   selectedSessionStatus,
   selectedSessionId,
   selectedAgentStatus,
+  displayAgentStatus,
   selectedHosting,
   selectedConnection,
   selectedWorktreeDeleted,
+  closedSessions,
+  onRestoreClosedSession,
   canMoveSession,
   moveDisabledReason,
   groupPrUrl,
   panelMode,
   isFullscreen,
-  showSidebar,
-  showApplicationsSidebar,
-  canShowApplications,
   compactAppMode = false,
+  filesOpen,
+  onToggleFiles,
   onToggleFullscreen,
-  onToggleSidebar,
-  onToggleApplicationsSidebar,
 }: GroupHeaderProps) {
   const [showHistory, setShowHistory] = useState(false);
   const [showArtifacts, setShowArtifacts] = useState(false);
@@ -147,7 +148,7 @@ export function GroupHeader({
               sessionStatusColor[selectedSessionStatus],
             )}
           >
-            <Circle size={6} className="fill-current" />
+            <AgentStatusIcon agentStatus={displayAgentStatus ?? "done"} size={8} />
             {label}
           </span>
         </>
@@ -172,6 +173,19 @@ export function GroupHeader({
       />
 
       <LinkedCheckoutActions state={linkedCheckout} />
+
+      <ClosedSessionTabsMenu sessions={closedSessions} onRestoreSession={onRestoreClosedSession} />
+
+      <ActionTooltip label={filesOpen ? "Close files and changes" : "Files and changes"}>
+        <button
+          onClick={onToggleFiles}
+          className={cn(headerIconButtonClass, filesOpen && "bg-white/10 text-foreground")}
+          aria-label={filesOpen ? "Close files and changes" : "Files and changes"}
+          aria-pressed={filesOpen}
+        >
+          <FolderTree size={13} />
+        </button>
+      </ActionTooltip>
 
       {hasRunScripts && (
         <ActionTooltip label="Run scripts">
@@ -243,38 +257,6 @@ export function GroupHeader({
           </button>
         </ActionTooltip>
       )}
-
-      {canShowApplications ? (
-        <ActionTooltip label={showApplicationsSidebar ? "Hide applications" : "Applications"}>
-          <button
-            onClick={onToggleApplicationsSidebar}
-            className={cn(
-              headerIconButtonClass,
-              "hidden sm:flex",
-              showApplicationsSidebar ? "bg-surface-hover text-foreground" : undefined,
-            )}
-            aria-label={showApplicationsSidebar ? "Hide applications" : "Applications"}
-          >
-            <AppWindow size={13} />
-          </button>
-        </ActionTooltip>
-      ) : null}
-
-      {!compactAppMode ? (
-        <ActionTooltip label={showSidebar ? "Hide sidebar" : "Show sidebar"}>
-          <button
-            onClick={onToggleSidebar}
-            className={cn(
-              headerIconButtonClass,
-              "hidden sm:flex",
-              showSidebar ? "bg-surface-hover text-foreground" : undefined,
-            )}
-            aria-label={showSidebar ? "Hide sidebar" : "Show sidebar"}
-          >
-            <PanelRight size={13} />
-          </button>
-        </ActionTooltip>
-      ) : null}
     </div>
   );
 }

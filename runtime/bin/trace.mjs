@@ -184,6 +184,23 @@ var traceCliOperations = {
     argumentPaths: ["sessionId", "cols", "rows"],
     document: `mutation TraceCliCreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) { createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) { ${TERMINAL_FIELDS} } }`
   }),
+  openTerminal: operation({
+    name: "TraceCliOpenTerminal",
+    type: "mutation",
+    rootField: "createTerminal",
+    capability: "terminal:control",
+    argumentPaths: ["sessionId", "cols", "rows"],
+    document: `mutation TraceCliOpenTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) { createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows, openInWorkspace: true) { ${TERMINAL_FIELDS} } }`
+  }),
+  openWorkspaceBrowser: operation({
+    name: "TraceCliOpenWorkspaceBrowser",
+    type: "mutation",
+    rootField: "openWorkspaceBrowser",
+    capability: "workspace:control",
+    argumentPaths: ["sessionGroupId", "url"],
+    sessionGroupArgumentPath: "sessionGroupId",
+    document: `mutation TraceCliOpenWorkspaceBrowser($sessionGroupId: ID!, $url: String!) { openWorkspaceBrowser(sessionGroupId: $sessionGroupId, url: $url) }`
+  }),
   sendTerminalInput: operation({
     name: "TraceCliSendTerminalInput",
     type: "mutation",
@@ -1221,6 +1238,47 @@ var appRuntimeCommands = [
 
 // src/commands/app/index.ts
 var appCommands = appRuntimeCommands;
+
+// src/commands/browser/index.ts
+function requireCurrentSessionGroup(env) {
+  const sessionGroupId = env.TRACE_SESSION_GROUP_ID;
+  if (!sessionGroupId) {
+    throw new CliError(
+      "This command requires an active Trace session group",
+      ExitCode.validation,
+      "validation"
+    );
+  }
+  return sessionGroupId;
+}
+var browserCommands = [
+  defineCommand({
+    path: ["browser", "open"],
+    description: "Open a website in a new browser tab in the current Trace workspace",
+    examples: ['"$TRACE_CLI" browser open https://example.com --json'],
+    effects: ["Requests a browser tab for the requesting user in the current session group."],
+    output: "A request confirmation containing the website URL.",
+    nextSteps: [
+      "The request is queued for the requesting user; it is not a confirmation that a tab opened."
+    ],
+    notes: [
+      "Browser requests target only the requesting user and the current session group.",
+      "The embedded browser renders only in the Trace desktop app. Web clients show the URL as a link instead, so do not rely on this command to load a page you then need to read."
+    ],
+    positionals: [{ name: "url", required: true }],
+    async run(ctx, input) {
+      const variables = {
+        sessionGroupId: requireCurrentSessionGroup(ctx.env),
+        url: input.positionals[0]
+      };
+      await (await ctx.client()).graphql(
+        traceCliOperations.openWorkspaceBrowser,
+        variables
+      );
+      ctx.output({ requested: true, url: variables.url }, `Requested ${variables.url}`);
+    }
+  })
+];
 
 // src/commands/organization.ts
 function requireOrganizationId(value) {
@@ -2355,10 +2413,7 @@ var terminalCommands = [
     async run(ctx, input) {
       const sessionId = resolveSessionId(ctx, optionString(input, "session"));
       const client = await ctx.client();
-      const result = await client.graphql(
-        traceCliOperations.sessionTerminals,
-        { sessionId }
-      );
+      const result = await client.graphql(traceCliOperations.sessionTerminals, { sessionId });
       ctx.output(
         { terminals: result.sessionTerminals },
         result.sessionTerminals.length ? result.sessionTerminals.map(terminalLine).join("\n") : "No terminals found"
@@ -2374,13 +2429,92 @@ var terminalCommands = [
     nextSteps: ['Use "$TRACE_CLI" terminal send <terminal-id> <text> --enter to run a command.'],
     options: [
       sessionOption,
-      { name: "cols", flag: "--cols", kind: "integer", valueName: "N", min: 20, max: 500, description: "Columns, from 20 to 500 (default: 80)" },
-      { name: "rows", flag: "--rows", kind: "integer", valueName: "N", min: 5, max: 200, description: "Rows, from 5 to 200 (default: 24)" }
+      {
+        name: "cols",
+        flag: "--cols",
+        kind: "integer",
+        valueName: "N",
+        min: 20,
+        max: 500,
+        description: "Columns, from 20 to 500 (default: 80)"
+      },
+      {
+        name: "rows",
+        flag: "--rows",
+        kind: "integer",
+        valueName: "N",
+        min: 5,
+        max: 200,
+        description: "Rows, from 5 to 200 (default: 24)"
+      }
     ],
     async run(ctx, input) {
-      const variables = { sessionId: resolveSessionId(ctx, optionString(input, "session")), cols: optionInteger(input, "cols") ?? 80, rows: optionInteger(input, "rows") ?? 24 };
-      const result = await (await ctx.client()).graphql(traceCliOperations.createTerminal, variables);
+      const variables = {
+        sessionId: resolveSessionId(ctx, optionString(input, "session")),
+        cols: optionInteger(input, "cols") ?? 80,
+        rows: optionInteger(input, "rows") ?? 24
+      };
+      const result = await (await ctx.client()).graphql(
+        traceCliOperations.createTerminal,
+        variables
+      );
       ctx.output({ terminal: result.createTerminal }, terminalLine(result.createTerminal));
+    }
+  }),
+  defineCommand({
+    path: ["terminal", "open"],
+    description: "Open and select a new terminal tab, optionally running a command",
+    examples: ['"$TRACE_CLI" terminal open --json', '"$TRACE_CLI" terminal open "pnpm dev" --json'],
+    effects: [
+      "Creates a PTY and selects its tab for the requesting user.",
+      "When provided, the command is sent directly to the PTY and is never stored in Trace events."
+    ],
+    output: "The new terminal metadata and whether a command was sent, without echoing command text.",
+    nextSteps: ['Use "$TRACE_CLI" terminal capture <terminal-id> --json to inspect output.'],
+    positionals: [{ name: "command", required: false }],
+    options: [
+      sessionOption,
+      {
+        name: "cols",
+        flag: "--cols",
+        kind: "integer",
+        valueName: "N",
+        min: 20,
+        max: 500,
+        description: "Columns, from 20 to 500 (default: 80)"
+      },
+      {
+        name: "rows",
+        flag: "--rows",
+        kind: "integer",
+        valueName: "N",
+        min: 5,
+        max: 200,
+        description: "Rows, from 5 to 200 (default: 24)"
+      }
+    ],
+    async run(ctx, input) {
+      const variables = {
+        sessionId: resolveSessionId(ctx, optionString(input, "session")),
+        cols: optionInteger(input, "cols") ?? 80,
+        rows: optionInteger(input, "rows") ?? 24
+      };
+      const client = await ctx.client();
+      const result = await client.graphql(
+        traceCliOperations.openTerminal,
+        variables
+      );
+      const command = input.positionals[0];
+      if (command) {
+        await client.graphql(
+          traceCliOperations.sendTerminalInput,
+          { terminalId: result.createTerminal.id, data: `${command}\r` }
+        );
+      }
+      ctx.output(
+        { terminal: result.createTerminal, commandSent: !!command },
+        terminalLine(result.createTerminal)
+      );
     }
   }),
   defineCommand({
@@ -2389,14 +2523,33 @@ var terminalCommands = [
     examples: ['"$TRACE_CLI" terminal capture <terminal-id> --plain --json'],
     effects: ["Read-only; captures only ephemeral bounded relay scrollback."],
     output: "Output, byte count, truncation state, timestamp, and terminal connectivity state.",
-    nextSteps: ['Use "$TRACE_CLI" terminal send <terminal-id> <text> --enter to provide more input.'],
+    nextSteps: [
+      'Use "$TRACE_CLI" terminal send <terminal-id> <text> --enter to provide more input.'
+    ],
     positionals: [{ name: "terminal-id", required: true }],
     options: [
-      { name: "maxBytes", flag: "--max-bytes", kind: "integer", valueName: "N", min: 1, max: 51200, description: "Output byte limit, from 1 to 51200" },
-      { name: "plain", flag: "--plain", kind: "boolean", description: "Strip ANSI escape sequences" }
+      {
+        name: "maxBytes",
+        flag: "--max-bytes",
+        kind: "integer",
+        valueName: "N",
+        min: 1,
+        max: 51200,
+        description: "Output byte limit, from 1 to 51200"
+      },
+      {
+        name: "plain",
+        flag: "--plain",
+        kind: "boolean",
+        description: "Strip ANSI escape sequences"
+      }
     ],
     async run(ctx, input) {
-      const variables = { terminalId: requiredTerminalId(input), maxBytes: optionInteger(input, "maxBytes"), plainText: optionBoolean(input, "plain") };
+      const variables = {
+        terminalId: requiredTerminalId(input),
+        maxBytes: optionInteger(input, "maxBytes"),
+        plainText: optionBoolean(input, "plain")
+      };
       const result = await (await ctx.client()).graphql(traceCliOperations.terminalCapture, variables);
       ctx.output({ capture: result.terminalCapture }, result.terminalCapture.output);
     }
@@ -2407,12 +2560,30 @@ var terminalCommands = [
     examples: ['"$TRACE_CLI" terminal send <terminal-id> "pnpm test" --enter --json'],
     effects: ["Writes to the selected terminal PTY; sent text is never included in Trace events."],
     output: "A confirmation containing the terminal ID, without echoing the sent text.",
-    nextSteps: ['Use "$TRACE_CLI" terminal capture <terminal-id> --json to inspect command output.'],
-    positionals: [{ name: "terminal-id", required: true }, { name: "text", required: true }],
-    options: [{ name: "enter", flag: "--enter", kind: "boolean", description: "Append a carriage-return Enter key" }],
+    nextSteps: [
+      'Use "$TRACE_CLI" terminal capture <terminal-id> --json to inspect command output.'
+    ],
+    positionals: [
+      { name: "terminal-id", required: true },
+      { name: "text", required: true }
+    ],
+    options: [
+      {
+        name: "enter",
+        flag: "--enter",
+        kind: "boolean",
+        description: "Append a carriage-return Enter key"
+      }
+    ],
     async run(ctx, input) {
-      const variables = { terminalId: requiredTerminalId(input), data: `${input.positionals[1]}${optionBoolean(input, "enter") ? "\r" : ""}` };
-      await (await ctx.client()).graphql(traceCliOperations.sendTerminalInput, variables);
+      const variables = {
+        terminalId: requiredTerminalId(input),
+        data: `${input.positionals[1]}${optionBoolean(input, "enter") ? "\r" : ""}`
+      };
+      await (await ctx.client()).graphql(
+        traceCliOperations.sendTerminalInput,
+        variables
+      );
       ctx.output({ terminalId: variables.terminalId, sent: true }, "Sent");
     }
   }),
@@ -2422,14 +2593,23 @@ var terminalCommands = [
     examples: ['"$TRACE_CLI" terminal key <terminal-id> ctrl-c --json'],
     effects: ["Writes only the documented key byte sequence to the selected terminal PTY."],
     output: "A confirmation containing the terminal ID and allowlisted key name.",
-    nextSteps: ['Use "$TRACE_CLI" terminal capture <terminal-id> --json to inspect the terminal state.'],
-    positionals: [{ name: "terminal-id", required: true }, { name: "key", required: true }],
+    nextSteps: [
+      'Use "$TRACE_CLI" terminal capture <terminal-id> --json to inspect the terminal state.'
+    ],
+    positionals: [
+      { name: "terminal-id", required: true },
+      { name: "key", required: true }
+    ],
     async run(ctx, input) {
       const key = input.positionals[1].toLowerCase();
       const data = KEYS[key];
-      if (!data) usage(`Invalid terminal key: ${key}. Allowed keys: ${Object.keys(KEYS).join(", ")}`);
+      if (!data)
+        usage(`Invalid terminal key: ${key}. Allowed keys: ${Object.keys(KEYS).join(", ")}`);
       const variables = { terminalId: requiredTerminalId(input), data };
-      await (await ctx.client()).graphql(traceCliOperations.sendTerminalInput, variables);
+      await (await ctx.client()).graphql(
+        traceCliOperations.sendTerminalInput,
+        variables
+      );
       ctx.output({ terminalId: variables.terminalId, key, sent: true }, "Sent");
     }
   }),
@@ -2439,18 +2619,39 @@ var terminalCommands = [
     examples: ['"$TRACE_CLI" terminal resize <terminal-id> --cols 140 --rows 40 --json'],
     effects: ["Resizes the selected terminal PTY; no shell command is executed."],
     output: "A confirmation containing the terminal ID without terminal contents.",
-    nextSteps: ['Use "$TRACE_CLI" terminal capture <terminal-id> --json to inspect post-resize output.'],
+    nextSteps: [
+      'Use "$TRACE_CLI" terminal capture <terminal-id> --json to inspect post-resize output.'
+    ],
     positionals: [{ name: "terminal-id", required: true }],
     options: [
-      { name: "cols", flag: "--cols", kind: "integer", valueName: "N", min: 20, max: 500, description: "Columns, from 20 to 500" },
-      { name: "rows", flag: "--rows", kind: "integer", valueName: "N", min: 5, max: 200, description: "Rows, from 5 to 200" }
+      {
+        name: "cols",
+        flag: "--cols",
+        kind: "integer",
+        valueName: "N",
+        min: 20,
+        max: 500,
+        description: "Columns, from 20 to 500"
+      },
+      {
+        name: "rows",
+        flag: "--rows",
+        kind: "integer",
+        valueName: "N",
+        min: 5,
+        max: 200,
+        description: "Rows, from 5 to 200"
+      }
     ],
     async run(ctx, input) {
       const cols = optionInteger(input, "cols");
       const rows = optionInteger(input, "rows");
       if (cols === void 0 || rows === void 0) usage("--cols and --rows are required");
       const variables = { terminalId: requiredTerminalId(input), cols, rows };
-      await (await ctx.client()).graphql(traceCliOperations.resizeTerminal, variables);
+      await (await ctx.client()).graphql(
+        traceCliOperations.resizeTerminal,
+        variables
+      );
       ctx.output({ terminalId: variables.terminalId, resized: true }, "Resized");
     }
   }),
@@ -2464,7 +2665,10 @@ var terminalCommands = [
     positionals: [{ name: "terminal-id", required: true }],
     async run(ctx, input) {
       const variables = { terminalId: requiredTerminalId(input) };
-      await (await ctx.client()).graphql(traceCliOperations.destroyTerminal, variables);
+      await (await ctx.client()).graphql(
+        traceCliOperations.destroyTerminal,
+        variables
+      );
       ctx.output({ terminalId: variables.terminalId, destroyed: true }, "Destroyed");
     }
   })
@@ -2474,6 +2678,7 @@ var terminalCommands = [
 var commands = [
   contextCommand,
   ...appCommands,
+  ...browserCommands,
   ...portCommands,
   channelListCommand,
   repoListCommand,

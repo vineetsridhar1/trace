@@ -70,6 +70,7 @@ import {
 } from "../lib/session-group-status.js";
 import { assertCloudHostingAllowed, isCloudHostingAllowed, isLocalMode } from "../lib/mode.js";
 import {
+  assertSessionAccess,
   assertSessionGroupAccess,
   canViewSessionGroup,
   visibleSessionGroupWhere,
@@ -1422,6 +1423,87 @@ async function withRuntimeTransitionLock<Result>(
 }
 
 export class SessionService {
+  async listHiddenTabs(sessionGroupId: string, organizationId: string, userId: string) {
+    await assertSessionGroupAccess(sessionGroupId, userId, organizationId);
+    return prisma.hiddenSessionTab.findMany({
+      where: { userId, session: { sessionGroupId, organizationId } },
+      select: { sessionId: true, hiddenAt: true },
+      orderBy: { hiddenAt: "desc" },
+    });
+  }
+
+  async hideTab(sessionId: string, organizationId: string, userId: string, actorType: ActorType) {
+    await assertSessionAccess(sessionId, userId, organizationId);
+    const session = await prisma.session.findFirst({
+      where: { id: sessionId, organizationId },
+      select: { id: true, sessionGroupId: true },
+    });
+    if (!session) throw new ValidationError("Session not found");
+    const hiddenTab = await prisma.hiddenSessionTab.upsert({
+      where: { userId_sessionId: { userId, sessionId } },
+      create: { userId, sessionId },
+      update: { hiddenAt: new Date() },
+      select: { sessionId: true, hiddenAt: true },
+    });
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_tab_hidden" as EventType,
+      payload: {
+        sessionId,
+        sessionGroupId: session.sessionGroupId,
+        userId,
+        hiddenAt: hiddenTab.hiddenAt.toISOString(),
+      },
+      actorType,
+      actorId: userId,
+    });
+    return hiddenTab;
+  }
+
+  /** Explicitly reopen a tab the user previously closed. */
+  async restoreTab(
+    sessionId: string,
+    organizationId: string,
+    userId: string,
+    actorType: ActorType,
+  ) {
+    await assertSessionAccess(sessionId, userId, organizationId);
+    const session = await prisma.session.findFirst({
+      where: { id: sessionId, organizationId },
+      select: { id: true, sessionGroupId: true },
+    });
+    if (!session) throw new ValidationError("Session not found");
+    await this.restoreHiddenTab(
+      sessionId,
+      session.sessionGroupId,
+      organizationId,
+      userId,
+      actorType,
+    );
+    return true;
+  }
+
+  private async restoreHiddenTab(
+    sessionId: string,
+    sessionGroupId: string | null,
+    organizationId: string,
+    userId: string,
+    actorType: ActorType,
+  ) {
+    const result = await prisma.hiddenSessionTab.deleteMany({ where: { userId, sessionId } });
+    if (!result.count) return;
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_tab_restored" as EventType,
+      payload: { sessionId, sessionGroupId, userId },
+      actorType,
+      actorId: userId,
+    });
+  }
   private async findIdempotentStartedSession(input: {
     clientMutationId?: string | null;
     organizationId: string;
@@ -2830,15 +2912,16 @@ export class SessionService {
     }
 
     const groupRuntimeId = this.getConnectionRuntimeInstanceId(group.connection);
-    const ownedRuntimesForRepo = listRuntimeMetadata({ hostingMode: "local" })
-      .filter((candidate) => {
+    const ownedRuntimesForRepo = listRuntimeMetadata({ hostingMode: "local" }).filter(
+      (candidate) => {
         if (candidate.organizationId !== organizationId) return false;
         if (candidate.ownerUserId !== userId) return false;
         if (options.requireRegisteredRepo && !candidate.registeredRepoIds.includes(repoId)) {
           return false;
         }
         return true;
-      });
+      },
+    );
     const runtime = options.runtimeInstanceId
       ? ownedRuntimesForRepo.find((candidate) => candidate.id === options.runtimeInstanceId)
       : (ownedRuntimesForRepo.find((candidate) => candidate.id === groupRuntimeId) ??
@@ -6345,6 +6428,15 @@ export class SessionService {
         branch: true,
       },
     });
+    if (actorType === "user") {
+      await this.restoreHiddenTab(
+        sessionId,
+        session.sessionGroupId,
+        session.organizationId,
+        actorId,
+        actorType,
+      );
+    }
     validateUploadKeysForOrganization(imageKeys, session.organizationId);
     const conn = this.parseConnection(session.connection);
     const allowToolFallback =
@@ -6751,6 +6843,7 @@ export class SessionService {
     text,
     imageKeys,
     actorId,
+    actorType = "user",
     interactionMode,
     organizationId,
     clientSource,
@@ -6759,6 +6852,7 @@ export class SessionService {
     text: string;
     imageKeys?: string[];
     actorId: string;
+    actorType?: ActorType;
     interactionMode?: string;
     organizationId: string;
     clientSource?: string | null;
@@ -6773,7 +6867,7 @@ export class SessionService {
 
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
-      select: { worktreeDeleted: true, organizationId: true },
+      select: { worktreeDeleted: true, organizationId: true, sessionGroupId: true },
     });
     if (session.organizationId !== organizationId) {
       throw new Error("Session does not belong to this organization");
@@ -6791,6 +6885,9 @@ export class SessionService {
     }
 
     const orgId = session.organizationId;
+    if (actorType === "user") {
+      await this.restoreHiddenTab(sessionId, session.sessionGroupId, orgId, actorId, actorType);
+    }
 
     const queuedMessage = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const maxPos = await tx.queuedMessage.aggregate({
@@ -8645,7 +8742,7 @@ export class SessionService {
           adapterType: "provisioned" as const,
           runtimeInstanceId: reuseCloudRuntime.id,
           runtimeLabel: reuseCloudRuntime.label,
-      }
+        }
       : targetHosting === "local"
         ? defaultConnection({
             runtimeInstanceId: targetRuntimeInstanceId ?? undefined,
@@ -9412,13 +9509,12 @@ export class SessionService {
         organizationId,
         sessionGroupId,
       });
-      const runtime = listRuntimeMetadata()
-        .find(
-          (runtime) =>
-            runtime.organizationId === organizationId &&
-            (runtime.hostingMode === "cloud" || accessibleRuntimeIds.has(runtime.id)) &&
-            runtime.registeredRepoIds.includes(repoId),
-        );
+      const runtime = listRuntimeMetadata().find(
+        (runtime) =>
+          runtime.organizationId === organizationId &&
+          (runtime.hostingMode === "cloud" || accessibleRuntimeIds.has(runtime.id)) &&
+          runtime.registeredRepoIds.includes(repoId),
+      );
       runtimeId = runtime?.key;
     }
     if (!runtimeId) throw new Error("Repo not cloned on any connected runtime");
@@ -9451,14 +9547,13 @@ export class SessionService {
         userId,
         organizationId,
       });
-      const runtime = listRuntimeMetadata()
-        .find(
-          (runtime) =>
-            runtime.organizationId === organizationId &&
-            runtime.hostingMode === "local" &&
-            accessibleRuntimeIds.has(runtime.id) &&
-            runtime.registeredRepoIds.includes(repoId),
-        );
+      const runtime = listRuntimeMetadata().find(
+        (runtime) =>
+          runtime.organizationId === organizationId &&
+          runtime.hostingMode === "local" &&
+          accessibleRuntimeIds.has(runtime.id) &&
+          runtime.registeredRepoIds.includes(repoId),
+      );
       runtimeId = runtime?.key;
     }
     if (!runtimeId) throw new Error("Repo not cloned on any connected local runtime");
@@ -10846,8 +10941,7 @@ export class SessionService {
         canRetry: true,
         canMove: true,
         // Don't spin the auto-retry loop for a non-transient failure.
-        autoRetryable:
-          currentSession.hosting !== "cloud" && !homeOffline && !unsupportedHomeTool,
+        autoRetryable: currentSession.hosting !== "cloud" && !homeOffline && !unsupportedHomeTool,
       };
     });
     if (!result) return;

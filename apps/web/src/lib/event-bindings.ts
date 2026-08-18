@@ -12,6 +12,10 @@ setOrgEventUIBindings({
   markSessionDone: (id) => useUIStore.getState().markSessionDone(id),
   markSessionGroupDone: (id) => useUIStore.getState().markSessionGroupDone(id),
   openSessionTab: (groupId, sessionId) => useUIStore.getState().openSessionTab(groupId, sessionId),
+  hideSessionTab: (groupId, sessionId, hiddenAt) =>
+    useUIStore.getState().hideSessionTab(groupId, sessionId, hiddenAt),
+  restoreSessionTab: (groupId, sessionId) =>
+    useUIStore.getState().restoreSessionTab(groupId, sessionId),
   navigateToSession: (channelId, sessionGroupId, sessionId) =>
     navigateToSession(channelId, sessionGroupId, sessionId),
 });

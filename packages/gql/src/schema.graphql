@@ -308,6 +308,7 @@ enum EventType {
   session_deleted
   terminal_created
   terminal_destroyed
+  workspace_browser_open_requested
   session_output
   ticket_created
   ticket_updated
@@ -364,6 +365,8 @@ enum EventType {
   session_runtime_disconnected
   session_runtime_reconnected
   session_group_visibility_updated
+  session_tab_hidden
+  session_tab_restored
   session_converted
   application_config_updated
   session_setup_script_started
@@ -626,6 +629,11 @@ type Session {
   artifacts: [Artifact!]!
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+type HiddenSessionTab {
+  sessionId: ID!
+  hiddenAt: DateTime!
 }
 
 type ArtifactFile {
@@ -1494,6 +1502,7 @@ type Query {
   """
   appSessionGroups(organizationId: ID!, includeArchived: Boolean): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
+  hiddenSessionTabs(sessionGroupId: ID!): [HiddenSessionTab!]!
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
   artifacts(sessionId: ID!, type: String, key: String): [Artifact!]!
@@ -1731,6 +1740,8 @@ type Mutation {
     runtimeInstanceId: ID
   ): Session!
   updateSessionDefaults(input: UpdateSessionDefaultsInput!): User!
+  hideSessionTab(sessionId: ID!): HiddenSessionTab!
+  restoreSessionTab(sessionId: ID!): Boolean!
   sendSessionMessage(
     sessionId: ID!
     text: String!
@@ -1830,7 +1841,14 @@ type Mutation {
   deleteCodexCredential: Boolean!
   registerPushToken(token: String!, platform: PushPlatform!): Boolean!
   unregisterPushToken(token: String!): Boolean!
-  createTerminal(sessionId: ID!, cols: Int!, rows: Int!): Terminal!
+  createTerminal(
+    sessionId: ID!
+    cols: Int!
+    rows: Int!
+    clientMutationId: String
+    openInWorkspace: Boolean
+  ): Terminal!
+  openWorkspaceBrowser(sessionGroupId: ID!, url: String!): Boolean!
   createChannelTerminal(channelId: ID!, bridgeRuntimeId: ID!, cols: Int!, rows: Int!): Terminal!
   destroyTerminal(terminalId: ID!): Boolean!
   sendTerminalInput(terminalId: ID!, data: String!): Boolean!

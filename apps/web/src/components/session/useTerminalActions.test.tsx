@@ -1,8 +1,10 @@
 import { act, create } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTerminalStore } from "../../stores/terminal";
+import { reconcileTerminalEvent } from "../../stores/terminal-events";
 import { useUIStore } from "../../stores/ui";
 import { useTerminalActions } from "./useTerminalActions";
+import type { Event } from "@trace/gql";
 
 const mutation = vi.fn();
 
@@ -35,7 +37,11 @@ describe("useTerminalActions", () => {
     });
     vi.stubGlobal("history", { pushState: vi.fn(), replaceState: vi.fn() });
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-    useTerminalStore.setState({ terminals: {} });
+    useTerminalStore.setState({
+      terminals: {},
+      pinnedTerminalIds: {},
+      terminalCreationIntents: {},
+    });
     useUIStore.setState({
       activeSessionGroupId: "group-1",
       activeSessionId: null,
@@ -45,7 +51,7 @@ describe("useTerminalActions", () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it("registers a newly created terminal before selecting it", async () => {
+  it("registers and selects a terminal without pinning it", async () => {
     mutation.mockReturnValue({
       toPromise: async () => ({ data: { createTerminal: { id: "terminal-1" } } }),
     });
@@ -58,13 +64,40 @@ describe("useTerminalActions", () => {
       await actions?.handleCreateTerminal({ id: "session-1" }, true);
     });
 
+    expect(useTerminalStore.getState().terminals).toEqual({});
+    expect(useUIStore.getState().activeTerminalId).toBeNull();
+    const mutationVariables = mutation.mock.calls[0]?.[1] as
+      | { clientMutationId?: string }
+      | undefined;
+    expect(mutationVariables?.clientMutationId).toEqual(expect.any(String));
+
+    act(() => {
+      reconcileTerminalEvent({
+        id: "event-terminal-created",
+        eventType: "terminal_created",
+        scopeType: "session",
+        scopeId: "session-1",
+        timestamp: "2026-08-17T00:00:00.000Z",
+        payload: {
+          clientMutationId: mutationVariables?.clientMutationId,
+          terminal: {
+            id: "terminal-1",
+            sessionId: "session-1",
+            sessionGroupId: "group-1",
+            closed: false,
+          },
+        },
+      } as unknown as Event);
+    });
+
     expect(useTerminalStore.getState().terminals["terminal-1"]).toMatchObject({
       id: "terminal-1",
       sessionId: "session-1",
       sessionGroupId: "group-1",
-      status: "connecting",
+      status: "active",
     });
     expect(useUIStore.getState().activeSessionId).toBe("session-1");
     expect(useUIStore.getState().activeTerminalId).toBe("terminal-1");
+    expect(useTerminalStore.getState().pinnedTerminalIds["terminal-1"]).toBeUndefined();
   });
 });

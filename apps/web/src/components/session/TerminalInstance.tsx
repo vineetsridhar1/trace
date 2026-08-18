@@ -21,7 +21,6 @@ export function TerminalInstance({
   const socketRef = useRef<TerminalSocket | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const reconnectingRef = useRef(false);
-  const initialCommandSentRef = useRef(false);
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
   const setTerminalStatus = useTerminalStore((s) => s.setTerminalStatus);
@@ -76,11 +75,10 @@ export function TerminalInstance({
         case "ready": {
           reconnectingRef.current = false;
           setTerminalStatus(terminalId, "active");
-          const entry = useTerminalStore.getState().terminals[terminalId];
-          if (entry?.initialCommand && !initialCommandSentRef.current) {
-            initialCommandSentRef.current = true;
-            const suffix = entry.submitInitialCommand === false ? "" : "\n";
-            socket.write(entry.initialCommand + suffix);
+          const initialCommand = useTerminalStore.getState().claimInitialCommand(terminalId);
+          if (initialCommand) {
+            const suffix = initialCommand.submitInitialCommand ? "\n" : "";
+            socket.write(initialCommand.command + suffix);
           }
           break;
         }

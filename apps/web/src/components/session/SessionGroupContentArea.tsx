@@ -4,7 +4,7 @@ import { SessionDetailView } from "./SessionDetailView";
 import { TerminalInstance } from "./TerminalInstance";
 import { FileScopedAiInput } from "./FileScopedAiInput";
 import { SessionEndpointTrafficPanel } from "./applications/SessionEndpointTrafficPanel";
-import type { OpenFileTab } from "./GroupTabStrip";
+import type { OpenFileTab } from "./openFileTab";
 import type { FileEditorBuffer } from "./file-editor-buffer";
 
 const MonacoFileViewer = lazy(() =>

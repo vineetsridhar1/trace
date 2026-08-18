@@ -65,6 +65,7 @@ import type { Context } from "../context.js";
 import { resolveActor } from "../services/actor.js";
 import { restrictAgentRootResolvers } from "../lib/agent-authorization.js";
 import { artifactMutations, artifactQueries, artifactTypeResolvers } from "./artifact.js";
+import { workspaceMutations } from "./workspace.js";
 
 const queries = {
   ...organizationQueries,
@@ -108,6 +109,7 @@ const mutations = {
   ...participantMutations,
   ...aiConversationMutations,
   ...artifactMutations,
+  ...workspaceMutations,
 };
 
 const subscriptions = {

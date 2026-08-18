@@ -19,7 +19,12 @@ export const terminalQueries = {
     ctx: Context,
   ) => {
     if (!ctx.userId) throw new AuthenticationError();
-    return terminalService.capture({ ...args, organizationId: requireOrgContext(ctx), userId: ctx.userId, agentSessionId: ctx.agentSessionId });
+    return terminalService.capture({
+      ...args,
+      organizationId: requireOrgContext(ctx),
+      userId: ctx.userId,
+      agentSessionId: ctx.agentSessionId,
+    });
   },
   channelTerminals: async (
     _parent: unknown,
@@ -39,7 +44,13 @@ export const terminalQueries = {
 export const terminalMutations = {
   createTerminal: async (
     _parent: unknown,
-    args: { sessionId: string; cols: number; rows: number },
+    args: {
+      sessionId: string;
+      cols: number;
+      rows: number;
+      clientMutationId?: string | null;
+      openInWorkspace?: boolean | null;
+    },
     ctx: Context,
   ) => {
     if (!ctx.userId) throw new AuthenticationError();
@@ -47,6 +58,8 @@ export const terminalMutations = {
       sessionId: args.sessionId,
       cols: args.cols,
       rows: args.rows,
+      clientMutationId: args.clientMutationId ?? undefined,
+      openInWorkspace: args.openInWorkspace === true,
       organizationId: requireOrgContext(ctx),
       userId: ctx.userId,
       actorType: ctx.actorType,
@@ -80,12 +93,30 @@ export const terminalMutations = {
       agentSessionId: ctx.agentSessionId,
     });
   },
-  sendTerminalInput: async (_parent: unknown, args: { terminalId: string; data: string }, ctx: Context) => {
+  sendTerminalInput: async (
+    _parent: unknown,
+    args: { terminalId: string; data: string },
+    ctx: Context,
+  ) => {
     if (!ctx.userId) throw new AuthenticationError();
-    return terminalService.sendInput({ ...args, organizationId: requireOrgContext(ctx), userId: ctx.userId, agentSessionId: ctx.agentSessionId });
+    return terminalService.sendInput({
+      ...args,
+      organizationId: requireOrgContext(ctx),
+      userId: ctx.userId,
+      agentSessionId: ctx.agentSessionId,
+    });
   },
-  resizeTerminal: async (_parent: unknown, args: { terminalId: string; cols: number; rows: number }, ctx: Context) => {
+  resizeTerminal: async (
+    _parent: unknown,
+    args: { terminalId: string; cols: number; rows: number },
+    ctx: Context,
+  ) => {
     if (!ctx.userId) throw new AuthenticationError();
-    return terminalService.resize({ ...args, organizationId: requireOrgContext(ctx), userId: ctx.userId, agentSessionId: ctx.agentSessionId });
+    return terminalService.resize({
+      ...args,
+      organizationId: requireOrgContext(ctx),
+      userId: ctx.userId,
+      agentSessionId: ctx.agentSessionId,
+    });
   },
 };

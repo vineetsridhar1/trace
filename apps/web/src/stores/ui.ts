@@ -52,8 +52,15 @@ export interface UIState {
   triggerRefresh: () => void;
   lastSelectedSessionIdsByGroup: Record<string, string>;
   openSessionTabsByGroup: Record<string, string[]>;
+  hiddenSessionTabsByGroup: Record<string, Record<string, string>>;
   openSessionTab: (groupId: string, sessionId: string) => void;
   closeSessionTab: (groupId: string, sessionId: string) => void;
+  hideSessionTab: (groupId: string, sessionId: string, hiddenAt: string) => void;
+  restoreSessionTab: (groupId: string, sessionId: string) => void;
+  setHiddenSessionTabs: (
+    groupId: string,
+    tabs: Array<{ sessionId: string; hiddenAt: string }>,
+  ) => void;
   initSessionTabs: (groupId: string, sessionIds: string[]) => void;
   openArtifactTabsByGroup: Record<string, string[]>;
   activeArtifactIdsByGroup: Record<string, string | null>;
@@ -68,8 +75,6 @@ export interface UIState {
   unreadChatIds: Record<string, boolean>;
   markChatUnread: (chatId: string) => void;
   markChatRead: (chatId: string) => void;
-  showTerminalPanel: boolean;
-  setShowTerminalPanel: (show: boolean) => void;
   channelDoneBadges: Record<string, boolean>;
   markChannelDone: (channelId: string) => void;
   sessionDoneBadges: Record<string, boolean>;
@@ -112,11 +117,11 @@ const initialNavigationState = {
   activeThreadId: null as string | null,
   lastSelectedSessionIdsByGroup: {} as Record<string, string>,
   openSessionTabsByGroup: {} as Record<string, string[]>,
+  hiddenSessionTabsByGroup: {} as Record<string, Record<string, string>>,
   openArtifactTabsByGroup: {} as Record<string, string[]>,
   activeArtifactIdsByGroup: {} as Record<string, string | null>,
   channelSubPage: null as ChannelSubPage,
   settingsInitialTab: null as string | null,
-  showTerminalPanel: false,
   unreadChatIds: {} as Record<string, boolean>,
   channelDoneBadges: {} as Record<string, boolean>,
   sessionDoneBadges: {} as Record<string, boolean>,
@@ -127,7 +132,6 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
   ...initialNavigationState,
   refreshTick: 0,
   setSettingsInitialTab: (tab: string | null) => set({ settingsInitialTab: tab }),
-  setShowTerminalPanel: (show: boolean) => set({ showTerminalPanel: show }),
   setChannelSubPage: (subPage: ChannelSubPage) => {
     set({ channelSubPage: subPage });
     const state = get();
@@ -193,6 +197,44 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
     }
     set(updates);
   },
+
+  hideSessionTab: (groupId: string, sessionId: string, hiddenAt: string) => {
+    set((s: UIState) => {
+      const openTabs = s.openSessionTabsByGroup[groupId] ?? [];
+      const nextTabs = openTabs.filter((id) => id !== sessionId);
+      const closingActiveTab = s.activeSessionId === sessionId;
+      if (closingActiveTab && nextTabs.length === 0) {
+        const channelId = resolveChannelIdForSessionGroup(groupId, s.activeChannelId);
+        persistActiveSessionNav(groupId, null);
+        replaceNav(channelId, groupId, null, "main", null, s.channelSubPage);
+      }
+      return {
+        openSessionTabsByGroup: { ...s.openSessionTabsByGroup, [groupId]: nextTabs },
+        hiddenSessionTabsByGroup: {
+          ...s.hiddenSessionTabsByGroup,
+          [groupId]: { ...s.hiddenSessionTabsByGroup[groupId], [sessionId]: hiddenAt },
+        },
+        activeSessionId: closingActiveTab ? (nextTabs[0] ?? null) : s.activeSessionId,
+      };
+    });
+  },
+
+  restoreSessionTab: (groupId: string, sessionId: string) => {
+    set((s: UIState) => {
+      const { [sessionId]: _, ...remaining } = s.hiddenSessionTabsByGroup[groupId] ?? {};
+      return {
+        hiddenSessionTabsByGroup: { ...s.hiddenSessionTabsByGroup, [groupId]: remaining },
+      };
+    });
+  },
+
+  setHiddenSessionTabs: (groupId: string, tabs: Array<{ sessionId: string; hiddenAt: string }>) =>
+    set((s: UIState) => ({
+      hiddenSessionTabsByGroup: {
+        ...s.hiddenSessionTabsByGroup,
+        [groupId]: Object.fromEntries(tabs.map((tab) => [tab.sessionId, tab.hiddenAt])),
+      },
+    })),
 
   initSessionTabs: (groupId: string, sessionIds: string[]) => {
     set((s: UIState) => {

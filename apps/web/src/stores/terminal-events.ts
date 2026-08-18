@@ -1,7 +1,9 @@
 import type { Event } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
+import { useAuthStore } from "@trace/client-core";
 import { useTerminalStore } from "./terminal";
 import { useUIStore } from "./ui";
+import { useWorkspaceRequestStore } from "./workspace-requests";
 
 /**
  * Terminal lifecycle events contain terminal metadata only. Terminal input and
@@ -21,14 +23,46 @@ export function reconcileTerminalEvent(event: Event): void {
     ) {
       return;
     }
-    useTerminalStore
-      .getState()
-      .addTerminal(
-        terminal.id,
-        terminal.sessionId,
-        terminal.sessionGroupId,
-        terminal.closed === true ? "exited" : "active",
-      );
+    const terminalStore = useTerminalStore.getState();
+    const clientMutationId =
+      typeof payload.clientMutationId === "string" ? payload.clientMutationId : undefined;
+    const intent = clientMutationId
+      ? terminalStore.consumeTerminalCreationIntent(clientMutationId, terminal.sessionId)
+      : null;
+    terminalStore.addTerminal(
+      terminal.id,
+      terminal.sessionId,
+      terminal.sessionGroupId,
+      terminal.closed === true ? "exited" : "active",
+      {
+        customName: intent?.customName,
+        initialCommand: intent?.initialCommand,
+        submitInitialCommand: intent?.submitInitialCommand,
+        creationIntentId: clientMutationId,
+      },
+    );
+    if (intent?.pin) {
+      useTerminalStore.getState().pinTerminal(terminal.id);
+    }
+    const openedForCurrentUser =
+      payload.openInWorkspace === true && payload.targetUserId === useAuthStore.getState().user?.id;
+    const shouldSelect = intent?.select === true || openedForCurrentUser;
+    const ui = useUIStore.getState();
+    const groupIsActive = ui.activeSessionGroupId === terminal.sessionGroupId;
+    if (shouldSelect && groupIsActive) {
+      ui.setActiveSessionId(terminal.sessionId);
+      useUIStore.getState().setActiveTerminalId(terminal.id);
+    }
+    if (intent?.replaceWorkspaceTabId || (shouldSelect && !groupIsActive)) {
+      useWorkspaceRequestStore.getState().enqueueTerminalRequest({
+        id: event.id,
+        sessionGroupId: terminal.sessionGroupId,
+        sessionId: terminal.sessionId,
+        terminalId: terminal.id,
+        replaceTabId: intent?.replaceWorkspaceTabId,
+        select: shouldSelect,
+      });
+    }
     return;
   }
 

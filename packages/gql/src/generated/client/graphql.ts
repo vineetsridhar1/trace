@@ -567,6 +567,8 @@ export type EventType =
   | "session_setup_script_failed"
   | "session_setup_script_started"
   | "session_started"
+  | "session_tab_hidden"
+  | "session_tab_restored"
   | "session_terminated"
   | "terminal_created"
   | "terminal_destroyed"
@@ -576,7 +578,14 @@ export type EventType =
   | "ticket_linked"
   | "ticket_unassigned"
   | "ticket_unlinked"
-  | "ticket_updated";
+  | "ticket_updated"
+  | "workspace_browser_open_requested";
+
+export type HiddenSessionTab = {
+  __typename?: "HiddenSessionTab";
+  hiddenAt: Scalars["DateTime"]["output"];
+  sessionId: Scalars["ID"]["output"];
+};
 
 export type HostingMode = "cloud" | "local";
 
@@ -734,6 +743,7 @@ export type Mutation = {
   enableSessionEndpointForwarding: SessionEndpoint;
   forkSession: Session;
   forwardSessionPort: SessionEndpoint;
+  hideSessionTab: HiddenSessionTab;
   /** Adopt an existing local worktree into a not-yet-started session's group (local hosting only). */
   importWorktree: SessionGroup;
   joinChannel: Channel;
@@ -747,6 +757,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  openWorkspaceBrowser: Scalars["Boolean"]["output"];
   publishAppSession: SessionEndpoint;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
@@ -762,6 +773,7 @@ export type Mutation = {
   resizeTerminal: Scalars["Boolean"]["output"];
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
+  restoreSessionTab: Scalars["Boolean"]["output"];
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
   revertSessionGroupFileChange: Scalars["Boolean"]["output"];
@@ -919,7 +931,9 @@ export type MutationCreateSessionEndpointPreviewArgs = {
 };
 
 export type MutationCreateTerminalArgs = {
+  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
   cols: Scalars["Int"]["input"];
+  openInWorkspace?: InputMaybe<Scalars["Boolean"]["input"]>;
   rows: Scalars["Int"]["input"];
   sessionId: Scalars["ID"]["input"];
 };
@@ -1017,6 +1031,10 @@ export type MutationForwardSessionPortArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationHideSessionTabArgs = {
+  sessionId: Scalars["ID"]["input"];
+};
+
 export type MutationImportWorktreeArgs = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   sessionId: Scalars["ID"]["input"];
@@ -1075,6 +1093,11 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationOpenWorkspaceBrowserArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+  url: Scalars["String"]["input"];
 };
 
 export type MutationPublishAppSessionArgs = {
@@ -1154,6 +1177,10 @@ export type MutationRestoreLinkedCheckoutArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationRestoreSessionTabArgs = {
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationRetrySessionConnectionArgs = {
@@ -1503,6 +1530,7 @@ export type Query = {
   chats: Array<Chat>;
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
+  hiddenSessionTabs: Array<HiddenSessionTab>;
   inboxItems: Array<InboxItem>;
   linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   linkedCheckoutStatus: LinkedCheckoutStatus;
@@ -1659,6 +1687,10 @@ export type QueryEventsArgs = {
   organizationId: Scalars["ID"]["input"];
   scope?: InputMaybe<ScopeInput>;
   types?: InputMaybe<Array<Scalars["String"]["input"]>>;
+};
+
+export type QueryHiddenSessionTabsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryInboxItemsArgs = {
@@ -3225,6 +3257,34 @@ export type SessionDetailQuery = {
     }>;
   } | null;
 };
+
+export type HiddenSessionTabsQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type HiddenSessionTabsQuery = {
+  __typename?: "Query";
+  hiddenSessionTabs: Array<{
+    __typename?: "HiddenSessionTab";
+    sessionId: string;
+    hiddenAt: string;
+  }>;
+};
+
+export type HideSessionTabMutationVariables = Exact<{
+  sessionId: Scalars["ID"]["input"];
+}>;
+
+export type HideSessionTabMutation = {
+  __typename?: "Mutation";
+  hideSessionTab: { __typename?: "HiddenSessionTab"; sessionId: string; hiddenAt: string };
+};
+
+export type RestoreSessionTabMutationVariables = Exact<{
+  sessionId: Scalars["ID"]["input"];
+}>;
+
+export type RestoreSessionTabMutation = { __typename?: "Mutation"; restoreSessionTab: boolean };
 
 export type SessionGroupDetailQueryVariables = Exact<{
   id: Scalars["ID"]["input"];
@@ -6773,6 +6833,128 @@ export const SessionDetailDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionDetailQuery, SessionDetailQueryVariables>;
+export const HiddenSessionTabsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "HiddenSessionTabs" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "hiddenSessionTabs" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                { kind: "Field", name: { kind: "Name", value: "hiddenAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<HiddenSessionTabsQuery, HiddenSessionTabsQueryVariables>;
+export const HideSessionTabDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "HideSessionTab" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "hideSessionTab" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                { kind: "Field", name: { kind: "Name", value: "hiddenAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<HideSessionTabMutation, HideSessionTabMutationVariables>;
+export const RestoreSessionTabDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "RestoreSessionTab" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "restoreSessionTab" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<RestoreSessionTabMutation, RestoreSessionTabMutationVariables>;
 export const SessionGroupDetailDocument = {
   kind: "Document",
   definitions: [

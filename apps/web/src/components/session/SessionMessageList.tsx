@@ -1,9 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { FolderGit2, GitBranch } from "lucide-react";
-import { useEntityField } from "@trace/client-core";
 import { useComposerStore } from "../../stores/composer";
-import { ImportWorktreeDialog } from "./ImportWorktreeDialog";
 import type { SessionNode, AgentToolResult } from "./groupReadGlob";
 import { SessionNodeRenderer } from "./SessionNodeRenderer";
 import { CollapsedSessionEventsRow } from "./messages/CollapsedSessionEventsRow";
@@ -25,22 +21,6 @@ function nodeKey(node: SessionListNode): string {
 
 // Height of the gradient fade above the floating composer.
 const BOTTOM_FADE_HEIGHT = 48;
-
-// Starter prompts shown on the session empty state. Clicking one sends it immediately.
-const STARTER_PROMPTS: { label: string; prompt: string }[] = [
-  {
-    label: "Explain this codebase",
-    prompt: "Give me a high-level tour of how this codebase is organized.",
-  },
-  {
-    label: "Summarize recent changes",
-    prompt: "Summarize the most recent changes on this branch.",
-  },
-  {
-    label: "Review the latest commit",
-    prompt: "Review the latest commit and flag anything risky.",
-  },
-];
 
 // Fallback height for rows the browser has not rendered yet (content-visibility
 // placeholder sizing). Once a row has been on screen, `contain-intrinsic-size:
@@ -447,129 +427,8 @@ export function SessionMessageList({
 
   const showEmptyState = !initialLoading && nodes.length === 0 && !loadingOlder;
 
-  // Worktree import entry point (shown on the empty state). Adopting an existing
-  // worktree only applies before a session starts, on local hosting, with a repo.
-  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
-  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
-  const sessionRepo = useEntityField("sessions", sessionId, "repo") as
-    | { id?: string; name?: string }
-    | null
-    | undefined;
-  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
-    | string
-    | undefined;
-  const worktreeAdopted = useEntityField(
-    "sessionGroups",
-    sessionGroupId ?? "",
-    "worktreeAdopted",
-  ) as boolean | undefined;
-  const groupWorkdir = useEntityField("sessionGroups", sessionGroupId ?? "", "workdir") as
-    | string
-    | null
-    | undefined;
-  const groupBranch = useEntityField("sessionGroups", sessionGroupId ?? "", "branch") as
-    | string
-    | null
-    | undefined;
-  const [showImportWorktree, setShowImportWorktree] = useState(false);
-  const requestPrefill = useComposerStore((s) => s.requestPrefill);
-  const canImportWorktree =
-    agentStatus === "not_started" && hosting !== "cloud" && Boolean(sessionRepo?.id);
-  const importedWorktree = Boolean(worktreeAdopted);
-  const repoName = sessionRepo?.name;
-
-  const emptyState = (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.2, ease: "easeOut" }}
-      className="absolute inset-0 z-10"
-    >
-      <div
-        className="h-full overflow-y-auto bg-background"
-        style={scrollPaddingBottom ? { paddingBottom: scrollPaddingBottom } : undefined}
-      >
-        <div className="relative flex min-h-full items-center justify-center overflow-hidden px-4 py-10">
-          <div className="relative w-[90%]">
-            {(repoName || groupBranch) && (
-              <div className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
-                {repoName && (
-                  <span className="flex items-center gap-1.5 font-medium text-foreground">
-                    <FolderGit2 size={13} className="text-muted-foreground" />
-                    {repoName}
-                  </span>
-                )}
-                {repoName && groupBranch && <span className="text-border">/</span>}
-                {groupBranch && (
-                  <span className="flex items-center gap-1 font-mono">
-                    <GitBranch size={11} className="shrink-0" />
-                    {groupBranch}
-                  </span>
-                )}
-              </div>
-            )}
-
-            <h2 className="text-base font-semibold tracking-tight text-foreground">
-              What should the agent do?
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Start with a suggestion, or type your own below.
-            </p>
-
-            <div className="pointer-events-auto mt-4 flex flex-wrap gap-2">
-              {STARTER_PROMPTS.map(({ label, prompt }) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => requestPrefill(sessionId, prompt, true)}
-                  className="group flex h-28 w-full max-w-[230px] flex-1 flex-col items-start overflow-hidden rounded-lg border border-border bg-surface-deep p-3 text-left transition-colors hover:border-accent/40 hover:bg-surface-elevated"
-                >
-                  <span className="line-clamp-4 text-sm leading-snug text-foreground">{label}</span>
-                </button>
-              ))}
-            </div>
-
-            {importedWorktree ? (
-              <div className="pointer-events-auto mt-4 flex flex-col gap-1 rounded-lg border border-border bg-surface-deep px-3 py-2.5">
-                <span className="flex items-center gap-2 text-xs font-medium text-foreground">
-                  <FolderGit2 size={14} className="text-muted-foreground" />
-                  Imported from worktree
-                </span>
-                {groupWorkdir && (
-                  <span className="max-w-full truncate pl-6 font-mono text-[11px] text-muted-foreground">
-                    {groupWorkdir}
-                  </span>
-                )}
-              </div>
-            ) : (
-              canImportWorktree && (
-                <button
-                  type="button"
-                  onClick={() => setShowImportWorktree(true)}
-                  className="pointer-events-auto mt-4 flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <FolderGit2 size={13} className="shrink-0" />
-                  Working from an existing checkout? Import from worktree
-                </button>
-              )
-            )}
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-
   return (
     <div className="relative h-full">
-      {canImportWorktree && sessionRepo?.id && (
-        <ImportWorktreeDialog
-          sessionId={sessionId}
-          repoId={sessionRepo.id}
-          open={showImportWorktree}
-          onClose={() => setShowImportWorktree(false)}
-        />
-      )}
-      {showEmptyState ? emptyState : null}
       {!showEmptyState ? (
         <PromptTimeline
           nodes={nodes}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { gql } from "@urql/core";
 import type { Artifact, QueuedMessage } from "@trace/gql";
 import { toast } from "sonner";
+import { cn } from "../../lib/utils";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useSessionPromptIndex } from "../../hooks/useSessionPromptIndex";
 import {
@@ -24,7 +25,6 @@ import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
-import { useUIStore, type UIState } from "../../stores/ui";
 import { AlertCircle, Cloud, RefreshCw, ArrowRightLeft } from "lucide-react";
 import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
 import { buildSessionNodes } from "./groupReadGlob";
@@ -325,14 +325,7 @@ export function SessionDetailView({
   const hasSetupScript = Boolean(channelSetupScript?.trim());
   const setupBlocking = hasSetupScript && setupStatus === "running";
 
-  const showTerminalPanel = useUIStore((s: UIState) => s.showTerminalPanel);
-  const setShowTerminalPanel = useUIStore((s: UIState) => s.setShowTerminalPanel);
   const [retryingSetup, setRetryingSetup] = useState(false);
-
-  // Reset terminal panel when switching sessions
-  useEffect(() => {
-    setShowTerminalPanel(false);
-  }, [sessionId, setShowTerminalPanel]);
 
   const canAccessTerminal =
     bridgeInteractionAllowed &&
@@ -613,6 +606,7 @@ export function SessionDetailView({
     !visiblePlanArtifact &&
     !worktreeDeleted &&
     !(isDisconnected(connection) && !isNotStarted);
+  const centeredComposer = composerActive && !initialEventsLoading && listNodes.length === 0;
 
   // The bottom bar (composer / plan / question / notice) floats over the message
   // list so content scrolls behind it. Measure its height to pad the scroll area
@@ -729,18 +723,18 @@ export function SessionDetailView({
               </div>
             )}
 
-            {!hideHeader && (showTerminal || showTerminalPanel) && canAccessTerminal && (
-              <TerminalPanel
-                sessionId={sessionId}
-                onClose={() => {
-                  setShowTerminal(false);
-                  setShowTerminalPanel(false);
-                }}
-              />
+            {!hideHeader && showTerminal && canAccessTerminal && (
+              <TerminalPanel sessionId={sessionId} onClose={() => setShowTerminal(false)} />
             )}
           </div>
 
-          <div ref={bottomBarRef} className="absolute inset-x-0 bottom-0 z-10">
+          <div
+            ref={bottomBarRef}
+            className={cn(
+              "absolute inset-x-0 bottom-0 z-10",
+              centeredComposer && "pointer-events-none top-0 flex items-center justify-center",
+            )}
+          >
             {runtimeLifecycleState ? (
               <RuntimeLifecycleNotice
                 sessionId={sessionId}
@@ -777,6 +771,7 @@ export function SessionDetailView({
                       bridgeAccess={bridgeAccess}
                       sessionGroupId={sessionGroupId ?? null}
                       onAccessRequested={refreshBridgeAccess}
+                      centered={centeredComposer}
                     />
                   </>
                 ) : null}
@@ -804,6 +799,7 @@ export function SessionDetailView({
                   bridgeAccess={bridgeAccess}
                   sessionGroupId={sessionGroupId ?? null}
                   onAccessRequested={refreshBridgeAccess}
+                  centered={centeredComposer}
                 />
               </>
             )}

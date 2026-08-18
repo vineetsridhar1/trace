@@ -565,6 +565,8 @@ export type EventType =
   | "session_setup_script_failed"
   | "session_setup_script_started"
   | "session_started"
+  | "session_tab_hidden"
+  | "session_tab_restored"
   | "session_terminated"
   | "terminal_created"
   | "terminal_destroyed"
@@ -574,7 +576,14 @@ export type EventType =
   | "ticket_linked"
   | "ticket_unassigned"
   | "ticket_unlinked"
-  | "ticket_updated";
+  | "ticket_updated"
+  | "workspace_browser_open_requested";
+
+export type HiddenSessionTab = {
+  __typename?: "HiddenSessionTab";
+  hiddenAt: Scalars["DateTime"]["output"];
+  sessionId: Scalars["ID"]["output"];
+};
 
 export type HostingMode = "cloud" | "local";
 
@@ -732,6 +741,7 @@ export type Mutation = {
   enableSessionEndpointForwarding: SessionEndpoint;
   forkSession: Session;
   forwardSessionPort: SessionEndpoint;
+  hideSessionTab: HiddenSessionTab;
   /** Adopt an existing local worktree into a not-yet-started session's group (local hosting only). */
   importWorktree: SessionGroup;
   joinChannel: Channel;
@@ -745,6 +755,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  openWorkspaceBrowser: Scalars["Boolean"]["output"];
   publishAppSession: SessionEndpoint;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
@@ -760,6 +771,7 @@ export type Mutation = {
   resizeTerminal: Scalars["Boolean"]["output"];
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
+  restoreSessionTab: Scalars["Boolean"]["output"];
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
   revertSessionGroupFileChange: Scalars["Boolean"]["output"];
@@ -917,7 +929,9 @@ export type MutationCreateSessionEndpointPreviewArgs = {
 };
 
 export type MutationCreateTerminalArgs = {
+  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
   cols: Scalars["Int"]["input"];
+  openInWorkspace?: InputMaybe<Scalars["Boolean"]["input"]>;
   rows: Scalars["Int"]["input"];
   sessionId: Scalars["ID"]["input"];
 };
@@ -1015,6 +1029,10 @@ export type MutationForwardSessionPortArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationHideSessionTabArgs = {
+  sessionId: Scalars["ID"]["input"];
+};
+
 export type MutationImportWorktreeArgs = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   sessionId: Scalars["ID"]["input"];
@@ -1073,6 +1091,11 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationOpenWorkspaceBrowserArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+  url: Scalars["String"]["input"];
 };
 
 export type MutationPublishAppSessionArgs = {
@@ -1152,6 +1175,10 @@ export type MutationRestoreLinkedCheckoutArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationRestoreSessionTabArgs = {
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationRetrySessionConnectionArgs = {
@@ -1501,6 +1528,7 @@ export type Query = {
   chats: Array<Chat>;
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
+  hiddenSessionTabs: Array<HiddenSessionTab>;
   inboxItems: Array<InboxItem>;
   linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   linkedCheckoutStatus: LinkedCheckoutStatus;
@@ -1657,6 +1685,10 @@ export type QueryEventsArgs = {
   organizationId: Scalars["ID"]["input"];
   scope?: InputMaybe<ScopeInput>;
   types?: InputMaybe<Array<Scalars["String"]["input"]>>;
+};
+
+export type QueryHiddenSessionTabsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryInboxItemsArgs = {

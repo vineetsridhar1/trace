@@ -8,9 +8,11 @@ import { useSessionApplicationsPanel } from "./useSessionApplicationsPanel";
 export function SessionApplicationsPanel({
   sessionGroupId,
   onOpenTraffic,
+  embedded = false,
 }: {
   sessionGroupId: string;
   onOpenTraffic: (endpointId: string) => void;
+  embedded?: boolean;
 }) {
   const state = useSessionApplicationsPanel(sessionGroupId);
   const config = state.config;
@@ -18,7 +20,7 @@ export function SessionApplicationsPanel({
   if (!config || (config.setupScripts.length === 0 && config.applications.length === 0)) {
     return (
       <div className="flex h-full flex-col overflow-hidden bg-surface-deep">
-        <PanelHeader onRefresh={state.refresh} />
+        {!embedded ? <PanelHeader onRefresh={state.refresh} /> : null}
         <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-6">
           <div className="max-w-64 text-center">
             <Settings size={22} className="mx-auto mb-3 text-muted-foreground" />
@@ -38,7 +40,7 @@ export function SessionApplicationsPanel({
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface-deep">
-      <PanelHeader onRefresh={state.refresh} />
+      {!embedded ? <PanelHeader onRefresh={state.refresh} /> : null}
       <div className="min-h-0 flex-1 space-y-4 overflow-auto px-3 py-3">
         {state.error ? (
           <p

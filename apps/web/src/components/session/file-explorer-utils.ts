@@ -14,6 +14,46 @@ export interface FileTreeEntry {
   isDirectory: boolean;
 }
 
+export type FlattenedFileTreeRow =
+  | { kind: "node"; key: string; node: FileTreeNode; depth: number }
+  | { kind: "message"; key: string; message: string; depth: number; destructive: boolean };
+
+export function flattenVisibleFileTree(
+  tree: FileTreeNode[],
+  expandedPaths: ReadonlySet<string>,
+): FlattenedFileTreeRow[] {
+  const rows: FlattenedFileTreeRow[] = [];
+
+  const visit = (nodes: FileTreeNode[], depth: number): void => {
+    for (const node of nodes) {
+      rows.push({ kind: "node", key: node.path, node, depth });
+      if (!node.isDirectory || !expandedPaths.has(node.path)) continue;
+
+      visit(node.children, depth + 1);
+      if (node.error) {
+        rows.push({
+          kind: "message",
+          key: `${node.path}:error`,
+          message: node.error,
+          depth: depth + 1,
+          destructive: true,
+        });
+      } else if (node.isLoaded && node.children.length === 0) {
+        rows.push({
+          kind: "message",
+          key: `${node.path}:empty`,
+          message: "empty",
+          depth: depth + 1,
+          destructive: false,
+        });
+      }
+    }
+  };
+
+  visit(tree, 0);
+  return rows;
+}
+
 export function buildTree(files: string[]): FileTreeNode[] {
   const root: FileTreeNode[] = [];
   const nodeMap = new Map<string, FileTreeNode>();

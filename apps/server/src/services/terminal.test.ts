@@ -14,14 +14,20 @@ vi.mock("../lib/terminal-relay.js", () => ({
     getTerminalsForChannel: vi.fn().mockReturnValue([]),
     getSessionId: vi.fn(),
     getTerminalAuthContext: vi.fn(),
+    getTerminalAuthContextDistributed: vi.fn(),
     getTerminalState: vi.fn(),
     destroyTerminal: vi.fn(),
+    destroyTerminalDistributed: vi.fn(),
   },
 }));
 
 vi.mock("./event.js", () => ({
   eventService: {
-    create: vi.fn().mockResolvedValue({ id: "event-1" }),
+    create: vi.fn().mockResolvedValue({
+      id: "event-1",
+      scopeType: "session",
+      scopeId: "session-1",
+    }),
   },
 }));
 
@@ -59,11 +65,13 @@ import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { terminalService } from "./terminal.js";
+import { eventService } from "./event.js";
 
 const prismaMock = prisma as any;
 const terminalRelayMock = terminalRelay as any;
 const runtimeAccessServiceMock = runtimeAccessService as any;
 const sessionRouterMock = sessionRouter as any;
+const eventServiceMock = eventService as any;
 
 describe("TerminalService", () => {
   beforeEach(() => {
@@ -80,10 +88,17 @@ describe("TerminalService", () => {
       runtimeInstanceId: "runtime-1",
       ownerUserId: "user-1",
     }));
+    terminalRelayMock.getTerminalAuthContextDistributed.mockImplementation((terminalId: string) =>
+      Promise.resolve(terminalRelayMock.getTerminalAuthContext(terminalId)),
+    );
     terminalRelayMock.getTerminalState.mockImplementation((terminalId: string) => ({
       id: terminalId,
       sessionId: terminalRelayMock.getSessionId(terminalId) ?? "session-1",
     }));
+    terminalRelayMock.destroyTerminalDistributed.mockImplementation((terminalId: string) => {
+      terminalRelayMock.destroyTerminal(terminalId);
+      return Promise.resolve();
+    });
   });
 
   describe("create", () => {
@@ -104,6 +119,8 @@ describe("TerminalService", () => {
         sessionId: "session-1",
         cols: 80,
         rows: 24,
+        clientMutationId: "request-1",
+        openInWorkspace: true,
         organizationId: "org-1",
         userId: "user-1",
       });
@@ -118,6 +135,16 @@ describe("TerminalService", () => {
         80,
         24,
         "/workspace",
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "terminal_created",
+          payload: expect.objectContaining({
+            clientMutationId: "request-1",
+            openInWorkspace: true,
+            targetUserId: "user-1",
+          }),
+        }),
       );
     });
 

@@ -87,6 +87,18 @@ declare global {
     contentTruncated: boolean;
   };
 
+  type DesktopBrowserWorkspaceState = {
+    sessionGroupId: string;
+    browserId: string;
+    url: string;
+    title: string;
+    canGoBack: boolean;
+    canGoForward: boolean;
+    loading: boolean;
+    devToolsOpen: boolean;
+    suspensionState: "active" | "frozen" | "muted";
+  };
+
   type DesktopLinkedCheckoutActionResult = {
     ok: boolean;
     status: DesktopLinkedCheckoutStatus;
@@ -157,6 +169,44 @@ declare global {
     setBridgeAuthContext: (organizationId: string | null) => Promise<boolean>;
     onBridgeStatus: (callback: (status: DesktopBridgeConnectionStatus) => void) => () => void;
     onMenuCommand?: (callback: (command: string) => void) => () => void;
+    activateBrowser: (input: {
+      sessionGroupId: string;
+      browserId: string;
+    }) => Promise<DesktopBrowserWorkspaceState>;
+    hideBrowser: (input: { sessionGroupId: string; browserId: string }) => Promise<void>;
+    destroyBrowser: (input: { sessionGroupId: string; browserId: string }) => Promise<void>;
+    setBrowserBounds: (input: {
+      sessionGroupId: string;
+      browserId: string;
+      bounds: { x: number; y: number; width: number; height: number };
+    }) => Promise<void>;
+    setBrowserOverlayHidden: (input: {
+      sessionGroupId: string;
+      browserId: string;
+      hidden: boolean;
+    }) => Promise<void>;
+    navigateBrowser: (input: {
+      sessionGroupId: string;
+      browserId: string;
+      url: string;
+    }) => Promise<DesktopBrowserWorkspaceState>;
+    goBrowserBack: (input: {
+      sessionGroupId: string;
+      browserId: string;
+    }) => Promise<DesktopBrowserWorkspaceState>;
+    goBrowserForward: (input: {
+      sessionGroupId: string;
+      browserId: string;
+    }) => Promise<DesktopBrowserWorkspaceState>;
+    reloadBrowser: (input: {
+      sessionGroupId: string;
+      browserId: string;
+    }) => Promise<DesktopBrowserWorkspaceState>;
+    toggleBrowserDevTools: (input: {
+      sessionGroupId: string;
+      browserId: string;
+    }) => Promise<DesktopBrowserWorkspaceState>;
+    onBrowserWorkspaceState: (callback: (state: unknown) => void) => () => void;
   }
 
   interface Window {

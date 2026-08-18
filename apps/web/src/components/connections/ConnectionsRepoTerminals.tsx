@@ -5,7 +5,6 @@ import {
   CREATE_CHANNEL_TERMINAL_MUTATION,
   DESTROY_TERMINAL_MUTATION,
 } from "@trace/client-core";
-import { useShallow } from "zustand/react/shallow";
 import type { Terminal } from "@trace/gql";
 import { Button } from "../ui/button";
 import { TerminalInstance } from "../session/TerminalInstance";
@@ -24,10 +23,10 @@ export function ConnectionsRepoTerminals({
   const scripts = useMemo(() => parseRunScripts(entry.runScripts), [entry.runScripts]);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
-  const terminals = useTerminalStore(
-    useShallow((state) =>
-      Object.values(state.terminals).filter((terminal) => terminal.sessionGroupId === scopeKey),
-    ),
+  const terminalTable = useTerminalStore((state) => state.terminals);
+  const terminals = useMemo(
+    () => Object.values(terminalTable).filter((terminal) => terminal.sessionGroupId === scopeKey),
+    [scopeKey, terminalTable],
   );
   const [activeId, setActiveId] = useState<string | null>(null);
   useEffect(() => {

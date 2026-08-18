@@ -48,7 +48,7 @@ async function enterKey(root: ReactTestInstance) {
   const input = root.findByType("input");
   await act(async () => {
     const control = { value: "sk-ant-secret" };
-    input.props.onChange({ currentTarget: control, target: control });
+    input.props.onChange({ currentTarget: control, target: control, nativeEvent: {} });
   });
 }
 

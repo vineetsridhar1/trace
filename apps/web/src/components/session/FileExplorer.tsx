@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Search } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { TraceLoader } from "../ui/trace-loader";
-import type { FileTreeNode } from "./file-explorer-utils";
+import { flattenVisibleFileTree, type FileTreeNode } from "./file-explorer-utils";
 import { FileTreeItem } from "./FileTreeItem";
+import { cn } from "../../lib/utils";
 
 export function FileExplorer({
   tree,
+  activeFilePath,
   loading,
   error,
   onRefresh,
@@ -13,6 +16,7 @@ export function FileExplorer({
   onFileClick,
 }: {
   tree: FileTreeNode[];
+  activeFilePath?: string | null;
   loading: boolean;
   error: string | null;
   onRefresh: () => Promise<void>;
@@ -20,7 +24,9 @@ export function FileExplorer({
   onFileClick: (filePath: string) => void;
 }) {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
   const didAutoExpandRef = useRef(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const loadedDirectoryPaths = useMemo(() => {
     const paths = new Set<string>();
     const visit = (node: FileTreeNode) => {
@@ -40,6 +46,27 @@ export function FileExplorer({
     for (const node of tree) visit(node);
     return count;
   }, [tree]);
+  const visibleTree = useMemo(() => filterFileTree(tree, search), [search, tree]);
+  const visibleExpandedPaths = useMemo(() => {
+    if (!search.trim()) return expandedPaths;
+    const paths = new Set(expandedPaths);
+    const visit = (node: FileTreeNode) => {
+      if (node.isDirectory) paths.add(node.path);
+      for (const child of node.children) visit(child);
+    };
+    for (const node of visibleTree) visit(node);
+    return paths;
+  }, [expandedPaths, search, visibleTree]);
+  const flattenedRows = useMemo(
+    () => flattenVisibleFileTree(visibleTree, visibleExpandedPaths),
+    [visibleExpandedPaths, visibleTree],
+  );
+  const virtualizer = useVirtualizer({
+    count: flattenedRows.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => 32,
+    overscan: 12,
+  });
 
   // Auto-expand first level + single-child directory chains on initial load
   useEffect(() => {
@@ -114,36 +141,89 @@ export function FileExplorer({
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#1e1e1e]">
-      <div className="flex shrink-0 items-center justify-between border-b border-[#2d2d2d] px-3 py-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-[#bbbbbb]">
-          Explorer
+    <div className="flex h-full flex-col bg-transparent">
+      <div className="px-2 py-2">
+        <label className="flex h-8 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-2 text-muted-foreground focus-within:border-ring/50">
+          <Search size={16} />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+            placeholder="Search files"
+            aria-label="Search files"
+          />
+          <span className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[9px]">
+            ⌘P
+          </span>
+        </label>
+      </div>
+      <div className="flex h-8 shrink-0 items-center px-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
+          Workspace
         </span>
+        <span className="ml-auto text-[10px] text-muted-foreground">{loadedItemCount} loaded</span>
         <button
           onClick={() => void onRefresh()}
-          className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+          className="ml-1 flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-white/10 hover:text-foreground"
           title="Refresh"
         >
-          <RefreshCw size={12} />
+          <RefreshCw size={14} />
         </button>
       </div>
-      <div className="native-scrollbar min-h-0 flex-1 overflow-y-auto py-0.5">
-        {tree.map((node: FileTreeNode) => (
-          <FileTreeItem
-            key={node.path}
-            node={node}
-            depth={0}
-            expandedPaths={expandedPaths}
-            onToggle={handleToggle}
-            onFileClick={onFileClick}
-          />
-        ))}
-      </div>
-      <div className="shrink-0 border-t border-[#2d2d2d] px-3 py-1">
-        <span className="text-[11px] text-muted-foreground">
-          {loadedItemCount} item{loadedItemCount !== 1 ? "s" : ""} loaded
-        </span>
+      <div
+        ref={scrollContainerRef}
+        className="native-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2"
+      >
+        <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const row = flattenedRows[virtualRow.index];
+            return (
+              <div
+                key={row.key}
+                className="absolute left-0 top-0 w-full"
+                style={{ transform: `translateY(${virtualRow.start}px)` }}
+              >
+                {row.kind === "node" ? (
+                  <FileTreeItem
+                    node={row.node}
+                    activeFilePath={activeFilePath}
+                    depth={row.depth}
+                    isExpanded={visibleExpandedPaths.has(row.node.path)}
+                    onToggle={handleToggle}
+                    onFileClick={onFileClick}
+                  />
+                ) : (
+                  <div
+                    className={cn(
+                      "h-8 truncate text-sm italic leading-8",
+                      row.destructive ? "text-destructive" : "text-muted-foreground",
+                    )}
+                    style={{ paddingLeft: `${row.depth * 14 + 28}px` }}
+                  >
+                    {row.message}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {visibleTree.length === 0 && search.trim() ? (
+          <p className="px-3 py-5 text-center text-xs text-muted-foreground">No matching files</p>
+        ) : null}
       </div>
     </div>
   );
+}
+
+function filterFileTree(tree: FileTreeNode[], search: string): FileTreeNode[] {
+  const query = search.trim().toLowerCase();
+  if (!query) return tree;
+
+  return tree.flatMap((node) => {
+    const children = filterFileTree(node.children, query);
+    if (node.name.toLowerCase().includes(query) || children.length > 0) {
+      return [{ ...node, children }];
+    }
+    return [];
+  });
 }

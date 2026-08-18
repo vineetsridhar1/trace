@@ -14,6 +14,8 @@ setOrgEventUIBindings({
   markSessionGroupDone: (id) => useMobileUIStore.getState().markSessionGroupDone(id),
   // Mobile has no tab metaphor — group detail navigation is the tab.
   openSessionTab: () => {},
+  hideSessionTab: () => {},
+  restoreSessionTab: () => {},
   navigateToSession: (_channelId, sessionGroupId, sessionId) => {
     router.push(`/sessions/${sessionGroupId}/${sessionId}` as never);
   },

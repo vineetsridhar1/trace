@@ -8,6 +8,7 @@ const FATAL_TERMINAL_ERRORS = new Set([
   "Invalid token",
   "Terminal not found",
   "Access denied",
+  "Bridge access revoked",
 ]);
 const FATAL_TERMINAL_CLOSE_CODES = new Set([1008]);
 
@@ -28,6 +29,7 @@ const RECONNECT_MAX_MS = 30_000;
 const ATTACH_RETRY_BASE_MS = 250;
 const ATTACH_RETRY_MAX_MS = 2_000;
 const ATTACH_RETRY_LIMIT = 5;
+const MAX_REPLAY_HISTORY_LENGTH = 1_000_000;
 
 /**
  * WebSocket client for a single terminal session.
@@ -35,9 +37,12 @@ const ATTACH_RETRY_LIMIT = 5;
  * Automatically reconnects on unexpected disconnects until explicitly closed
  * or the server reports a fatal auth/terminal error.
  */
-export class TerminalSocket {
+class TerminalSocketConnection {
   private ws: WebSocket | null = null;
   private listeners = new Set<(event: TerminalSocketEvent) => void>();
+  private outputHistory: string[] = [];
+  private outputHistoryLength = 0;
+  private lastLifecycleEvent: TerminalSocketEvent | null = null;
   private closed = false;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -175,6 +180,10 @@ export class TerminalSocket {
 
   onEvent(listener: (event: TerminalSocketEvent) => void): () => void {
     this.listeners.add(listener);
+    for (const data of this.outputHistory) {
+      listener({ type: "output", data });
+    }
+    if (this.lastLifecycleEvent) listener(this.lastLifecycleEvent);
     return () => {
       this.listeners.delete(listener);
     };
@@ -196,6 +205,21 @@ export class TerminalSocket {
   }
 
   private emit(event: TerminalSocketEvent): void {
+    if (event.type === "output") {
+      this.outputHistory.push(event.data);
+      this.outputHistoryLength += event.data.length;
+      while (
+        this.outputHistoryLength > MAX_REPLAY_HISTORY_LENGTH &&
+        this.outputHistory.length > 1
+      ) {
+        this.outputHistoryLength -= this.outputHistory.shift()?.length ?? 0;
+      }
+    } else if (event.type === "exit" || event.type === "error" || event.type === "disconnected") {
+      this.lastLifecycleEvent = event;
+    } else if (event.type === "ready" || event.type === "reconnected") {
+      this.lastLifecycleEvent = null;
+    }
+
     for (const listener of this.listeners) {
       listener(event);
     }
@@ -221,5 +245,72 @@ export class TerminalSocket {
       if (!this.sendMessage({ type: "input", data })) return;
       this.pendingWrites.shift();
     }
+  }
+}
+
+interface SharedTerminalConnection {
+  connection: TerminalSocketConnection;
+  connected: boolean;
+  references: number;
+}
+
+const sharedConnections = new Map<string, SharedTerminalConnection>();
+
+/**
+ * Reference-counted terminal transport. Multiple terminal views for the same
+ * terminal ID share one WebSocket and receive the same output stream.
+ */
+export class TerminalSocket {
+  private readonly shared: SharedTerminalConnection;
+  private readonly listenerCleanups = new Set<() => void>();
+  private released = false;
+
+  constructor(private readonly terminalId: string) {
+    const existing = sharedConnections.get(terminalId);
+    this.shared = existing ?? {
+      connection: new TerminalSocketConnection(terminalId),
+      connected: false,
+      references: 0,
+    };
+    this.shared.references += 1;
+    sharedConnections.set(terminalId, this.shared);
+  }
+
+  connect(): void {
+    if (this.released || this.shared.connected) return;
+    this.shared.connected = true;
+    this.shared.connection.connect();
+  }
+
+  write(data: string): void {
+    if (!this.released) this.shared.connection.write(data);
+  }
+
+  resize(cols: number, rows: number): void {
+    if (!this.released) this.shared.connection.resize(cols, rows);
+  }
+
+  onEvent(listener: (event: TerminalSocketEvent) => void): () => void {
+    if (this.released) return () => undefined;
+
+    const unsubscribeConnection = this.shared.connection.onEvent(listener);
+    const cleanup = () => {
+      unsubscribeConnection();
+      this.listenerCleanups.delete(cleanup);
+    };
+    this.listenerCleanups.add(cleanup);
+    return cleanup;
+  }
+
+  close(): void {
+    if (this.released) return;
+    this.released = true;
+    for (const cleanup of [...this.listenerCleanups]) cleanup();
+
+    this.shared.references -= 1;
+    if (this.shared.references > 0) return;
+
+    this.shared.connection.close();
+    sharedConnections.delete(this.terminalId);
   }
 }

@@ -4,6 +4,7 @@ import type { Event } from "@trace/gql";
 import { handleOrgEvent, useAuthStore } from "@trace/client-core";
 import { client } from "../lib/urql";
 import { reconcileTerminalEvent } from "../stores/terminal-events";
+import { reconcileWorkspaceRequestEvent } from "../stores/workspace-requests";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
   subscription OrgEvents($organizationId: ID!) {
@@ -42,6 +43,7 @@ export function useOrgEvents() {
         const event = result.data.orgEvents as Event;
         handleOrgEvent(event);
         reconcileTerminalEvent(event);
+        reconcileWorkspaceRequestEvent(event);
       });
 
     return () => subscription.unsubscribe();

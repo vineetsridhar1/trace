@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { useRegisterCommands } from "../hooks/useRegisterCommands";
 import type { RegisteredCommand } from "../stores/command-registry";
@@ -6,11 +7,13 @@ import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
 import { selectChannel } from "../lib/channel-click-navigation";
 import { features } from "../lib/features";
 import { navigateToSessionGroup, useUIStore, type UIState } from "../stores/ui";
+import { useWorkspaceSidebarStore } from "../stores/workspace-sidebar";
 import { SidebarChannelsPane } from "./sidebar/SidebarChannelsPane";
 import { SidebarDirectMessagesPane } from "./sidebar/SidebarDirectMessagesPane";
 import { PeekOverlay } from "./sidebar/PeekOverlay";
 import { SidebarTabSwitcher } from "./sidebar/SidebarTabSwitcher";
 import { UserMenu } from "./sidebar/UserMenu";
+import { SidebarFilesPane } from "./sidebar/SidebarFilesPane";
 import { CodingToolsSidebarItem } from "./desktop/CodingToolsSidebarItem";
 import { AppUpdateSidebarItem } from "./desktop/AppUpdateSidebarItem";
 import { SidebarGettingStartedItem } from "./sidebar/SidebarGettingStartedItem";
@@ -23,7 +26,8 @@ export function AppSidebar() {
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const activeChatId = useUIStore((s: UIState) => s.activeChatId);
   const setActiveChatId = useUIStore((s: UIState) => s.setActiveChatId);
-  const { state, isMobile, setOpenMobile, toggleSidebar } = useSidebar();
+  const { state, isMobile, setOpen, setOpenMobile, toggleSidebar } = useSidebar();
+  const filesSessionGroupId = useWorkspaceSidebarStore((s) => s.filesSessionGroupId);
   const sidebarData = useSidebarData();
 
   const restoreLastVisited = useUIStore((s: UIState) => s.restoreLastVisited);
@@ -62,6 +66,7 @@ export function AppSidebar() {
   const initialTab: SidebarTab = features.messaging && activeChatId ? "dm" : "main";
   const [currentTab, setCurrentTab] = useState<SidebarTab>(initialTab);
   const [peekTabProgress, setPeekTabProgress] = useState(getTabIndex(initialTab));
+  const showFiles = activeSessionGroupId !== null && filesSessionGroupId === activeSessionGroupId;
 
   const handleTabCommit = useCallback(
     (tab: SidebarTab) => {
@@ -116,6 +121,13 @@ export function AppSidebar() {
   }, [state]);
 
   useEffect(() => {
+    if (!showFiles) return;
+    setPeeking(false);
+    if (isMobile) setOpenMobile(true);
+    else setOpen(true);
+  }, [isMobile, setOpen, setOpenMobile, showFiles]);
+
+  useEffect(() => {
     setCurrentTab((previousTab: SidebarTab) =>
       getPreferredSidebarTab(activeChatId, activeChannelId, activePage, previousTab),
     );
@@ -137,69 +149,97 @@ export function AppSidebar() {
           style={{ backgroundColor: "transparent" }}
         >
           <div className="app-region-drag h-12 shrink-0" />
-          <SidebarContent className="app-region-no-drag overflow-hidden">
-            {features.messaging ? (
-              <div
-                ref={expandedTabs.viewportRef}
-                className="no-scrollbar flex size-full overflow-x-auto overflow-y-hidden overscroll-x-contain"
-                onScroll={expandedTabs.handleScroll}
-              >
-                <SidebarDirectMessagesPane
-                  activeChatId={activeChatId}
-                  chatIds={sidebarData.chatIds}
-                  chatsLoading={sidebarData.chatsLoading}
-                  onChatClick={handleChatClick}
-                />
-                <SidebarChannelsPane
-                  activeChannelId={activeChannelId}
-                  activeSessionGroupId={activeSessionGroupId}
-                  activeOrgId={sidebarData.activeOrgId}
-                  allChannelIds={sidebarData.allChannelIds}
-                  channelGroupsById={sidebarData.channelGroupsById}
-                  channelIdsByGroup={sidebarData.channelIdsByGroup}
-                  channelsById={sidebarData.channelsById}
-                  channelsLoading={sidebarData.channelsLoading}
-                  groupIds={sidebarData.groupIds}
-                  linkedChannelId={sidebarData.linkedChannelId}
-                  onChannelClick={handleChannelClick}
-                  onSessionClick={handleSessionClick}
-                  topLevelItems={sidebarData.topLevelItems}
-                />
-              </div>
-            ) : (
-              <div className="flex size-full">
-                <SidebarChannelsPane
-                  activeChannelId={activeChannelId}
-                  activeSessionGroupId={activeSessionGroupId}
-                  activeOrgId={sidebarData.activeOrgId}
-                  allChannelIds={sidebarData.allChannelIds}
-                  channelGroupsById={sidebarData.channelGroupsById}
-                  channelIdsByGroup={sidebarData.channelIdsByGroup}
-                  channelsById={sidebarData.channelsById}
-                  channelsLoading={sidebarData.channelsLoading}
-                  groupIds={sidebarData.groupIds}
-                  linkedChannelId={sidebarData.linkedChannelId}
-                  onChannelClick={handleChannelClick}
-                  onSessionClick={handleSessionClick}
-                  topLevelItems={sidebarData.topLevelItems}
-                />
-              </div>
-            )}
-          </SidebarContent>
+          <div className="relative min-h-0 flex-1 overflow-hidden">
+            <motion.div
+              className="absolute inset-0 flex flex-col"
+              animate={{ x: showFiles ? "-100%" : "0%" }}
+              transition={sidebarPaneTransition}
+              aria-hidden={showFiles}
+              inert={showFiles}
+            >
+              <SidebarContent className="app-region-no-drag overflow-hidden">
+                {features.messaging ? (
+                  <div
+                    ref={expandedTabs.viewportRef}
+                    className="no-scrollbar flex size-full overflow-x-auto overflow-y-hidden overscroll-x-contain"
+                    onScroll={expandedTabs.handleScroll}
+                  >
+                    <SidebarDirectMessagesPane
+                      activeChatId={activeChatId}
+                      chatIds={sidebarData.chatIds}
+                      chatsLoading={sidebarData.chatsLoading}
+                      onChatClick={handleChatClick}
+                    />
+                    <SidebarChannelsPane
+                      activeChannelId={activeChannelId}
+                      activeSessionGroupId={activeSessionGroupId}
+                      activeOrgId={sidebarData.activeOrgId}
+                      allChannelIds={sidebarData.allChannelIds}
+                      channelGroupsById={sidebarData.channelGroupsById}
+                      channelIdsByGroup={sidebarData.channelIdsByGroup}
+                      channelsById={sidebarData.channelsById}
+                      channelsLoading={sidebarData.channelsLoading}
+                      groupIds={sidebarData.groupIds}
+                      linkedChannelId={sidebarData.linkedChannelId}
+                      onChannelClick={handleChannelClick}
+                      onSessionClick={handleSessionClick}
+                      topLevelItems={sidebarData.topLevelItems}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex size-full">
+                    <SidebarChannelsPane
+                      activeChannelId={activeChannelId}
+                      activeSessionGroupId={activeSessionGroupId}
+                      activeOrgId={sidebarData.activeOrgId}
+                      allChannelIds={sidebarData.allChannelIds}
+                      channelGroupsById={sidebarData.channelGroupsById}
+                      channelIdsByGroup={sidebarData.channelIdsByGroup}
+                      channelsById={sidebarData.channelsById}
+                      channelsLoading={sidebarData.channelsLoading}
+                      groupIds={sidebarData.groupIds}
+                      linkedChannelId={sidebarData.linkedChannelId}
+                      onChannelClick={handleChannelClick}
+                      onSessionClick={handleSessionClick}
+                      topLevelItems={sidebarData.topLevelItems}
+                    />
+                  </div>
+                )}
+              </SidebarContent>
 
-          <SidebarFooter className="app-region-no-drag gap-0 p-0">
-            {features.messaging && (
-              <div className="px-3 py-2">
-                <SidebarTabSwitcher tabProgress={tabProgress} onTabClick={expandedTabs.selectTab} />
-              </div>
-            )}
-            <AppUpdateSidebarItem />
-            <CodingToolsSidebarItem />
-            <SidebarGettingStartedItem />
-            <div className="border-t border-white/10">
-              <UserMenu />
-            </div>
-          </SidebarFooter>
+              <SidebarFooter className="app-region-no-drag gap-0 p-0">
+                {features.messaging && (
+                  <div className="px-3 py-2">
+                    <SidebarTabSwitcher
+                      tabProgress={tabProgress}
+                      onTabClick={expandedTabs.selectTab}
+                    />
+                  </div>
+                )}
+                <AppUpdateSidebarItem />
+                <CodingToolsSidebarItem />
+                <SidebarGettingStartedItem />
+                <div className="border-t border-white/10">
+                  <UserMenu />
+                </div>
+              </SidebarFooter>
+            </motion.div>
+
+            <AnimatePresence initial={false}>
+              {showFiles ? (
+                <motion.div
+                  key={activeSessionGroupId}
+                  className="app-region-no-drag absolute inset-0"
+                  initial={{ x: "100%" }}
+                  animate={{ x: "0%" }}
+                  exit={{ x: "100%" }}
+                  transition={sidebarPaneTransition}
+                >
+                  <SidebarFilesPane sessionGroupId={activeSessionGroupId} />
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
         </div>
       </Sidebar>
 
@@ -217,3 +257,10 @@ export function AppSidebar() {
     </>
   );
 }
+
+const sidebarPaneTransition = {
+  type: "spring" as const,
+  stiffness: 420,
+  damping: 38,
+  mass: 0.7,
+};
