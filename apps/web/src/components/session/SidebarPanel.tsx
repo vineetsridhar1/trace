@@ -1,5 +1,4 @@
 import {
-  AppWindow,
   Files,
   GitCompareArrows,
   Globe,
@@ -11,12 +10,11 @@ import { BranchChangesPanel } from "./BranchChangesPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { FileExplorer } from "./FileExplorer";
 import type { FileTreeNode } from "./file-explorer-utils";
-import { SessionApplicationsPanel } from "./applications/SessionApplicationsPanel";
 import { TerminalPanel } from "./TerminalPanel";
 import { BrowserWorkspacePanel } from "./BrowserWorkspacePanel";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
-export type SidebarTab = "applications" | "browser" | "terminal" | "files" | "changes";
+export type SidebarTab = "browser" | "terminal" | "files" | "changes";
 
 interface SidebarPanelProps {
   sessionGroupId: string;
@@ -26,7 +24,6 @@ interface SidebarPanelProps {
   fileTree: FileTreeNode[];
   filesLoading: boolean;
   filesError: string | null;
-  canShowApplications: boolean;
   canShowBrowser: boolean;
   onTabChange: (tab: SidebarTab) => void;
   onClose: () => void;
@@ -34,7 +31,6 @@ interface SidebarPanelProps {
   onRefreshFiles: () => Promise<void>;
   onLoadDirectory: (directoryPath: string) => Promise<void>;
   onDiffFileClick?: (filePath: string, status: string) => void;
-  onOpenTraffic: (endpointId: string) => void;
   onBrowserTitleChange?: (browserId: string, title: string) => void;
   bridgeAccess?: BridgeRuntimeAccessInfo | null;
   onBridgeAccessRequested?: () => void | Promise<void>;
@@ -57,7 +53,6 @@ export interface WorkspaceSurfaceContentProps {
   onRefreshFiles: () => Promise<void>;
   onLoadDirectory: (directoryPath: string) => Promise<void>;
   onDiffFileClick?: (filePath: string, status: string) => void;
-  onOpenTraffic: (endpointId: string) => void;
   onBrowserTitleChange?: (browserId: string, title: string) => void;
   bridgeAccess?: BridgeRuntimeAccessInfo | null;
   onBridgeAccessRequested?: () => void | Promise<void>;
@@ -71,7 +66,6 @@ export function SidebarPanel({
   fileTree,
   filesLoading,
   filesError,
-  canShowApplications,
   canShowBrowser,
   onTabChange,
   onClose,
@@ -79,7 +73,6 @@ export function SidebarPanel({
   onRefreshFiles,
   onLoadDirectory,
   onDiffFileClick,
-  onOpenTraffic,
   onBrowserTitleChange,
   bridgeAccess,
   onBridgeAccessRequested,
@@ -99,15 +92,6 @@ export function SidebarPanel({
         >
           <PanelRightClose size={15} />
         </button>
-        {canShowApplications ? (
-          <SidebarDestination
-            active={activeTab === "applications"}
-            icon={AppWindow}
-            label="Applications"
-            live
-            onClick={() => onTabChange("applications")}
-          />
-        ) : null}
         {canShowBrowser ? (
           <SidebarDestination
             active={activeTab === "browser"}
@@ -149,7 +133,6 @@ export function SidebarPanel({
         onRefreshFiles={onRefreshFiles}
         onLoadDirectory={onLoadDirectory}
         onDiffFileClick={onDiffFileClick}
-        onOpenTraffic={onOpenTraffic}
         onBrowserTitleChange={onBrowserTitleChange}
         bridgeAccess={bridgeAccess}
         onBridgeAccessRequested={onBridgeAccessRequested}
@@ -173,7 +156,6 @@ export function WorkspaceSurfaceContent({
   onRefreshFiles,
   onLoadDirectory,
   onDiffFileClick,
-  onOpenTraffic,
   onBrowserTitleChange,
   bridgeAccess,
   onBridgeAccessRequested,
@@ -190,12 +172,6 @@ export function WorkspaceSurfaceContent({
             onRequested={onBridgeAccessRequested}
           />
         </div>
-      ) : surface === "applications" ? (
-        <SessionApplicationsPanel
-          sessionGroupId={sessionGroupId}
-          onOpenTraffic={onOpenTraffic}
-          embedded
-        />
       ) : surface === "browser" ? (
         <BrowserWorkspacePanel
           sessionGroupId={sessionGroupId}
@@ -231,13 +207,11 @@ function SidebarDestination({
   active,
   icon: Icon,
   label,
-  live = false,
   onClick,
 }: {
   active: boolean;
   icon: typeof Files;
   label: string;
-  live?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -255,9 +229,6 @@ function SidebarDestination({
       )}
     >
       <Icon size={14} />
-      {live ? (
-        <span className="absolute right-1 top-1 size-1.5 rounded-full bg-emerald-400" />
-      ) : null}
     </button>
   );
 }

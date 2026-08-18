@@ -165,7 +165,6 @@ function isDraftWorkspaceTab(value: unknown): value is DraftWorkspaceTab {
 
 function isWorkspaceSurface(value: unknown): value is WorkspaceSurface {
   return (
-    value === "applications" ||
     value === "browser" ||
     value === "terminal" ||
     value === "files" ||

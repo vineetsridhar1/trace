@@ -57,6 +57,7 @@ import { ArtifactOpenContext } from "../artifact/ArtifactOpenContext";
 import { ArtifactTabContent } from "../artifact/ArtifactTabContent";
 import { useWorkspaceTabRequests } from "./useWorkspaceTabRequests";
 import { CANVAS_TAB_ID, useSessionWorkspaceTabs } from "./useSessionWorkspaceTabs";
+import { useSessionApplicationsData } from "./applications/useSessionApplicationsData";
 
 const EMPTY_ARTIFACT_IDS: string[] = [];
 const EMPTY_HIDDEN_SESSION_TABS: Record<string, string> = {};
@@ -324,6 +325,7 @@ export function SessionGroupDetailView({
   const [forkDialogOpen, setForkDialogOpen] = useState(false);
   const [forkEventId, setForkEventId] = useState<string | null>(null);
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
+  const [applicationPanelOpen, setApplicationPanelOpen] = useState(false);
   const [groupLoadError, setGroupLoadError] = useState<string | null>(null);
   const {
     browserTitles,
@@ -571,6 +573,13 @@ export function SessionGroupDetailView({
   );
   const animationCanvasReady = isAnimationCanvasReady(appCanvasReady, groupAnimationPreviewUrl);
   const showApplicationsSidebarTab = selectedSession?.hosting === "cloud";
+  const { previewUrl: applicationPreviewUrl, refresh: refreshApplications } =
+    useSessionApplicationsData(sessionGroupId);
+
+  useEffect(() => {
+    if (!showApplicationsSidebarTab) return;
+    void refreshApplications().catch(() => undefined);
+  }, [refreshApplications, showApplicationsSidebarTab]);
 
   const selectedSessionStatus = getSessionGroupDisplayStatus(
     groupSessions.map((session) => session.sessionStatus),
@@ -1061,7 +1070,6 @@ export function SessionGroupDetailView({
               onRefreshFiles={refreshTree}
               onLoadDirectory={loadDirectory}
               onDiffFileClick={handleDiffFileClick}
-              onOpenTraffic={handleOpenTrafficTab}
               onBrowserTitleChange={handleBrowserTitleChange}
               bridgeAccess={bridgeAccess}
               onBridgeAccessRequested={refreshBridgeAccess}
@@ -1074,7 +1082,7 @@ export function SessionGroupDetailView({
               !!selectedSession && !selectedSession._optimistic && bridgeInteractionAllowed
             }
             canStartTerminal={!!selectedSession && terminalAllowed}
-            canShowApplications={showApplicationsSidebarTab}
+            applicationUrl={applicationPreviewUrl}
             defaultTool={selectedSession?.tool}
             defaultModel={selectedSession?.model}
             defaultReasoningEffort={selectedSession?.reasoningEffort}
@@ -1103,6 +1111,17 @@ export function SessionGroupDetailView({
                 ),
               );
             }}
+            onOpenApplication={(url) => {
+              setRequestedActiveWorkspaceTabId(tabId);
+              setDraftWorkspaceTabs((drafts) =>
+                drafts.map((candidate) =>
+                  candidate.id === tabId
+                    ? { ...candidate, surface: "browser", initialUrl: url }
+                    : candidate,
+                ),
+              );
+            }}
+            onOpenApplications={() => setApplicationPanelOpen(true)}
             onStartChat={async (input) => {
               const sessionId = await handleNewChat(input);
               if (!sessionId) return false;
@@ -1222,6 +1241,7 @@ export function SessionGroupDetailView({
     },
     [
       activeFilePath,
+      applicationPreviewUrl,
       animationCanvasReady,
       appCanvasReady,
       bridgeAccess,
@@ -1260,7 +1280,6 @@ export function SessionGroupDetailView({
       sessionGroupId,
       sessionsByRecency,
       setFileBuffer,
-      showApplicationsSidebarTab,
       terminalAllowed,
     ],
   );
@@ -1299,6 +1318,10 @@ export function SessionGroupDetailView({
                 selectedSession?.connection as Record<string, unknown> | null | undefined
               }
               selectedWorktreeDeleted={selectedSession?.worktreeDeleted}
+              canShowApplications={showApplicationsSidebarTab}
+              applicationPanelOpen={applicationPanelOpen}
+              onApplicationPanelOpenChange={setApplicationPanelOpen}
+              onOpenTraffic={handleOpenTrafficTab}
               closedSessions={closedSessions}
               onRestoreClosedSession={handleRestoreSession}
               canMoveSession={canMoveSelectedSession && selectedSessionBridgeInteractionAllowed}

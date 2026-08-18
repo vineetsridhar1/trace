@@ -175,6 +175,12 @@ export function useSessionApplicationsData(sessionGroupId: string) {
     }
     return grouped;
   }, [endpoints]);
+  const previewUrl = useMemo(
+    () =>
+      endpoints.find((endpoint) => endpoint.status === "enabled" && endpoint.url.trim())?.url ??
+      null,
+    [endpoints],
+  );
   const latestSetupRunByScript = useMemo(() => {
     const latest = new Map<string, SessionSetupScriptRun>();
     for (const run of setupRuns) {
@@ -200,6 +206,7 @@ export function useSessionApplicationsData(sessionGroupId: string) {
     loadProcessLogs,
     processLogsById,
     processesByKey,
+    previewUrl,
     refresh,
   };
 }

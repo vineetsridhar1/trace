@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import {
   Activity,
-  AppWindow,
   Bot,
   FileCode,
   Files,
@@ -103,6 +102,5 @@ function workspaceSurfaceIcon(surface: WorkspaceSurface | null) {
   if (surface === "terminal") return <TerminalSquare size={12} />;
   if (surface === "files") return <Files size={12} />;
   if (surface === "changes") return <GitCompareArrows size={12} />;
-  if (surface === "applications") return <AppWindow size={12} />;
   return <Bot size={12} />;
 }
