@@ -28,6 +28,9 @@ function makeStatus(
 describe("getBranchSyncStatus", () => {
   it("reports synced branches as green", () => {
     expect(getBranchSyncStatus(makeStatus(), "group-1", "trace/test")).toBe("synced");
+    expect(
+      getBranchSyncStatus(makeStatus({ currentBranch: null }), "group-1", "trace/test"),
+    ).toBe("synced");
   });
 
   it("reports a spotlighted branch that has advanced since sync as yellow", () => {
@@ -41,6 +44,9 @@ describe("getBranchSyncStatus", () => {
       getBranchSyncStatus(makeStatus({ hasUncommittedChanges: true }), "group-1", "trace/test"),
     ).toBe("outOfSync");
     expect(getBranchSyncStatus(makeStatus(), "other-group", "trace/test")).toBe("outOfSync");
+    expect(
+      getBranchSyncStatus(makeStatus({ targetBranch: "trace/other" }), "group-1", "trace/test"),
+    ).toBe("outOfSync");
     expect(
       getBranchSyncStatus(makeStatus({ lastSyncError: "conflict" }), "group-1", "trace/test"),
     ).toBe("outOfSync");

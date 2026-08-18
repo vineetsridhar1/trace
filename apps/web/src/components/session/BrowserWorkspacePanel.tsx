@@ -261,7 +261,7 @@ export function getBranchSyncStatus(
 ): BranchSyncStatus {
   if (
     status.attachedSessionGroupId !== sessionGroupId ||
-    status.currentBranch !== branch ||
+    status.targetBranch !== branch ||
     status.hasUncommittedChanges ||
     status.lastSyncError
   ) {
