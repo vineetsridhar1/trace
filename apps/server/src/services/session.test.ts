@@ -1282,6 +1282,35 @@ describe("SessionService", () => {
       expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
 
+    it("requires the project channel itself to have a repository before coding conversion", async () => {
+      const sourceGroup = makeSessionGroup({
+        id: "group-general",
+        kind: "general",
+        channelId: "channel-1",
+        repoId: "repo-fallback",
+      });
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
+        .mockResolvedValueOnce({ ...sourceGroup, sessions: [makeSession()] });
+      prismaMock.channel.findFirst.mockResolvedValueOnce({ id: "channel-1", repoId: null });
+
+      await expect(
+        service.convertGroup({
+          sessionGroupId: sourceGroup.id,
+          kind: "coding",
+          channelId: "channel-1",
+          repoId: "repo-fallback",
+          organizationId: "org-1",
+          actorId: "user-1",
+        }),
+      ).rejects.toThrow(
+        "The selected project/channel has no linked repository, so Trace cannot create a coding worktree",
+      );
+
+      expect(prismaMock.repo.findFirst).not.toHaveBeenCalled();
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+    });
+
     it("rejects a coding conversion when the runtime lacks the destination repo", async () => {
       const sourceGroup = makeSessionGroup({ id: "group-general", kind: "general" });
       const sourceSession = makeSession({
@@ -6103,6 +6132,10 @@ describe("SessionService", () => {
 
       const command = sessionRouterMock.send.mock.calls.at(-1)?.[1];
       expect(command?.prompt).toContain("This is a Trace general agent session");
+      expect(command?.prompt).toContain(
+        "coding is the default and does not require user confirmation",
+      );
+      expect(command?.prompt).toContain("never perform a non-coding conversion automatically");
       expect(command?.prompt).not.toContain("trace-<slug>-<descriptive-name>");
       expect(command?.prompt).not.toContain("git add -A");
     });

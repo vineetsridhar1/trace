@@ -101,20 +101,29 @@ cloud hosting fails when cloud is unavailable; it is never silently changed to l
 
 ## Message and lifecycle
 
-When a general conversation becomes one focused task, convert it in place so the existing
-conversation and session identity are preserved:
+When a general conversation becomes focused implementation or coding work, convert it in place to
+Coding by default so the existing conversation and session identity are preserved. You may perform
+this default Coding conversion automatically without asking for confirmation:
 
 ```sh
-"$TRACE_CLI" session convert --kind coding --channel <channel-id> --json
+"$TRACE_CLI" session convert --channel <channel-id> --json
+```
+
+Before converting to App, Design, PDF, Animation, or another non-coding kind, ask the user to
+confirm that exact kind and wait for their response. Never perform a non-coding conversion
+automatically. After confirmation, run the matching command:
+
+```sh
 "$TRACE_CLI" session convert --kind app --json
 "$TRACE_CLI" session convert --kind design --json
 "$TRACE_CLI" session convert --kind pdf --json
 "$TRACE_CLI" session convert --kind animation --json
 ```
 
-The coding channel is the destination and normally supplies its linked repository. When the
-repository should remain project context after conversion, use `channel link-repo` first; add
-`--repo` only for a one-off conversion. App, Design, PDF, and Animation conversions do
+The project/channel is the Coding destination and must already supply its linked repository. Trace
+cannot create the Coding worktree without that link, and conversion must fail rather than accepting
+a one-off repository. Use `channel link-repo` to attach the repository to the project/channel, then
+retry the conversion. App, Design, PDF, and Animation conversions do
 not accept a channel or repo; Trace creates an isolated managed repo and moves the session to cloud.
 Design System authoring is not a standalone conversion target because it requires a source repo and
 its dedicated creation flow. Add `--tool`, `--model`, or `--reasoning` when the destination needs an

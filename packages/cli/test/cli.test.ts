@@ -968,20 +968,40 @@ describe("Trace CLI", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      run([
-        "session",
-        "convert",
-        "--kind",
-        "coding",
-        "--channel",
-        "channel-1",
-        "--tool",
-        "codex",
-        "--json",
-      ]),
+      run(["session", "convert", "--channel", "channel-1", "--tool", "codex", "--json"]),
     ).resolves.toBe(0);
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(stdout.mock.calls.flat().join("")).toContain('"id":"session-general"');
+  });
+
+  it("rejects coding conversion when the project channel has no repository", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_SESSION_ID", "session-general");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as { query: string };
+      const data = request.query.includes("TraceCliSession")
+        ? {
+            session: {
+              id: "session-general",
+              sessionGroupId: "group-general",
+              channel: { id: "channel-1", name: "Project" },
+            },
+          }
+        : { channel: { id: "channel-1", name: "Project", repo: null } };
+      return new Response(JSON.stringify({ data }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(run(["session", "convert", "--json"])).resolves.toBe(64);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(stderr.mock.calls.flat().join("")).toContain(
+      "channel link-repo channel-1 <repo-id> --json",
+    );
   });
 
   it.each(["app", "design", "pdf", "animation"] as const)(
