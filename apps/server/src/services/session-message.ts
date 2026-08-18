@@ -6,7 +6,14 @@ type DbClient = Prisma.TransactionClient | typeof prisma;
 
 type SessionMessageSource = Pick<
   PrismaEvent,
-  "id" | "scopeType" | "scopeId" | "eventType" | "actorType" | "actorId" | "organizationId" | "timestamp"
+  | "id"
+  | "scopeType"
+  | "scopeId"
+  | "eventType"
+  | "actorType"
+  | "actorId"
+  | "organizationId"
+  | "timestamp"
 > & {
   payload: Prisma.JsonValue | Prisma.InputJsonValue;
 };
@@ -25,7 +32,9 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
 }
 
 function textFromContent(content: unknown): string {
@@ -54,7 +63,9 @@ export function sessionMessageDataFromEvent(event: SessionMessageSource): Messag
       role: "user",
       text: payload.prompt,
       content: [{ type: "text", text: payload.prompt }],
-      ...(stringArray(payload.imageKeys).length > 0 ? { attachments: stringArray(payload.imageKeys) } : {}),
+      ...(stringArray(payload.imageKeys).length > 0
+        ? { attachments: stringArray(payload.imageKeys) }
+        : {}),
     };
   }
 
@@ -73,10 +84,12 @@ export function sessionMessageDataFromEvent(event: SessionMessageSource): Messag
   const message = asRecord(payload.message);
   const content = message?.content;
   if (!Array.isArray(content)) return null;
+  const text = textFromContent(content);
+  if (!text.trim()) return null;
 
   return {
     role: "assistant",
-    text: textFromContent(content),
+    text,
     content: content as Prisma.InputJsonValue,
   };
 }

@@ -7,10 +7,7 @@ vi.mock("../lib/db.js", async () => {
 
 import { prisma } from "../lib/db.js";
 import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
-import {
-  SessionMessageService,
-  sessionMessageCreateDataFromEvent,
-} from "./session-message.js";
+import { SessionMessageService, sessionMessageCreateDataFromEvent } from "./session-message.js";
 
 const timestamp = new Date("2026-08-17T12:00:00.000Z");
 
@@ -47,9 +44,24 @@ describe("session messages", () => {
     ).toBeNull();
   });
 
+  it("does not materialize assistant tool output without text", () => {
+    expect(
+      sessionMessageCreateDataFromEvent(
+        event({
+          payload: {
+            type: "assistant",
+            message: { content: [{ type: "tool_use", name: "Bash", input: {} }] },
+          },
+        }),
+      ),
+    ).toBeNull();
+  });
+
   it("uses a composite cursor when loading messages with identical timestamps", async () => {
     const service = new SessionMessageService();
-    const prismaMock = prisma as unknown as { sessionMessage: { findMany: ReturnType<typeof vi.fn> } };
+    const prismaMock = prisma as unknown as {
+      sessionMessage: { findMany: ReturnType<typeof vi.fn> };
+    };
     prismaMock.sessionMessage.findMany.mockResolvedValue([]);
 
     await service.list("session-1", timestamp, "message-2", 50);
