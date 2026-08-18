@@ -1029,13 +1029,13 @@ function jsonRecord(value: unknown): Record<string, unknown> {
 const MAX_SESSION_NAME_LENGTH = 80;
 const MAX_CONVERSATION_CONTEXT_CHARS = 96 * 1024;
 const MAX_CONVERSATION_CONTEXT_ENTRY_CHARS = 12 * 1024;
-const CONVERSATION_CONTEXT_EVENT_PAGE_SIZE = 100;
-const MAX_CONVERSATION_CONTEXT_EVENTS_SCANNED = 500;
+const CONVERSATION_CONTEXT_MESSAGE_PAGE_SIZE = 100;
+const MAX_CONVERSATION_CONTEXT_MESSAGES_SCANNED = 500;
 
-type ConversationContextEvent = {
+type ConversationContextMessage = {
   id: string;
-  eventType: string;
-  payload: Prisma.JsonValue;
+  role: "user" | "assistant" | "system";
+  text: string;
 };
 
 type ConversationLineSource = {
@@ -1269,7 +1269,7 @@ const TITLE_TAG_RE = /<trace-title>([\s\S]*?)<\/trace-title>/;
 const BRANCH_TAG_RE = /<trace-branch>([\s\S]*?)<\/trace-branch>/;
 
 /**
- * Build a conversation transcript from session events.
+ * Build a conversation transcript from durable session messages.
  * Includes user messages and assistant text (no tool calls).
  * Used to give a new coding tool context when switching mid-session.
  */
@@ -1285,18 +1285,18 @@ async function buildConversationContext(sessionId: string): Promise<string | nul
   let scanned = 0;
   let reachedFirstEntry = false;
 
-  while (scanned < MAX_CONVERSATION_CONTEXT_EVENTS_SCANNED && !reachedFirstEntry) {
-    const events = await fetchConversationContextEvents(sessionId, "desc", cursorId);
-    if (events.length === 0) break;
+  while (scanned < MAX_CONVERSATION_CONTEXT_MESSAGES_SCANNED && !reachedFirstEntry) {
+    const messages = await fetchConversationContextMessages(sessionId, "desc", cursorId);
+    if (messages.length === 0) break;
 
-    for (const evt of events) {
+    for (const message of messages) {
       scanned += 1;
-      if (evt.id === firstEntry.eventId) {
+      if (message.id === firstEntry.messageId) {
         reachedFirstEntry = true;
         continue;
       }
 
-      const lines = conversationLineSourcesFromEvent(evt).map((line) =>
+      const lines = conversationLineSourcesFromMessage(message).map((line) =>
         formatConversationLine(line.role, line.text),
       );
       for (const line of [...lines].reverse()) {
@@ -1310,10 +1310,10 @@ async function buildConversationContext(sessionId: string): Promise<string | nul
         bodyChars += separatorChars + line.length;
       }
 
-      if (reachedFirstEntry || scanned >= MAX_CONVERSATION_CONTEXT_EVENTS_SCANNED) break;
+      if (reachedFirstEntry || scanned >= MAX_CONVERSATION_CONTEXT_MESSAGES_SCANNED) break;
     }
 
-    cursorId = events.at(-1)?.id;
+    cursorId = messages.at(-1)?.id;
   }
 
   if (!reachedFirstEntry) {
@@ -1323,79 +1323,57 @@ async function buildConversationContext(sessionId: string): Promise<string | nul
   return buildBoundedConversationHistory(firstEntry.lines, selectedTail, omitted);
 }
 
-async function fetchConversationContextEvents(
+async function fetchConversationContextMessages(
   sessionId: string,
   direction: "asc" | "desc",
   cursorId?: string,
-): Promise<ConversationContextEvent[]> {
-  return prisma.event.findMany({
-    where: {
-      scopeId: sessionId,
-      scopeType: "session",
-      eventType: { in: ["session_started", "message_sent", "session_output"] },
-    },
-    orderBy: [{ timestamp: direction }, { id: direction }],
-    take: CONVERSATION_CONTEXT_EVENT_PAGE_SIZE,
+): Promise<ConversationContextMessage[]> {
+  return prisma.sessionMessage.findMany({
+    where: { sessionId },
+    orderBy: [{ createdAt: direction }, { id: direction }],
+    take: CONVERSATION_CONTEXT_MESSAGE_PAGE_SIZE,
     ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
-    select: { id: true, eventType: true, payload: true },
+    select: { id: true, role: true, text: true },
   });
 }
 
 async function findFirstConversationContextEntry(
   sessionId: string,
-): Promise<{ eventId: string; lines: string[] } | null> {
+): Promise<{ messageId: string; lines: string[] } | null> {
   let cursorId: string | undefined;
   let scanned = 0;
 
-  while (scanned < MAX_CONVERSATION_CONTEXT_EVENTS_SCANNED) {
-    const events = await fetchConversationContextEvents(sessionId, "asc", cursorId);
-    if (events.length === 0) break;
+  while (scanned < MAX_CONVERSATION_CONTEXT_MESSAGES_SCANNED) {
+    const messages = await fetchConversationContextMessages(sessionId, "asc", cursorId);
+    if (messages.length === 0) break;
 
-    for (const evt of events) {
+    for (const message of messages) {
       scanned += 1;
-      const sources = conversationLineSourcesFromEvent(evt);
+      const sources = conversationLineSourcesFromMessage(message);
       if (sources.length > 0) {
         return {
-          eventId: evt.id,
+          messageId: message.id,
           lines: sources.map((line, index) =>
             formatConversationLine(line.role, line.text, { preserveStart: index === 0 }),
           ),
         };
       }
-      if (scanned >= MAX_CONVERSATION_CONTEXT_EVENTS_SCANNED) break;
+      if (scanned >= MAX_CONVERSATION_CONTEXT_MESSAGES_SCANNED) break;
     }
 
-    cursorId = events.at(-1)?.id;
+    cursorId = messages.at(-1)?.id;
   }
 
   return null;
 }
 
-function conversationLineSourcesFromEvent(evt: ConversationContextEvent): ConversationLineSource[] {
-  const payload = evt.payload as Record<string, unknown>;
-
-  if (evt.eventType === "session_started") {
-    return typeof payload.prompt === "string" ? [{ role: "User", text: payload.prompt }] : [];
-  }
-
-  if (evt.eventType === "message_sent") {
-    return typeof payload.text === "string" ? [{ role: "User", text: payload.text }] : [];
-  }
-
-  if (payload.type !== "assistant") return [];
-
-  const message = payload.message as Record<string, unknown> | undefined;
-  const content = message?.content;
-  if (!Array.isArray(content)) return [];
-
-  const lines: ConversationLineSource[] = [];
-  for (const block of content) {
-    const b = block as Record<string, unknown>;
-    if (b.type === "text" && typeof b.text === "string") {
-      lines.push({ role: "Assistant", text: b.text });
-    }
-  }
-  return lines;
+function conversationLineSourcesFromMessage(
+  message: ConversationContextMessage,
+): ConversationLineSource[] {
+  if (!message.text) return [];
+  if (message.role === "user") return [{ role: "User", text: message.text }];
+  if (message.role === "assistant") return [{ role: "Assistant", text: message.text }];
+  return [];
 }
 
 function formatConversationLine(
@@ -7135,12 +7113,11 @@ export class SessionService {
     let conversationContext: string | null | undefined;
     let hasPrependedConversationContext = false;
     if (session.toolChangedAt) {
-      const msgSinceSwitch = await prisma.event.findFirst({
+      const msgSinceSwitch = await prisma.sessionMessage.findFirst({
         where: {
-          scopeId: sessionId,
-          scopeType: "session",
-          eventType: "message_sent",
-          timestamp: { gt: session.toolChangedAt },
+          sessionId,
+          role: "user",
+          createdAt: { gt: session.toolChangedAt },
         },
       });
       if (!msgSinceSwitch) {

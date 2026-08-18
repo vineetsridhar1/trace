@@ -364,6 +364,8 @@ describe("SessionService", () => {
     prismaMock.session.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.sessionGroup.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.artifact.findMany.mockResolvedValue([]);
+    prismaMock.sessionMessage.findMany.mockResolvedValue([]);
+    prismaMock.sessionMessage.findFirst.mockResolvedValue(null);
     prismaMock.hiddenSessionTab.deleteMany.mockResolvedValue({ count: 0 });
     sessionRouterMock.send.mockReturnValue("delivered");
     sessionRouterMock.sendAsync.mockImplementation((...args) =>
