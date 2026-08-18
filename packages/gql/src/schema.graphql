@@ -931,6 +931,28 @@ type Message {
   deletedAt: DateTime
 }
 
+enum SessionMessageRole {
+  user
+  assistant
+  system
+}
+
+"""
+Durable conversational content for a session. Unlike Event, this is not a
+sync-log entry and is retained independently of event-log retention.
+"""
+type SessionMessage {
+  id: ID!
+  sessionId: ID!
+  role: SessionMessageRole!
+  actor: Actor!
+  text: String!
+  content: JSON!
+  attachments: JSON
+  sourceEventId: ID!
+  createdAt: DateTime!
+}
+
 type InboxItem {
   id: ID!
   itemType: InboxItemType!
@@ -1892,6 +1914,12 @@ type Query {
     excludePayloadTypes: [String!]
   ): [Event!]!
   sessionPromptIndex(organizationId: ID!, sessionId: ID!): [SessionPromptIndexItem!]!
+  sessionMessages(
+    sessionId: ID!
+    before: DateTime
+    beforeMessageId: ID
+    limit: Int
+  ): [SessionMessage!]!
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
   availableRuntimes(tool: CodingTool!, sessionGroupId: ID): [SessionRuntimeInstance!]!
   myBridgeRuntimes: [BridgeRuntime!]!

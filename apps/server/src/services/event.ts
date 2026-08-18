@@ -6,6 +6,7 @@ import { pubsub, topics } from "../lib/pubsub.js";
 import { redis } from "../lib/redis.js";
 import { isLocalMode } from "../lib/mode.js";
 import { pushNotificationService } from "./pushNotificationService.js";
+import { sessionMessageDataFromEvent, sessionMessageService } from "./session-message.js";
 
 // Approximate cap on the per-org Redis event stream. The durable copy of every
 // event lives in Postgres (see `query`); this stream is only a fan-out tail, so
@@ -102,6 +103,7 @@ const scopeTopicMap: Record<string, (id: string) => string> = {
 };
 
 type TxClient = Prisma.TransactionClient;
+type EventDb = TxClient | typeof prisma;
 
 function eventCursorWhere(
   direction: "after" | "before",
@@ -123,8 +125,18 @@ function eventCursorWhere(
 
 export class EventService {
   async create(input: CreateEventInput, tx?: TxClient) {
-    const db = tx ?? prisma;
+    if (!tx && this.shouldMaterializeSessionMessage(input)) {
+      const event = await prisma.$transaction(async (db) => this.createInTransaction(input, db));
+      if (!input.deferPublish) this.publishCreated(event);
+      return event;
+    }
 
+    const event = await this.createInTransaction(input, tx ?? prisma);
+    if (!input.deferPublish) this.publishCreated(event);
+    return event;
+  }
+
+  private async createInTransaction(input: CreateEventInput, db: EventDb) {
     const event = await db.event.create({
       data: {
         id: input.id,
@@ -140,12 +152,22 @@ export class EventService {
         timestamp: input.timestamp,
       },
     });
-
-    if (!input.deferPublish) {
-      this.publishCreated(event);
-    }
-
+    await sessionMessageService.upsertFromEvent(event, db);
     return event;
+  }
+
+  private shouldMaterializeSessionMessage(input: CreateEventInput): boolean {
+    return sessionMessageDataFromEvent({
+      id: input.id ?? "",
+      organizationId: input.organizationId,
+      scopeType: input.scopeType,
+      scopeId: input.scopeId,
+      eventType: input.eventType,
+      payload: input.payload,
+      actorType: input.actorType,
+      actorId: input.actorId,
+      timestamp: input.timestamp ?? new Date(),
+    }) !== null;
   }
 
   async createMany(inputs: CreateEventInput[]) {

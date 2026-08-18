@@ -1997,6 +1997,7 @@ export type Query = {
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
   sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
+  sessionMessages: Array<SessionMessage>;
   sessionPromptIndex: Array<SessionPromptIndexItem>;
   sessionSetupScriptRuns: Array<SessionSetupScriptRun>;
   sessionSlashCommands: Array<SlashCommand>;
@@ -2319,6 +2320,13 @@ export type QuerySessionGroupsArgs = {
   channelId: Scalars["ID"]["input"];
   includeActiveMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
   status?: InputMaybe<SessionGroupStatus>;
+};
+
+export type QuerySessionMessagesArgs = {
+  before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeMessageId?: InputMaybe<Scalars["ID"]["input"]>;
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type QuerySessionPromptIndexArgs = {
@@ -2791,6 +2799,25 @@ export type SessionGroupStatus =
   | "needs_input";
 
 export type SessionGroupVisibility = "private" | "public";
+
+/**
+ * Durable conversational content for a session. Unlike Event, this is not a
+ * sync-log entry and is retained independently of event-log retention.
+ */
+export type SessionMessage = {
+  __typename?: "SessionMessage";
+  actor: Actor;
+  attachments?: Maybe<Scalars["JSON"]["output"]>;
+  content: Scalars["JSON"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  role: SessionMessageRole;
+  sessionId: Scalars["ID"]["output"];
+  sourceEventId: Scalars["ID"]["output"];
+  text: Scalars["String"]["output"];
+};
+
+export type SessionMessageRole = "assistant" | "system" | "user";
 
 export type SessionPromptIndexItem = {
   __typename?: "SessionPromptIndexItem";
@@ -3380,6 +3407,8 @@ export type ResolversTypes = ResolversObject<{
   SessionGroupKind: SessionGroupKind;
   SessionGroupStatus: SessionGroupStatus;
   SessionGroupVisibility: SessionGroupVisibility;
+  SessionMessage: ResolverTypeWrapper<SessionMessage>;
+  SessionMessageRole: SessionMessageRole;
   SessionPromptIndexItem: ResolverTypeWrapper<SessionPromptIndexItem>;
   SessionRuntimeInstance: ResolverTypeWrapper<SessionRuntimeInstance>;
   SessionSearchResults: ResolverTypeWrapper<SessionSearchResults>;
@@ -3535,6 +3564,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionGroupDirectoryEntry: SessionGroupDirectoryEntry;
   SessionGroupFileContentResult: SessionGroupFileContentResult;
   SessionGroupFileTree: SessionGroupFileTree;
+  SessionMessage: SessionMessage;
   SessionPromptIndexItem: SessionPromptIndexItem;
   SessionRuntimeInstance: SessionRuntimeInstance;
   SessionSearchResults: SessionSearchResults;
@@ -5705,6 +5735,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QuerySessionGroupsArgs, "channelId">
   >;
+  sessionMessages?: Resolver<
+    Array<ResolversTypes["SessionMessage"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionMessagesArgs, "sessionId">
+  >;
   sessionPromptIndex?: Resolver<
     Array<ResolversTypes["SessionPromptIndexItem"]>,
     ParentType,
@@ -6167,6 +6203,23 @@ export type SessionGroupFileTreeResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type SessionMessageResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionMessage"] =
+    ResolversParentTypes["SessionMessage"],
+> = ResolversObject<{
+  actor?: Resolver<ResolversTypes["Actor"], ParentType, ContextType>;
+  attachments?: Resolver<Maybe<ResolversTypes["JSON"]>, ParentType, ContextType>;
+  content?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  role?: Resolver<ResolversTypes["SessionMessageRole"], ParentType, ContextType>;
+  sessionId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  sourceEventId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  text?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type SessionPromptIndexItemResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["SessionPromptIndexItem"] =
@@ -6551,6 +6604,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionGroupDirectoryEntry?: SessionGroupDirectoryEntryResolvers<ContextType>;
   SessionGroupFileContentResult?: SessionGroupFileContentResultResolvers<ContextType>;
   SessionGroupFileTree?: SessionGroupFileTreeResolvers<ContextType>;
+  SessionMessage?: SessionMessageResolvers<ContextType>;
   SessionPromptIndexItem?: SessionPromptIndexItemResolvers<ContextType>;
   SessionRuntimeInstance?: SessionRuntimeInstanceResolvers<ContextType>;
   SessionSearchResults?: SessionSearchResultsResolvers<ContextType>;

@@ -1994,6 +1994,7 @@ export type Query = {
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
   sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
+  sessionMessages: Array<SessionMessage>;
   sessionPromptIndex: Array<SessionPromptIndexItem>;
   sessionSetupScriptRuns: Array<SessionSetupScriptRun>;
   sessionSlashCommands: Array<SlashCommand>;
@@ -2316,6 +2317,13 @@ export type QuerySessionGroupsArgs = {
   channelId: Scalars["ID"]["input"];
   includeActiveMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
   status?: InputMaybe<SessionGroupStatus>;
+};
+
+export type QuerySessionMessagesArgs = {
+  before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeMessageId?: InputMaybe<Scalars["ID"]["input"]>;
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type QuerySessionPromptIndexArgs = {
@@ -2788,6 +2796,25 @@ export type SessionGroupStatus =
   | "needs_input";
 
 export type SessionGroupVisibility = "private" | "public";
+
+/**
+ * Durable conversational content for a session. Unlike Event, this is not a
+ * sync-log entry and is retained independently of event-log retention.
+ */
+export type SessionMessage = {
+  __typename?: "SessionMessage";
+  actor: Actor;
+  attachments?: Maybe<Scalars["JSON"]["output"]>;
+  content: Scalars["JSON"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  role: SessionMessageRole;
+  sessionId: Scalars["ID"]["output"];
+  sourceEventId: Scalars["ID"]["output"];
+  text: Scalars["String"]["output"];
+};
+
+export type SessionMessageRole = "assistant" | "system" | "user";
 
 export type SessionPromptIndexItem = {
   __typename?: "SessionPromptIndexItem";
