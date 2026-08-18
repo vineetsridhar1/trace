@@ -18,7 +18,7 @@ interface TerminalActions {
   handleCreateTerminal: (
     session: { id: string; _optimistic?: boolean } | null,
     terminalAllowed: boolean,
-  ) => Promise<string | null>;
+  ) => Promise<void>;
 }
 
 function Harness({ onReady }: { onReady: (actions: TerminalActions) => void }) {

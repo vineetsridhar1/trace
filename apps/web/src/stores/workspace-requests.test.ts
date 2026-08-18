@@ -23,7 +23,10 @@ describe("workspace request reconciliation", () => {
     useAuthStore.setState({
       user: { id: "user-1", email: "user@example.com", name: "User" } as User,
     });
-    useWorkspaceRequestStore.setState({ browserRequestsByGroup: {} });
+    useWorkspaceRequestStore.setState({
+      browserRequestsByGroup: {},
+      terminalRequestsByGroup: {},
+    });
   });
 
   it("queues browser requests for the requesting user", () => {

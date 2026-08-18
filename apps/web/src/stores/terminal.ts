@@ -24,6 +24,7 @@ export interface AddTerminalOptions {
 
 export interface TerminalCreationIntent extends AddTerminalOptions {
   sessionId: string;
+  replaceWorkspaceTabId?: string;
   pin?: boolean;
   select?: boolean;
   showPanel?: boolean;

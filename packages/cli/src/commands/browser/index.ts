@@ -20,10 +20,10 @@ export const browserCommands = [
     description: "Open a website in a new browser tab in the current Trace workspace",
     examples: ['"$TRACE_CLI" browser open https://example.com --json'],
     effects: [
-      "Creates and selects a browser tab for the requesting user in the current session group.",
+      "Requests a browser tab for the requesting user in the current session group.",
     ],
-    output: "A confirmation containing the requested website URL.",
-    nextSteps: ["The new browser tab opens in the current Trace workspace."],
+    output: "A request confirmation containing the website URL.",
+    nextSteps: ["The tab opens when an eligible Trace client receives the request."],
     positionals: [{ name: "url", required: true }],
     async run(ctx, input) {
       const variables = {
@@ -36,7 +36,7 @@ export const browserCommands = [
         traceCliOperations.openWorkspaceBrowser,
         variables,
       );
-      ctx.output({ opened: true, url: variables.url }, `Opened ${variables.url}`);
+      ctx.output({ requested: true, url: variables.url }, `Requested ${variables.url}`);
     },
   }),
 ] as const;

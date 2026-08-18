@@ -27,10 +27,10 @@ export const commandGroups: readonly CommandGroupDefinition[] = [
   {
     name: "browser",
     description: "Open websites in the current Trace workspace",
-    workflow: ['Run "$TRACE_CLI" browser open <url> --json to create and select a browser tab.'],
+    workflow: ['Run "$TRACE_CLI" browser open <url> --json to request a browser tab.'],
     examples: ['"$TRACE_CLI" browser open https://example.com --json'],
     notes: [
-      "Browser tabs open only for the requesting user and only in the current session group.",
+      "Browser requests target only the requesting user and the current session group.",
     ],
   },
   {

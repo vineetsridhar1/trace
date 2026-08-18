@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTerminalStore } from "./terminal";
 import { reconcileTerminalEvent } from "./terminal-events";
 import { useUIStore } from "./ui";
+import { useWorkspaceRequestStore } from "./workspace-requests";
 
 function terminalEvent(eventType: Event["eventType"], payload: Record<string, unknown>): Event {
   return {
@@ -29,7 +30,15 @@ describe("terminal lifecycle event reconciliation", () => {
       pinnedTerminalIds: {},
       terminalCreationIntents: {},
     });
-    useUIStore.setState({ activeSessionId: null, activeTerminalId: null });
+    useUIStore.setState({
+      activeSessionGroupId: null,
+      activeSessionId: null,
+      activeTerminalId: null,
+    });
+    useWorkspaceRequestStore.setState({
+      browserRequestsByGroup: {},
+      terminalRequestsByGroup: {},
+    });
     useAuthStore.setState({
       user: { id: "user-1", email: "user@example.com", name: "User" } as User,
     });
@@ -71,6 +80,7 @@ describe("terminal lifecycle event reconciliation", () => {
   });
 
   it("pins and selects a created terminal when the client requested it", () => {
+    useUIStore.setState({ activeSessionGroupId: "group-1" });
     useTerminalStore.getState().registerTerminalCreationIntent("request-1", {
       sessionId: "session-1",
       pin: true,
@@ -122,7 +132,12 @@ describe("terminal lifecycle event reconciliation", () => {
     expect(useTerminalStore.getState().terminalCreationIntents).toHaveProperty("request-1");
   });
 
-  it("selects a terminal opened by the CLI for the requesting user", () => {
+  it("queues a terminal opened by the CLI without navigating away", () => {
+    useUIStore.setState({
+      activeSessionGroupId: "group-2",
+      activeSessionId: "session-2",
+      activeTerminalId: null,
+    });
     reconcileTerminalEvent(
       terminalEvent("terminal_created", {
         openInWorkspace: true,
@@ -137,8 +152,49 @@ describe("terminal lifecycle event reconciliation", () => {
       }),
     );
 
-    expect(useUIStore.getState().activeSessionId).toBe("session-1");
-    expect(useUIStore.getState().activeTerminalId).toBe("terminal-1");
+    expect(useUIStore.getState().activeSessionId).toBe("session-2");
+    expect(useUIStore.getState().activeTerminalId).toBeNull();
+    expect(useWorkspaceRequestStore.getState().terminalRequestsByGroup["group-1"]).toEqual([
+      {
+        id: "event-terminal_created",
+        sessionGroupId: "group-1",
+        sessionId: "session-1",
+        terminalId: "terminal-1",
+        select: true,
+      },
+    ]);
+  });
+
+  it("queues an event-driven workspace tab replacement", () => {
+    useUIStore.setState({ activeSessionGroupId: "group-1" });
+    useTerminalStore.getState().registerTerminalCreationIntent("request-1", {
+      sessionId: "session-1",
+      select: true,
+      replaceWorkspaceTabId: "draft:new",
+      createdAt: Date.now(),
+    });
+    reconcileTerminalEvent(
+      terminalEvent("terminal_created", {
+        clientMutationId: "request-1",
+        terminal: {
+          id: "terminal-1",
+          sessionId: "session-1",
+          sessionGroupId: "group-1",
+          status: "active",
+          closed: false,
+        },
+      }),
+    );
+    expect(useWorkspaceRequestStore.getState().terminalRequestsByGroup["group-1"]).toEqual([
+      {
+        id: "event-terminal_created",
+        sessionGroupId: "group-1",
+        sessionId: "session-1",
+        terminalId: "terminal-1",
+        replaceTabId: "draft:new",
+        select: true,
+      },
+    ]);
   });
 
   it("ignores malformed lifecycle payloads", () => {

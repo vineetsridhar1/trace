@@ -9,14 +9,27 @@ export type WorkspaceBrowserRequest = {
   url: string;
 };
 
+export type WorkspaceTerminalRequest = {
+  id: string;
+  sessionGroupId: string;
+  sessionId: string;
+  terminalId: string;
+  replaceTabId?: string;
+  select: boolean;
+};
+
 type WorkspaceRequestState = {
   browserRequestsByGroup: Record<string, WorkspaceBrowserRequest[]>;
+  terminalRequestsByGroup: Record<string, WorkspaceTerminalRequest[]>;
   enqueueBrowserRequest: (request: WorkspaceBrowserRequest) => void;
+  enqueueTerminalRequest: (request: WorkspaceTerminalRequest) => void;
   consumeBrowserRequests: (sessionGroupId: string) => void;
+  consumeTerminalRequests: (sessionGroupId: string) => void;
 };
 
 export const useWorkspaceRequestStore = create<WorkspaceRequestState>((set) => ({
   browserRequestsByGroup: {},
+  terminalRequestsByGroup: {},
   enqueueBrowserRequest: (request) =>
     set((state) => {
       const existing = state.browserRequestsByGroup[request.sessionGroupId] ?? [];
@@ -28,12 +41,30 @@ export const useWorkspaceRequestStore = create<WorkspaceRequestState>((set) => (
         },
       };
     }),
+  enqueueTerminalRequest: (request) =>
+    set((state) => {
+      const existing = state.terminalRequestsByGroup[request.sessionGroupId] ?? [];
+      if (existing.some((candidate) => candidate.id === request.id)) return state;
+      return {
+        terminalRequestsByGroup: {
+          ...state.terminalRequestsByGroup,
+          [request.sessionGroupId]: [...existing, request],
+        },
+      };
+    }),
   consumeBrowserRequests: (sessionGroupId) =>
     set((state) => {
       if (!state.browserRequestsByGroup[sessionGroupId]?.length) return state;
       const next = { ...state.browserRequestsByGroup };
       delete next[sessionGroupId];
       return { browserRequestsByGroup: next };
+    }),
+  consumeTerminalRequests: (sessionGroupId) =>
+    set((state) => {
+      if (!state.terminalRequestsByGroup[sessionGroupId]?.length) return state;
+      const next = { ...state.terminalRequestsByGroup };
+      delete next[sessionGroupId];
+      return { terminalRequestsByGroup: next };
     }),
 }));
 

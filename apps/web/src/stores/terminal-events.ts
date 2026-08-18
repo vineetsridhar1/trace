@@ -3,6 +3,7 @@ import { asJsonObject } from "@trace/shared";
 import { useAuthStore } from "@trace/client-core";
 import { useTerminalStore } from "./terminal";
 import { useUIStore } from "./ui";
+import { useWorkspaceRequestStore } from "./workspace-requests";
 
 /**
  * Terminal lifecycle events contain terminal metadata only. Terminal input and
@@ -43,18 +44,25 @@ export function reconcileTerminalEvent(event: Event): void {
     if (intent?.pin) {
       useTerminalStore.getState().pinTerminal(terminal.id);
     }
-    if (intent?.select) {
-      const ui = useUIStore.getState();
-      ui.setActiveSessionId(terminal.sessionId);
-      ui.setActiveTerminalId(terminal.id);
-    }
-    if (
+    const openedForCurrentUser =
       payload.openInWorkspace === true &&
-      payload.targetUserId === useAuthStore.getState().user?.id
-    ) {
-      const ui = useUIStore.getState();
+      payload.targetUserId === useAuthStore.getState().user?.id;
+    const shouldSelect = intent?.select === true || openedForCurrentUser;
+    const ui = useUIStore.getState();
+    const groupIsActive = ui.activeSessionGroupId === terminal.sessionGroupId;
+    if (shouldSelect && groupIsActive) {
       ui.setActiveSessionId(terminal.sessionId);
-      ui.setActiveTerminalId(terminal.id);
+      useUIStore.getState().setActiveTerminalId(terminal.id);
+    }
+    if (intent?.replaceWorkspaceTabId || (shouldSelect && !groupIsActive)) {
+      useWorkspaceRequestStore.getState().enqueueTerminalRequest({
+        id: event.id,
+        sessionGroupId: terminal.sessionGroupId,
+        sessionId: terminal.sessionId,
+        terminalId: terminal.id,
+        replaceTabId: intent?.replaceWorkspaceTabId,
+        select: shouldSelect,
+      });
     }
     if (intent?.showPanel) useUIStore.getState().setShowTerminalPanel(true);
     return;

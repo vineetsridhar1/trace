@@ -487,6 +487,14 @@ function SpatialResizeHandle({
   onResizeStart: (splitId: string) => void;
   onResizeEnd: () => void;
 }) {
+  const cleanupRef = useRef<(() => void) | null>(null);
+  useEffect(
+    () => () => {
+      cleanupRef.current?.();
+    },
+    [],
+  );
+
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
@@ -498,6 +506,7 @@ function SpatialResizeHandle({
       const axisSize = direction === "horizontal" ? bounds.width : bounds.height;
       if (axisSize <= 0) return;
 
+      cleanupRef.current?.();
       const previousCursor = document.body.style.cursor;
       const previousUserSelect = document.body.style.userSelect;
       document.body.style.cursor = direction === "horizontal" ? "col-resize" : "row-resize";
@@ -513,16 +522,21 @@ function SpatialResizeHandle({
         const nextRatio = Math.max(minimumRatio, Math.min(1 - minimumRatio, position / axisSize));
         onResize(splitId, nextRatio);
       };
-      const stopResizing = () => {
+      const cleanup = () => {
         window.removeEventListener("pointermove", handlePointerMove);
         window.removeEventListener("pointerup", stopResizing);
         window.removeEventListener("pointercancel", stopResizing);
         window.removeEventListener("blur", stopResizing);
         document.body.style.cursor = previousCursor;
         document.body.style.userSelect = previousUserSelect;
+        cleanupRef.current = null;
+      };
+      const stopResizing = () => {
+        cleanup();
         onResizeEnd();
       };
 
+      cleanupRef.current = cleanup;
       window.addEventListener("pointermove", handlePointerMove);
       window.addEventListener("pointerup", stopResizing);
       window.addEventListener("pointercancel", stopResizing);

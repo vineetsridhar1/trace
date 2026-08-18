@@ -158,6 +158,23 @@ export class BrowserWorkspaceManager {
     this.publish(workspace);
   }
 
+  async destroy(sessionGroupId: string, browserId = "default"): Promise<void> {
+    await this.loadSnapshots();
+    const key = browserWorkspaceKey(sessionGroupId, browserId);
+    const workspace = this.workspaces.get(key);
+    if (workspace) {
+      if (this.window && !this.window.isDestroyed() && this.visibleWorkspaceIds.has(key)) {
+        this.window.contentView.removeChildView(workspace.view);
+      }
+      this.visibleWorkspaceIds.delete(key);
+      this.workspaces.delete(key);
+      workspace.view.webContents.close();
+    }
+    if (!this.snapshots.delete(key)) return;
+    this.persistenceDirty = true;
+    await this.flushPersistence();
+  }
+
   setBounds(sessionGroupId: string, browserId: string, bounds: Electron.Rectangle) {
     const key = browserWorkspaceKey(sessionGroupId, browserId);
     if (!this.visibleWorkspaceIds.has(key)) return;

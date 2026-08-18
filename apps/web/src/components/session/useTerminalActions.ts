@@ -59,12 +59,19 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
   );
 
   const handleCreateTerminal = useCallback(
-    async (session: { id: string; _optimistic?: boolean } | null, terminalAllowed: boolean) => {
-      if (!session || session._optimistic || !terminalAllowed) return null;
-      setActiveSessionId(session.id);
-      return requestSessionTerminal({ sessionId: session.id, select: true }).completion;
+    async (
+      session: { id: string; _optimistic?: boolean } | null,
+      terminalAllowed: boolean,
+      options?: { replaceWorkspaceTabId?: string },
+    ) => {
+      if (!session || session._optimistic || !terminalAllowed) return;
+      await requestSessionTerminal({
+        sessionId: session.id,
+        select: true,
+        replaceWorkspaceTabId: options?.replaceWorkspaceTabId,
+      }).completion;
     },
-    [setActiveSessionId],
+    [],
   );
 
   const handleSelectTerminal = useCallback(

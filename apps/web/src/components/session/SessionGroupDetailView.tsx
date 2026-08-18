@@ -76,6 +76,14 @@ const EMPTY_ARTIFACT_IDS: string[] = [];
 const EMPTY_HIDDEN_SESSION_TABS: Record<string, string> = {};
 const SESSION_WORKSPACE_TABS_KEY_PREFIX = "trace:session-workspace-tabs:";
 const EMPTY_BROWSER_REQUESTS: Array<{ id: string; sessionGroupId: string; url: string }> = [];
+const EMPTY_TERMINAL_REQUESTS: Array<{
+  id: string;
+  sessionGroupId: string;
+  sessionId: string;
+  terminalId: string;
+  replaceTabId?: string;
+  select: boolean;
+}> = [];
 
 type DraftWorkspaceTab = {
   id: string;
@@ -401,36 +409,17 @@ export function SessionGroupDetailView({
   const consumeBrowserOpenRequests = useWorkspaceRequestStore(
     (state) => state.consumeBrowserRequests,
   );
+  const terminalOpenRequests = useWorkspaceRequestStore(
+    (state) => state.terminalRequestsByGroup[sessionGroupId] ?? EMPTY_TERMINAL_REQUESTS,
+  );
+  const consumeTerminalOpenRequests = useWorkspaceRequestStore(
+    (state) => state.consumeTerminalRequests,
+  );
   const [browserTitles, setBrowserTitles] = useState<Record<string, string>>({});
-  const [pendingTerminalTabs, setPendingTerminalTabs] = useState<
-    Array<{
-      id: string;
-      sessionId: string;
-      sessionGroupId: string;
-      status: "connecting";
-      customName?: string;
-    }>
-  >([]);
   const [workspaceTabReplacements, setWorkspaceTabReplacements] = useState<
     Record<string, string>
   >({});
-  const workspaceTerminals = useMemo(
-    () => [
-      ...terminals,
-      ...pendingTerminalTabs.filter(
-        (pending) => !terminals.some((terminal) => terminal.id === pending.id),
-      ),
-    ],
-    [pendingTerminalTabs, terminals],
-  );
-
-  useEffect(() => {
-    if (pendingTerminalTabs.length === 0) return;
-    const terminalIds = new Set(terminals.map((terminal) => terminal.id));
-    setPendingTerminalTabs((pending) =>
-      pending.filter((terminal) => !terminalIds.has(terminal.id)),
-    );
-  }, [pendingTerminalTabs.length, terminals]);
+  const workspaceTerminals = terminals;
 
   useEffect(() => {
     try {
@@ -457,6 +446,43 @@ export function SessionGroupDetailView({
     setRequestedActiveDraftTabId(requestedTabs[requestedTabs.length - 1]!.id);
     consumeBrowserOpenRequests(sessionGroupId);
   }, [browserOpenRequests, consumeBrowserOpenRequests, sessionGroupId]);
+
+  useEffect(() => {
+    if (terminalOpenRequests.length === 0) return;
+    const replacements = terminalOpenRequests.filter(
+      (request): request is typeof request & { replaceTabId: string } =>
+        typeof request.replaceTabId === "string",
+    );
+    if (replacements.length > 0) {
+      setWorkspaceTabReplacements((current) => ({
+        ...current,
+        ...Object.fromEntries(
+          replacements.map((request) => [
+            request.replaceTabId,
+            `terminal:${request.terminalId}`,
+          ]),
+        ),
+      }));
+      const replacedTabIds = new Set(replacements.map((request) => request.replaceTabId));
+      setDraftWorkspaceTabs((drafts) =>
+        drafts.filter((draft) => !replacedTabIds.has(draft.id)),
+      );
+    }
+    const selectedRequest = [...terminalOpenRequests].reverse().find((request) => request.select);
+    if (selectedRequest) {
+      setActiveSessionId(selectedRequest.sessionId);
+      if (useUIStore.getState().activeSessionGroupId === sessionGroupId) {
+        setActiveTerminalId(selectedRequest.terminalId);
+      }
+    }
+    consumeTerminalOpenRequests(sessionGroupId);
+  }, [
+    consumeTerminalOpenRequests,
+    sessionGroupId,
+    setActiveSessionId,
+    setActiveTerminalId,
+    terminalOpenRequests,
+  ]);
 
   const handleOpenForkDialog = useCallback((eventId: string) => {
     setForkEventId(eventId);
@@ -800,9 +826,6 @@ export function SessionGroupDetailView({
   const handleCloseTerminal = useCallback(
     (terminalId: string) => {
       if (activeTerminalId === terminalId) setActiveTerminalId(null);
-      setPendingTerminalTabs((pending) =>
-        pending.filter((terminal) => terminal.id !== terminalId),
-      );
       void client.mutation(DESTROY_TERMINAL_MUTATION, { terminalId }).toPromise();
     },
     [activeTerminalId, setActiveTerminalId],
@@ -1145,6 +1168,10 @@ export function SessionGroupDetailView({
   const handleCloseWorkspaceTab = useCallback(
     (tabId: string) => {
       if (tabId.startsWith("draft:")) {
+        const draft = draftWorkspaceTabs.find((candidate) => candidate.id === tabId);
+        if (draft?.surface === "browser") {
+          void window.trace?.destroyBrowser({ sessionGroupId, browserId: tabId });
+        }
         setDraftWorkspaceTabs((drafts) => drafts.filter((draft) => draft.id !== tabId));
       } else if (tabId.startsWith("session:")) {
         handleCloseSession(tabId.slice("session:".length));
@@ -1164,6 +1191,8 @@ export function SessionGroupDetailView({
       handleCloseTerminal,
       handleCloseSession,
       handleCloseTrafficTab,
+      draftWorkspaceTabs,
+      sessionGroupId,
     ],
   );
 
@@ -1238,26 +1267,9 @@ export function SessionGroupDetailView({
               }
               if (surface === "terminal") {
                 if (!selectedSession || !terminalAllowed) return;
-                void handleCreateTerminal(selectedSession, terminalAllowed)
-                  .then((terminalId) => {
-                    if (!terminalId) return;
-                    setPendingTerminalTabs((pending) => [
-                      ...pending,
-                      {
-                        id: terminalId,
-                        sessionId: selectedSession.id,
-                        sessionGroupId,
-                        status: "connecting",
-                      },
-                    ]);
-                    setWorkspaceTabReplacements((replacements) => ({
-                      ...replacements,
-                      [tabId]: `terminal:${terminalId}`,
-                    }));
-                    setDraftWorkspaceTabs((drafts) =>
-                      drafts.filter((candidate) => candidate.id !== tabId),
-                    );
-                  })
+                void handleCreateTerminal(selectedSession, terminalAllowed, {
+                  replaceWorkspaceTabId: tabId,
+                })
                   .catch((error: unknown) => {
                     toast.error("Failed to create terminal", {
                       description: error instanceof Error ? error.message : undefined,

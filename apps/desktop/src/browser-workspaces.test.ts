@@ -302,6 +302,25 @@ describe("BrowserWorkspaceManager", () => {
     });
   });
 
+  it("destroys a closed browser and removes its persisted snapshot", async () => {
+    const store = new MemorySnapshotStore();
+    const manager = new BrowserWorkspaceManager({ snapshotStore: store });
+    const window = createWindow();
+    manager.setWindow(window);
+    await manager.activate("group-a", "browser-a");
+    const contents = latestContents();
+    contents.setURL("https://private.example/token");
+
+    await manager.destroy("group-a", "browser-a");
+
+    expect(contents.closed).toBe(true);
+    expect(window.contentView.removeChildView).toHaveBeenCalledWith(electronMocks.views[0]);
+    expect(store.value).toEqual([]);
+    await manager.activate("group-a", "browser-a");
+    expect(latestContents()).not.toBe(contents);
+    expect(latestContents().getURL()).toBe("about:blank");
+  });
+
   it("closes DevTools before freezing and restores them after activation", async () => {
     const manager = new BrowserWorkspaceManager({ snapshotStore: new MemorySnapshotStore() });
     manager.setWindow(createWindow());
