@@ -105,13 +105,15 @@ export class ChannelService {
 
       const channelType = input.type ?? "coding";
       let repoName: string | null = null;
+      let repoDefaultBranch: string | null = null;
       if (input.repoId) {
         const repo = await tx.repo.findFirst({
           where: { id: input.repoId, organizationId: input.organizationId },
-          select: { name: true },
+          select: { name: true, defaultBranch: true },
         });
         if (!repo) throw new NotFoundError("Repo", input.repoId!);
         repoName = repo.name;
+        repoDefaultBranch = repo.defaultBranch;
       }
       if (input.groupId) {
         await tx.channelGroup.findFirstOrThrow({
@@ -138,7 +140,9 @@ export class ChannelService {
         position: input.position ?? null,
         groupId: input.groupId ?? null,
         repo: input.repoId && repoName ? { id: input.repoId, name: repoName } : null,
-        baseBranch: input.baseBranch ?? null,
+        // Match linkRepo: a channel created with a repo starts on that repo's
+        // default branch unless the caller picked one.
+        baseBranch: input.baseBranch ?? repoDefaultBranch,
         projectIds: input.projectIds ?? [],
       });
 

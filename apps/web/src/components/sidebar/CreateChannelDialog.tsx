@@ -14,8 +14,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { client } from "../../lib/urql";
-import { useAuthStore } from "@trace/client-core";
+import { useAuthStore, useEntityIds } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
+import { RepoName } from "./RepoName";
 
 const CREATE_CHANNEL_MUTATION = gql`
   mutation CreateChannel($input: CreateChannelInput!) {
@@ -57,9 +58,11 @@ export function CreateChannelDialog({
   const [mode, setMode] = useState<CreateMode>("choose");
   const [name, setName] = useState("");
   const [visibility, setVisibility] = useState<ChannelVisibility>("public");
+  const [repoId, setRepoId] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const repoIds = useEntityIds("repos");
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -68,6 +71,7 @@ export function CreateChannelDialog({
     setMode(defaultGroupId ? "channel" : "choose");
     setName("");
     setVisibility("public");
+    setRepoId("");
     setError(null);
   }, [open, defaultGroupId]);
 
@@ -85,6 +89,7 @@ export function CreateChannelDialog({
             name: name.trim(),
             type: "coding",
             visibility,
+            repoId: repoId || null,
             groupId: defaultGroupId ?? null,
           },
         })
@@ -95,6 +100,7 @@ export function CreateChannelDialog({
       const newChannelId = result.data?.createChannel?.id as string | undefined;
       setName("");
       setVisibility("public");
+      setRepoId("");
       setOpen(false);
       if (newChannelId) {
         useUIStore.getState().setActiveChannelId(newChannelId);
@@ -223,6 +229,36 @@ export function CreateChannelDialog({
                   </SelectContent>
                 </Select>
               </div>
+              {repoIds.length > 0 && (
+                <div>
+                  <label className="mb-1.5 block text-sm text-muted-foreground">
+                    Repository (optional)
+                  </label>
+                  <Select
+                    value={repoId || "__none__"}
+                    onValueChange={(value: string | null) => {
+                      setRepoId(value && value !== "__none__" ? value : "");
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue>
+                        {repoId ? <RepoName repoId={repoId} /> : "No repository"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No repository</SelectItem>
+                      {repoIds.map((id) => (
+                        <SelectItem key={id} value={id}>
+                          <RepoName repoId={id} />
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    You can attach or change this later from the project menu.
+                  </p>
+                </div>
+              )}
               {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
             <DialogFooter>

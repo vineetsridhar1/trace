@@ -13,6 +13,7 @@ import {
   ResponsiveDialogTitle as DialogTitle,
 } from "../ui/responsive-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { RepoName } from "./RepoName";
 
 export function AttachProjectRepoDialog({
   projectId,
@@ -135,9 +136,4 @@ export function AttachProjectRepoDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-function RepoName({ repoId }: { repoId: string }) {
-  const name = useEntityField("repos", repoId, "name");
-  return <>{name ?? repoId}</>;
 }
