@@ -182,6 +182,12 @@ enum ParticipantScope {
   system
 }
 
+enum SessionMessageRole {
+  user
+  assistant
+  system
+}
+
 enum EventType {
   session_converted
   message_sent
@@ -840,6 +846,7 @@ model Session {
 
   projects       SessionProject[]
   queuedMessages QueuedMessage[]
+  messages       SessionMessage[]
   slackThread    SlackThreadSession?
   artifacts      Artifact[]
   hiddenByUsers  HiddenSessionTab[]
@@ -851,6 +858,24 @@ model Session {
   @@index([organizationId, agentStatus])
   @@index([channelId, updatedAt])
   @@index([pendingGeneralWorkspaceCleanupRuntimeId])
+}
+
+model SessionMessage {
+  id            String             @id @default(uuid())
+  sessionId     String
+  session       Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  organizationId String
+  role          SessionMessageRole
+  actorType     ActorType
+  actorId       String
+  text          String
+  content       Json
+  attachments   Json?
+  sourceEventId String             @unique
+  createdAt     DateTime           @default(now())
+
+  @@index([sessionId, createdAt, id])
+  @@index([organizationId, createdAt, id])
 }
 
 model HiddenSessionTab {

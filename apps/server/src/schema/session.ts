@@ -24,6 +24,8 @@ import {
 import { assertScopeAccess, canViewSessionGroup } from "../services/access.js";
 import { designCommitPreviewUrl } from "../lib/design-preview-url.js";
 import { animationCommitPreviewUrl } from "../lib/animation-preview-url.js";
+import { sessionMessageService } from "../services/session-message.js";
+import { resolveActor } from "../services/actor.js";
 
 export const sessionQueries = {
   sessionGroups: (
@@ -106,6 +108,14 @@ export const sessionQueries = {
   },
   session: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.get(args.id, requireOrgContext(ctx), ctx.userId);
+  },
+  sessionMessages: async (
+    _: unknown,
+    args: { sessionId: string; before?: Date | null; limit?: number | null },
+    ctx: Context,
+  ) => {
+    await assertScopeAccess("session", args.sessionId, ctx.userId, requireOrgContext(ctx));
+    return sessionMessageService.list(args.sessionId, args.before ?? undefined, args.limit ?? undefined);
   },
   mySessions: (
     _: unknown,
@@ -1084,6 +1094,10 @@ export const sessionTypeResolvers = {
   },
   QueuedMessage: {
     attachmentKeys: (message: { imageKeys: string[] }) => message.imageKeys,
+  },
+  SessionMessage: {
+    actor: (message: { actorType: string; actorId: string }, _args: unknown, ctx: Context) =>
+      resolveActor(message, ctx.userLoader),
   },
 };
 
