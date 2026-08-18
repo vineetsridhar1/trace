@@ -593,12 +593,24 @@ export interface BridgeWorkspaceReady {
   sourceCommitSha?: string;
 }
 
-export interface BridgeWorkspaceWarning {
-  type: "branch_missing_restored_from_base";
-  branch: string;
-  baseBranch: string;
-  message: string;
-}
+/**
+ * A workspace that came up usable but not in the state the request implied.
+ * Every variant carries a `message` written for the user: what happened, and
+ * what to do about it.
+ */
+export type BridgeWorkspaceWarning =
+  | {
+      type: "branch_missing_restored_from_base";
+      branch: string;
+      baseBranch: string;
+      message: string;
+    }
+  | {
+      type: "workspace_kept_local_changes";
+      branch: string;
+      baseRef: string;
+      message: string;
+    };
 
 export interface BridgeWorkspaceFailed {
   type: "workspace_failed";

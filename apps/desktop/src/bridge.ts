@@ -65,6 +65,7 @@ import {
   adoptWorktree,
   listRepoWorktrees,
   isTraceManagedWorktreePath,
+  type CreatedWorktree,
 } from "./worktree.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { generalWorkspacePath, removeGeneralWorkspace } from "@trace/shared/general-workspace";
@@ -339,10 +340,7 @@ export class BridgeClient implements IBridgeClient {
   private sessionWorkdirs = new Map<string, string>();
   private sessionGroupIds = new Map<string, string | null>();
   /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
-  private pendingWorktrees = new Map<
-    string,
-    Promise<{ workdir: string; branch: string; slug: string }>
-  >();
+  private pendingWorktrees = new Map<string, Promise<CreatedWorktree>>();
   /** In-flight workspace prep per session, so prompts can wait for it to finish */
   private sessionPrepares = new Map<string, Promise<void>>();
   /** Prompts held because workspace prep failed; replayed once prep succeeds */
@@ -1199,7 +1197,7 @@ export class BridgeClient implements IBridgeClient {
             .catch(() => undefined);
         }
         const prepared = worktreePromise
-          .then(({ workdir, branch: worktreeBranch, slug: worktreeSlug }) => {
+          .then(({ workdir, branch: worktreeBranch, slug: worktreeSlug, warning }) => {
             this.sessionWorkdirs.set(sessionId, workdir);
             this.sessionGroupIds.set(sessionId, sessionGroupId ?? null);
             this.send({
@@ -1208,6 +1206,7 @@ export class BridgeClient implements IBridgeClient {
               workdir,
               branch: worktreeBranch,
               slug: worktreeSlug,
+              ...(warning ? { warning } : {}),
             });
             void this.pollLocalPrStatuses();
           })

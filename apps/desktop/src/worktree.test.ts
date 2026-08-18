@@ -209,6 +209,13 @@ describe("createWorktree", () => {
       workdir: expect.stringContaining("/trace/sessions/repo-1/gibbon"),
       branch: "trace/gibbon",
       slug: "gibbon",
+      // Reported to the user rather than left as a silent behavior change.
+      warning: {
+        type: "workspace_kept_local_changes",
+        branch: "trace/gibbon",
+        baseRef: "origin/trace/gibbon",
+        message: expect.stringContaining("kept them instead of resetting"),
+      },
     });
     expect(execFileMock).not.toHaveBeenCalledWith(
       "git",

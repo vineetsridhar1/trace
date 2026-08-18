@@ -8153,12 +8153,20 @@ export class SessionService {
         scopeType: "session",
         scopeId: sessionId,
         eventType: "session_output",
-        payload: {
-          type: "workspace_restored_from_base",
-          branch: warning.branch,
-          baseBranch: warning.baseBranch,
-          message: warning.message,
-        },
+        payload:
+          warning.type === "branch_missing_restored_from_base"
+            ? {
+                type: "workspace_restored_from_base",
+                branch: warning.branch,
+                baseBranch: warning.baseBranch,
+                message: warning.message,
+              }
+            : {
+                type: "workspace_kept_local_changes",
+                branch: warning.branch,
+                baseRef: warning.baseRef,
+                message: warning.message,
+              },
         actorType: "system",
         actorId: "system",
       });

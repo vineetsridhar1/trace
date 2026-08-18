@@ -9398,6 +9398,44 @@ describe("SessionService", () => {
       expect(readyCall?.[0].payload).not.toHaveProperty("warning");
     });
 
+    it("emits a workspace_kept_local_changes event when prep preserved uncommitted work", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        pendingRun: null,
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        readOnlyWorkspace: false,
+        workdir: null,
+      });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({ branch: "trace/coyote", workdir: "/tmp/trace/coyote" }),
+      );
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ branch: "trace/coyote", workdir: "/tmp/trace/coyote" }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await service.workspaceReady("session-1", "/tmp/trace/coyote", "trace/coyote", undefined, {
+        type: "workspace_kept_local_changes",
+        branch: "trace/coyote",
+        baseRef: "origin/trace/coyote",
+        message:
+          "This workspace had uncommitted changes, so Trace kept them instead of resetting to " +
+          "origin/trace/coyote. Commit or discard them if you want a clean base.",
+      });
+
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "workspace_kept_local_changes",
+            branch: "trace/coyote",
+            baseRef: "origin/trace/coyote",
+            message: expect.stringContaining("Commit or discard them"),
+          }),
+        }),
+      );
+    });
+
     it("does not emit a workspace_restored_from_base event when there is no warning", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
         pendingRun: null,

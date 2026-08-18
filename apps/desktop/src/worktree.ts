@@ -12,6 +12,7 @@ import {
   shouldRepairRenamedTraceWorktreeBranch,
   parseWorktreeListPorcelain,
   type BridgeRepoWorktree,
+  type BridgeWorkspaceWarning,
 } from "@trace/shared";
 import { formatGitError, gitEnv } from "./git-utils.js";
 
@@ -258,6 +259,25 @@ async function resolveWorktreeBranch(
   return resolveGeneratedTraceWorktreeBranch(slug, refs);
 }
 
+export type CreatedWorktree = {
+  workdir: string;
+  branch: string;
+  slug: string;
+  /** Set when the workspace came up in a state the request did not ask for. */
+  warning?: BridgeWorkspaceWarning;
+};
+
+function keptLocalChangesWarning(branch: string, baseRef: string): BridgeWorkspaceWarning {
+  return {
+    type: "workspace_kept_local_changes",
+    branch,
+    baseRef,
+    message:
+      `This workspace had uncommitted changes, so Trace kept them instead of resetting to ${baseRef}. ` +
+      "Commit or discard them if you want a clean base.",
+  };
+}
+
 async function resolveAvailableWorktreeSlug(
   sessionsDir: string,
   repoPath: string,
@@ -293,7 +313,7 @@ export async function createWorktree({
   preserveBranchName?: boolean;
   /** Commit SHA to restore from instead of branching from origin/{startBranch|defaultBranch}. */
   baseCommitSha?: string;
-}): Promise<{ workdir: string; branch: string; slug: string }> {
+}): Promise<CreatedWorktree> {
   const sessionsDir = path.join(os.homedir(), "trace", "sessions", repoId);
   const worktreeSlug = await resolveAvailableWorktreeSlug(sessionsDir, repoPath, slug);
   const targetPath = path.join(sessionsDir, worktreeSlug);
@@ -379,17 +399,19 @@ export async function createWorktree({
         preserveLocalWork,
       );
     }
+    let warning: BridgeWorkspaceWarning | undefined;
     if (baseRef) {
       if (preserveLocalWork) {
         console.warn(
           `[worktree] adopting ${targetPath} as-is: it has uncommitted work, skipping reset to ${baseRef}`,
         );
+        warning = keptLocalChangesWarning(branch, baseRef);
       } else {
         await resetWorktreeToRef(targetPath, baseRef);
       }
       await setUpstreamIfRemote(repoPath, branch, baseRef);
     }
-    return { workdir: targetPath, branch, slug: worktreeSlug };
+    return { workdir: targetPath, branch, slug: worktreeSlug, ...(warning ? { warning } : {}) };
   }
 
   // Check if the branch already exists (e.g. worktree was removed but branch remains)
