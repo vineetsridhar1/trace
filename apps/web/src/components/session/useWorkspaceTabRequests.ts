@@ -75,6 +75,17 @@ export function useWorkspaceTabRequests({
   }, [browserRequests, consumeBrowserRequests, sessionGroupId]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const unsubscribe = window.trace?.onBrowserTabOpenRequested((request: unknown) => {
+      if (!isBrowserTabOpenRequest(request) || request.sessionGroupId !== sessionGroupId) return;
+      const id = `draft:${crypto.randomUUID()}`;
+      setDraftTabs((tabs) => [...tabs, { id, surface: "browser", initialUrl: request.url }]);
+      setForegroundTabId(id);
+    });
+    return unsubscribe;
+  }, [sessionGroupId]);
+
+  useEffect(() => {
     if (terminalRequests.length === 0) return;
     const replacements = terminalRequests.filter(
       (request): request is typeof request & { replaceTabId: string } =>
@@ -170,4 +181,12 @@ function isWorkspaceSurface(value: unknown): value is WorkspaceSurface {
     value === "files" ||
     value === "changes"
   );
+}
+
+function isBrowserTabOpenRequest(
+  value: unknown,
+): value is { sessionGroupId: string; url: string } {
+  if (!value || typeof value !== "object") return false;
+  const request = value as Record<string, unknown>;
+  return typeof request.sessionGroupId === "string" && typeof request.url === "string";
 }

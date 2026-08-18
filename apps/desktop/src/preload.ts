@@ -69,4 +69,9 @@ contextBridge.exposeInMainWorld("trace", {
     ipcRenderer.on("browser-workspace-state", listener);
     return () => ipcRenderer.removeListener("browser-workspace-state", listener);
   },
+  onBrowserTabOpenRequested: (callback: (request: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: unknown) => callback(request);
+    ipcRenderer.on("browser-tab-open-requested", listener);
+    return () => ipcRenderer.removeListener("browser-tab-open-requested", listener);
+  },
 });

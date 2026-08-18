@@ -198,6 +198,7 @@ declare global {
       browserId: string;
     }) => Promise<DesktopBrowserWorkspaceState>;
     onBrowserWorkspaceState: (callback: (state: unknown) => void) => () => void;
+    onBrowserTabOpenRequested: (callback: (request: unknown) => void) => () => void;
   }
 
   interface Window {
