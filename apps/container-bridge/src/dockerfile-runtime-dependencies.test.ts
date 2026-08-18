@@ -33,11 +33,13 @@ describe("container runtime dependencies", () => {
     }
   });
 
-  it("ships bundled skills at the path exported to cloud sessions", async () => {
+  it("exports the bundled skills path without baking the runtime directory", async () => {
     const dockerfile = await readFile(new URL("../Dockerfile", import.meta.url), "utf8");
 
-    expect(dockerfile).toContain("COPY runtime/skills/ /trace/runtime/skills/");
     expect(dockerfile).toContain("ENV TRACE_SKILLS_DIR=/trace/runtime/skills/");
+    // Baking /trace/runtime into a lower image layer makes it un-renameable on
+    // overlayfs, which fails the install swap in ensureTraceRuntime.
+    expect(dockerfile).not.toMatch(/^COPY\s+\S+\s+\/trace\/runtime/m);
   });
 
   it("installs and smoke-tests the Codex platform package", async () => {

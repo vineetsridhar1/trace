@@ -5,10 +5,32 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ensureTraceRuntime } from "../src/trace-runtime.js";
 import { BUNDLED_TRACE_RUNTIME_MANIFEST } from "../src/trace-runtime.generated.js";
 
+// Overlayfs rejects renaming a directory that lives in a lower image layer, so
+// the install swap has to survive losing its rollback staging step.
+const renameControl = vi.hoisted(() => ({ failStagingRename: false }));
+
+vi.mock("fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("fs/promises")>();
+  return {
+    ...actual,
+    rename: async (from: string, to: string) => {
+      if (renameControl.failStagingRename && `${to}`.endsWith("-previous")) {
+        const error: NodeJS.ErrnoException = new Error(
+          "EXDEV: cross-device link not permitted",
+        );
+        error.code = "EXDEV";
+        throw error;
+      }
+      return actual.rename(from, to);
+    },
+  };
+});
+
 const roots: string[] = [];
 
 afterEach(async () => {
   vi.unstubAllGlobals();
+  renameControl.failStagingRename = false;
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
 });
 
@@ -87,6 +109,26 @@ describe("ensureTraceRuntime", () => {
     await ensureTraceRuntime(root);
 
     await expect(readFile(join(root, "marker"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    expect(JSON.parse(await readFile(join(root, "manifest.json"), "utf8")).contentHash).toBe(
+      BUNDLED_TRACE_RUNTIME_MANIFEST.contentHash,
+    );
+  });
+
+  it("installs over a root that cannot be renamed aside", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "trace-runtime-test-"));
+    roots.push(parent);
+    const root = join(parent, "runtime");
+    // Mirrors the image layout that broke cloud session spawns: a non-empty
+    // runtime directory carrying no manifest, which cannot be moved out of the way.
+    await mkdir(join(root, "skills", "trace-session"), { recursive: true });
+    await writeFile(join(root, "skills", "trace-session", "SKILL.md"), "baked skill", "utf8");
+    renameControl.failStagingRename = true;
+
+    const runtime = await ensureTraceRuntime(root);
+
+    expect(
+      await readFile(join(runtime.skillsDir, "trace-session", "SKILL.md"), "utf8"),
+    ).not.toContain("baked skill");
     expect(JSON.parse(await readFile(join(root, "manifest.json"), "utf8")).contentHash).toBe(
       BUNDLED_TRACE_RUNTIME_MANIFEST.contentHash,
     );

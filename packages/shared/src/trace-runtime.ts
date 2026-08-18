@@ -66,12 +66,25 @@ async function installFiles(
   await chmod(join(next, "bin/trace"), 0o755);
 
   await rm(previous, { recursive: true, force: true });
-  await rename(root, previous).catch(() => undefined);
+  // ENOENT just means there is no prior install. Anything else means the current
+  // root cannot be staged for rollback — overlayfs returns EXDEV for renaming a
+  // directory baked into a lower image layer — so clear the path directly, since
+  // removal succeeds where rename does not. Swallowing every error here instead
+  // leaves a non-empty root behind and turns the swap below into ENOTEMPTY.
+  let displaced = false;
+  try {
+    await rename(root, previous);
+    displaced = true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
   try {
     await rename(next, root);
     await rm(previous, { recursive: true, force: true });
   } catch (error) {
-    await rename(previous, root).catch(() => undefined);
+    if (displaced) await rename(previous, root).catch(() => undefined);
     throw error;
   }
 }

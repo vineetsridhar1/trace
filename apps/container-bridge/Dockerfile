@@ -65,9 +65,11 @@ RUN chmod +x /usr/local/bin/trace-entrypoint
 # floating-version fallback.
 COPY apps/container-bridge/app-starter/ /opt/trace/app-starter/
 
-# Session instructions load bundled guidance from this stable path. The app
-# runtime only ships skills supported by this deployment.
-COPY runtime/skills/ /trace/runtime/skills/
+# Session instructions load bundled guidance from this stable path. The bridge
+# installs the skills itself via ensureTraceRuntime before any session reads
+# them, so the image must NOT bake this directory: a pre-existing /trace/runtime
+# in a lower image layer cannot be renamed aside on overlayfs, which breaks the
+# install swap and takes down session startup.
 ENV TRACE_SKILLS_DIR=/trace/runtime/skills/
 
 # Create non-root user — Claude Code refuses --dangerously-skip-permissions as root.
