@@ -882,6 +882,13 @@ model SessionMessage {
   @@index([organizationId, createdAt, id])
 }
 
+model SessionMessageBackfillCursor {
+  name      String   @id
+  timestamp DateTime
+  eventId   String
+  updatedAt DateTime @updatedAt
+}
+
 model HiddenSessionTab {
   userId    String
   sessionId String
