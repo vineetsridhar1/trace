@@ -4931,9 +4931,6 @@ export class SessionService {
       const message = error instanceof Error ? error.message : String(error);
       throw new ValidationError(`Cannot fork this repository session: ${message}`);
     }
-    if (status.hasUncommittedChanges) {
-      throw new ValidationError("Commit or discard workspace changes before forking this session.");
-    }
     if (!status.headCommitSha) {
       throw new ValidationError(
         "Cannot fork this repository session because its current commit could not be resolved.",
