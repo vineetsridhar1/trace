@@ -247,6 +247,7 @@ export function SessionDetailView({
     eventIds,
     timelineItems,
     timelineMode,
+    loading: initialEventsLoading,
   } = useSessionEvents(sessionId, { skip: isOptimistic === true });
   const durableMessages = useSessionMessages(sessionId, isOptimistic === true);
   const scopeKey = eventScopeKey("session", sessionId);
