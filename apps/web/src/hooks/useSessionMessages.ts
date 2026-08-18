@@ -90,5 +90,15 @@ export function useSessionMessages(sessionId: string, skip = false) {
     }
   }, [fetchPage, hasOlder, loadingOlder, messages]);
 
-  return { messages, loading, loadingOlder, hasOlder, error, fetchOlder };
+  const refresh = useCallback(async () => {
+    try {
+      const page = await fetchPage();
+      setMessages(page);
+      setHasOlder(page.length === PAGE_SIZE);
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError : new Error("Failed to load messages"));
+    }
+  }, [fetchPage]);
+
+  return { messages, loading, loadingOlder, hasOlder, error, fetchOlder, refresh };
 }

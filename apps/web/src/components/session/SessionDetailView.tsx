@@ -251,6 +251,18 @@ export function SessionDetailView({
   const durableMessages = useSessionMessages(sessionId, isOptimistic === true);
   const scopeKey = eventScopeKey("session", sessionId);
   const events = useScopedEvents(scopeKey);
+  const latestEvent = eventIds.length > 0 ? events[eventIds[eventIds.length - 1]] : undefined;
+  const latestEventPayload = latestEvent?.payload as Record<string, unknown> | undefined;
+  const isLatestConversationEvent =
+    latestEvent?.eventType === "session_started" ||
+    latestEvent?.eventType === "message_sent" ||
+    (latestEvent?.eventType === "session_output" && latestEventPayload?.type === "assistant");
+  const lastConversationEventIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isLatestConversationEvent || latestEvent?.id === lastConversationEventIdRef.current) return;
+    lastConversationEventIdRef.current = latestEvent?.id ?? null;
+    void durableMessages.refresh();
+  }, [durableMessages.refresh, isLatestConversationEvent, latestEvent?.id]);
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
     | string
