@@ -1,12 +1,11 @@
 import { memo } from "react";
 import {
   attachmentKeysFromPayload,
-  actionRequiredArtifactForToolError,
   asJsonObject,
   isActionRequiredArtifact,
   type JsonObject,
 } from "@trace/shared";
-import { useEntityField, useScopedEventField } from "@trace/client-core";
+import { useScopedEventField } from "@trace/client-core";
 import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
 import { AssistantText } from "./messages/AssistantText";
@@ -30,21 +29,6 @@ function optionalAttachmentKeys(payload: JsonObject | null | undefined): string[
 /** Safely read a string from an unknown value, returning fallback if not a string */
 function str(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
-}
-
-function assistantText(payload: JsonObject | null | undefined): string | undefined {
-  if (payload?.type !== "assistant") return undefined;
-  const message = asJsonObject(payload.message);
-  const content = message?.content;
-  if (!Array.isArray(content)) return undefined;
-  const text = content
-    .map((block) => {
-      const value = asJsonObject(block);
-      return value?.type === "text" && typeof value.text === "string" ? value.text : "";
-    })
-    .join("\n")
-    .trim();
-  return text || undefined;
 }
 
 /** Narrow and unwrap tool result content for display in ToolCallRow */
@@ -170,7 +154,7 @@ function renderSessionOutput(
   if (typeof type !== "string") return null;
 
   const artifact = asJsonObject(payload.artifact);
-  if (sessionId && isActionRequiredArtifact(artifact)) {
+  if (payload.type !== "assistant" && sessionId && isActionRequiredArtifact(artifact)) {
     return <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />;
   }
 
@@ -267,7 +251,6 @@ export const SessionMessage = memo(function SessionMessage({
     | { type: string; id: string; name?: string | null }
     | undefined;
   const sessionId = useScopedEventField(scopeKey, id, "scopeId") as string | undefined;
-  const tool = useEntityField("sessions", sessionId ?? "", "tool") as string | undefined;
   if (!eventType || !timestamp) return null;
 
   switch (eventType) {
@@ -290,12 +273,7 @@ export const SessionMessage = memo(function SessionMessage({
 
     case "session_output":
       if (payload) {
-        const artifact =
-          asJsonObject(payload.artifact) ??
-          (() => {
-            const text = assistantText(payload);
-            return text ? actionRequiredArtifactForToolError(tool, text) : undefined;
-          })();
+        const artifact = payload.type === "assistant" ? undefined : asJsonObject(payload.artifact);
         if (sessionId && isActionRequiredArtifact(artifact)) {
           return (
             <ActionRequiredArtifactCard
