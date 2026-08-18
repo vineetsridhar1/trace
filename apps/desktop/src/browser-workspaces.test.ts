@@ -348,6 +348,28 @@ describe("BrowserWorkspaceManager", () => {
     expect(latestContents().getURL()).toBe("about:blank");
   });
 
+  it("destroys every browser and snapshot for an archived session group", async () => {
+    const store = new MemorySnapshotStore();
+    const manager = new BrowserWorkspaceManager({ snapshotStore: store });
+    const window = createWindow();
+    manager.setWindow(window);
+    await manager.activate("group-a", "browser-a");
+    const firstContents = latestContents();
+    await manager.activate("group-a", "browser-b");
+    const secondContents = latestContents();
+    await manager.activate("group-b", "browser-c");
+
+    await manager.destroyAllForSessionGroup("group-a");
+
+    expect(firstContents.closed).toBe(true);
+    expect(secondContents.closed).toBe(true);
+    expect(latestContents().closed).toBe(false);
+    expect(store.value).toEqual([
+      { sessionGroupId: "group-b", browserId: "browser-c", url: "about:blank" },
+    ]);
+    expect(window.contentView.removeChildView).toHaveBeenCalledTimes(2);
+  });
+
   it("closes DevTools before freezing and restores them after activation", async () => {
     const manager = new BrowserWorkspaceManager({ snapshotStore: new MemorySnapshotStore() });
     manager.setWindow(createWindow());

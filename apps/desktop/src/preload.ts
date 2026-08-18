@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld("trace", {
     ipcRenderer.invoke("browser-hide", input),
   destroyBrowser: (input: { sessionGroupId: string; browserId: string }) =>
     ipcRenderer.invoke("browser-destroy", input),
+  destroyBrowsersForSessionGroup: (sessionGroupId: string) =>
+    ipcRenderer.invoke("browser-destroy-group", sessionGroupId),
   setBrowserBounds: (input: {
     sessionGroupId: string;
     browserId: string;

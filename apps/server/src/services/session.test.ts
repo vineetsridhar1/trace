@@ -11781,6 +11781,7 @@ describe("SessionService", () => {
         }),
         expect.objectContaining({ reason: "session_unloaded" }),
       );
+      expect(terminalRelayMock.destroyAllForSessionGroup).toHaveBeenCalledWith("group-1");
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "session_group_archived",

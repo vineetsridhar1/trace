@@ -383,6 +383,9 @@ ipcMain.handle("browser-hide", (_event, input: { sessionGroupId: string; browser
 ipcMain.handle("browser-destroy", (_event, input: { sessionGroupId: string; browserId: string }) =>
   browserWorkspaces.destroy(input.sessionGroupId, input.browserId),
 );
+ipcMain.handle("browser-destroy-group", (_event, sessionGroupId: string) =>
+  browserWorkspaces.destroyAllForSessionGroup(sessionGroupId),
+);
 ipcMain.handle(
   "browser-set-bounds",
   (_event, input: { sessionGroupId: string; browserId: string; bounds: Electron.Rectangle }) => {
