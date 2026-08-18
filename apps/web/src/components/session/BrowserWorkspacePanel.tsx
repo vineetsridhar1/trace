@@ -270,9 +270,9 @@ function branchSyncStatusLabel(status: BranchSyncStatus) {
     case "synced":
       return "Branch is synced with origin";
     case "behind":
-      return "Branch is behind origin";
+      return "Branch is behind origin. Press Spotlight to sync this branch.";
     case "outOfSync":
-      return "Branch has uncommitted or unpushed changes";
+      return "Branch has uncommitted or unpushed changes. Press Spotlight to sync this branch.";
     case "checking":
       return "Checking branch sync status";
     case "unavailable":
