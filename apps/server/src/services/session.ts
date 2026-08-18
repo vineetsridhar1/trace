@@ -5239,9 +5239,11 @@ export class SessionService {
       this.getConnectionRuntimeInstanceId(sourceSession.connection) ??
       this.getConnectionRuntimeInstanceId(sourceSession.sessionGroup?.connection);
     if (!workdir || !runtimeId) {
-      throw new ValidationError(
-        "Cannot fork this repository session because its exact workspace commit is unavailable.",
-      );
+      // Older and fully unloaded sessions may retain their repo and branch but
+      // no longer have a live workspace to inspect. In that case the new
+      // session can still provision from the recorded branch; only a live
+      // workspace is required to preserve an unpushed exact HEAD.
+      return null;
     }
 
     let status: BridgeSessionGitSyncStatus;
