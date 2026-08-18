@@ -510,12 +510,16 @@ export const sessionMutations = {
   ) => {
     const organizationId = requireOrgContext(ctx);
     await assertScopeAccess("session", args.sessionId, ctx.userId, organizationId);
-    return sessionService.linkPullRequest({
-      sessionId: args.sessionId,
-      prUrl: args.prUrl,
-      organizationId,
-      actorId: ctx.userId,
-    });
+    try {
+      return await sessionService.linkPullRequest({
+        sessionId: args.sessionId,
+        prUrl: args.prUrl,
+        organizationId,
+        actorId: ctx.userId,
+      });
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
   },
   renameSessionGroup: (_: unknown, args: { id: string; name: string }, ctx: Context) => {
     return sessionService.renameGroup(

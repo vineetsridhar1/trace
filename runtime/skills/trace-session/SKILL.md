@@ -135,6 +135,11 @@ Start a separate session only for independent or parallel work.
 
 Use `--self` instead of an ID to target the current session. Be careful: stopping or archiving `--self` can end your own ability to continue. If another session is actively running, queueing is normally the least disruptive way to add follow-up work.
 
+When linking a pull request, Trace validates the session repository, channel repository, and GitHub
+remote before recording the PR. If `session link-pr` returns repository-association commands, run
+those exact `repo attach-remote` and `channel link-repo` commands in order, then retry `session
+link-pr`. Never replace a conflicting existing association automatically.
+
 For monitoring, take bounded snapshots with `session events`. Use `--follow` only when continuous monitoring is actually requested, and stop following once the requested condition is met. If follow mode reports that its replay window exceeded 1,000 events, rerun the command to take a fresh snapshot and follow from its latest cursor.
 
 Artifact uploads return an `idempotencyKey` in JSON mode and retry transient failures once. If a

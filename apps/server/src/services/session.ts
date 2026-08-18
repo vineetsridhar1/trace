@@ -204,6 +204,35 @@ const PI_INSTALL_COMMAND = "npm install -g @earendil-works/pi-coding-agent";
 const PI_INSTALL_DOCS_URL = "https://pi.dev/docs/latest/quickstart";
 const ORG_GITHUB_TOKEN_SECRET_NAME = "GITHUB_TOKEN";
 
+type GitHubPullRequestRef = GitHubRepoRef & {
+  number: string;
+  prUrl: string;
+  remoteUrl: string;
+};
+
+function parseGitHubPullRequestUrl(url: URL): GitHubPullRequestRef | null {
+  if (url.hostname.toLowerCase() !== "github.com") return null;
+  const parts = url.pathname.split("/").filter(Boolean);
+  if (parts.length < 4 || parts[2] !== "pull" || !/^\d+$/.test(parts[3])) return null;
+  const [owner, repo, , number] = parts;
+  if (!owner || !repo || !number) return null;
+  return {
+    owner,
+    repo,
+    number,
+    prUrl: `https://github.com/${owner}/${repo}/pull/${number}`,
+    remoteUrl: `https://github.com/${owner}/${repo}.git`,
+  };
+}
+
+function isSameGitHubRepo(remoteUrl: string, expected: GitHubRepoRef): boolean {
+  const actual = parseGitHubRepo(remoteUrl);
+  return (
+    actual?.owner.toLowerCase() === expected.owner.toLowerCase() &&
+    actual.repo.toLowerCase() === expected.repo.toLowerCase()
+  );
+}
+
 function normalizeClientSource(source: string | null | undefined): string | null {
   const trimmed = source?.trim();
   return trimmed ? trimmed : null;
@@ -12726,23 +12755,90 @@ export class SessionService {
     } catch {
       throw new ValidationError("A valid pull request URL is required");
     }
-    if (url.protocol !== "https:") {
-      throw new ValidationError("The pull request URL must use HTTPS");
-    }
+    if (url.protocol !== "https:") throw new ValidationError("The pull request URL must use HTTPS");
+    const pullRequest = parseGitHubPullRequestUrl(url);
+    if (!pullRequest) throw new ValidationError("A valid GitHub pull request URL is required");
 
     const session = await prisma.session.findFirst({
       where: { id: params.sessionId, organizationId: params.organizationId },
-      select: { id: true, sessionGroupId: true },
+      select: {
+        id: true,
+        repoId: true,
+        repo: { select: { id: true, remoteUrl: true } },
+        channelId: true,
+        channel: {
+          select: {
+            id: true,
+            repoId: true,
+            repo: { select: { id: true, remoteUrl: true } },
+          },
+        },
+        sessionGroupId: true,
+        sessionGroup: {
+          select: {
+            id: true,
+            repoId: true,
+            repo: { select: { id: true, remoteUrl: true } },
+            channelId: true,
+            channel: {
+              select: {
+                id: true,
+                repoId: true,
+                repo: { select: { id: true, remoteUrl: true } },
+              },
+            },
+          },
+        },
+      },
     });
     if (!session) throw new ValidationError("Session not found");
     if (!session.sessionGroupId) {
       throw new ValidationError("Session is not part of a session group");
     }
 
+    const channel = session.sessionGroup?.channel ?? session.channel;
+    const repo = session.sessionGroup?.repo ?? session.repo ?? channel?.repo;
+    if (!repo) {
+      const channelHint = channel
+        ? ` Run \"$TRACE_CLI\" repo list --json, then \"$TRACE_CLI\" channel link-repo ${channel.id} <repo-id> --json before retrying.`
+        : " Attach a repository to the session before retrying.";
+      throw new ValidationError(
+        `This session has no repository to associate with the PR.${channelHint}`,
+      );
+    }
+
+    const groupRepoId = session.sessionGroup?.repoId ?? session.repoId;
+    if (channel?.repoId && groupRepoId && channel.repoId !== groupRepoId) {
+      throw new ValidationError(
+        `Channel ${channel.id} is linked to repository ${channel.repoId}, but this session uses repository ${groupRepoId}. Resolve the mismatch before linking the PR.`,
+      );
+    }
+    if (repo.remoteUrl && !isSameGitHubRepo(repo.remoteUrl, pullRequest)) {
+      throw new ValidationError(
+        `Repository ${repo.id} is linked to ${repo.remoteUrl}, which does not match ${pullRequest.remoteUrl}. Refusing to replace the existing remote.`,
+      );
+    }
+
+    const remediation: string[] = [];
+    if (!repo.remoteUrl) {
+      remediation.push(
+        `\"$TRACE_CLI\" repo attach-remote ${repo.id} ${pullRequest.remoteUrl} --json`,
+      );
+    }
+    if (channel && !channel.repoId) {
+      remediation.push(`\"$TRACE_CLI\" channel link-repo ${channel.id} ${repo.id} --json`);
+    }
+    if (remediation.length > 0) {
+      remediation.push(`\"$TRACE_CLI\" session link-pr ${pullRequest.prUrl} ${session.id} --json`);
+      throw new ValidationError(
+        `Repository association is required before linking this PR. Run these commands in order:\n${remediation.join("\n")}`,
+      );
+    }
+
     await this.markPrOpened({
       sessionGroupId: session.sessionGroupId,
       eventSessionId: session.id,
-      prUrl: url.toString(),
+      prUrl: pullRequest.prUrl,
       organizationId: params.organizationId,
       actorId: params.actorId ?? "trace-cli",
     });

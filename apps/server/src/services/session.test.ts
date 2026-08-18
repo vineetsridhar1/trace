@@ -14147,6 +14147,109 @@ describe("SessionService", () => {
   });
 
   describe("pr lifecycle", () => {
+    it("requires the agent to attach a missing remote and channel repo before linking a PR", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        repoId: "repo-1",
+        repo: { id: "repo-1", remoteUrl: null },
+        channelId: "channel-1",
+        channel: { id: "channel-1", repoId: null, repo: null },
+        sessionGroupId: "group-1",
+        sessionGroup: {
+          id: "group-1",
+          repoId: "repo-1",
+          repo: { id: "repo-1", remoteUrl: null },
+          channelId: "channel-1",
+          channel: { id: "channel-1", repoId: null, repo: null },
+        },
+      });
+      const markPrOpenedSpy = vi.spyOn(service, "markPrOpened");
+
+      await expect(
+        service.linkPullRequest({
+          sessionId: "session-1",
+          prUrl: "https://github.com/acme/app/pull/42",
+          organizationId: "org-1",
+          actorId: "user-1",
+        }),
+      ).rejects.toThrow(
+        [
+          "Repository association is required before linking this PR. Run these commands in order:",
+          '"$TRACE_CLI" repo attach-remote repo-1 https://github.com/acme/app.git --json',
+          '"$TRACE_CLI" channel link-repo channel-1 repo-1 --json',
+          '"$TRACE_CLI" session link-pr https://github.com/acme/app/pull/42 session-1 --json',
+        ].join("\n"),
+      );
+      expect(markPrOpenedSpy).not.toHaveBeenCalled();
+    });
+
+    it("links a PR when the session, channel, and GitHub remote agree", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        repoId: "repo-1",
+        repo: { id: "repo-1", remoteUrl: "git@github.com:acme/app.git" },
+        channelId: "channel-1",
+        channel: { id: "channel-1", repoId: "repo-1" },
+        sessionGroupId: "group-1",
+        sessionGroup: {
+          id: "group-1",
+          repoId: "repo-1",
+          repo: { id: "repo-1", remoteUrl: "git@github.com:acme/app.git" },
+          channelId: "channel-1",
+          channel: { id: "channel-1", repoId: "repo-1" },
+        },
+      });
+      parseGitHubRepoMock.mockReturnValueOnce({ owner: "acme", repo: "app" });
+      const markPrOpenedSpy = vi.spyOn(service, "markPrOpened").mockResolvedValueOnce(undefined);
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
+        makeSessionGroup({
+          prUrl: "https://github.com/acme/app/pull/42",
+        }),
+      );
+
+      await service.linkPullRequest({
+        sessionId: "session-1",
+        prUrl: "https://github.com/acme/app/pull/42/files?diff=split",
+        organizationId: "org-1",
+        actorId: "user-1",
+      });
+
+      expect(markPrOpenedSpy).toHaveBeenCalledWith({
+        sessionGroupId: "group-1",
+        eventSessionId: "session-1",
+        prUrl: "https://github.com/acme/app/pull/42",
+        organizationId: "org-1",
+        actorId: "user-1",
+      });
+    });
+
+    it("refuses to replace a repository remote that disagrees with the PR", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        repoId: "repo-1",
+        repo: { id: "repo-1", remoteUrl: "https://github.com/acme/other.git" },
+        channelId: "channel-1",
+        channel: { id: "channel-1", repoId: "repo-1" },
+        sessionGroupId: "group-1",
+        sessionGroup: {
+          id: "group-1",
+          repoId: "repo-1",
+          repo: { id: "repo-1", remoteUrl: "https://github.com/acme/other.git" },
+          channelId: "channel-1",
+          channel: { id: "channel-1", repoId: "repo-1" },
+        },
+      });
+      parseGitHubRepoMock.mockReturnValueOnce({ owner: "acme", repo: "other" });
+
+      await expect(
+        service.linkPullRequest({
+          sessionId: "session-1",
+          prUrl: "https://github.com/acme/app/pull/42",
+          organizationId: "org-1",
+        }),
+      ).rejects.toThrow("Refusing to replace the existing remote");
+    });
+
     it("does not emit a duplicate PR-opened event when the group already tracks that PR", async () => {
       prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
         prUrl: "https://github.com/trace/trace/pull/100",
