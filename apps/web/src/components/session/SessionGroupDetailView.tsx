@@ -4,16 +4,6 @@ import {
   useMemo,
   useState,
 } from "react";
-import {
-  Activity,
-  AppWindow,
-  Bot,
-  FileCode,
-  Files,
-  GitCompareArrows,
-  Globe,
-  TerminalSquare,
-} from "lucide-react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import {
@@ -28,7 +18,6 @@ import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { useWorkspaceSidebarStore } from "../../stores/workspace-sidebar";
-import { useWorkspaceRequestStore } from "../../stores/workspace-requests";
 import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-core";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
@@ -39,7 +28,7 @@ import { ProjectPreviewWorkspace } from "./ProjectPreviewWorkspace";
 import { AttachmentOpenContext, UploadedAttachmentOpenContext } from "./AttachmentOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
 import { WorkspaceSurfaceContent, type WorkspaceSurface } from "./SidebarPanel";
-import { SpatialWorkspace, type SpatialWorkspaceTab } from "./SpatialWorkspace";
+import { SpatialWorkspace } from "./SpatialWorkspace";
 import { SpatialNewTab, type SpatialNewChatInput } from "./SpatialNewTab";
 import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
 import { AppSessionPreviewPanel } from "./applications/AppSessionPreviewPanel";
@@ -71,75 +60,11 @@ import { useRegisterCommands } from "../../hooks/useRegisterCommands";
 import type { RegisteredCommand } from "../../stores/command-registry";
 import { ArtifactOpenContext } from "../artifact/ArtifactOpenContext";
 import { ArtifactTabContent } from "../artifact/ArtifactTabContent";
+import { useWorkspaceTabRequests } from "./useWorkspaceTabRequests";
+import { useSessionWorkspaceTabs } from "./useSessionWorkspaceTabs";
 
 const EMPTY_ARTIFACT_IDS: string[] = [];
 const EMPTY_HIDDEN_SESSION_TABS: Record<string, string> = {};
-const SESSION_WORKSPACE_TABS_KEY_PREFIX = "trace:session-workspace-tabs:";
-const EMPTY_BROWSER_REQUESTS: Array<{ id: string; sessionGroupId: string; url: string }> = [];
-const EMPTY_TERMINAL_REQUESTS: Array<{
-  id: string;
-  sessionGroupId: string;
-  sessionId: string;
-  terminalId: string;
-  replaceTabId?: string;
-  select: boolean;
-}> = [];
-
-type DraftWorkspaceTab = {
-  id: string;
-  surface: WorkspaceSurface | null;
-  initialUrl?: string;
-};
-
-function isWorkspaceSurface(value: unknown): value is WorkspaceSurface {
-  return (
-    value === "applications" ||
-    value === "browser" ||
-    value === "terminal" ||
-    value === "files" ||
-    value === "changes"
-  );
-}
-
-function getStoredWorkspaceTabs(
-  sessionGroupId: string,
-): DraftWorkspaceTab[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(`${SESSION_WORKSPACE_TABS_KEY_PREFIX}${sessionGroupId}`);
-    if (!stored) return [];
-    const parsed: unknown = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (tab): tab is DraftWorkspaceTab =>
-        !!tab &&
-        typeof tab === "object" &&
-        typeof (tab as Record<string, unknown>).id === "string" &&
-        (tab as Record<string, unknown>).surface !== "terminal" &&
-        ((tab as Record<string, unknown>).surface === null ||
-          isWorkspaceSurface((tab as Record<string, unknown>).surface)) &&
-        ((tab as Record<string, unknown>).initialUrl === undefined ||
-          typeof (tab as Record<string, unknown>).initialUrl === "string"),
-    );
-  } catch {
-    return [];
-  }
-}
-
-function workspaceSurfaceIcon(surface: WorkspaceSurface | null) {
-  if (surface === "browser") return <Globe size={12} />;
-  if (surface === "terminal") return <TerminalSquare size={12} />;
-  if (surface === "files") return <Files size={12} />;
-  if (surface === "changes") return <GitCompareArrows size={12} />;
-  if (surface === "applications") return <AppWindow size={12} />;
-  return <Bot size={12} />;
-}
-
-function browserWorkspaceLabel(title: string | undefined) {
-  const trimmedTitle = title?.trim();
-  return trimmedTitle && trimmedTitle !== "New tab" ? `Browser · ${trimmedTitle}` : "Browser";
-}
-
 const HIDDEN_SESSION_TABS_QUERY = gql`
   query HiddenSessionTabs($sessionGroupId: ID!) {
     hiddenSessionTabs(sessionGroupId: $sessionGroupId) {
@@ -399,93 +324,20 @@ export function SessionGroupDetailView({
   const [forkEventId, setForkEventId] = useState<string | null>(null);
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
   const [groupLoadError, setGroupLoadError] = useState<string | null>(null);
-  const [draftWorkspaceTabs, setDraftWorkspaceTabs] = useState<DraftWorkspaceTab[]>(() =>
-    getStoredWorkspaceTabs(sessionGroupId),
-  );
-  const [requestedActiveWorkspaceTabId, setRequestedActiveWorkspaceTabId] = useState<
-    string | null
-  >(null);
-  const browserOpenRequests = useWorkspaceRequestStore(
-    (state) => state.browserRequestsByGroup[sessionGroupId] ?? EMPTY_BROWSER_REQUESTS,
-  );
-  const consumeBrowserOpenRequests = useWorkspaceRequestStore(
-    (state) => state.consumeBrowserRequests,
-  );
-  const terminalOpenRequests = useWorkspaceRequestStore(
-    (state) => state.terminalRequestsByGroup[sessionGroupId] ?? EMPTY_TERMINAL_REQUESTS,
-  );
-  const consumeTerminalOpenRequests = useWorkspaceRequestStore(
-    (state) => state.consumeTerminalRequests,
-  );
-  const [browserTitles, setBrowserTitles] = useState<Record<string, string>>({});
-  const [workspaceTabReplacements, setWorkspaceTabReplacements] = useState<
-    Record<string, string>
-  >({});
-  const workspaceTerminals = terminals;
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        `${SESSION_WORKSPACE_TABS_KEY_PREFIX}${sessionGroupId}`,
-        JSON.stringify(draftWorkspaceTabs),
-      );
-    } catch {
-      // Persistence is optional when browser storage is unavailable.
-    }
-  }, [draftWorkspaceTabs, sessionGroupId]);
-
-  useEffect(() => {
-    if (browserOpenRequests.length === 0) return;
-    const requestedTabs = browserOpenRequests.map((request) => ({
-      id: `draft:${request.id}`,
-      surface: "browser" as const,
-      initialUrl: request.url,
-    }));
-    setDraftWorkspaceTabs((tabs) => [
-      ...tabs,
-      ...requestedTabs.filter((request) => !tabs.some((tab) => tab.id === request.id)),
-    ]);
-    setRequestedActiveWorkspaceTabId(requestedTabs[requestedTabs.length - 1]!.id);
-    consumeBrowserOpenRequests(sessionGroupId);
-  }, [browserOpenRequests, consumeBrowserOpenRequests, sessionGroupId]);
-
-  useEffect(() => {
-    if (terminalOpenRequests.length === 0) return;
-    const replacements = terminalOpenRequests.filter(
-      (request): request is typeof request & { replaceTabId: string } =>
-        typeof request.replaceTabId === "string",
-    );
-    if (replacements.length > 0) {
-      setWorkspaceTabReplacements((current) => ({
-        ...current,
-        ...Object.fromEntries(
-          replacements.map((request) => [
-            request.replaceTabId,
-            `terminal:${request.terminalId}`,
-          ]),
-        ),
-      }));
-      const replacedTabIds = new Set(replacements.map((request) => request.replaceTabId));
-      setDraftWorkspaceTabs((drafts) =>
-        drafts.filter((draft) => !replacedTabIds.has(draft.id)),
-      );
-    }
-    const selectedRequest = [...terminalOpenRequests].reverse().find((request) => request.select);
-    if (selectedRequest) {
-      setRequestedActiveWorkspaceTabId(`terminal:${selectedRequest.terminalId}`);
-      setActiveSessionId(selectedRequest.sessionId);
-      if (useUIStore.getState().activeSessionGroupId === sessionGroupId) {
-        setActiveTerminalId(selectedRequest.terminalId);
-      }
-    }
-    consumeTerminalOpenRequests(sessionGroupId);
-  }, [
-    consumeTerminalOpenRequests,
+  const {
+    browserTitles,
+    draftTabs: draftWorkspaceTabs,
+    foregroundTabId: requestedActiveWorkspaceTabId,
+    handleBrowserTitleChange,
+    setDraftTabs: setDraftWorkspaceTabs,
+    setForegroundTabId: setRequestedActiveWorkspaceTabId,
+    tabReplacements: workspaceTabReplacements,
+  } = useWorkspaceTabRequests({
     sessionGroupId,
     setActiveSessionId,
     setActiveTerminalId,
-    terminalOpenRequests,
-  ]);
+  });
+  const workspaceTerminals = terminals;
 
   const handleOpenForkDialog = useCallback((eventId: string) => {
     setForkEventId(eventId);
@@ -1063,64 +915,15 @@ export function SessionGroupDetailView({
     [setActiveArtifactId, setActiveFilePath, setActiveTerminalId],
   );
 
-  const workspaceTabs = useMemo<SpatialWorkspaceTab[]>(() => {
-    const tabs: SpatialWorkspaceTab[] = sessionTabs.map((session) => ({
-      id: `session:${session.id}`,
-      label: session.name,
-      icon: <Bot size={12} />,
-      status: session.agentStatus === "active" ? "live" : undefined,
-    }));
-
-    tabs.push(
-      ...openArtifactIds.map((artifactId) => ({
-        id: `artifact:${artifactId}`,
-        label: "Artifact",
-        icon: <FileCode size={12} />,
-      })),
-      ...workspaceTerminals.map((terminal, index) => ({
-        id: `terminal:${terminal.id}`,
-        label: terminal.customName || `Terminal ${index + 1}`,
-        icon: <TerminalSquare size={12} />,
-        status: terminal.status === "active" ? ("live" as const) : undefined,
-      })),
-      ...openFiles.map((file) => ({
-        id: `file:${file.filePath}`,
-        label: file.fileName,
-        icon: file.isDiff ? <GitCompareArrows size={12} /> : <FileCode size={12} />,
-        status: file.isDiff ? ("changed" as const) : undefined,
-      })),
-      ...draftWorkspaceTabs.map((draft) => ({
-        id: draft.id,
-        label: draft.surface
-          ? draft.surface === "changes"
-            ? "Files changed"
-            : draft.surface === "browser"
-              ? browserWorkspaceLabel(browserTitles[draft.id])
-            : `${draft.surface[0].toUpperCase()}${draft.surface.slice(1)}`
-          : "New tab",
-        icon: workspaceSurfaceIcon(draft.surface),
-        minContentWidth: draft.surface === "browser" ? 0 : undefined,
-      })),
-    );
-
-    if (trafficEndpointId) {
-      tabs.push({
-        id: "traffic",
-        label: "Traffic",
-        icon: <Activity size={12} />,
-      });
-    }
-    return tabs;
-  }, [
+  const workspaceTabs = useSessionWorkspaceTabs({
+    sessions: sessionTabs,
+    artifactIds: openArtifactIds,
+    terminals: workspaceTerminals,
+    files: openFiles,
+    drafts: draftWorkspaceTabs,
     browserTitles,
-    draftWorkspaceTabs,
-    openArtifactIds,
-    openFiles,
-    sessionTabs,
-    showApplicationsSidebarTab,
-    workspaceTerminals,
     trafficEndpointId,
-  ]);
+  });
 
   const preferredWorkspaceTabId = activeArtifactId
     ? `artifact:${activeArtifactId}`
@@ -1133,12 +936,6 @@ export function SessionGroupDetailView({
           : selectedSession
             ? `session:${selectedSession.id}`
             : draftWorkspaceTabs[0]?.id ?? null;
-
-  useEffect(() => {
-    if (!requestedActiveWorkspaceTabId) return;
-    const timeoutId = window.setTimeout(() => setRequestedActiveWorkspaceTabId(null), 0);
-    return () => window.clearTimeout(timeoutId);
-  }, [requestedActiveWorkspaceTabId]);
 
   const handleActivateWorkspaceTab = useCallback(
     (tabId: string) => {
@@ -1201,12 +998,6 @@ export function SessionGroupDetailView({
     const id = `draft:${crypto.randomUUID()}`;
     setDraftWorkspaceTabs((drafts) => [...drafts, { id, surface: null }]);
     return id;
-  }, []);
-
-  const handleBrowserTitleChange = useCallback((browserId: string, title: string) => {
-    setBrowserTitles((titles) =>
-      titles[browserId] === title ? titles : { ...titles, [browserId]: title },
-    );
   }, []);
 
   const handleWorkspaceOverlayVisibility = useCallback(

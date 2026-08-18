@@ -1,8 +1,15 @@
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Event, User } from "@trace/gql";
+import { useAuthStore } from "@trace/client-core";
 import { SpatialWorkspace } from "./SpatialWorkspace";
 import { createSpatialLayout, dockSpatialTab } from "./spatial-workspace-layout";
+import { useWorkspaceTabRequests } from "./useWorkspaceTabRequests";
+import {
+  reconcileWorkspaceRequestEvent,
+  useWorkspaceRequestStore,
+} from "../../stores/workspace-requests";
 
 function NewTabHarness() {
   const [tabs, setTabs] = useState([{ id: "chat", label: "Chat", icon: null }]);
@@ -49,6 +56,45 @@ function ForegroundTabHarness() {
   );
 }
 
+function BrowserRequestHarness() {
+  const { draftTabs, foregroundTabId } = useWorkspaceTabRequests({
+    sessionGroupId: "group-1",
+    setActiveSessionId: () => undefined,
+    setActiveTerminalId: () => undefined,
+  });
+  const tabs = [
+    { id: "chat", label: "Chat", icon: null },
+    ...draftTabs.map((tab) => ({ id: tab.id, label: "Browser", icon: null })),
+  ];
+  return (
+    <SpatialWorkspace
+      persistenceKey="spatial-workspace-browser-request-test"
+      tabs={tabs}
+      preferredActiveTabId="chat"
+      foregroundTabId={foregroundTabId}
+      onActivateTab={() => undefined}
+      onCloseTab={() => undefined}
+      onNewTab={() => "draft:new"}
+      renderTab={(tabId) => <div data-rendered-tab={tabId} />}
+    />
+  );
+}
+
+function browserRequestEvent(): Event {
+  return {
+    id: "browser-request-1",
+    eventType: "workspace_browser_open_requested",
+    scopeType: "system",
+    scopeId: "group-1",
+    timestamp: "2026-08-17T00:00:00.000Z",
+    payload: {
+      sessionGroupId: "group-1",
+      targetUserId: "user-1",
+      url: "https://example.com/",
+    },
+  } as unknown as Event;
+}
+
 describe("SpatialWorkspace", () => {
   let renderer: ReactTestRenderer | null = null;
 
@@ -59,6 +105,7 @@ describe("SpatialWorkspace", () => {
   afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -112,6 +159,32 @@ describe("SpatialWorkspace", () => {
     });
 
     expect(renderer.root.findByProps({ "data-rendered-tab": "browser" })).toBeDefined();
+  });
+
+  it("foregrounds a browser tab created from a workspace request event", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("localStorage", { getItem: vi.fn(() => null), setItem: vi.fn() });
+    useAuthStore.setState({
+      user: { id: "user-1", email: "user@example.com", name: "User" } as User,
+    });
+    useWorkspaceRequestStore.setState({
+      browserRequestsByGroup: {},
+      terminalRequestsByGroup: {},
+    });
+    await act(async () => {
+      renderer = create(<BrowserRequestHarness />);
+    });
+
+    if (!renderer) throw new Error("Expected the workspace to mount");
+    expect(renderer.root.findByProps({ "data-rendered-tab": "chat" })).toBeDefined();
+
+    await act(async () => {
+      reconcileWorkspaceRequestEvent(browserRequestEvent());
+    });
+
+    expect(
+      renderer.root.findByProps({ "data-rendered-tab": "draft:browser-request-1" }),
+    ).toBeDefined();
   });
 
   it("restores global resize state when unmounted mid-drag", async () => {
