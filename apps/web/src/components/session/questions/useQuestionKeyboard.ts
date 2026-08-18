@@ -11,20 +11,16 @@ function isInteractive(target: EventTarget | null): boolean {
 
 export function useQuestionKeyboard({
   disabled,
-  reviewing,
   question,
   type,
   onDismiss,
-  onSend,
   onAdvance,
   onToggle,
 }: {
   disabled: boolean;
-  reviewing: boolean;
   question: Question;
   type: string;
   onDismiss: () => void;
-  onSend: () => void;
   onAdvance: () => void;
   onToggle: (value: string) => void;
 }) {
@@ -34,20 +30,16 @@ export function useQuestionKeyboard({
       if (event.key === "Escape") {
         event.preventDefault();
         onDismiss();
-      } else if (reviewing && event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        onSend();
-      } else if (!reviewing && event.key === "Enter" && !isInteractive(event.target)) {
+      } else if (event.key === "Enter" && !isInteractive(event.target)) {
         event.preventDefault();
         onAdvance();
-      } else if (!reviewing && !isInteractive(event.target) && /^[1-9]$/.test(event.key)) {
+      } else if (!isInteractive(event.target) && /^[1-9]$/.test(event.key)) {
         const option = question.options[Number(event.key) - 1];
         if (option) {
           event.preventDefault();
           onToggle(option.id ?? option.label);
         }
       } else if (
-        !reviewing &&
         !isInteractive(event.target) &&
         type === "confirm" &&
         /^(y|n)$/i.test(event.key)
@@ -60,5 +52,5 @@ export function useQuestionKeyboard({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [disabled, onAdvance, onDismiss, onSend, onToggle, question.options, reviewing, type]);
+  }, [disabled, onAdvance, onDismiss, onToggle, question.options, type]);
 }

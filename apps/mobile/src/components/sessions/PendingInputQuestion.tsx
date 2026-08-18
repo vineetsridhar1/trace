@@ -13,7 +13,6 @@ import { QuestionFlowControl } from "./question-flow/QuestionFlowControl";
 import { QuestionFlowFooter } from "./question-flow/QuestionFlowFooter";
 import { QuestionFlowHeader } from "./question-flow/QuestionFlowHeader";
 import { QuestionFlowOption } from "./question-flow/QuestionFlowOption";
-import { QuestionFlowReview } from "./question-flow/QuestionFlowReview";
 import { questionColors, questionMetrics } from "./question-flow/tokens";
 
 interface PendingInputQuestionProps {
@@ -35,7 +34,6 @@ export function PendingInputQuestion({
 }: PendingInputQuestionProps) {
   const insets = useSafeAreaInsets();
   const organizationId = useAuthStore((state: AuthState) => state.activeOrgId);
-  const [reviewing, setReviewing] = useState(false);
   const [sending, setSending] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -135,7 +133,7 @@ export function PendingInputQuestion({
   const continueFlow = () => {
     if (!currentValid) return;
     setSendError(null);
-    if (isLastPage) setReviewing(true);
+    if (isLastPage) void send();
     else state.goNext();
   };
   const letAgentDecide = () => {
@@ -152,20 +150,18 @@ export function PendingInputQuestion({
     question.type ?? (question.multiSelect ? "multi-select" : "single-select");
   const primaryLabel = sending
     ? "Sending…"
-    : sendError && reviewing
+    : sendError
       ? "Try again"
-      : reviewing
+      : isLastPage
         ? `Send ${total} answer${total === 1 ? "" : "s"}`
-        : isLastPage
-          ? "Review answers"
-          : validationMessage && question.min
-            ? `Choose ${Math.max(1, question.min - currentSelected.size)} more`
-            : "Continue";
+        : validationMessage && question.min
+          ? `Choose ${Math.max(1, question.min - currentSelected.size)} more`
+          : "Continue";
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <QuestionFlowHeader
-        step={reviewing ? `${total} answers` : total > 1 ? `${page + 1} of ${total}` : "Question"}
+        step={total > 1 ? `${page + 1} of ${total}` : "Question"}
         onBack={onClose}
       />
       <ScrollView
@@ -174,18 +170,7 @@ export function PendingInputQuestion({
         keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
         keyboardShouldPersistTaps="handled"
       >
-        {reviewing ? (
-          <QuestionFlowReview
-            questions={questions}
-            answers={answers}
-            onEdit={(index) => {
-              state.setPage(index);
-              setReviewing(false);
-              setSendError(null);
-            }}
-          />
-        ) : (
-          <>
+        <>
             <View style={styles.prompt}>
               <View
                 style={[
@@ -246,8 +231,7 @@ export function PendingInputQuestion({
                 onPress={letAgentDecide}
               />
             </View>
-          </>
-        )}
+        </>
       </ScrollView>
       <KeyboardStickyView
         offset={{ opened: -8 }}
@@ -262,13 +246,10 @@ export function PendingInputQuestion({
           ) : null}
           <QuestionFlowFooter
             label={primaryLabel}
-            disabled={sending || (reviewing ? !hasAllAnswers : !currentValid)}
-            backVisible={!reviewing && !isFirstPage}
+            disabled={sending || !currentValid}
+            backVisible={!isFirstPage}
             onBack={state.goPrev}
-            onPrimary={() => {
-              if (reviewing) void send();
-              else continueFlow();
-            }}
+            onPrimary={continueFlow}
             bottomInset={keyboardVisible ? 0 : insets.bottom}
           />
         </View>
