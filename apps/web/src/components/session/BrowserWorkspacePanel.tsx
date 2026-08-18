@@ -20,13 +20,15 @@ export function BrowserWorkspacePanel({
   sessionGroupId,
   browserId,
   initialUrl,
-  sessionId,
+  repoId,
+  branch,
   onTitleChange,
 }: {
   sessionGroupId: string;
   browserId: string;
   initialUrl?: string;
-  sessionId: string | null;
+  repoId?: string | null;
+  branch?: string | null;
   onTitleChange?: (browserId: string, title: string) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -106,16 +108,16 @@ export function BrowserWorkspacePanel({
   }, [browserId, initialUrl, sessionGroupId, syncBounds]);
 
   useEffect(() => {
-    if (!window.trace || !sessionId) {
+    if (!window.trace || !repoId || !branch) {
       setSyncStatus("unavailable");
       return;
     }
     let cancelled = false;
     const refresh = () => {
       void window.trace!
-        .getSessionGitSyncStatus(sessionId)
+        .getBrowserLinkedCheckoutStatus(repoId)
         .then((nextStatus) => {
-          if (!cancelled) setSyncStatus(getBranchSyncStatus(nextStatus));
+          if (!cancelled) setSyncStatus(getBranchSyncStatus(nextStatus, sessionGroupId, branch));
         })
         .catch(() => {
           if (!cancelled) setSyncStatus("unavailable");
@@ -127,7 +129,7 @@ export function BrowserWorkspacePanel({
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [sessionId]);
+  }, [branch, repoId, sessionGroupId]);
 
   const perform = useCallback((action: () => Promise<DesktopBrowserWorkspaceState>) => {
     setError(null);
@@ -252,10 +254,23 @@ export function BrowserWorkspacePanel({
 
 type BranchSyncStatus = "checking" | "synced" | "behind" | "outOfSync" | "unavailable";
 
-export function getBranchSyncStatus(status: DesktopSessionGitSyncStatus): BranchSyncStatus {
-  if (status.hasUncommittedChanges || !status.remoteCommitSha) return "outOfSync";
-  if (status.remoteAheadCount > 0) return "outOfSync";
-  return status.remoteBehindCount > 0 ? "behind" : "synced";
+export function getBranchSyncStatus(
+  status: DesktopLinkedCheckoutStatus,
+  sessionGroupId: string,
+  branch: string,
+): BranchSyncStatus {
+  if (
+    status.attachedSessionGroupId !== sessionGroupId ||
+    status.currentBranch !== branch ||
+    status.hasUncommittedChanges ||
+    status.lastSyncError
+  ) {
+    return "outOfSync";
+  }
+  if (!status.lastSyncedCommitSha || status.currentCommitSha !== status.lastSyncedCommitSha) {
+    return "behind";
+  }
+  return "synced";
 }
 
 function branchSyncStatusColor(status: BranchSyncStatus) {
@@ -268,11 +283,11 @@ function branchSyncStatusColor(status: BranchSyncStatus) {
 function branchSyncStatusLabel(status: BranchSyncStatus) {
   switch (status) {
     case "synced":
-      return "Branch is synced with origin";
+      return "Branch is spotlighted and synced";
     case "behind":
-      return "Branch is behind origin. Press Spotlight to sync this branch.";
+      return "Spotlighted branch is behind. Press Spotlight to sync this branch.";
     case "outOfSync":
-      return "Branch has uncommitted or unpushed changes. Press Spotlight to sync this branch.";
+      return "Branch is not spotlighted or has local changes. Press Spotlight to sync this branch.";
     case "checking":
       return "Checking branch sync status";
     case "unavailable":

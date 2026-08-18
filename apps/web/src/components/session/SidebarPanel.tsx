@@ -42,6 +42,8 @@ export interface WorkspaceSurfaceContentProps {
   sessionGroupId: string;
   browserId?: string;
   browserInitialUrl?: string;
+  browserRepoId?: string | null;
+  browserBranch?: string | null;
   surface: WorkspaceSurface;
   activeSessionId: string | null;
   activeFilePath?: string | null;
@@ -145,6 +147,8 @@ export function WorkspaceSurfaceContent({
   sessionGroupId,
   browserId = "default",
   browserInitialUrl,
+  browserRepoId,
+  browserBranch,
   surface,
   activeSessionId,
   activeFilePath,
@@ -177,7 +181,8 @@ export function WorkspaceSurfaceContent({
           sessionGroupId={sessionGroupId}
           browserId={browserId}
           initialUrl={browserInitialUrl}
-          sessionId={activeSessionId}
+          repoId={browserRepoId}
+          branch={browserBranch}
           onTitleChange={onBrowserTitleChange}
         />
       ) : surface === "terminal" ? (

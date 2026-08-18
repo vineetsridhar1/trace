@@ -1059,6 +1059,8 @@ export function SessionGroupDetailView({
               sessionGroupId={sessionGroupId}
               browserId={tabId}
               browserInitialUrl={draft.initialUrl}
+              browserRepoId={linkedCheckoutRepoId}
+              browserBranch={linkedCheckoutBranch}
               surface={draft.surface}
               activeSessionId={selectedSession?.id ?? null}
               activeFilePath={activeFilePath}

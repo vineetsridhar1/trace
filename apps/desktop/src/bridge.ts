@@ -667,18 +667,6 @@ export class BridgeClient implements IBridgeClient {
     return this.status;
   }
 
-  async getSessionGitSyncStatus(sessionId: string) {
-    const workdir = this.sessionWorkdirs.get(sessionId);
-    if (!workdir) throw new Error("Session workdir is unavailable");
-    return inspectSessionGitSyncStatus((args, options) =>
-      execFileAsync("git", args, {
-        cwd: workdir,
-        maxBuffer: options?.maxBuffer,
-        timeout: options?.timeoutMs,
-      }).then(({ stdout }) => String(stdout)),
-    );
-  }
-
   onStatusChange(listener: (status: BridgeConnectionStatus) => void): () => void {
     this.statusListeners.add(listener);
     listener(this.status);

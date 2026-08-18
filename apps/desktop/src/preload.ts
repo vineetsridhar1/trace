@@ -23,8 +23,8 @@ contextBridge.exposeInMainWorld("trace", {
     ipcRenderer.invoke("install-or-update-coding-tool", toolId),
   getBridgeStatus: () => ipcRenderer.invoke("get-bridge-status"),
   getBridgeInfo: () => ipcRenderer.invoke("get-bridge-info"),
-  getSessionGitSyncStatus: (sessionId: string) =>
-    ipcRenderer.invoke("get-session-git-sync-status", sessionId),
+  getBrowserLinkedCheckoutStatus: (repoId: string) =>
+    ipcRenderer.invoke("get-browser-linked-checkout-status", repoId),
   setBridgeLabel: (label: string) => ipcRenderer.invoke("set-bridge-label", label),
   setBridgeAuthContext: (organizationId: string | null) =>
     ipcRenderer.invoke("set-bridge-auth-context", organizationId),

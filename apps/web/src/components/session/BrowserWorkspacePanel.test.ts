@@ -2,36 +2,47 @@ import { describe, expect, it } from "vitest";
 import { getBranchSyncStatus } from "./BrowserWorkspacePanel";
 
 function makeStatus(
-  overrides: Partial<DesktopSessionGitSyncStatus> = {},
-): DesktopSessionGitSyncStatus {
+  overrides: Partial<DesktopLinkedCheckoutStatus> = {},
+): DesktopLinkedCheckoutStatus {
   return {
-    branch: "trace/test",
-    headCommitSha: "head",
-    upstreamBranch: "origin/trace/test",
-    upstreamCommitSha: "head",
-    aheadCount: 0,
-    behindCount: 0,
-    remoteBranch: "origin/trace/test",
-    remoteCommitSha: "head",
-    remoteAheadCount: 0,
-    remoteBehindCount: 0,
+    repoId: "repo-1",
+    repoPath: "/repo",
+    isAttached: true,
+    attachedSessionGroupId: "group-1",
+    targetBranch: "trace/test",
+    autoSyncEnabled: true,
+    currentBranch: "trace/test",
+    currentCommitSha: "head",
+    lastSyncedCommitSha: "head",
+    lastSyncError: null,
+    restoreBranch: "main",
+    restoreCommitSha: "base",
     hasUncommittedChanges: false,
+    changedFiles: [],
+    changedFilesTotalCount: 0,
+    changedFilesTruncated: false,
     ...overrides,
   };
 }
 
 describe("getBranchSyncStatus", () => {
   it("reports synced branches as green", () => {
-    expect(getBranchSyncStatus(makeStatus())).toBe("synced");
+    expect(getBranchSyncStatus(makeStatus(), "group-1", "trace/test")).toBe("synced");
   });
 
-  it("reports a clean branch that is behind origin as yellow", () => {
-    expect(getBranchSyncStatus(makeStatus({ remoteBehindCount: 2 }))).toBe("behind");
+  it("reports a spotlighted branch that has advanced since sync as yellow", () => {
+    expect(
+      getBranchSyncStatus(makeStatus({ currentCommitSha: "newer" }), "group-1", "trace/test"),
+    ).toBe("behind");
   });
 
-  it("reports uncommitted, unpushed, and untracked branches as out of sync", () => {
-    expect(getBranchSyncStatus(makeStatus({ hasUncommittedChanges: true }))).toBe("outOfSync");
-    expect(getBranchSyncStatus(makeStatus({ remoteAheadCount: 1 }))).toBe("outOfSync");
-    expect(getBranchSyncStatus(makeStatus({ remoteCommitSha: null }))).toBe("outOfSync");
+  it("reports a different, dirty, or failed Spotlight checkout as out of sync", () => {
+    expect(
+      getBranchSyncStatus(makeStatus({ hasUncommittedChanges: true }), "group-1", "trace/test"),
+    ).toBe("outOfSync");
+    expect(getBranchSyncStatus(makeStatus(), "other-group", "trace/test")).toBe("outOfSync");
+    expect(
+      getBranchSyncStatus(makeStatus({ lastSyncError: "conflict" }), "group-1", "trace/test"),
+    ).toBe("outOfSync");
   });
 });
