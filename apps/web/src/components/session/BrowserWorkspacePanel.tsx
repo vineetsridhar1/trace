@@ -19,10 +19,12 @@ const EMPTY_BROWSER_STATE: DesktopBrowserWorkspaceState = {
 export function BrowserWorkspacePanel({
   sessionGroupId,
   browserId,
+  initialUrl,
   onTitleChange,
 }: {
   sessionGroupId: string;
   browserId: string;
+  initialUrl?: string;
   onTitleChange?: (browserId: string, title: string) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -57,7 +59,15 @@ export function BrowserWorkspacePanel({
     let cancelled = false;
     void window.trace
       .activateBrowser({ sessionGroupId, browserId })
-      .then((nextState) => {
+      .then(async (nextState) => {
+        if (cancelled) return;
+        if (initialUrl && nextState.url === "about:blank") {
+          nextState = await window.trace!.navigateBrowser({
+            sessionGroupId,
+            browserId,
+            url: initialUrl,
+          });
+        }
         if (cancelled) return;
         setState(nextState);
         setInputValue(nextState.url);
@@ -90,7 +100,7 @@ export function BrowserWorkspacePanel({
       unsubscribe();
       void window.trace?.hideBrowser({ sessionGroupId, browserId });
     };
-  }, [browserId, sessionGroupId, syncBounds]);
+  }, [browserId, initialUrl, sessionGroupId, syncBounds]);
 
   const perform = useCallback((action: () => Promise<DesktopBrowserWorkspaceState>) => {
     setError(null);
@@ -120,7 +130,9 @@ export function BrowserWorkspacePanel({
           event.preventDefault();
           addressEditingRef.current = false;
           addressInputRef.current?.blur();
-          perform(() => window.trace!.navigateBrowser({ sessionGroupId, browserId, url: inputValue }));
+          perform(() =>
+            window.trace!.navigateBrowser({ sessionGroupId, browserId, url: inputValue }),
+          );
         }}
       >
         <Button

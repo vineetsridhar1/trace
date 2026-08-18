@@ -1,5 +1,6 @@
 import type { Event } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
+import { useAuthStore } from "@trace/client-core";
 import { useTerminalStore } from "./terminal";
 import { useUIStore } from "./ui";
 
@@ -43,6 +44,14 @@ export function reconcileTerminalEvent(event: Event): void {
       useTerminalStore.getState().pinTerminal(terminal.id);
     }
     if (intent?.select) {
+      const ui = useUIStore.getState();
+      ui.setActiveSessionId(terminal.sessionId);
+      ui.setActiveTerminalId(terminal.id);
+    }
+    if (
+      payload.openInWorkspace === true &&
+      payload.targetUserId === useAuthStore.getState().user?.id
+    ) {
       const ui = useUIStore.getState();
       ui.setActiveSessionId(terminal.sessionId);
       ui.setActiveTerminalId(terminal.id);

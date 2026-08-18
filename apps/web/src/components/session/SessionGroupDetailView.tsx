@@ -28,6 +28,7 @@ import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { useWorkspaceSidebarStore } from "../../stores/workspace-sidebar";
+import { useWorkspaceRequestStore } from "../../stores/workspace-requests";
 import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-core";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
@@ -74,6 +75,13 @@ import { ArtifactTabContent } from "../artifact/ArtifactTabContent";
 const EMPTY_ARTIFACT_IDS: string[] = [];
 const EMPTY_HIDDEN_SESSION_TABS: Record<string, string> = {};
 const SESSION_WORKSPACE_TABS_KEY_PREFIX = "trace:session-workspace-tabs:";
+const EMPTY_BROWSER_REQUESTS: Array<{ id: string; sessionGroupId: string; url: string }> = [];
+
+type DraftWorkspaceTab = {
+  id: string;
+  surface: WorkspaceSurface | null;
+  initialUrl?: string;
+};
 
 function isWorkspaceSurface(value: unknown): value is WorkspaceSurface {
   return (
@@ -87,7 +95,7 @@ function isWorkspaceSurface(value: unknown): value is WorkspaceSurface {
 
 function getStoredWorkspaceTabs(
   sessionGroupId: string,
-): Array<{ id: string; surface: WorkspaceSurface | null }> {
+): DraftWorkspaceTab[] {
   if (typeof window === "undefined") return [];
   try {
     const stored = localStorage.getItem(`${SESSION_WORKSPACE_TABS_KEY_PREFIX}${sessionGroupId}`);
@@ -95,13 +103,15 @@ function getStoredWorkspaceTabs(
     const parsed: unknown = JSON.parse(stored);
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(
-      (tab): tab is { id: string; surface: WorkspaceSurface | null } =>
+      (tab): tab is DraftWorkspaceTab =>
         !!tab &&
         typeof tab === "object" &&
         typeof (tab as Record<string, unknown>).id === "string" &&
         (tab as Record<string, unknown>).surface !== "terminal" &&
         ((tab as Record<string, unknown>).surface === null ||
-          isWorkspaceSurface((tab as Record<string, unknown>).surface)),
+          isWorkspaceSurface((tab as Record<string, unknown>).surface)) &&
+        ((tab as Record<string, unknown>).initialUrl === undefined ||
+          typeof (tab as Record<string, unknown>).initialUrl === "string"),
     );
   } catch {
     return [];
@@ -381,9 +391,16 @@ export function SessionGroupDetailView({
   const [forkEventId, setForkEventId] = useState<string | null>(null);
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
   const [groupLoadError, setGroupLoadError] = useState<string | null>(null);
-  const [draftWorkspaceTabs, setDraftWorkspaceTabs] = useState<
-    Array<{ id: string; surface: WorkspaceSurface | null }>
-  >(() => getStoredWorkspaceTabs(sessionGroupId));
+  const [draftWorkspaceTabs, setDraftWorkspaceTabs] = useState<DraftWorkspaceTab[]>(() =>
+    getStoredWorkspaceTabs(sessionGroupId),
+  );
+  const [requestedActiveDraftTabId, setRequestedActiveDraftTabId] = useState<string | null>(null);
+  const browserOpenRequests = useWorkspaceRequestStore(
+    (state) => state.browserRequestsByGroup[sessionGroupId] ?? EMPTY_BROWSER_REQUESTS,
+  );
+  const consumeBrowserOpenRequests = useWorkspaceRequestStore(
+    (state) => state.consumeBrowserRequests,
+  );
   const [browserTitles, setBrowserTitles] = useState<Record<string, string>>({});
   const [pendingTerminalTabs, setPendingTerminalTabs] = useState<
     Array<{
@@ -425,6 +442,21 @@ export function SessionGroupDetailView({
       // Persistence is optional when browser storage is unavailable.
     }
   }, [draftWorkspaceTabs, sessionGroupId]);
+
+  useEffect(() => {
+    if (browserOpenRequests.length === 0) return;
+    const requestedTabs = browserOpenRequests.map((request) => ({
+      id: `draft:${request.id}`,
+      surface: "browser" as const,
+      initialUrl: request.url,
+    }));
+    setDraftWorkspaceTabs((tabs) => [
+      ...tabs,
+      ...requestedTabs.filter((request) => !tabs.some((tab) => tab.id === request.id)),
+    ]);
+    setRequestedActiveDraftTabId(requestedTabs[requestedTabs.length - 1]!.id);
+    consumeBrowserOpenRequests(sessionGroupId);
+  }, [browserOpenRequests, consumeBrowserOpenRequests, sessionGroupId]);
 
   const handleOpenForkDialog = useCallback((eventId: string) => {
     setForkEventId(eventId);
@@ -1064,7 +1096,9 @@ export function SessionGroupDetailView({
     trafficEndpointId,
   ]);
 
-  const preferredWorkspaceTabId = activeArtifactId
+  const preferredWorkspaceTabId = requestedActiveDraftTabId
+    ? requestedActiveDraftTabId
+    : activeArtifactId
     ? `artifact:${activeArtifactId}`
     : activeFilePath
       ? `file:${activeFilePath}`
@@ -1075,6 +1109,12 @@ export function SessionGroupDetailView({
           : selectedSession
             ? `session:${selectedSession.id}`
             : draftWorkspaceTabs[0]?.id ?? null;
+
+  useEffect(() => {
+    if (!requestedActiveDraftTabId) return;
+    const timeoutId = window.setTimeout(() => setRequestedActiveDraftTabId(null), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [requestedActiveDraftTabId]);
 
   const handleActivateWorkspaceTab = useCallback(
     (tabId: string) => {
@@ -1162,6 +1202,7 @@ export function SessionGroupDetailView({
             <WorkspaceSurfaceContent
               sessionGroupId={sessionGroupId}
               browserId={tabId}
+              browserInitialUrl={draft.initialUrl}
               surface={draft.surface}
               activeSessionId={selectedSession?.id ?? null}
               activeFilePath={activeFilePath}

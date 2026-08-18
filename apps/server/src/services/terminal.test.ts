@@ -120,6 +120,7 @@ describe("TerminalService", () => {
         cols: 80,
         rows: 24,
         clientMutationId: "request-1",
+        openInWorkspace: true,
         organizationId: "org-1",
         userId: "user-1",
       });
@@ -138,7 +139,11 @@ describe("TerminalService", () => {
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "terminal_created",
-          payload: expect.objectContaining({ clientMutationId: "request-1" }),
+          payload: expect.objectContaining({
+            clientMutationId: "request-1",
+            openInWorkspace: true,
+            targetUserId: "user-1",
+          }),
         }),
       );
     });

@@ -83,6 +83,46 @@ export const terminalCommands = [
     },
   }),
   defineCommand({
+    path: ["terminal", "open"],
+    description: "Open and select a new terminal tab, optionally running a command",
+    examples: [
+      '"$TRACE_CLI" terminal open --json',
+      '"$TRACE_CLI" terminal open "pnpm dev" --json',
+    ],
+    effects: [
+      "Creates a PTY and selects its tab for the requesting user.",
+      "When provided, the command is sent directly to the PTY and is never stored in Trace events.",
+    ],
+    output: "The new terminal metadata and whether a command was sent, without echoing command text.",
+    nextSteps: ['Use "$TRACE_CLI" terminal capture <terminal-id> --json to inspect output.'],
+    positionals: [{ name: "command", required: false }],
+    options: [
+      sessionOption,
+      { name: "cols", flag: "--cols", kind: "integer", valueName: "N", min: 20, max: 500, description: "Columns, from 20 to 500 (default: 80)" },
+      { name: "rows", flag: "--rows", kind: "integer", valueName: "N", min: 5, max: 200, description: "Rows, from 5 to 200 (default: 24)" },
+    ],
+    async run(ctx, input) {
+      const variables = {
+        sessionId: resolveSessionId(ctx, optionString(input, "session")),
+        cols: optionInteger(input, "cols") ?? 80,
+        rows: optionInteger(input, "rows") ?? 24,
+      };
+      const client = await ctx.client();
+      const result = await client.graphql<{ createTerminal: TerminalView }, typeof variables>(traceCliOperations.openTerminal, variables);
+      const command = input.positionals[0];
+      if (command) {
+        await client.graphql<{ sendTerminalInput: boolean }, { terminalId: string; data: string }>(
+          traceCliOperations.sendTerminalInput,
+          { terminalId: result.createTerminal.id, data: `${command}\r` },
+        );
+      }
+      ctx.output(
+        { terminal: result.createTerminal, commandSent: !!command },
+        terminalLine(result.createTerminal),
+      );
+    },
+  }),
+  defineCommand({
     path: ["terminal", "capture"],
     description: "Capture bounded terminal scrollback; ANSI is preserved by default",
     examples: ['"$TRACE_CLI" terminal capture <terminal-id> --plain --json'],

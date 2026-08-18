@@ -1,4 +1,5 @@
-import type { Event } from "@trace/gql";
+import type { Event, User } from "@trace/gql";
+import { useAuthStore } from "@trace/client-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTerminalStore } from "./terminal";
 import { reconcileTerminalEvent } from "./terminal-events";
@@ -29,6 +30,9 @@ describe("terminal lifecycle event reconciliation", () => {
       terminalCreationIntents: {},
     });
     useUIStore.setState({ activeSessionId: null, activeTerminalId: null });
+    useAuthStore.setState({
+      user: { id: "user-1", email: "user@example.com", name: "User" } as User,
+    });
   });
 
   afterEach(() => vi.unstubAllGlobals());
@@ -116,6 +120,25 @@ describe("terminal lifecycle event reconciliation", () => {
 
     expect(useTerminalStore.getState().pinnedTerminalIds).toEqual({});
     expect(useTerminalStore.getState().terminalCreationIntents).toHaveProperty("request-1");
+  });
+
+  it("selects a terminal opened by the CLI for the requesting user", () => {
+    reconcileTerminalEvent(
+      terminalEvent("terminal_created", {
+        openInWorkspace: true,
+        targetUserId: "user-1",
+        terminal: {
+          id: "terminal-1",
+          sessionId: "session-1",
+          sessionGroupId: "group-1",
+          status: "active",
+          closed: false,
+        },
+      }),
+    );
+
+    expect(useUIStore.getState().activeSessionId).toBe("session-1");
+    expect(useUIStore.getState().activeTerminalId).toBe("terminal-1");
   });
 
   it("ignores malformed lifecycle payloads", () => {

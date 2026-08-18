@@ -1,6 +1,7 @@
 import type { CommandDefinition, CommandGroupDefinition } from "../runtime.js";
 import { artifactCommand } from "./artifact.js";
 import { appCommands } from "./app/index.js";
+import { browserCommands } from "./browser/index.js";
 import { channelListCommand } from "./channel/list.js";
 import { contextCommand } from "./context.js";
 import { integrationCommands } from "./integration/index.js";
@@ -12,6 +13,7 @@ import { terminalCommands } from "./terminal/index.js";
 export const commands: readonly CommandDefinition[] = [
   contextCommand,
   ...appCommands,
+  ...browserCommands,
   ...integrationCommands,
   ...portCommands,
   channelListCommand,
@@ -22,6 +24,15 @@ export const commands: readonly CommandDefinition[] = [
 ];
 
 export const commandGroups: readonly CommandGroupDefinition[] = [
+  {
+    name: "browser",
+    description: "Open websites in the current Trace workspace",
+    workflow: ['Run "$TRACE_CLI" browser open <url> --json to create and select a browser tab.'],
+    examples: ['"$TRACE_CLI" browser open https://example.com --json'],
+    notes: [
+      "Browser tabs open only for the requesting user and only in the current session group.",
+    ],
+  },
   {
     name: "app",
     description: "Control live cloud-session applications and durable deployments",
@@ -104,11 +115,13 @@ export const commandGroups: readonly CommandGroupDefinition[] = [
     workflow: [
       'Run "$TRACE_CLI" terminal list --json to discover terminals in the current session.',
       'Run "$TRACE_CLI" terminal create --json only when a shared terminal is needed.',
+      'Run "$TRACE_CLI" terminal open [command] --json to create and select a terminal tab.',
       'Use "$TRACE_CLI" terminal send <terminal-id> <text> --enter, then terminal capture, to run and inspect a command.',
       "Use terminal key only for its documented allowlisted keys; use terminal destroy when the terminal is no longer needed.",
     ],
     examples: [
       '"$TRACE_CLI" terminal create --cols 120 --rows 30 --json',
+      '"$TRACE_CLI" terminal open "pnpm test" --json',
       '"$TRACE_CLI" terminal send <terminal-id> "pnpm test" --enter --json',
       '"$TRACE_CLI" terminal capture <terminal-id> --plain --json',
     ],

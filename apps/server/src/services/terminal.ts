@@ -171,6 +171,7 @@ class TerminalService {
     cols,
     rows,
     clientMutationId,
+    openInWorkspace,
     organizationId,
     userId,
     actorType,
@@ -180,6 +181,7 @@ class TerminalService {
     cols: number;
     rows: number;
     clientMutationId?: string;
+    openInWorkspace?: boolean;
     organizationId: string;
     userId: string;
     actorType: ActorType;
@@ -262,6 +264,7 @@ class TerminalService {
       eventType: "terminal_created",
       payload: {
         ...(clientMutationId ? { clientMutationId } : {}),
+        ...(openInWorkspace ? { openInWorkspace: true, targetUserId: userId } : {}),
         terminal: {
           id: terminal.id,
           sessionId,
