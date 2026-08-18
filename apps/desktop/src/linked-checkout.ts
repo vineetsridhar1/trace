@@ -117,13 +117,27 @@ const LINKED_CHECKOUT_CONTENT_PREVIEW_LIMIT = 80_000;
 const LINKED_CHECKOUT_STATUS_FILE_LIMIT = 200;
 const LINKED_CHECKOUT_LINE_COUNT_BYTE_LIMIT = 2_000_000;
 const LINKED_CHECKOUT_STATUS_TIMEOUT_MS = 15_000;
+/**
+ * `git status` and `git diff` take `.git/index.lock` to write back the refreshed
+ * index. They tolerate losing that lock, but a mutation (`git add`, `switch`,
+ * `commit`) does not — it exits 128. Reads run on a 15s poll and from the UI,
+ * outside `withRepoLock`, so a read holding the lock is enough to fail a
+ * Spotlight sync on the user's own checkout. This flag skips only that optional
+ * write, leaving the output identical.
+ */
+const READ_ONLY_GIT_FLAGS = ["--no-optional-locks"] as const;
 
 async function getCurrentCommitSha(repoPath: string): Promise<string> {
   return runGit(repoPath, ["rev-parse", "HEAD"]);
 }
 
 async function hasTrackedChanges(repoPath: string): Promise<boolean> {
-  const status = await runGit(repoPath, ["status", "--porcelain", "--untracked-files=no"]);
+  const status = await runGit(repoPath, [
+    ...READ_ONLY_GIT_FLAGS,
+    "status",
+    "--porcelain",
+    "--untracked-files=no",
+  ]);
   return status.length > 0;
 }
 
@@ -141,7 +155,12 @@ async function listUntrackedPaths(repoPath: string): Promise<string[]> {
 }
 
 async function hasUncommittedChanges(repoPath: string): Promise<boolean> {
-  const status = await runGit(repoPath, ["status", "--porcelain", "--untracked-files=all"]);
+  const status = await runGit(repoPath, [
+    ...READ_ONLY_GIT_FLAGS,
+    "status",
+    "--porcelain",
+    "--untracked-files=all",
+  ]);
   return status.length > 0;
 }
 
@@ -156,11 +175,15 @@ function parseNullSeparated(output: string): string[] {
 
 async function listDiffChangedPaths(repoPath: string): Promise<string[]> {
   const [{ stdout: trackedStdout }, { stdout: untrackedStdout }] = await Promise.all([
-    execFileAsync("git", ["diff", "--name-only", "-z", "--no-renames", "HEAD"], {
-      cwd: repoPath,
-      maxBuffer: GIT_MAX_BUFFER,
-      timeout: LINKED_CHECKOUT_STATUS_TIMEOUT_MS,
-    }),
+    execFileAsync(
+      "git",
+      [...READ_ONLY_GIT_FLAGS, "diff", "--name-only", "-z", "--no-renames", "HEAD"],
+      {
+        cwd: repoPath,
+        maxBuffer: GIT_MAX_BUFFER,
+        timeout: LINKED_CHECKOUT_STATUS_TIMEOUT_MS,
+      },
+    ),
     execFileAsync("git", ["ls-files", "--others", "--exclude-standard", "-z"], {
       cwd: repoPath,
       maxBuffer: GIT_MAX_BUFFER,
@@ -176,7 +199,7 @@ async function listDiffChangedPaths(repoPath: string): Promise<string[]> {
 async function listChangedPaths(repoPath: string): Promise<string[]> {
   const { stdout } = await execFileAsync(
     "git",
-    ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+    [...READ_ONLY_GIT_FLAGS, "status", "--porcelain=v1", "-z", "--untracked-files=all"],
     {
       cwd: repoPath,
       maxBuffer: GIT_MAX_BUFFER,
@@ -222,7 +245,7 @@ async function readTrackedLineCounts(
 ): Promise<Map<string, { additions: number; deletions: number }>> {
   const { stdout } = await execFileAsync(
     "git",
-    ["diff", "--numstat", "-z", "--no-renames", "HEAD"],
+    [...READ_ONLY_GIT_FLAGS, "diff", "--numstat", "-z", "--no-renames", "HEAD"],
     {
       cwd: repoPath,
       maxBuffer: GIT_MAX_BUFFER,
@@ -250,7 +273,7 @@ async function readTrackedLineCounts(
 async function readChangedStatuses(repoPath: string): Promise<Map<string, string>> {
   const { stdout } = await execFileAsync(
     "git",
-    ["diff", "--name-status", "-z", "--no-renames", "HEAD"],
+    [...READ_ONLY_GIT_FLAGS, "diff", "--name-status", "-z", "--no-renames", "HEAD"],
     {
       cwd: repoPath,
       maxBuffer: GIT_MAX_BUFFER,
@@ -311,7 +334,7 @@ async function readFileDiffPreview(
 }> {
   const { stdout } = await execFileAsync(
     "git",
-    ["diff", "--no-ext-diff", "--no-color", "HEAD", "--", relativePath],
+    [...READ_ONLY_GIT_FLAGS, "diff", "--no-ext-diff", "--no-color", "HEAD", "--", relativePath],
     {
       cwd: repoPath,
       maxBuffer: GIT_MAX_BUFFER,
@@ -419,7 +442,7 @@ function readWorkingContentPreview(
 async function getChangedFileStatus(repoPath: string, relativePath: string): Promise<string> {
   const { stdout } = await execFileAsync(
     "git",
-    ["diff", "--name-status", "--no-renames", "HEAD", "--", relativePath],
+    [...READ_ONLY_GIT_FLAGS, "diff", "--name-status", "--no-renames", "HEAD", "--", relativePath],
     {
       cwd: repoPath,
       maxBuffer: GIT_MAX_BUFFER,
@@ -562,7 +585,14 @@ async function hasUncommittedChangesForPaths(
   if (changedPaths.length === 0) return false;
   const { stdout } = await execFileAsync(
     "git",
-    ["status", "--porcelain", "--untracked-files=all", "--", ...changedPaths],
+    [
+      ...READ_ONLY_GIT_FLAGS,
+      "status",
+      "--porcelain",
+      "--untracked-files=all",
+      "--",
+      ...changedPaths,
+    ],
     {
       cwd: repoPath,
       maxBuffer: GIT_MAX_BUFFER,
