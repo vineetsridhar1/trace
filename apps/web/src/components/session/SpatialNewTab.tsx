@@ -2,6 +2,7 @@ import { AppWindow, Globe, TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuthStore } from "@trace/client-core";
+import { cn } from "../../lib/utils";
 import { uploadFile } from "../../lib/upload";
 import type { ChatEditorHandle } from "../chat/ChatEditor";
 import { ComposerInputOptions } from "./SessionInputOptions";
@@ -187,7 +188,12 @@ export function SpatialNewTab({
           />
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3">
+        <div
+          className={cn(
+            "mt-4 grid grid-cols-2 gap-2",
+            availableStarts.length > 2 && "md:grid-cols-3",
+          )}
+        >
           {availableStarts.slice(0, 4).map((item) => {
             const Icon = item.icon;
             const disabled = item.surface === "terminal" && !canStartTerminal;
