@@ -12,7 +12,6 @@ import {
   Files,
   GitCompareArrows,
   Globe,
-  PanelsTopLeft,
   TerminalSquare,
 } from "lucide-react";
 import { gql } from "@urql/core";
@@ -80,7 +79,6 @@ function isWorkspaceSurface(value: unknown): value is WorkspaceSurface {
   return (
     value === "applications" ||
     value === "browser" ||
-    value === "trace" ||
     value === "terminal" ||
     value === "files" ||
     value === "changes"
@@ -112,7 +110,6 @@ function getStoredWorkspaceTabs(
 
 function workspaceSurfaceIcon(surface: WorkspaceSurface | null) {
   if (surface === "browser") return <Globe size={12} />;
-  if (surface === "trace") return <PanelsTopLeft size={12} />;
   if (surface === "terminal") return <TerminalSquare size={12} />;
   if (surface === "files") return <Files size={12} />;
   if (surface === "changes") return <GitCompareArrows size={12} />;
@@ -1044,8 +1041,7 @@ export function SessionGroupDetailView({
             : `${draft.surface[0].toUpperCase()}${draft.surface.slice(1)}`
           : "New tab",
         icon: workspaceSurfaceIcon(draft.surface),
-        minContentWidth:
-          draft.surface === "browser" || draft.surface === "trace" ? 0 : undefined,
+        minContentWidth: draft.surface === "browser" ? 0 : undefined,
       })),
     );
 
@@ -1146,7 +1142,7 @@ export function SessionGroupDetailView({
   const handleWorkspaceOverlayVisibility = useCallback(
     (visible: boolean) => {
       for (const draft of draftWorkspaceTabs) {
-        if (draft.surface !== "browser" && draft.surface !== "trace") continue;
+        if (draft.surface !== "browser") continue;
         void window.trace?.setBrowserOverlayHidden({
           sessionGroupId,
           browserId: draft.id,

@@ -120,13 +120,9 @@ export class BrowserWorkspaceManager {
     this.window = window;
   }
 
-  async activate(
-    sessionGroupId: string,
-    browserId = "default",
-    options: { useAppSession?: boolean } = {},
-  ): Promise<BrowserWorkspaceState> {
+  async activate(sessionGroupId: string, browserId = "default"): Promise<BrowserWorkspaceState> {
     await this.loadSnapshots();
-    const workspace = this.getOrCreate(sessionGroupId, browserId, options.useAppSession === true);
+    const workspace = this.getOrCreate(sessionGroupId, browserId);
     workspace.overlayHidden = false;
     if (this.window && !this.window.isDestroyed()) {
       this.window.contentView.addChildView(workspace.view);
@@ -256,18 +252,14 @@ export class BrowserWorkspaceManager {
     return workspace;
   }
 
-  private getOrCreate(
-    sessionGroupId: string,
-    browserId: string,
-    useAppSession: boolean,
-  ): BrowserWorkspace {
+  private getOrCreate(sessionGroupId: string, browserId: string): BrowserWorkspace {
     const key = browserWorkspaceKey(sessionGroupId, browserId);
     const existing = this.workspaces.get(key);
     if (existing) return existing;
 
     const snapshot = this.snapshots.get(key);
     const view = new WebContentsView({
-      webPreferences: browserWebPreferences(useAppSession),
+      webPreferences: browserWebPreferences(),
     });
     const workspace: BrowserWorkspace = {
       key,
@@ -288,9 +280,9 @@ export class BrowserWorkspaceManager {
       overlayHidden: false,
     };
     this.workspaces.set(key, workspace);
-    if (!useAppSession) this.configureSession(view.webContents.session);
+    this.configureSession(view.webContents.session);
     this.bindWorkspaceEvents(workspace);
-    this.configureWindowOpening(view.webContents, useAppSession);
+    this.configureWindowOpening(view.webContents);
     void view.webContents.loadURL(workspace.state.url).catch((error: unknown) => {
       console.warn("[browser] failed to restore browser workspace", error);
     });
@@ -396,16 +388,16 @@ export class BrowserWorkspaceManager {
     });
   }
 
-  private configureWindowOpening(webContents: WebContents, useAppSession = false) {
-    webContents.setWindowOpenHandler(({ url }) => this.windowOpenResponse(url, useAppSession));
+  private configureWindowOpening(webContents: WebContents) {
+    webContents.setWindowOpenHandler(({ url }) => this.windowOpenResponse(url));
     webContents.on("did-create-window", (popup) => {
-      if (!useAppSession) this.configureSession(popup.webContents.session);
-      this.configureWindowOpening(popup.webContents, useAppSession);
+      this.configureSession(popup.webContents.session);
+      this.configureWindowOpening(popup.webContents);
       this.bindContextMenu(popup.webContents);
     });
   }
 
-  private windowOpenResponse(url: string, useAppSession = false): WindowOpenHandlerResponse {
+  private windowOpenResponse(url: string): WindowOpenHandlerResponse {
     if (!isAllowedBrowserUrl(url)) return { action: "deny" };
     return {
       action: "allow",
@@ -414,7 +406,7 @@ export class BrowserWorkspaceManager {
         height: 720,
         autoHideMenuBar: true,
         backgroundColor: "#18181b",
-        webPreferences: browserWebPreferences(useAppSession),
+        webPreferences: browserWebPreferences(),
       },
     };
   }
@@ -614,11 +606,11 @@ class FileBrowserWorkspaceSnapshotStore implements BrowserWorkspaceSnapshotStore
   }
 }
 
-function browserWebPreferences(useAppSession = false): Electron.WebPreferences {
+function browserWebPreferences(): Electron.WebPreferences {
   return {
     contextIsolation: true,
     nodeIntegration: false,
-    ...(useAppSession ? {} : { partition: BROWSER_PARTITION }),
+    partition: BROWSER_PARTITION,
     sandbox: true,
   };
 }

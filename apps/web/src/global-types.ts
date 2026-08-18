@@ -163,7 +163,6 @@ declare global {
     activateBrowser: (input: {
       sessionGroupId: string;
       browserId: string;
-      useAppSession?: boolean;
     }) => Promise<DesktopBrowserWorkspaceState>;
     hideBrowser: (input: { sessionGroupId: string; browserId: string }) => Promise<void>;
     setBrowserBounds: (input: {

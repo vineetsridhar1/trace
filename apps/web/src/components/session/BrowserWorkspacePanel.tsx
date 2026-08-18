@@ -19,14 +19,10 @@ const EMPTY_BROWSER_STATE: DesktopBrowserWorkspaceState = {
 export function BrowserWorkspacePanel({
   sessionGroupId,
   browserId,
-  initialUrl,
-  embeddedApp = false,
   onTitleChange,
 }: {
   sessionGroupId: string;
   browserId: string;
-  initialUrl?: string;
-  embeddedApp?: boolean;
   onTitleChange?: (browserId: string, title: string) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -59,23 +55,8 @@ export function BrowserWorkspacePanel({
   useEffect(() => {
     if (!window.trace) return;
     let cancelled = false;
-    const activate = async () => {
-      let nextState = await window.trace!.activateBrowser({
-        sessionGroupId,
-        browserId,
-        useAppSession: embeddedApp,
-      });
-      const navigationUrl = browserInitialNavigationUrl(nextState.url, initialUrl);
-      if (navigationUrl) {
-        nextState = await window.trace!.navigateBrowser({
-          sessionGroupId,
-          browserId,
-          url: navigationUrl,
-        });
-      }
-      return nextState;
-    };
-    void activate()
+    void window.trace
+      .activateBrowser({ sessionGroupId, browserId })
       .then((nextState) => {
         if (cancelled) return;
         setState(nextState);
@@ -109,7 +90,7 @@ export function BrowserWorkspacePanel({
       unsubscribe();
       void window.trace?.hideBrowser({ sessionGroupId, browserId });
     };
-  }, [browserId, embeddedApp, initialUrl, sessionGroupId, syncBounds]);
+  }, [browserId, sessionGroupId, syncBounds]);
 
   const perform = useCallback((action: () => Promise<DesktopBrowserWorkspaceState>) => {
     setError(null);
@@ -133,93 +114,85 @@ export function BrowserWorkspacePanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface-deep">
-      {embeddedApp ? null : (
-        <form
-          className="app-region-drag flex shrink-0 items-center gap-2 border-b border-border bg-surface-mid px-3 py-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            addressEditingRef.current = false;
-            addressInputRef.current?.blur();
-            perform(() =>
-              window.trace!.navigateBrowser({ sessionGroupId, browserId, url: inputValue }),
-            );
-          }}
+      <form
+        className="app-region-drag flex shrink-0 items-center gap-2 border-b border-border bg-surface-mid px-3 py-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          addressEditingRef.current = false;
+          addressInputRef.current?.blur();
+          perform(() => window.trace!.navigateBrowser({ sessionGroupId, browserId, url: inputValue }));
+        }}
+      >
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="app-region-no-drag h-7 w-7"
+          disabled={!state.canGoBack}
+          onClick={() => perform(() => window.trace!.goBrowserBack({ sessionGroupId, browserId }))}
+          aria-label="Back"
         >
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="app-region-no-drag h-7 w-7"
-            disabled={!state.canGoBack}
-            onClick={() =>
-              perform(() => window.trace!.goBrowserBack({ sessionGroupId, browserId }))
-            }
-            aria-label="Back"
-          >
-            <ChevronLeft size={16} />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="app-region-no-drag h-7 w-7"
-            disabled={!state.canGoForward}
-            onClick={() =>
-              perform(() => window.trace!.goBrowserForward({ sessionGroupId, browserId }))
-            }
-            aria-label="Forward"
-          >
-            <ChevronRight size={16} />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="app-region-no-drag h-7 w-7"
-            onClick={() =>
-              perform(() => window.trace!.reloadBrowser({ sessionGroupId, browserId }))
-            }
-            aria-label="Reload"
-          >
-            {state.loading ? (
-              <LoaderCircle className="animate-spin" size={15} />
-            ) : (
-              <RefreshCw size={15} />
-            )}
-          </Button>
-          <Input
-            ref={addressInputRef}
-            value={inputValue}
-            onChange={(event) => setInputValue(event.target.value)}
-            onFocus={() => {
-              addressEditingRef.current = true;
-            }}
-            onBlur={() => {
-              addressEditingRef.current = false;
-              setInputValue(state.url);
-            }}
-            className="app-region-no-drag h-8 flex-1 bg-background/70 text-xs"
-            aria-label="Browser URL"
-            placeholder="Enter a URL"
-            spellCheck={false}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className={cn(
-              "app-region-no-drag h-7 gap-1.5 text-xs",
-              state.devToolsOpen && "bg-surface-hover text-foreground",
-            )}
-            onClick={() =>
-              perform(() => window.trace!.toggleBrowserDevTools({ sessionGroupId, browserId }))
-            }
-          >
-            <Code2 size={14} />
-            DevTools
-          </Button>
-        </form>
-      )}
+          <ChevronLeft size={16} />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="app-region-no-drag h-7 w-7"
+          disabled={!state.canGoForward}
+          onClick={() =>
+            perform(() => window.trace!.goBrowserForward({ sessionGroupId, browserId }))
+          }
+          aria-label="Forward"
+        >
+          <ChevronRight size={16} />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="app-region-no-drag h-7 w-7"
+          onClick={() => perform(() => window.trace!.reloadBrowser({ sessionGroupId, browserId }))}
+          aria-label="Reload"
+        >
+          {state.loading ? (
+            <LoaderCircle className="animate-spin" size={15} />
+          ) : (
+            <RefreshCw size={15} />
+          )}
+        </Button>
+        <Input
+          ref={addressInputRef}
+          value={inputValue}
+          onChange={(event) => setInputValue(event.target.value)}
+          onFocus={() => {
+            addressEditingRef.current = true;
+          }}
+          onBlur={() => {
+            addressEditingRef.current = false;
+            setInputValue(state.url);
+          }}
+          className="app-region-no-drag h-8 flex-1 bg-background/70 text-xs"
+          aria-label="Browser URL"
+          placeholder="Enter a URL"
+          spellCheck={false}
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "app-region-no-drag h-7 gap-1.5 text-xs",
+            state.devToolsOpen && "bg-surface-hover text-foreground",
+          )}
+          onClick={() =>
+            perform(() => window.trace!.toggleBrowserDevTools({ sessionGroupId, browserId }))
+          }
+        >
+          <Code2 size={14} />
+          DevTools
+        </Button>
+      </form>
       {error ? (
         <p className="shrink-0 border-b border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
           {error}
@@ -228,10 +201,6 @@ export function BrowserWorkspacePanel({
       <div ref={contentRef} className="min-h-0 flex-1" aria-label={state.title} />
     </div>
   );
-}
-
-export function browserInitialNavigationUrl(currentUrl: string, initialUrl?: string) {
-  return initialUrl && currentUrl === "about:blank" ? initialUrl : null;
 }
 
 function isBrowserState(value: unknown): value is DesktopBrowserWorkspaceState {

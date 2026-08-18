@@ -158,10 +158,8 @@ const electronMocks = vi.hoisted(() => {
   class MockWebContentsView {
     readonly webContents = new MockWebContents();
     readonly setBounds = vi.fn();
-    readonly options: { webPreferences?: Record<string, unknown> };
 
-    constructor(options: { webPreferences?: Record<string, unknown> }) {
-      this.options = options;
+    constructor(_options: unknown) {
       views.push(this);
     }
   }
@@ -301,20 +299,6 @@ describe("BrowserWorkspaceManager", () => {
     expect(window.contentView.removeChildView).toHaveBeenCalledWith(firstView);
     await expect(manager.reload("group-a", "browser-b")).resolves.toMatchObject({
       browserId: "browser-b",
-    });
-  });
-
-  it("uses the app session for an embedded Trace instance", async () => {
-    const manager = new BrowserWorkspaceManager({ snapshotStore: new MemorySnapshotStore() });
-    manager.setWindow(createWindow());
-
-    await manager.activate("group-a", "trace-a", { useAppSession: true });
-    expect(electronMocks.views[0].options.webPreferences).not.toHaveProperty("partition");
-    expect(electronMocks.sharedSession.permissionRequestHandler).toBeNull();
-
-    await manager.activate("group-a", "browser-a");
-    expect(electronMocks.views[1].options.webPreferences).toMatchObject({
-      partition: "persist:trace-browser",
     });
   });
 

@@ -3,7 +3,6 @@ import {
   Files,
   GitCompareArrows,
   Globe,
-  PanelsTopLeft,
   PanelRightClose,
   TerminalSquare,
 } from "lucide-react";
@@ -17,7 +16,7 @@ import { TerminalPanel } from "./TerminalPanel";
 import { BrowserWorkspacePanel } from "./BrowserWorkspacePanel";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
-export type SidebarTab = "applications" | "browser" | "trace" | "terminal" | "files" | "changes";
+export type SidebarTab = "applications" | "browser" | "terminal" | "files" | "changes";
 
 interface SidebarPanelProps {
   sessionGroupId: string;
@@ -116,14 +115,6 @@ export function SidebarPanel({
             onClick={() => onTabChange("browser")}
           />
         ) : null}
-        {canShowBrowser ? (
-          <SidebarDestination
-            active={activeTab === "trace"}
-            icon={PanelsTopLeft}
-            label="Trace"
-            onClick={() => onTabChange("trace")}
-          />
-        ) : null}
         <SidebarDestination
           active={activeTab === "terminal"}
           icon={TerminalSquare}
@@ -189,7 +180,7 @@ export function WorkspaceSurfaceContent({
 
   return (
     <section className="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-surface-deep">
-      {!bridgeInteractionAllowed && surface !== "browser" && surface !== "trace" ? (
+      {!bridgeInteractionAllowed && surface !== "browser" ? (
         <div className="p-3">
           <BridgeAccessNotice
             access={bridgeAccess ?? null}
@@ -209,18 +200,8 @@ export function WorkspaceSurfaceContent({
           browserId={browserId}
           onTitleChange={onBrowserTitleChange}
         />
-      ) : surface === "trace" ? (
-        <BrowserWorkspacePanel
-          sessionGroupId={sessionGroupId}
-          browserId={browserId}
-          initialUrl={traceHomeUrl()}
-          embeddedApp
-          onTitleChange={onBrowserTitleChange}
-        />
       ) : surface === "terminal" ? (
-        activeSessionId ? (
-          <TerminalPanel sessionId={activeSessionId} onClose={onClose} fill />
-        ) : null
+        activeSessionId ? <TerminalPanel sessionId={activeSessionId} onClose={onClose} fill /> : null
       ) : surface === "files" ? (
         <FileExplorer
           tree={fileTree}
@@ -239,14 +220,6 @@ export function WorkspaceSurfaceContent({
       )}
     </section>
   );
-}
-
-function traceHomeUrl() {
-  const url = new URL(window.location.href);
-  url.pathname = "/";
-  url.search = "";
-  url.hash = "";
-  return url.toString();
 }
 
 function SidebarDestination({
