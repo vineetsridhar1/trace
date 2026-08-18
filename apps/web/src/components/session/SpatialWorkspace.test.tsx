@@ -244,4 +244,75 @@ describe("SpatialWorkspace", () => {
     expect(document.body.style.cursor).toBe("default");
     expect(document.body.style.userSelect).toBe("text");
   });
+
+  it("holds layout persistence until a resize drag settles", async () => {
+    const persistenceKey = "spatial-workspace-resize-persistence-test";
+    const layout = dockSpatialTab(
+      createSpatialLayout(["first", "second"], "first"),
+      "second",
+      "right",
+      "full",
+    );
+    const setItem = vi.fn();
+    const listeners = new Map<string, (event: unknown) => void>();
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn(() => JSON.stringify(layout)),
+      setItem,
+    });
+    vi.stubGlobal("window", {
+      addEventListener: (type: string, listener: (event: unknown) => void) =>
+        listeners.set(type, listener),
+      removeEventListener: (type: string) => listeners.delete(type),
+    });
+    vi.stubGlobal("document", {
+      body: { style: { cursor: "default", userSelect: "text" } },
+      documentElement: { scrollLeft: 0, scrollTop: 0 },
+    });
+
+    await act(async () => {
+      renderer = create(
+        <SpatialWorkspace
+          persistenceKey={persistenceKey}
+          tabs={[
+            { id: "first", label: "First", icon: null },
+            { id: "second", label: "Second", icon: null },
+          ]}
+          onActivateTab={() => undefined}
+          onCloseTab={() => undefined}
+          onNewTab={() => "draft:new"}
+          renderTab={(tabId) => <div>{tabId}</div>}
+        />,
+      );
+    });
+    if (!renderer) throw new Error("Expected the workspace to mount");
+
+    const separator = renderer.root.findByProps({ role: "separator" });
+    await act(async () => {
+      separator.props.onPointerDown({
+        button: 0,
+        currentTarget: {
+          parentElement: {
+            getBoundingClientRect: () => ({ left: 0, top: 0, width: 1_000, height: 600 }),
+          },
+        },
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      });
+    });
+
+    setItem.mockClear();
+    // The handle drives onResize from pointermove; serializing and writing the
+    // whole tree once per frame is what this guards against.
+    for (const clientX of [400, 420, 440, 460]) {
+      await act(async () => {
+        listeners.get("pointermove")?.({ clientX, clientY: 300 });
+      });
+    }
+    expect(setItem).not.toHaveBeenCalled();
+
+    await act(async () => {
+      listeners.get("pointerup")?.({});
+    });
+    expect(setItem).toHaveBeenCalledWith(persistenceKey, expect.any(String));
+  });
 });

@@ -1,15 +1,15 @@
-ALTER TYPE "EventType" ADD VALUE 'session_tab_hidden';
-ALTER TYPE "EventType" ADD VALUE 'session_tab_restored';
+ALTER TYPE "EventType" ADD VALUE IF NOT EXISTS 'session_tab_hidden';
+ALTER TYPE "EventType" ADD VALUE IF NOT EXISTS 'session_tab_restored';
 
-CREATE TABLE "HiddenSessionTab" (
+CREATE TABLE IF NOT EXISTS "HiddenSessionTab" (
   "userId" TEXT NOT NULL,
   "sessionId" TEXT NOT NULL,
   "hiddenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "HiddenSessionTab_pkey" PRIMARY KEY ("userId", "sessionId")
 );
 
-CREATE INDEX "HiddenSessionTab_userId_hiddenAt_idx" ON "HiddenSessionTab"("userId", "hiddenAt");
-CREATE INDEX "HiddenSessionTab_sessionId_idx" ON "HiddenSessionTab"("sessionId");
+CREATE INDEX IF NOT EXISTS "HiddenSessionTab_userId_hiddenAt_idx" ON "HiddenSessionTab"("userId", "hiddenAt");
+CREATE INDEX IF NOT EXISTS "HiddenSessionTab_sessionId_idx" ON "HiddenSessionTab"("sessionId");
 
 ALTER TABLE "HiddenSessionTab" ADD CONSTRAINT "HiddenSessionTab_userId_fkey"
   FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;

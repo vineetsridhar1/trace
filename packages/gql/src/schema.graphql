@@ -2123,6 +2123,7 @@ type Mutation {
   ): Session!
   updateSessionDefaults(input: UpdateSessionDefaultsInput!): User!
   hideSessionTab(sessionId: ID!): HiddenSessionTab!
+  restoreSessionTab(sessionId: ID!): Boolean!
   sendSessionMessage(
     sessionId: ID!
     text: String!

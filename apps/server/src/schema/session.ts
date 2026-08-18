@@ -21,11 +21,7 @@ import {
   deriveSessionGroupStatus,
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
-import {
-  assertChannelAccess,
-  assertScopeAccess,
-  canViewSessionGroup,
-} from "../services/access.js";
+import { assertChannelAccess, assertScopeAccess, canViewSessionGroup } from "../services/access.js";
 import { designCommitPreviewUrl } from "../lib/design-preview-url.js";
 import { animationCommitPreviewUrl } from "../lib/animation-preview-url.js";
 import { sessionMessageService } from "../services/session-message.js";
@@ -594,6 +590,12 @@ export const sessionMutations = {
     const organizationId = requireOrgContext(ctx);
     await assertScopeAccess("session", args.sessionId, ctx.userId, organizationId);
     return sessionService.hideTab(args.sessionId, organizationId, ctx.userId, ctx.actorType);
+  },
+  restoreSessionTab: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const organizationId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, organizationId);
+    return sessionService.restoreTab(args.sessionId, organizationId, ctx.userId, ctx.actorType);
   },
   sendSessionMessage: async (
     _: unknown,

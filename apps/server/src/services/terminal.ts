@@ -20,13 +20,23 @@ class TerminalService {
   private static readonly MAX_ROWS = 200;
 
   private validateDimensions(cols: number, rows: number): void {
-    if (!Number.isInteger(cols) || cols < TerminalService.MIN_COLS || cols > TerminalService.MAX_COLS || !Number.isInteger(rows) || rows < TerminalService.MIN_ROWS || rows > TerminalService.MAX_ROWS) {
-      throw new ValidationError(`Terminal dimensions must be ${TerminalService.MIN_COLS}-${TerminalService.MAX_COLS} columns and ${TerminalService.MIN_ROWS}-${TerminalService.MAX_ROWS} rows`);
+    if (
+      !Number.isInteger(cols) ||
+      cols < TerminalService.MIN_COLS ||
+      cols > TerminalService.MAX_COLS ||
+      !Number.isInteger(rows) ||
+      rows < TerminalService.MIN_ROWS ||
+      rows > TerminalService.MAX_ROWS
+    ) {
+      throw new ValidationError(
+        `Terminal dimensions must be ${TerminalService.MIN_COLS}-${TerminalService.MAX_COLS} columns and ${TerminalService.MIN_ROWS}-${TerminalService.MAX_ROWS} rows`,
+      );
     }
   }
 
   private validateInput(data: string): void {
-    if (Buffer.byteLength(data, "utf8") > TerminalService.MAX_INPUT_BYTES) throw new ValidationError("Terminal input exceeds 16384 bytes");
+    if (Buffer.byteLength(data, "utf8") > TerminalService.MAX_INPUT_BYTES)
+      throw new ValidationError("Terminal input exceeds 16384 bytes");
     if (/[\u0000-\u0002\u0005-\u0008\u000b\u000e-\u001f\u007f-\u009f]/.test(data)) {
       throw new ValidationError("Terminal input contains unsupported control bytes");
     }
@@ -189,7 +199,7 @@ class TerminalService {
   }): Promise<{ id: string; sessionId: string }> {
     this.validateDimensions(cols, rows);
     if (clientMutationId && clientMutationId.length > 128) {
-      throw new Error("clientMutationId must be 128 characters or fewer");
+      throw new ValidationError("clientMutationId must be 128 characters or fewer");
     }
     const session = await prisma.session.findFirst({
       where: { id: sessionId, organizationId },
@@ -213,9 +223,21 @@ class TerminalService {
       },
     });
     if (!session) throw new Error("Session not found");
-    if (agentSessionId && agentSessionId !== session.id && agentSessionId !== session.sessionGroupId) {
-      const agentSession = await prisma.session.findFirst({ where: { id: agentSessionId, organizationId }, select: { sessionGroupId: true } });
-      if (!agentSession || !agentSession.sessionGroupId || agentSession.sessionGroupId !== session.sessionGroupId) throw new AuthorizationError("Session credential cannot access this terminal");
+    if (
+      agentSessionId &&
+      agentSessionId !== session.id &&
+      agentSessionId !== session.sessionGroupId
+    ) {
+      const agentSession = await prisma.session.findFirst({
+        where: { id: agentSessionId, organizationId },
+        select: { sessionGroupId: true },
+      });
+      if (
+        !agentSession ||
+        !agentSession.sessionGroupId ||
+        agentSession.sessionGroupId !== session.sessionGroupId
+      )
+        throw new AuthorizationError("Session credential cannot access this terminal");
     }
     if (
       isFullyUnloadedSession(
@@ -295,10 +317,17 @@ class TerminalService {
   }): Promise<Array<{ id: string; sessionId: string }>> {
     if (agentSessionId && agentSessionId !== sessionId) {
       const [requested, agent] = await Promise.all([
-        prisma.session.findFirst({ where: { id: sessionId, organizationId }, select: { sessionGroupId: true } }),
-        prisma.session.findFirst({ where: { id: agentSessionId, organizationId }, select: { sessionGroupId: true } }),
+        prisma.session.findFirst({
+          where: { id: sessionId, organizationId },
+          select: { sessionGroupId: true },
+        }),
+        prisma.session.findFirst({
+          where: { id: agentSessionId, organizationId },
+          select: { sessionGroupId: true },
+        }),
       ]);
-      if (!requested || !agent?.sessionGroupId || requested.sessionGroupId !== agent.sessionGroupId) throw new AuthorizationError("Session credential cannot access this terminal");
+      if (!requested || !agent?.sessionGroupId || requested.sessionGroupId !== agent.sessionGroupId)
+        throw new AuthorizationError("Session credential cannot access this terminal");
     }
     const session = await prisma.session.findFirst({
       where: { id: sessionId, organizationId },
@@ -349,7 +378,15 @@ class TerminalService {
       owningSessions.map((item: OwningSession) => [item.id, item]),
     );
 
-    const results: Array<{ id: string; sessionId: string; status: string; cols: number; rows: number; connected: boolean; closed: boolean }> = [];
+    const results: Array<{
+      id: string;
+      sessionId: string;
+      status: string;
+      cols: number;
+      rows: number;
+      connected: boolean;
+      closed: boolean;
+    }> = [];
     for (const id of terminalIds) {
       const authContext = terminalRelay.getTerminalAuthContext(id);
       if (!authContext || authContext.ownerUserId !== userId) continue;
@@ -444,7 +481,8 @@ class TerminalService {
     actorType: ActorType;
     agentSessionId?: string | null;
   }): Promise<boolean> {
-    if (agentSessionId) await this.assertTerminalOperation(terminalId, organizationId, userId, agentSessionId);
+    if (agentSessionId)
+      await this.assertTerminalOperation(terminalId, organizationId, userId, agentSessionId);
     const authContext = await terminalRelay.getTerminalAuthContextDistributed(terminalId);
     if (!authContext) return true; // Already gone — no-op
     if (authContext.ownerUserId !== userId) throw new Error("Terminal not found");
@@ -496,44 +534,136 @@ class TerminalService {
     return true;
   }
 
-  private async assertTerminalOperation(terminalId: string, organizationId: string, userId: string, agentSessionId?: string | null): Promise<void> {
+  private async assertTerminalOperation(
+    terminalId: string,
+    organizationId: string,
+    userId: string,
+    agentSessionId?: string | null,
+  ): Promise<void> {
     const auth = await terminalRelay.getTerminalAuthContextDistributed(terminalId);
     if (!auth) throw new NotFoundError("Terminal", terminalId);
-    if (auth.ownerUserId !== userId) throw new AuthorizationError("Not authorized for this terminal");
+    if (auth.ownerUserId !== userId)
+      throw new AuthorizationError("Not authorized for this terminal");
     if (auth.kind !== "session") throw new AuthorizationError("Not authorized for this terminal");
-    const session = await prisma.session.findFirst({ where: { id: auth.sessionId, organizationId }, select: { id: true, organizationId: true, sessionGroupId: true, connection: true, sessionGroup: { select: { connection: true, visibility: true, ownerUserId: true } } } });
+    const session = await prisma.session.findFirst({
+      where: { id: auth.sessionId, organizationId },
+      select: {
+        id: true,
+        organizationId: true,
+        sessionGroupId: true,
+        connection: true,
+        sessionGroup: { select: { connection: true, visibility: true, ownerUserId: true } },
+      },
+    });
     if (!session) throw new NotFoundError("Terminal", terminalId);
-    if (agentSessionId && agentSessionId !== session.id && agentSessionId !== session.sessionGroupId) {
-      const agentSession = await prisma.session.findFirst({ where: { id: agentSessionId, organizationId }, select: { sessionGroupId: true } });
-      if (!agentSession || !agentSession.sessionGroupId || agentSession.sessionGroupId !== session.sessionGroupId) throw new AuthorizationError("Session credential cannot access this terminal");
+    if (
+      agentSessionId &&
+      agentSessionId !== session.id &&
+      agentSessionId !== session.sessionGroupId
+    ) {
+      const agentSession = await prisma.session.findFirst({
+        where: { id: agentSessionId, organizationId },
+        select: { sessionGroupId: true },
+      });
+      if (
+        !agentSession ||
+        !agentSession.sessionGroupId ||
+        agentSession.sessionGroupId !== session.sessionGroupId
+      )
+        throw new AuthorizationError("Session credential cannot access this terminal");
     }
     const runtimeInstanceId = await this.assertTerminalAccess(session, userId, "deny");
-    if (!runtimeInstanceId || runtimeInstanceId !== auth.runtimeInstanceId) throw new AuthorizationError("Runtime disconnected");
+    if (!runtimeInstanceId || runtimeInstanceId !== auth.runtimeInstanceId)
+      throw new AuthorizationError("Runtime disconnected");
   }
 
-  async capture(input: { terminalId: string; maxBytes?: number | null; plainText?: boolean | null; organizationId: string; userId: string; agentSessionId?: string | null }) {
+  async capture(input: {
+    terminalId: string;
+    maxBytes?: number | null;
+    plainText?: boolean | null;
+    organizationId: string;
+    userId: string;
+    agentSessionId?: string | null;
+  }) {
     const requested = input.maxBytes ?? TerminalService.MAX_CAPTURE_BYTES;
-    if (!Number.isInteger(requested) || requested < 1 || requested > TerminalService.MAX_CAPTURE_BYTES) throw new ValidationError(`maxBytes must be between 1 and ${TerminalService.MAX_CAPTURE_BYTES}`);
-    await this.assertTerminalOperation(input.terminalId, input.organizationId, input.userId, input.agentSessionId);
-    const capture = await terminalRelay.captureTerminalDistributed(input.terminalId, requested) as
-      | { output: string; byteCount: number; truncated: boolean; closed: boolean; connected: boolean }
-      | null;
+    if (
+      !Number.isInteger(requested) ||
+      requested < 1 ||
+      requested > TerminalService.MAX_CAPTURE_BYTES
+    )
+      throw new ValidationError(
+        `maxBytes must be between 1 and ${TerminalService.MAX_CAPTURE_BYTES}`,
+      );
+    await this.assertTerminalOperation(
+      input.terminalId,
+      input.organizationId,
+      input.userId,
+      input.agentSessionId,
+    );
+    const capture = (await terminalRelay.captureTerminalDistributed(
+      input.terminalId,
+      requested,
+    )) as {
+      output: string;
+      byteCount: number;
+      truncated: boolean;
+      closed: boolean;
+      connected: boolean;
+    } | null;
     if (!capture) throw new NotFoundError("Terminal", input.terminalId);
-    const output = input.plainText ? capture.output.replace(/[\u001B\u009B][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d\/#&.:=?%@~_]+)*)?\u0007)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PRZcf-nq-uy=><~]))/g, "") : capture.output;
-    return { terminalId: input.terminalId, output, byteCount: Buffer.byteLength(output), truncated: capture.truncated, capturedAt: new Date().toISOString(), closed: capture.closed, connected: capture.connected };
+    const output = input.plainText
+      ? capture.output.replace(
+          /[\u001B\u009B][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d\/#&.:=?%@~_]+)*)?\u0007)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PRZcf-nq-uy=><~]))/g,
+          "",
+        )
+      : capture.output;
+    return {
+      terminalId: input.terminalId,
+      output,
+      byteCount: Buffer.byteLength(output),
+      truncated: capture.truncated,
+      capturedAt: new Date().toISOString(),
+      closed: capture.closed,
+      connected: capture.connected,
+    };
   }
 
-  async sendInput(input: { terminalId: string; data: string; organizationId: string; userId: string; agentSessionId?: string | null }): Promise<boolean> {
+  async sendInput(input: {
+    terminalId: string;
+    data: string;
+    organizationId: string;
+    userId: string;
+    agentSessionId?: string | null;
+  }): Promise<boolean> {
     this.validateInput(input.data);
-    await this.assertTerminalOperation(input.terminalId, input.organizationId, input.userId, input.agentSessionId);
-    if (!(await terminalRelay.sendInputDistributed(input.terminalId, input.data))) throw new ValidationError("Terminal is closed");
+    await this.assertTerminalOperation(
+      input.terminalId,
+      input.organizationId,
+      input.userId,
+      input.agentSessionId,
+    );
+    if (!(await terminalRelay.sendInputDistributed(input.terminalId, input.data)))
+      throw new ValidationError("Terminal is closed");
     return true;
   }
 
-  async resize(input: { terminalId: string; cols: number; rows: number; organizationId: string; userId: string; agentSessionId?: string | null }): Promise<boolean> {
+  async resize(input: {
+    terminalId: string;
+    cols: number;
+    rows: number;
+    organizationId: string;
+    userId: string;
+    agentSessionId?: string | null;
+  }): Promise<boolean> {
     this.validateDimensions(input.cols, input.rows);
-    await this.assertTerminalOperation(input.terminalId, input.organizationId, input.userId, input.agentSessionId);
-    if (!(await terminalRelay.resizeTerminalDistributed(input.terminalId, input.cols, input.rows))) throw new ValidationError("Terminal is closed");
+    await this.assertTerminalOperation(
+      input.terminalId,
+      input.organizationId,
+      input.userId,
+      input.agentSessionId,
+    );
+    if (!(await terminalRelay.resizeTerminalDistributed(input.terminalId, input.cols, input.rows)))
+      throw new ValidationError("Terminal is closed");
     return true;
   }
 }

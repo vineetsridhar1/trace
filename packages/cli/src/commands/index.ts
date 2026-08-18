@@ -37,6 +37,7 @@ export const commandGroups: readonly CommandGroupDefinition[] = [
     examples: ['"$TRACE_CLI" browser open https://example.com --json'],
     notes: [
       "Browser requests target only the requesting user and the current session group.",
+      "The embedded browser renders only in the Trace desktop app; web clients show the URL as a link.",
     ],
   },
   {

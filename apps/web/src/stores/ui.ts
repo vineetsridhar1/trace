@@ -76,8 +76,6 @@ export interface UIState {
   unreadChatIds: Record<string, boolean>;
   markChatUnread: (chatId: string) => void;
   markChatRead: (chatId: string) => void;
-  showTerminalPanel: boolean;
-  setShowTerminalPanel: (show: boolean) => void;
   channelDoneBadges: Record<string, boolean>;
   markChannelDone: (channelId: string) => void;
   sessionDoneBadges: Record<string, boolean>;
@@ -125,7 +123,6 @@ const initialNavigationState = {
   activeArtifactIdsByGroup: {} as Record<string, string | null>,
   channelSubPage: null as ChannelSubPage,
   settingsInitialTab: null as string | null,
-  showTerminalPanel: false,
   unreadChatIds: {} as Record<string, boolean>,
   channelDoneBadges: {} as Record<string, boolean>,
   sessionDoneBadges: {} as Record<string, boolean>,
@@ -136,7 +133,6 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
   ...initialNavigationState,
   refreshTick: 0,
   setSettingsInitialTab: (tab: string | null) => set({ settingsInitialTab: tab }),
-  setShowTerminalPanel: (show: boolean) => set({ showTerminalPanel: show }),
   setChannelSubPage: (subPage: ChannelSubPage) => {
     set({ channelSubPage: subPage });
     const state = get();

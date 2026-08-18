@@ -13,6 +13,14 @@ import type { SpatialWorkspaceTab } from "./SpatialWorkspace";
 import type { WorkspaceSurface } from "./SidebarPanel";
 import type { DraftWorkspaceTab } from "./useWorkspaceTabRequests";
 
+/**
+ * Canvas workspaces (app, design, design system, pdf, animation) render their
+ * preview through a permanent tab owned by the session group. This is the only
+ * "surface:" tab id in the app — every other surface is opened on demand as a
+ * draft tab.
+ */
+export const CANVAS_TAB_ID = "surface:browser";
+
 interface SessionWorkspaceTabsOptions {
   sessions: Array<{ id: string; name: string; agentStatus?: string | null }>;
   artifactIds: string[];
@@ -21,6 +29,7 @@ interface SessionWorkspaceTabsOptions {
   drafts: DraftWorkspaceTab[];
   browserTitles: Record<string, string>;
   trafficEndpointId: string | null;
+  canvas: boolean;
 }
 
 export function useSessionWorkspaceTabs({
@@ -31,14 +40,21 @@ export function useSessionWorkspaceTabs({
   drafts,
   browserTitles,
   trafficEndpointId,
+  canvas,
 }: SessionWorkspaceTabsOptions) {
   return useMemo<SpatialWorkspaceTab[]>(() => {
-    const tabs: SpatialWorkspaceTab[] = sessions.map((session) => ({
-      id: `session:${session.id}`,
-      label: session.name,
-      icon: <Bot size={12} />,
-      status: session.agentStatus === "active" ? "live" : undefined,
-    }));
+    const tabs: SpatialWorkspaceTab[] = canvas
+      ? [{ id: CANVAS_TAB_ID, label: "Preview", icon: <Globe size={12} />, closable: false }]
+      : [];
+
+    tabs.push(
+      ...sessions.map((session) => ({
+        id: `session:${session.id}`,
+        label: session.name,
+        icon: <Bot size={12} />,
+        status: session.agentStatus === "active" ? ("live" as const) : undefined,
+      })),
+    );
 
     tabs.push(
       ...artifactIds.map((artifactId) => ({
@@ -70,7 +86,7 @@ export function useSessionWorkspaceTabs({
       tabs.push({ id: "traffic", label: "Traffic", icon: <Activity size={12} /> });
     }
     return tabs;
-  }, [artifactIds, browserTitles, drafts, files, sessions, terminals, trafficEndpointId]);
+  }, [artifactIds, browserTitles, canvas, drafts, files, sessions, terminals, trafficEndpointId]);
 }
 
 function workspaceSurfaceLabel(surface: WorkspaceSurface | null, browserTitle?: string) {

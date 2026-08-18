@@ -114,10 +114,25 @@ export function BrowserWorkspacePanel({
       );
   }, []);
 
+  // The embedded browser is an Electron surface. On the web the request still
+  // reaches this tab, so show what was asked for and let the user open it
+  // rather than dropping it silently.
   if (!window.trace) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
-        The Trace browser is available in the desktop app.
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <p className="text-sm text-muted-foreground">
+          The embedded browser is available in the Trace desktop app.
+        </p>
+        {initialUrl ? (
+          <a
+            href={initialUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="max-w-full truncate text-sm font-medium text-accent underline underline-offset-4"
+          >
+            Open {initialUrl} in a new tab
+          </a>
+        ) : null}
       </div>
     );
   }

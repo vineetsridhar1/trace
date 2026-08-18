@@ -19,6 +19,7 @@ interface SpatialWorkspaceProps {
   onCloseTab: (tabId: string) => void;
   onNewTab: (groupId: string) => string;
   tabReplacements?: Record<string, string>;
+  onTabReplacementsApplied?: (sourceTabIds: string[]) => void;
   onOverlayVisibilityChange?: (visible: boolean) => void;
   renderTab: (tabId: string, compact: boolean) => ReactNode;
 }
@@ -31,6 +32,7 @@ export function SpatialWorkspace({
   onCloseTab,
   onNewTab,
   tabReplacements = {},
+  onTabReplacementsApplied,
   onOverlayVisibilityChange,
   renderTab,
 }: SpatialWorkspaceProps) {
@@ -40,6 +42,7 @@ export function SpatialWorkspace({
     preferredActiveTabId,
     foregroundTabId,
     tabReplacements,
+    onTabReplacementsApplied,
     onActivateTab,
     onNewTab,
     onOverlayVisibilityChange,

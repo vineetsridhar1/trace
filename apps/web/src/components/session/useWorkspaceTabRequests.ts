@@ -84,10 +84,7 @@ export function useWorkspaceTabRequests({
       setTabReplacements((current) => ({
         ...current,
         ...Object.fromEntries(
-          replacements.map((request) => [
-            request.replaceTabId,
-            `terminal:${request.terminalId}`,
-          ]),
+          replacements.map((request) => [request.replaceTabId, `terminal:${request.terminalId}`]),
         ),
       }));
       const replacedTabIds = new Set(replacements.map((request) => request.replaceTabId));
@@ -116,6 +113,14 @@ export function useWorkspaceTabRequests({
     return () => globalThis.clearTimeout(timeoutId);
   }, [foregroundTabId]);
 
+  const handleTabReplacementsApplied = useCallback((sourceTabIds: string[]) => {
+    setTabReplacements((current) => {
+      const next = { ...current };
+      for (const sourceTabId of sourceTabIds) delete next[sourceTabId];
+      return Object.keys(next).length === Object.keys(current).length ? current : next;
+    });
+  }, []);
+
   const handleBrowserTitleChange = useCallback((browserId: string, title: string) => {
     setBrowserTitles((titles) =>
       titles[browserId] === title ? titles : { ...titles, [browserId]: title },
@@ -127,6 +132,7 @@ export function useWorkspaceTabRequests({
     draftTabs,
     foregroundTabId,
     handleBrowserTitleChange,
+    handleTabReplacementsApplied,
     setDraftTabs,
     setForegroundTabId,
     tabReplacements,

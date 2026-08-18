@@ -1120,6 +1120,7 @@ export type Mutation = {
   resizeTerminal: Scalars["Boolean"]["output"];
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
+  restoreSessionTab: Scalars["Boolean"]["output"];
   retryDesignSystemCommitArtifact: DesignSystem;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
@@ -1576,6 +1577,10 @@ export type MutationRestoreLinkedCheckoutArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationRestoreSessionTabArgs = {
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationRetryDesignSystemCommitArtifactArgs = {
@@ -3909,6 +3914,12 @@ export type HideSessionTabMutation = {
   __typename?: "Mutation";
   hideSessionTab: { __typename?: "HiddenSessionTab"; sessionId: string; hiddenAt: string };
 };
+
+export type RestoreSessionTabMutationVariables = Exact<{
+  sessionId: Scalars["ID"]["input"];
+}>;
+
+export type RestoreSessionTabMutation = { __typename?: "Mutation"; restoreSessionTab: boolean };
 
 export type SessionGroupDetailQueryVariables = Exact<{
   id: Scalars["ID"]["input"];
@@ -8309,6 +8320,42 @@ export const HideSessionTabDocument = {
     },
   ],
 } as unknown as DocumentNode<HideSessionTabMutation, HideSessionTabMutationVariables>;
+export const RestoreSessionTabDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "RestoreSessionTab" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "restoreSessionTab" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<RestoreSessionTabMutation, RestoreSessionTabMutationVariables>;
 export const SessionGroupDetailDocument = {
   kind: "Document",
   definitions: [
