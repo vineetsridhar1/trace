@@ -196,9 +196,10 @@ describe("SpatialWorkspace", () => {
     );
     const addEventListener = vi.fn();
     const removeEventListener = vi.fn();
+    const setItem = vi.fn();
     vi.stubGlobal("localStorage", {
       getItem: vi.fn(() => JSON.stringify(layout)),
-      setItem: vi.fn(),
+      setItem,
     });
     vi.stubGlobal("window", { addEventListener, removeEventListener });
     vi.stubGlobal("document", {
@@ -238,11 +239,18 @@ describe("SpatialWorkspace", () => {
     });
     expect(document.body.style.cursor).toBe("col-resize");
 
+    setItem.mockClear();
+    await act(async () => {
+      const moveListener = addEventListener.mock.calls.find(([type]) => type === "pointermove")?.[1];
+      moveListener?.({ clientX: 600, clientY: 300 });
+    });
+
     await act(async () => renderer?.unmount());
     renderer = null;
     expect(removeEventListener).toHaveBeenCalledWith("pointermove", expect.any(Function));
     expect(document.body.style.cursor).toBe("default");
     expect(document.body.style.userSelect).toBe("text");
+    expect(setItem).toHaveBeenCalledWith("spatial-workspace-resize-cleanup", expect.any(String));
   });
 
   it("holds layout persistence until a resize drag settles", async () => {

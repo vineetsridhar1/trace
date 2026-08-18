@@ -11,6 +11,7 @@ export class WorkspaceBrowserUrlError extends Error {}
 export function normalizeWorkspaceBrowserUrl(value: string): string {
   const input = value.trim();
   if (!input) throw new WorkspaceBrowserUrlError("Browser URL is required");
+  if (input === "about:blank") return input;
   const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(input) ? input : `https://${input}`;
   let url: URL;
   try {

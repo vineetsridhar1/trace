@@ -1,11 +1,23 @@
-import { act, create } from "react-test-renderer";
-import { describe, expect, it } from "vitest";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SpatialWorkspaceTab } from "./spatial-workspace-types";
 import { CANVAS_TAB_ID, useSessionWorkspaceTabs } from "./useSessionWorkspaceTabs";
 
 type Options = Parameters<typeof useSessionWorkspaceTabs>[0];
+const renderers: ReactTestRenderer[] = [];
 
-const BASE: Omit<Options, "appCanvas"> = {
+beforeEach(() => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+});
+
+afterEach(async () => {
+  await act(async () => {
+    for (const renderer of renderers.splice(0)) renderer.unmount();
+  });
+  vi.unstubAllGlobals();
+});
+
+const BASE: Omit<Options, "canvas"> = {
   sessions: [{ id: "session-1", name: "Agent" }],
   artifactIds: [],
   terminals: [],
@@ -22,7 +34,7 @@ function renderTabs(options: Options): SpatialWorkspaceTab[] {
     return null;
   }
   act(() => {
-    create(<Probe />);
+    renderers.push(create(<Probe />));
   });
   return tabs;
 }

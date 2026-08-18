@@ -47,6 +47,7 @@ export function useSpatialWorkspaceController({
   const [layout, setLayout] = useState(() =>
     readLayout(persistenceKey, tabIds, preferredActiveTabId),
   );
+  const layoutRef = useRef(layout);
   const [resizingSplitId, setResizingSplitId] = useState<string | null>(null);
   const previousPreferredActiveTabIdRef = useRef(preferredActiveTabId);
   const previousForegroundTabIdRef = useRef<string | null>(null);
@@ -77,18 +78,31 @@ export function useSpatialWorkspaceController({
     if (applied.length > 0) onTabReplacementsApplied?.(applied);
     // tabIds/tabReplacements are read through their serialized keys so that a
     // new array or object identity alone does not re-run the sync.
-  }, [foregroundTabId, preferredActiveTabId, tabIdsKey, tabReplacementsKey]);
+  }, [
+    foregroundTabId,
+    onTabReplacementsApplied,
+    preferredActiveTabId,
+    tabIdsKey,
+    tabReplacementsKey,
+  ]);
+
+  useEffect(() => {
+    layoutRef.current = layout;
+  }, [layout]);
+
+  useEffect(
+    () => () => {
+      persistLayout(persistenceKey, layoutRef.current);
+    },
+    [persistenceKey],
+  );
 
   // Panel resizing drives setLayout from pointermove, so persisting on every
   // layout change would serialize and write the whole tree once per frame.
   // Hold the write until the drag settles.
   useEffect(() => {
     if (resizingSplitId !== null) return;
-    try {
-      localStorage.setItem(persistenceKey, JSON.stringify(layout));
-    } catch {
-      // Persistence is optional when browser storage is unavailable.
-    }
+    persistLayout(persistenceKey, layout);
   }, [layout, persistenceKey, resizingSplitId]);
 
   const overlayVisible = drag.draggedTabId !== null || resizingSplitId !== null;
@@ -164,6 +178,14 @@ function readLayout(key: string, tabIds: string[], preferredActiveTabId?: string
     }
   }
   return createSpatialLayout(tabIds, preferredActiveTabId);
+}
+
+function persistLayout(key: string, layout: SpatialLayout) {
+  try {
+    localStorage.setItem(key, JSON.stringify(layout));
+  } catch {
+    // Persistence is optional when browser storage is unavailable.
+  }
 }
 
 function countRegions(node: SpatialLayout["root"]): number {

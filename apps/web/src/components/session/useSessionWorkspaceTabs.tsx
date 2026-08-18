@@ -15,11 +15,10 @@ import type { DraftWorkspaceTab } from "./useWorkspaceTabRequests";
 
 /**
  * Canvas workspaces (app, design, design system, pdf, animation) render their
- * preview through a permanent tab owned by the session group. This is the only
- * "surface:" tab id in the app — every other surface is opened on demand as a
- * draft tab.
+ * preview through a permanent tab owned by the session group. It has its own
+ * namespace because it is not one of the on-demand workspace surfaces.
  */
-export const CANVAS_TAB_ID = "surface:browser";
+export const CANVAS_TAB_ID = "canvas:preview";
 
 interface SessionWorkspaceTabsOptions {
   sessions: Array<{ id: string; name: string; agentStatus?: string | null }>;

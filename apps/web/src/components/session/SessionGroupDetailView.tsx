@@ -899,9 +899,19 @@ export function SessionGroupDetailView({
     (sessionId: string) => {
       // The session_tab_restored event clears the hidden entry; without the
       // mutation the tab reappears locally and is hidden again on reload.
-      void client.mutation(RESTORE_SESSION_TAB_MUTATION, { sessionId }).toPromise();
-      openSessionTab(sessionGroupId, sessionId);
-      handleSelectSession(sessionId);
+      void client
+        .mutation(RESTORE_SESSION_TAB_MUTATION, { sessionId })
+        .toPromise()
+        .then((result) => {
+          if (result.error) throw result.error;
+          openSessionTab(sessionGroupId, sessionId);
+          handleSelectSession(sessionId);
+        })
+        .catch((error: unknown) => {
+          toast.error("Failed to restore session tab", {
+            description: error instanceof Error ? error.message : undefined,
+          });
+        });
     },
     [handleSelectSession, openSessionTab, sessionGroupId],
   );
