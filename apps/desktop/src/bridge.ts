@@ -10,6 +10,8 @@ import type {
   BridgeCommand,
   BridgeMessage,
   BridgePrObservation,
+  BridgeRunCommand,
+  BridgeSendCommand,
   CodingToolAdapter,
   ToolOutput,
 } from "@trace/shared";
@@ -61,6 +63,7 @@ import {
   adoptWorktree,
   listRepoWorktrees,
   isTraceManagedWorktreePath,
+  type CreatedWorktree,
 } from "./worktree.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { generalWorkspacePath, removeGeneralWorkspace } from "@trace/shared/general-workspace";
@@ -335,10 +338,11 @@ export class BridgeClient implements IBridgeClient {
   private sessionWorkdirs = new Map<string, string>();
   private sessionGroupIds = new Map<string, string | null>();
   /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
-  private pendingWorktrees = new Map<
-    string,
-    Promise<{ workdir: string; branch: string; slug: string }>
-  >();
+  private pendingWorktrees = new Map<string, Promise<CreatedWorktree>>();
+  /** In-flight workspace prep per session, so prompts can wait for it to finish */
+  private sessionPrepares = new Map<string, Promise<void>>();
+  /** Prompts held because workspace prep failed; replayed once prep succeeds */
+  private deferredRuns = new Map<string, BridgeRunCommand | BridgeSendCommand>();
   /** Sessions running in read-only mode (no worktree, using user's repo checkout) */
   private readOnlySessions = new Set<string>();
   private pendingInputToolUseIds = new Map<string, string>();
@@ -1037,36 +1041,60 @@ export class BridgeClient implements IBridgeClient {
     });
   }
 
+  /**
+   * Run a prompt once the session's workspace is settled.
+   *
+   * A reconnect re-prepares the workspace, and the server can deliver the user's
+   * message while that is still running. Spawning the coding tool then would
+   * point it at a tree being rewritten by `git reset`/`git clean`. If prep fails
+   * outright the prompt is held rather than dropped: the server has already
+   * cleared its own copy, so this is the only remaining one, and a later
+   * successful prep replays it.
+   */
+  private async runAfterWorkspacePrep(cmd: BridgeRunCommand | BridgeSendCommand) {
+    const { sessionId } = cmd;
+    const prepare = this.sessionPrepares.get(sessionId);
+    if (prepare) {
+      try {
+        await prepare;
+      } catch {
+        // workspace_failed was already reported by the prepare handler.
+        this.deferredRuns.set(sessionId, cmd);
+        console.warn(
+          `[bridge] holding prompt for session ${sessionId} until workspace prep succeeds`,
+        );
+        return;
+      }
+    }
+    await this.runPrompt({
+      sessionId,
+      prompt: cmd.prompt ?? "",
+      // Prefer the freshly prepared workdir: the server's `cwd` was read before
+      // prep ran and can name a path that prep has since moved or renamed.
+      cwd: this.sessionWorkdirs.get(sessionId) ?? cmd.cwd,
+      tool: cmd.tool,
+      model: cmd.model,
+      reasoningEffort: cmd.reasoningEffort,
+      enableClaudeInChrome: cmd.enableClaudeInChrome,
+      interactionMode: cmd.interactionMode,
+      toolSessionId: cmd.toolSessionId,
+      imageUrls: cmd.imageUrls,
+    });
+  }
+
+  private flushDeferredRun(sessionId: string) {
+    const deferred = this.deferredRuns.get(sessionId);
+    if (!deferred) return;
+    this.deferredRuns.delete(sessionId);
+    console.warn(`[bridge] replaying held prompt for session ${sessionId}`);
+    this.handleCommand(deferred);
+  }
+
   private handleCommand(cmd: BridgeCommand) {
     switch (cmd.type) {
-      case "run": {
-        void this.runPrompt({
-          sessionId: cmd.sessionId,
-          prompt: cmd.prompt ?? "",
-          cwd: cmd.cwd,
-          tool: cmd.tool,
-          model: cmd.model,
-          reasoningEffort: cmd.reasoningEffort,
-          enableClaudeInChrome: cmd.enableClaudeInChrome,
-          interactionMode: cmd.interactionMode,
-          toolSessionId: cmd.toolSessionId,
-          imageUrls: cmd.imageUrls,
-        });
-        break;
-      }
+      case "run":
       case "send": {
-        void this.runPrompt({
-          sessionId: cmd.sessionId,
-          prompt: cmd.prompt,
-          cwd: cmd.cwd,
-          tool: cmd.tool,
-          model: cmd.model,
-          reasoningEffort: cmd.reasoningEffort,
-          enableClaudeInChrome: cmd.enableClaudeInChrome,
-          interactionMode: cmd.interactionMode,
-          toolSessionId: cmd.toolSessionId,
-          imageUrls: cmd.imageUrls,
-        });
+        void this.runAfterWorkspacePrep(cmd);
         break;
       }
       case "prepare": {
@@ -1153,8 +1181,8 @@ export class BridgeClient implements IBridgeClient {
             .finally(() => this.pendingWorktrees.delete(worktreeKey))
             .catch(() => undefined);
         }
-        worktreePromise
-          .then(({ workdir, branch: worktreeBranch, slug: worktreeSlug }) => {
+        const prepared = worktreePromise
+          .then(({ workdir, branch: worktreeBranch, slug: worktreeSlug, warning }) => {
             this.sessionWorkdirs.set(sessionId, workdir);
             this.sessionGroupIds.set(sessionId, sessionGroupId ?? null);
             this.send({
@@ -1163,12 +1191,31 @@ export class BridgeClient implements IBridgeClient {
               workdir,
               branch: worktreeBranch,
               slug: worktreeSlug,
+              ...(warning ? { warning } : {}),
             });
             void this.pollLocalPrStatuses();
           })
           .catch((err: Error) => {
             this.send({ type: "workspace_failed", sessionId, error: err.message });
+            throw err;
           });
+        // Tracked so a prompt arriving mid-prep waits for the workspace instead
+        // of running against a tree that is being reset underneath it. Settling
+        // is observed here first (registered before any waiter), so a waiter
+        // resumes with the workdir already recorded and the entry cleared.
+        this.sessionPrepares.set(sessionId, prepared);
+        const clearPrepare = () => {
+          if (this.sessionPrepares.get(sessionId) === prepared) {
+            this.sessionPrepares.delete(sessionId);
+          }
+        };
+        void prepared.then(
+          () => {
+            clearPrepare();
+            this.flushDeferredRun(sessionId);
+          },
+          () => clearPrepare(),
+        );
         break;
       }
       case "prepare_general": {
@@ -1341,6 +1388,8 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "terminate": {
+        // An explicit stop cancels a prompt still waiting on workspace prep.
+        this.deferredRuns.delete(cmd.sessionId);
         const adapter = this.adapters.get(cmd.sessionId);
         if (adapter) {
           // Abort the running process but keep the adapter so it retains
@@ -1373,6 +1422,7 @@ export class BridgeClient implements IBridgeClient {
         this.reportedToolSessionIds.delete(cmd.sessionId);
         this.pendingInputToolUseIds.delete(cmd.sessionId);
         this.sessionRunSequence.delete(cmd.sessionId);
+        this.deferredRuns.delete(cmd.sessionId);
         const wasReadOnly = this.readOnlySessions.has(cmd.sessionId);
         this.readOnlySessions.delete(cmd.sessionId);
         this.sessionWorkdirs.delete(cmd.sessionId);

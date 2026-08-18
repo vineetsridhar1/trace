@@ -1,6 +1,7 @@
 import path from "path";
 import os from "os";
 import fs from "fs";
+import { randomUUID } from "crypto";
 import { execFile } from "child_process";
 import { generateAnimalSlug, getUsedSlugs } from "@trace/shared/animal-names";
 import {
@@ -11,6 +12,7 @@ import {
   shouldRepairRenamedTraceWorktreeBranch,
   parseWorktreeListPorcelain,
   type BridgeRepoWorktree,
+  type BridgeWorkspaceWarning,
 } from "@trace/shared";
 import { formatGitError, gitEnv } from "./git-utils.js";
 
@@ -19,22 +21,32 @@ type ExecErrorWithOutput = Error & {
   stderr?: string;
 };
 
+const GIT_OPERATION_TIMEOUT_MS = 60_000;
+/** Network fetches on a large repo routinely outlast the local-operation budget. */
+const GIT_FETCH_TIMEOUT_MS = 10 * 60_000;
+const backgroundRemovalByRepo = new Map<string, Promise<void>>();
+
 function execFileAsync(
   command: string,
   args: string[],
-  options: { cwd: string },
+  options: { cwd: string; timeout?: number },
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { ...options, env: gitEnv() }, (error, stdout, stderr) => {
-      if (error) {
-        const gitError = error as ExecErrorWithOutput;
-        if (typeof stdout === "string") gitError.stdout = stdout;
-        if (typeof stderr === "string") gitError.stderr = stderr;
-        reject(new Error(formatGitError(gitError)));
-        return;
-      }
-      resolve({ stdout, stderr });
-    });
+    execFile(
+      command,
+      args,
+      { timeout: GIT_OPERATION_TIMEOUT_MS, ...options, env: gitEnv() },
+      (error, stdout, stderr) => {
+        if (error) {
+          const gitError = error as ExecErrorWithOutput;
+          if (typeof stdout === "string") gitError.stdout = stdout;
+          if (typeof stderr === "string") gitError.stderr = stderr;
+          reject(new Error(formatGitError(gitError)));
+          return;
+        }
+        resolve({ stdout, stderr });
+      },
+    );
   });
 }
 
@@ -81,17 +93,58 @@ async function getCurrentBranch(worktreePath: string): Promise<string | null> {
 
 async function resetWorktreeToRef(worktreePath: string, ref: string): Promise<void> {
   await execFileAsync("git", ["reset", "--hard", ref], { cwd: worktreePath });
-  await execFileAsync("git", ["clean", "-ffdx"], { cwd: worktreePath });
+  // Preserve ignored setup artifacts such as node_modules. Recursively deleting
+  // them can take minutes and blocks every other Git operation on the machine.
+  try {
+    await execFileAsync("git", ["clean", "-ffd"], { cwd: worktreePath });
+  } catch (error) {
+    // `git clean` exits non-zero when a single path resists removal — typically
+    // a process writing into the tree while the walk runs ("Directory not
+    // empty"). The checkout is already at the requested ref and is perfectly
+    // usable, so a leftover path must not fail workspace prep.
+    console.warn(
+      `[worktree] git clean left paths behind in ${worktreePath}: ${getErrorMessage(error)}`,
+    );
+  }
+}
+
+/**
+ * True when the worktree holds work that a reset would destroy: staged or
+ * unstaged changes to tracked files, or untracked files. Ignored paths (build
+ * output, `node_modules`) don't count — `--porcelain` omits them by default.
+ *
+ * An unreadable status is reported as "has work" so recovery never discards a
+ * workspace it failed to inspect.
+ */
+async function hasUncommittedWork(worktreePath: string): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["status", "--porcelain", "--untracked-files=normal", "-z"],
+      { cwd: worktreePath },
+    );
+    return stdout.trim().length > 0;
+  } catch (error) {
+    console.warn(
+      `[worktree] could not read status of ${worktreePath}, assuming it has uncommitted work: ${getErrorMessage(error)}`,
+    );
+    return true;
+  }
 }
 
 async function switchWorktreeToBranch(
   worktreePath: string,
   branch: string,
   baseRef: string | null,
+  preserveLocalWork = false,
 ): Promise<void> {
-  await execFileAsync("git", ["checkout", "-f", "-B", branch, ...(baseRef ? [baseRef] : [])], {
-    cwd: worktreePath,
-  });
+  // `-f` discards uncommitted changes and a start point re-baselines the
+  // branch, so a branch-name repair on a workspace with live work does neither.
+  await execFileAsync(
+    "git",
+    ["checkout", ...(preserveLocalWork ? [] : ["-f"]), "-B", branch, ...(baseRef ? [baseRef] : [])],
+    { cwd: worktreePath },
+  );
 }
 
 async function isUsableWorktree(worktreePath: string): Promise<boolean> {
@@ -205,6 +258,25 @@ async function resolveWorktreeBranch(
   return resolveGeneratedTraceWorktreeBranch(slug, refs);
 }
 
+export type CreatedWorktree = {
+  workdir: string;
+  branch: string;
+  slug: string;
+  /** Set when the workspace came up in a state the request did not ask for. */
+  warning?: BridgeWorkspaceWarning;
+};
+
+function keptLocalChangesWarning(branch: string, baseRef: string): BridgeWorkspaceWarning {
+  return {
+    type: "workspace_kept_local_changes",
+    branch,
+    baseRef,
+    message:
+      `This workspace had uncommitted changes, so Trace kept them instead of resetting to ${baseRef}. ` +
+      "Commit or discard them if you want a clean base.",
+  };
+}
+
 async function resolveAvailableWorktreeSlug(
   sessionsDir: string,
   repoPath: string,
@@ -240,7 +312,7 @@ export async function createWorktree({
   preserveBranchName?: boolean;
   /** Commit SHA to restore from instead of branching from origin/{startBranch|defaultBranch}. */
   baseCommitSha?: string;
-}): Promise<{ workdir: string; branch: string; slug: string }> {
+}): Promise<CreatedWorktree> {
   const sessionsDir = path.join(os.homedir(), "trace", "sessions", repoId);
   const worktreeSlug = await resolveAvailableWorktreeSlug(sessionsDir, repoPath, slug);
   const targetPath = path.join(sessionsDir, worktreeSlug);
@@ -254,7 +326,12 @@ export async function createWorktree({
 
   // Fetch latest so origin refs are up to date when a remote exists.
   if (!baseCommitSha) {
-    if (hasOrigin) await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
+    if (hasOrigin) {
+      await execFileAsync("git", ["fetch", "origin"], {
+        cwd: repoPath,
+        timeout: GIT_FETCH_TIMEOUT_MS,
+      });
+    }
   } else {
     // Verify the base commit SHA is reachable locally; fetch if not
     const reachable = await execFileAsync("git", ["cat-file", "-t", baseCommitSha], {
@@ -263,7 +340,10 @@ export async function createWorktree({
       .then(() => true)
       .catch(() => false);
     if (!reachable && hasOrigin) {
-      await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
+      await execFileAsync("git", ["fetch", "origin"], {
+        cwd: repoPath,
+        timeout: GIT_FETCH_TIMEOUT_MS,
+      });
     }
   }
 
@@ -285,6 +365,10 @@ export async function createWorktree({
   // branch so the server can reconcile instead of blocking the UI.
   if (fs.existsSync(targetPath)) {
     const currentBranch = await getCurrentBranch(targetPath);
+    // Every reconnect re-prepares the workspace, so re-baselining it here would
+    // throw away whatever the agent had not committed yet. Only a workspace with
+    // nothing to lose gets reset to the requested ref.
+    const preserveLocalWork = await hasUncommittedWork(targetPath);
     if (currentBranch !== branch) {
       const canRepairRenamedBranch = shouldRepairRenamedTraceWorktreeBranch({
         currentBranch,
@@ -307,13 +391,26 @@ export async function createWorktree({
       console.warn(
         `[worktree] repairing renamed Trace worktree ${targetPath}: ${currentBranch} -> ${branch}`,
       );
-      await switchWorktreeToBranch(targetPath, branch, baseRef);
+      await switchWorktreeToBranch(
+        targetPath,
+        branch,
+        preserveLocalWork ? null : baseRef,
+        preserveLocalWork,
+      );
     }
+    let warning: BridgeWorkspaceWarning | undefined;
     if (baseRef) {
-      await resetWorktreeToRef(targetPath, baseRef);
+      if (preserveLocalWork) {
+        console.warn(
+          `[worktree] adopting ${targetPath} as-is: it has uncommitted work, skipping reset to ${baseRef}`,
+        );
+        warning = keptLocalChangesWarning(branch, baseRef);
+      } else {
+        await resetWorktreeToRef(targetPath, baseRef);
+      }
       await setUpstreamIfRemote(repoPath, branch, baseRef);
     }
-    return { workdir: targetPath, branch, slug: worktreeSlug };
+    return { workdir: targetPath, branch, slug: worktreeSlug, ...(warning ? { warning } : {}) };
   }
 
   // Check if the branch already exists (e.g. worktree was removed but branch remains)
@@ -342,9 +439,60 @@ export async function removeWorktree({
   repoPath: string;
   worktreePath: string;
 }): Promise<void> {
-  await execFileAsync("git", ["worktree", "remove", worktreePath], {
+  if (!fs.existsSync(worktreePath)) return;
+
+  const quarantineDir = path.join(path.dirname(worktreePath), ".trace-trash");
+  const quarantinedPath = path.join(
+    quarantineDir,
+    `${path.basename(worktreePath)}-${randomUUID()}`,
+  );
+  fs.mkdirSync(quarantineDir, { recursive: true });
+
+  // Moving within the same volume is fast and makes the original workspace
+  // unavailable immediately. The expensive recursive deletion is serialized
+  // per repository so cleanup cannot create an unbounded Git process herd.
+  await execFileAsync("git", ["worktree", "move", worktreePath, quarantinedPath], {
     cwd: repoPath,
   });
+
+  const previousRemoval = backgroundRemovalByRepo.get(repoPath) ?? Promise.resolve();
+  const removal = previousRemoval
+    .catch(() => undefined)
+    .then(() => drainQuarantine(repoPath, quarantineDir));
+  backgroundRemovalByRepo.set(repoPath, removal);
+  void removal
+    .catch((error: unknown) => {
+      console.warn(`[worktree] failed to drain ${quarantineDir}: ${getErrorMessage(error)}`);
+    })
+    .finally(() => {
+      if (backgroundRemovalByRepo.get(repoPath) === removal) {
+        backgroundRemovalByRepo.delete(repoPath);
+      }
+    });
+}
+
+/**
+ * Delete every quarantined workspace, then drop the worktree registrations those
+ * deletions invalidated.
+ *
+ * A plain recursive delete rather than `git worktree remove`: the directory is
+ * already detached from its session, so neither a dirty tree nor a lock file may
+ * stop it, and there is no command timeout that could leave it half done and
+ * orphaned. Draining the whole directory also reclaims anything an app quit
+ * interrupted, so quarantined workspaces cannot accumulate across restarts.
+ */
+async function drainQuarantine(repoPath: string, quarantineDir: string): Promise<void> {
+  const resolvedQuarantineDir = path.resolve(quarantineDir);
+  const entries = await fs.promises.readdir(resolvedQuarantineDir).catch(() => [] as string[]);
+  for (const entry of entries) {
+    const target = path.resolve(resolvedQuarantineDir, entry);
+    // Never recurse outside the quarantine directory, whatever the entry name is.
+    if (path.dirname(target) !== resolvedQuarantineDir) continue;
+    await fs.promises.rm(target, { recursive: true, force: true });
+  }
+  // Registrations for the deleted directories are now stale; pruning them keeps
+  // `git worktree list` and slug generation honest.
+  await execFileAsync("git", ["worktree", "prune"], { cwd: repoPath });
 }
 
 /** Absolute path to the shared git dir backing a repo or worktree, or null. */

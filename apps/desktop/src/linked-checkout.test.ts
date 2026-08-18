@@ -245,6 +245,48 @@ beforeEach(() => {
   configMock.__reset();
 });
 
+describe("linked checkout index lock contention", () => {
+  it("explains what to do when another Git process holds the index lock", async () => {
+    const { repoPath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    // Stand in for the user's terminal or editor mid-commit. Mutations exit 128
+    // on a held lock, and Trace cannot resolve the contention for the user.
+    const lockPath = path.join(repoPath, ".git", "index.lock");
+    fs.writeFileSync(lockPath, "");
+    try {
+      const result = await syncLinkedCheckout({
+        repoId: "repo-1",
+        sessionGroupId: "group-1",
+        branch: "trace/raccoon",
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain("Another Git process is using this repository");
+      expect(result.error).toContain(lockPath);
+      expect(result.error).not.toContain("fatal:");
+    } finally {
+      fs.rmSync(lockPath, { force: true });
+    }
+  }, 15_000);
+
+  it("still reports status while the index lock is held", async () => {
+    const { repoPath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "from root checkout\n");
+
+    const lockPath = path.join(repoPath, ".git", "index.lock");
+    fs.writeFileSync(lockPath, "");
+    try {
+      const status = await getLinkedCheckoutStatus("repo-1");
+      expect(status.hasUncommittedChanges).toBe(true);
+      expect(status.changedFiles.map((file) => file.path)).toContain("app.txt");
+    } finally {
+      fs.rmSync(lockPath, { force: true });
+    }
+  }, 15_000);
+});
+
 describe("linked checkout commit-back", () => {
   it("commits detached root-checkout changes onto the attached Trace worktree branch", async () => {
     const { repoPath, worktreePath } = await createRepoFixture();

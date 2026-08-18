@@ -2,6 +2,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 
 export const GIT_MAX_BUFFER = 5 * 1024 * 1024;
+const GIT_COMMAND_TIMEOUT_MS = 30_000;
 const GIT_AUTH_ERROR =
   "GitHub login required for this repository. Run `gh auth login` or switch the repo remote to SSH, then try again.";
 
@@ -21,6 +22,21 @@ export function gitEnv(): NodeJS.ProcessEnv {
   };
 }
 
+/**
+ * Git's lock error is four lines of internals ending in advice to delete a file
+ * it does not name in a copyable way. Trace can't resolve the contention — the
+ * holder is usually the user's own terminal or editor — so the least it can do is
+ * say what to do about it.
+ */
+export function gitLockErrorMessage(message: string): string | null {
+  const match = /Unable to create '([^']+\.lock)': File exists/.exec(message);
+  if (!match) return null;
+  return (
+    `Another Git process is using this repository. Wait for it to finish, or quit other Git tools, ` +
+    `then try again. If nothing else is running, delete ${match[1]} and retry.`
+  );
+}
+
 export function isGitAuthError(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
@@ -33,20 +49,23 @@ export function isGitAuthError(message: string): boolean {
   );
 }
 
+function explainGitError(message: string): string {
+  if (isGitAuthError(message)) return GIT_AUTH_ERROR;
+  return gitLockErrorMessage(message) ?? message;
+}
+
 export function formatGitError(error: unknown): string {
   if (error instanceof Error) {
     const gitError = error as GitExecError;
     const stderr = gitError.stderr?.trim();
-    if (stderr) return isGitAuthError(stderr) ? GIT_AUTH_ERROR : stderr;
+    if (stderr) return explainGitError(stderr);
     const stdout = gitError.stdout?.trim();
-    if (stdout) return isGitAuthError(stdout) ? GIT_AUTH_ERROR : stdout;
+    if (stdout) return explainGitError(stdout);
     if (gitError.message.trim()) {
-      const message = gitError.message.trim();
-      return isGitAuthError(message) ? GIT_AUTH_ERROR : message;
+      return explainGitError(gitError.message.trim());
     }
   }
-  const message = String(error);
-  return isGitAuthError(message) ? GIT_AUTH_ERROR : message;
+  return explainGitError(String(error));
 }
 
 export function isSafeGitRef(ref: string): boolean {
@@ -71,6 +90,7 @@ export async function runGit(repoPath: string, args: string[]): Promise<string> 
     cwd: repoPath,
     env: gitEnv(),
     maxBuffer: GIT_MAX_BUFFER,
+    timeout: GIT_COMMAND_TIMEOUT_MS,
   });
   return stdout.trim();
 }
