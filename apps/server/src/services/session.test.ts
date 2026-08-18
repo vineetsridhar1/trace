@@ -4215,6 +4215,40 @@ describe("SessionService", () => {
 
       expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
     });
+
+    it("forks an unloaded repository session from its recorded branch", async () => {
+      const sourceSession = makeSession({
+        repoId: "repo-1",
+        workdir: null,
+        connection: { state: "stopped", retryCount: 0, canRetry: true, canMove: true },
+        sessionGroup: makeSessionGroup({
+          workdir: null,
+          connection: { state: "stopped", retryCount: 0, canRetry: true, canMove: true },
+        }),
+      });
+      const resolver = service as unknown as {
+        resolveForkBaseCommitSha: (session: typeof sourceSession) => Promise<string | null>;
+      };
+
+      await expect(resolver.resolveForkBaseCommitSha(sourceSession)).resolves.toBeNull();
+      expect(sessionRouterMock.inspectSessionGitSyncStatus).not.toHaveBeenCalled();
+    });
+
+    it("forks from the committed HEAD when the workspace has uncommitted changes", async () => {
+      const sourceSession = makeSession({
+        repoId: "repo-1",
+        workdir: "/tmp/trace/source",
+        connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+      });
+      const resolver = service as unknown as {
+        resolveForkBaseCommitSha: (session: typeof sourceSession) => Promise<string | null>;
+      };
+      sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValueOnce(
+        makeGitSyncStatus({ headCommitSha: "committed-head", hasUncommittedChanges: true }),
+      );
+
+      await expect(resolver.resolveForkBaseCommitSha(sourceSession)).resolves.toBe("committed-head");
+    });
   });
 
   describe("file access", () => {
