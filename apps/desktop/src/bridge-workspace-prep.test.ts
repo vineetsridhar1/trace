@@ -1,0 +1,183 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { BridgeMessage } from "@trace/shared";
+
+const { createWorktreeMock } = vi.hoisted(() => ({ createWorktreeMock: vi.fn() }));
+
+vi.mock("ws", async () => {
+  const { EventEmitter } = await import("node:events");
+  class MockWebSocket extends EventEmitter {
+    static readonly CONNECTING = 0;
+    static readonly OPEN = 1;
+    readyState = MockWebSocket.CONNECTING;
+    constructor(_url: string, _options?: unknown) {
+      super();
+    }
+    close(): void {}
+    send(_data: string): void {}
+  }
+  return { default: MockWebSocket };
+});
+
+vi.mock("@trace/shared/adapters", () => {
+  class MockAdapter {}
+  class MockTerminalManager {
+    destroyAll(): void {}
+  }
+  return {
+    AntigravityAdapter: MockAdapter,
+    ClaudeCodeAdapter: MockAdapter,
+    CodexAdapter: MockAdapter,
+    CursorComposerAdapter: MockAdapter,
+    PiAdapter: MockAdapter,
+    resolveExecutable: () => null,
+    TerminalManager: MockTerminalManager,
+  };
+});
+
+vi.mock("./config.js", () => ({
+  getBridgeLabel: () => null,
+  getOrCreateInstanceId: () => "bridge-test",
+  getRepoConfig: () => ({ path: "/tmp/repo" }),
+  readConfig: () => ({ repos: {}, bridgeLabel: null }),
+}));
+
+vi.mock("./runtime-debug.js", () => ({
+  runtimeDebug: vi.fn(),
+}));
+
+vi.mock("./worktree.js", () => ({
+  createWorktree: createWorktreeMock,
+  adoptWorktree: vi.fn(),
+  removeWorktree: vi.fn(),
+  listRepoWorktrees: vi.fn(),
+  isTraceManagedWorktreePath: () => true,
+}));
+
+import { BridgeClient } from "./bridge.js";
+
+type RunPromptArgs = { sessionId: string; prompt: string; cwd?: string };
+
+type Harness = {
+  handleCommand: (cmd: unknown) => void;
+  sent: BridgeMessage[];
+  runPrompt: ReturnType<typeof vi.fn>;
+};
+
+const PREPARE = {
+  type: "prepare",
+  sessionId: "session-1",
+  sessionGroupId: "group-1",
+  slug: "coyote",
+  repoId: "repo-1",
+  repoName: "mortgages",
+  repoRemoteUrl: "git@example.com:acme/mortgages.git",
+  defaultBranch: "main",
+  branch: "trace-coyote",
+};
+
+const SEND = {
+  type: "send",
+  sessionId: "session-1",
+  prompt: "keep going",
+  cwd: "/stale/workdir",
+  tool: "codex",
+};
+
+function createHarness(): Harness {
+  const client = Object.create(BridgeClient.prototype) as BridgeClient;
+  const sent: BridgeMessage[] = [];
+  const runPrompt = vi.fn().mockResolvedValue(undefined);
+
+  Object.assign(client as unknown as Record<string, unknown>, {
+    sessionWorkdirs: new Map<string, string>(),
+    sessionGroupIds: new Map<string, string | null>(),
+    pendingWorktrees: new Map(),
+    sessionPrepares: new Map(),
+    deferredRuns: new Map(),
+    readOnlySessions: new Set<string>(),
+    send: (msg: BridgeMessage) => sent.push(msg),
+    pollLocalPrStatuses: vi.fn().mockResolvedValue(undefined),
+    runPrompt,
+  });
+
+  const internals = client as unknown as { handleCommand: (cmd: unknown) => void };
+  return { handleCommand: (cmd) => internals.handleCommand(cmd), sent, runPrompt };
+}
+
+describe("BridgeClient workspace prep gating", () => {
+  beforeEach(() => {
+    createWorktreeMock.mockReset();
+  });
+
+  it("waits for in-flight prep and runs in the prepared workdir", async () => {
+    let resolvePrep: (value: { workdir: string; branch: string; slug: string }) => void = () => {};
+    createWorktreeMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePrep = resolve;
+      }),
+    );
+
+    const { handleCommand, sent, runPrompt } = createHarness();
+    handleCommand(PREPARE);
+    handleCommand(SEND);
+
+    // Prep is still running: nothing may touch the tree yet.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sent).toHaveLength(0);
+    expect(runPrompt).not.toHaveBeenCalled();
+
+    resolvePrep({ workdir: "/prepared/coyote", branch: "trace-coyote", slug: "coyote" });
+
+    await vi.waitFor(() => expect(runPrompt).toHaveBeenCalledTimes(1));
+    expect(sent).toEqual([
+      expect.objectContaining({ type: "workspace_ready", workdir: "/prepared/coyote" }),
+    ]);
+    const args = runPrompt.mock.calls[0][0] as RunPromptArgs;
+    expect(args).toMatchObject({
+      sessionId: "session-1",
+      prompt: "keep going",
+      cwd: "/prepared/coyote",
+    });
+  });
+
+  it("holds a prompt when prep fails and replays it once prep succeeds", async () => {
+    createWorktreeMock
+      .mockRejectedValueOnce(
+        new Error(
+          "warning: failed to remove tmp/cache/bootsnap/compile-cache-iseq/3e: Directory not empty",
+        ),
+      )
+      .mockResolvedValueOnce({
+        workdir: "/prepared/coyote",
+        branch: "trace-coyote",
+        slug: "coyote",
+      });
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const { handleCommand, sent, runPrompt } = createHarness();
+    handleCommand(PREPARE);
+    handleCommand(SEND);
+
+    await vi.waitFor(() =>
+      expect(sent).toEqual([expect.objectContaining({ type: "workspace_failed" })]),
+    );
+    expect(runPrompt).not.toHaveBeenCalled();
+
+    // The user retries the connection, which re-prepares the workspace.
+    handleCommand(PREPARE);
+
+    await vi.waitFor(() => expect(runPrompt).toHaveBeenCalledTimes(1));
+    const args = runPrompt.mock.calls[0][0] as RunPromptArgs;
+    expect(args).toMatchObject({ prompt: "keep going", cwd: "/prepared/coyote" });
+  });
+
+  it("runs immediately when no prep is in flight", async () => {
+    const { handleCommand, runPrompt } = createHarness();
+    handleCommand(SEND);
+
+    await vi.waitFor(() => expect(runPrompt).toHaveBeenCalledTimes(1));
+    const args = runPrompt.mock.calls[0][0] as RunPromptArgs;
+    expect(args.cwd).toBe("/stale/workdir");
+  });
+});

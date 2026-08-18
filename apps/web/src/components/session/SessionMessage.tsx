@@ -188,7 +188,7 @@ function renderSessionOutput(
     return <SystemBadge text={error || "Workspace preparation failed"} />;
   }
 
-  if (type === "workspace_restored_from_base") {
+  if (type === "workspace_restored_from_base" || type === "workspace_kept_local_changes") {
     const message = str(payload.message);
     if (message) return <SystemBadge text={message} />;
   }
