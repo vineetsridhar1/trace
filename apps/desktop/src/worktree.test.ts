@@ -31,6 +31,39 @@ describe("createWorktree", () => {
     generateAnimalSlugMock.mockReset();
   });
 
+  it("quarantines a worktree before removing it in the background", async () => {
+    existsSyncMock.mockReturnValue(true);
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        _args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout: string, stderr: string) => void,
+      ) => {
+        callback(null, "", "");
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { removeWorktree } = await import("./worktree.js");
+    await removeWorktree({ repoPath: "/tmp/repo", worktreePath: "/tmp/sessions/otter" });
+
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      ["worktree", "move", "/tmp/sessions/otter", expect.stringContaining("/.trace-trash/otter-")],
+      expect.objectContaining({ cwd: "/tmp/repo" }),
+      expect.any(Function),
+    );
+    await vi.waitFor(() => {
+      expect(execFileMock).toHaveBeenCalledWith(
+        "git",
+        ["worktree", "remove", expect.stringContaining("/.trace-trash/otter-")],
+        expect.objectContaining({ cwd: "/tmp/repo" }),
+        expect.any(Function),
+      );
+    });
+  });
+
   afterEach(() => {
     vi.resetModules();
     vi.restoreAllMocks();
@@ -91,6 +124,20 @@ describe("createWorktree", () => {
       expect.objectContaining({
         cwd: expect.stringContaining("/trace/sessions/repo-1/gibbon"),
       }),
+      expect.any(Function),
+    );
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      ["clean", "-ffd"],
+      expect.objectContaining({
+        cwd: expect.stringContaining("/trace/sessions/repo-1/gibbon"),
+      }),
+      expect.any(Function),
+    );
+    expect(execFileMock).not.toHaveBeenCalledWith(
+      "git",
+      ["clean", "-ffdx"],
+      expect.anything(),
       expect.any(Function),
     );
     expect(execFileMock).toHaveBeenCalledWith(

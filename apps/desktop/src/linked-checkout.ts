@@ -47,6 +47,7 @@ function triggerAutoSyncReconcile(repoId: string): void {
 // so concurrent sync/restore/auto-sync calls can't race on `.git/index.lock` or
 // produce interleaved config writes.
 const repoLocks = new Map<string, Promise<unknown>>();
+const pendingStatusReads = new Map<string, Promise<LinkedCheckoutStatus>>();
 
 export function withRepoLock<T>(repoId: string, fn: () => Promise<T>): Promise<T> {
   const previous = repoLocks.get(repoId) ?? Promise.resolve();
@@ -115,6 +116,7 @@ const LINKED_CHECKOUT_DIFF_PREVIEW_LIMIT = 80_000;
 const LINKED_CHECKOUT_CONTENT_PREVIEW_LIMIT = 80_000;
 const LINKED_CHECKOUT_STATUS_FILE_LIMIT = 200;
 const LINKED_CHECKOUT_LINE_COUNT_BYTE_LIMIT = 2_000_000;
+const LINKED_CHECKOUT_STATUS_TIMEOUT_MS = 15_000;
 
 async function getCurrentCommitSha(repoPath: string): Promise<string> {
   return runGit(repoPath, ["rev-parse", "HEAD"]);
@@ -132,6 +134,7 @@ async function listUntrackedPaths(repoPath: string): Promise<string[]> {
     {
       cwd: repoPath,
       maxBuffer: GIT_MAX_BUFFER,
+      timeout: LINKED_CHECKOUT_STATUS_TIMEOUT_MS,
     },
   );
   return parseNullSeparated(stdout);
@@ -156,10 +159,12 @@ async function listDiffChangedPaths(repoPath: string): Promise<string[]> {
     execFileAsync("git", ["diff", "--name-only", "-z", "--no-renames", "HEAD"], {
       cwd: repoPath,
       maxBuffer: GIT_MAX_BUFFER,
+      timeout: LINKED_CHECKOUT_STATUS_TIMEOUT_MS,
     }),
     execFileAsync("git", ["ls-files", "--others", "--exclude-standard", "-z"], {
       cwd: repoPath,
       maxBuffer: GIT_MAX_BUFFER,
+      timeout: LINKED_CHECKOUT_STATUS_TIMEOUT_MS,
     }),
   ]);
 
@@ -175,6 +180,7 @@ async function listChangedPaths(repoPath: string): Promise<string[]> {
     {
       cwd: repoPath,
       maxBuffer: GIT_MAX_BUFFER,
+      timeout: LINKED_CHECKOUT_STATUS_TIMEOUT_MS,
     },
   );
   const entries = parseNullSeparated(stdout);
@@ -220,6 +226,7 @@ async function readTrackedLineCounts(
     {
       cwd: repoPath,
       maxBuffer: GIT_MAX_BUFFER,
+      timeout: LINKED_CHECKOUT_STATUS_TIMEOUT_MS,
     },
   );
 
@@ -247,6 +254,7 @@ async function readChangedStatuses(repoPath: string): Promise<Map<string, string
     {
       cwd: repoPath,
       maxBuffer: GIT_MAX_BUFFER,
+      timeout: LINKED_CHECKOUT_STATUS_TIMEOUT_MS,
     },
   );
 
@@ -1204,8 +1212,17 @@ export async function pauseExistingAttachment(repoId: string, error: string): Pr
   triggerAutoSyncReconcile(repoId);
 }
 
-export async function getLinkedCheckoutStatus(repoId: string): Promise<LinkedCheckoutStatus> {
-  return readStatus(repoId);
+export function getLinkedCheckoutStatus(repoId: string): Promise<LinkedCheckoutStatus> {
+  const pending = pendingStatusReads.get(repoId);
+  if (pending) return pending;
+
+  const read = readStatus(repoId).finally(() => {
+    if (pendingStatusReads.get(repoId) === read) {
+      pendingStatusReads.delete(repoId);
+    }
+  });
+  pendingStatusReads.set(repoId, read);
+  return read;
 }
 
 export async function getLinkedCheckoutChangedFile(

@@ -1,6 +1,7 @@
 import path from "path";
 import os from "os";
 import fs from "fs";
+import { randomUUID } from "crypto";
 import { execFile } from "child_process";
 import { generateAnimalSlug, getUsedSlugs } from "@trace/shared/animal-names";
 import {
@@ -19,22 +20,31 @@ type ExecErrorWithOutput = Error & {
   stderr?: string;
 };
 
+const GIT_OPERATION_TIMEOUT_MS = 60_000;
+const WORKTREE_REMOVAL_TIMEOUT_MS = 5 * 60_000;
+const backgroundRemovalByRepo = new Map<string, Promise<void>>();
+
 function execFileAsync(
   command: string,
   args: string[],
-  options: { cwd: string },
+  options: { cwd: string; timeout?: number },
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { ...options, env: gitEnv() }, (error, stdout, stderr) => {
-      if (error) {
-        const gitError = error as ExecErrorWithOutput;
-        if (typeof stdout === "string") gitError.stdout = stdout;
-        if (typeof stderr === "string") gitError.stderr = stderr;
-        reject(new Error(formatGitError(gitError)));
-        return;
-      }
-      resolve({ stdout, stderr });
-    });
+    execFile(
+      command,
+      args,
+      { timeout: GIT_OPERATION_TIMEOUT_MS, ...options, env: gitEnv() },
+      (error, stdout, stderr) => {
+        if (error) {
+          const gitError = error as ExecErrorWithOutput;
+          if (typeof stdout === "string") gitError.stdout = stdout;
+          if (typeof stderr === "string") gitError.stderr = stderr;
+          reject(new Error(formatGitError(gitError)));
+          return;
+        }
+        resolve({ stdout, stderr });
+      },
+    );
   });
 }
 
@@ -81,7 +91,9 @@ async function getCurrentBranch(worktreePath: string): Promise<string | null> {
 
 async function resetWorktreeToRef(worktreePath: string, ref: string): Promise<void> {
   await execFileAsync("git", ["reset", "--hard", ref], { cwd: worktreePath });
-  await execFileAsync("git", ["clean", "-ffdx"], { cwd: worktreePath });
+  // Preserve ignored setup artifacts such as node_modules. Recursively deleting
+  // them can take minutes and blocks every other Git operation on the machine.
+  await execFileAsync("git", ["clean", "-ffd"], { cwd: worktreePath });
 }
 
 async function switchWorktreeToBranch(
@@ -342,9 +354,43 @@ export async function removeWorktree({
   repoPath: string;
   worktreePath: string;
 }): Promise<void> {
-  await execFileAsync("git", ["worktree", "remove", worktreePath], {
+  if (!fs.existsSync(worktreePath)) return;
+
+  const quarantineDir = path.join(path.dirname(worktreePath), ".trace-trash");
+  const quarantinedPath = path.join(
+    quarantineDir,
+    `${path.basename(worktreePath)}-${randomUUID()}`,
+  );
+  fs.mkdirSync(quarantineDir, { recursive: true });
+
+  // Moving within the same volume is fast and makes the original workspace
+  // unavailable immediately. The expensive recursive deletion is serialized
+  // per repository so cleanup cannot create an unbounded Git process herd.
+  await execFileAsync("git", ["worktree", "move", worktreePath, quarantinedPath], {
     cwd: repoPath,
   });
+
+  const previousRemoval = backgroundRemovalByRepo.get(repoPath) ?? Promise.resolve();
+  const removal = previousRemoval
+    .catch(() => undefined)
+    .then(async () => {
+      await execFileAsync("git", ["worktree", "remove", quarantinedPath], {
+        cwd: repoPath,
+        timeout: WORKTREE_REMOVAL_TIMEOUT_MS,
+      });
+    });
+  backgroundRemovalByRepo.set(repoPath, removal);
+  void removal
+    .catch((error: unknown) => {
+      console.warn(
+        `[worktree] failed to remove quarantined worktree ${quarantinedPath}: ${getErrorMessage(error)}`,
+      );
+    })
+    .finally(() => {
+      if (backgroundRemovalByRepo.get(repoPath) === removal) {
+        backgroundRemovalByRepo.delete(repoPath);
+      }
+    });
 }
 
 /** Absolute path to the shared git dir backing a repo or worktree, or null. */

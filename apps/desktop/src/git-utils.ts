@@ -2,6 +2,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 
 export const GIT_MAX_BUFFER = 5 * 1024 * 1024;
+const GIT_COMMAND_TIMEOUT_MS = 30_000;
 const GIT_AUTH_ERROR =
   "GitHub login required for this repository. Run `gh auth login` or switch the repo remote to SSH, then try again.";
 
@@ -71,6 +72,7 @@ export async function runGit(repoPath: string, args: string[]): Promise<string> 
     cwd: repoPath,
     env: gitEnv(),
     maxBuffer: GIT_MAX_BUFFER,
+    timeout: GIT_COMMAND_TIMEOUT_MS,
   });
   return stdout.trim();
 }
