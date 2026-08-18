@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Code2, LoaderCircle, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, LoaderCircle, RefreshCw } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -20,11 +20,13 @@ export function BrowserWorkspacePanel({
   sessionGroupId,
   browserId,
   initialUrl,
+  sessionId,
   onTitleChange,
 }: {
   sessionGroupId: string;
   browserId: string;
   initialUrl?: string;
+  sessionId: string | null;
   onTitleChange?: (browserId: string, title: string) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -33,6 +35,7 @@ export function BrowserWorkspacePanel({
   const [state, setState] = useState<DesktopBrowserWorkspaceState>(EMPTY_BROWSER_STATE);
   const [inputValue, setInputValue] = useState("about:blank");
   const [error, setError] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<BranchSyncStatus>("checking");
 
   useEffect(() => {
     onTitleChange?.(browserId, state.title);
@@ -101,6 +104,30 @@ export function BrowserWorkspacePanel({
       void window.trace?.hideBrowser({ sessionGroupId, browserId });
     };
   }, [browserId, initialUrl, sessionGroupId, syncBounds]);
+
+  useEffect(() => {
+    if (!window.trace || !sessionId) {
+      setSyncStatus("unavailable");
+      return;
+    }
+    let cancelled = false;
+    const refresh = () => {
+      void window.trace!
+        .getSessionGitSyncStatus(sessionId)
+        .then((nextStatus) => {
+          if (!cancelled) setSyncStatus(getBranchSyncStatus(nextStatus));
+        })
+        .catch(() => {
+          if (!cancelled) setSyncStatus("unavailable");
+        });
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [sessionId]);
 
   const perform = useCallback((action: () => Promise<DesktopBrowserWorkspaceState>) => {
     setError(null);
@@ -204,21 +231,14 @@ export function BrowserWorkspacePanel({
           placeholder="Enter a URL"
           spellCheck={false}
         />
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className={cn(
-            "app-region-no-drag h-7 gap-1.5 text-xs",
-            state.devToolsOpen && "bg-surface-hover text-foreground",
-          )}
-          onClick={() =>
-            perform(() => window.trace!.toggleBrowserDevTools({ sessionGroupId, browserId }))
-          }
+        <span
+          className="app-region-no-drag flex h-7 items-center gap-1.5 px-1.5 text-xs text-muted-foreground"
+          title={branchSyncStatusLabel(syncStatus)}
+          aria-label={branchSyncStatusLabel(syncStatus)}
         >
-          <Code2 size={14} />
-          DevTools
-        </Button>
+          <span className={cn("h-2 w-2 rounded-full", branchSyncStatusColor(syncStatus))} />
+          Sync
+        </span>
       </form>
       {error ? (
         <p className="shrink-0 border-b border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
@@ -228,6 +248,36 @@ export function BrowserWorkspacePanel({
       <div ref={contentRef} className="min-h-0 flex-1" aria-label={state.title} />
     </div>
   );
+}
+
+type BranchSyncStatus = "checking" | "synced" | "behind" | "outOfSync" | "unavailable";
+
+export function getBranchSyncStatus(status: DesktopSessionGitSyncStatus): BranchSyncStatus {
+  if (status.hasUncommittedChanges || !status.remoteCommitSha) return "outOfSync";
+  if (status.remoteAheadCount > 0) return "outOfSync";
+  return status.remoteBehindCount > 0 ? "behind" : "synced";
+}
+
+function branchSyncStatusColor(status: BranchSyncStatus) {
+  if (status === "synced") return "bg-emerald-500";
+  if (status === "behind") return "bg-amber-400";
+  if (status === "outOfSync") return "bg-destructive";
+  return "bg-muted-foreground";
+}
+
+function branchSyncStatusLabel(status: BranchSyncStatus) {
+  switch (status) {
+    case "synced":
+      return "Branch is synced with origin";
+    case "behind":
+      return "Branch is behind origin";
+    case "outOfSync":
+      return "Branch has uncommitted or unpushed changes";
+    case "checking":
+      return "Checking branch sync status";
+    case "unavailable":
+      return "Branch sync status is unavailable";
+  }
 }
 
 function isBrowserState(value: unknown): value is DesktopBrowserWorkspaceState {

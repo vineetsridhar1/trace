@@ -373,6 +373,9 @@ ipcMain.handle("install-or-update-coding-tool", async (_event, toolId: string) =
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
 ipcMain.handle("get-bridge-info", () => bridge.getInfo());
+ipcMain.handle("get-session-git-sync-status", (_event, sessionId: string) =>
+  bridge.getSessionGitSyncStatus(sessionId),
+);
 ipcMain.handle("set-bridge-label", async (_event, label: string) => {
   await setBridgeLabel(label);
   bridge.updateLabel();

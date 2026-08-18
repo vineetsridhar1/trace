@@ -177,6 +177,7 @@ export function WorkspaceSurfaceContent({
           sessionGroupId={sessionGroupId}
           browserId={browserId}
           initialUrl={browserInitialUrl}
+          sessionId={activeSessionId}
           onTitleChange={onBrowserTitleChange}
         />
       ) : surface === "terminal" ? (

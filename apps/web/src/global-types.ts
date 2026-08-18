@@ -35,6 +35,20 @@ declare global {
     status: DesktopBridgeConnectionStatus;
   };
 
+  type DesktopSessionGitSyncStatus = {
+    branch: string | null;
+    headCommitSha: string | null;
+    upstreamBranch: string | null;
+    upstreamCommitSha: string | null;
+    aheadCount: number;
+    behindCount: number;
+    remoteBranch: string | null;
+    remoteCommitSha: string | null;
+    remoteAheadCount: number;
+    remoteBehindCount: number;
+    hasUncommittedChanges: boolean;
+  };
+
   type DesktopGithubCliStatus = {
     installed: boolean;
     authenticated: boolean;
@@ -156,6 +170,7 @@ declare global {
     installOrUpdateCodingTool: (toolId: string) => Promise<DesktopCodingToolStatus>;
     getBridgeStatus: () => Promise<DesktopBridgeConnectionStatus>;
     getBridgeInfo: () => Promise<DesktopBridgeInfo>;
+    getSessionGitSyncStatus: (sessionId: string) => Promise<DesktopSessionGitSyncStatus>;
     setBridgeLabel: (label: string) => Promise<DesktopBridgeInfo>;
     setBridgeAuthContext: (organizationId: string | null) => Promise<boolean>;
     onBridgeStatus: (callback: (status: DesktopBridgeConnectionStatus) => void) => () => void;
