@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   kind: null as "app" | "design" | null,
+  activeChannelId: null as string | null,
   close: vi.fn(),
   createApp: vi.fn(),
   createDesign: vi.fn(),
@@ -32,6 +33,13 @@ vi.mock("../../stores/command-palette", () => ({
     }),
 }));
 
+vi.mock("../../stores/ui", () => ({
+  navigateToSessionGroup: vi.fn(),
+  useUIStore: {
+    getState: () => ({ activeChannelId: state.activeChannelId }),
+  },
+}));
+
 vi.mock("@trace/client-core", () => ({
   useAuthStore: (selector: (state: { activeOrgId: string | null }) => unknown) =>
     selector({ activeOrgId: null }),
@@ -46,6 +54,7 @@ vi.mock("zustand/react/shallow", () => ({
 describe("NewGeneratedProjectDialog", () => {
   beforeEach(() => {
     state.kind = null;
+    state.activeChannelId = null;
     state.close.mockReset();
     state.createApp.mockReset();
     state.createDesign.mockReset();
@@ -64,12 +73,14 @@ describe("NewGeneratedProjectDialog", () => {
 
   it("dispatches exactly one blank design session creation", async () => {
     state.kind = "design";
+    state.activeChannelId = "channel-1";
     const { NewGeneratedProjectDialog } = await import("./NewGeneratedProjectDialog");
 
     NewGeneratedProjectDialog();
 
     expect(state.close).toHaveBeenCalledTimes(1);
     expect(state.createDesign).toHaveBeenCalledTimes(1);
+    expect(state.createDesign).toHaveBeenCalledWith(undefined, "channel-1");
     expect(state.createApp).not.toHaveBeenCalled();
   });
 });

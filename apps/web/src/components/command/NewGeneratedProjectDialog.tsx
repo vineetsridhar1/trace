@@ -13,7 +13,7 @@ import {
 } from "../../lib/create-quick-session";
 import { client } from "../../lib/urql";
 import { useCommandPaletteStore } from "../../stores/command-palette";
-import { navigateToSessionGroup } from "../../stores/ui";
+import { navigateToSessionGroup, useUIStore } from "../../stores/ui";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import {
@@ -125,14 +125,15 @@ export function NewGeneratedProjectDialog() {
 
   const createImmediate = useCallback(
     (nextKind: CreatableGeneratedProjectKind) => {
+      const activeChannelId = useUIStore.getState().activeChannelId;
       close();
       void (nextKind === "app"
-        ? createAppSession()
+        ? createAppSession(activeChannelId)
         : nextKind === "design"
-          ? createDesignSession()
+          ? createDesignSession(undefined, activeChannelId)
           : nextKind === "pdf"
-            ? createPdfSession()
-            : createAnimationSession());
+            ? createPdfSession(activeChannelId)
+            : createAnimationSession(activeChannelId));
     },
     [close],
   );

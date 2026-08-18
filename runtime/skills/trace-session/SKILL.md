@@ -36,6 +36,8 @@ an unrelated command or call Trace's GraphQL API directly.
 "$TRACE_CLI" channel list --json
 "$TRACE_CLI" channel list --member-only --json
 "$TRACE_CLI" repo list --json
+"$TRACE_CLI" channel link-repo <channel-id> <repo-id> --json
+"$TRACE_CLI" repo attach-remote <repo-id> <remote-url> --json
 "$TRACE_CLI" session list --json
 "$TRACE_CLI" session list --status active --limit 50 --json
 "$TRACE_CLI" session get <session-id> --json
@@ -65,8 +67,13 @@ current worktree branch.
 
 Every new coding session needs a task prompt and a channel. Use `--channel` to choose a destination
 other than the current one; if it is omitted, Trace inherits the current session's channel when one
-exists. A channel supplies its linked repo; if it has none, also pass `--repo`. A repository alone
-is not a session destination.
+exists. A channel supplies its linked repo. When that repository should become persistent context
+for the project, use `channel link-repo` before starting the session; use `--repo` only for a
+one-off session override. A repository alone is not a session destination.
+
+`channel link-repo` only fills an empty channel link, and `repo attach-remote` only fills an empty
+remote URL. Both are idempotent for the same value and refuse replacement. Never invent a remote
+URL; attach one only when the user or workspace provides it.
 
 Select another existing group or an explicit destination when appropriate:
 
@@ -94,19 +101,29 @@ cloud hosting fails when cloud is unavailable; it is never silently changed to l
 
 ## Message and lifecycle
 
-When a general conversation becomes one focused task, convert it in place so the existing
-conversation and session identity are preserved:
+When a general conversation becomes focused implementation or coding work, convert it in place to
+Coding by default so the existing conversation and session identity are preserved. You may perform
+this default Coding conversion automatically without asking for confirmation:
 
 ```sh
-"$TRACE_CLI" session convert --kind coding --channel <channel-id> --json
+"$TRACE_CLI" session convert --channel <channel-id> --json
+```
+
+Before converting to App, Design, PDF, Animation, or another non-coding kind, ask the user to
+confirm that exact kind and wait for their response. Never perform a non-coding conversion
+automatically. After confirmation, run the matching command:
+
+```sh
 "$TRACE_CLI" session convert --kind app --json
 "$TRACE_CLI" session convert --kind design --json
 "$TRACE_CLI" session convert --kind pdf --json
 "$TRACE_CLI" session convert --kind animation --json
 ```
 
-The coding channel is the destination and normally supplies its linked repository. Add `--repo`
-only when the selected channel has no repository. App, Design, PDF, and Animation conversions do
+The project/channel is the Coding destination and must already supply its linked repository. Trace
+cannot create the Coding worktree without that link, and conversion must fail rather than accepting
+a one-off repository. Use `channel link-repo` to attach the repository to the project/channel, then
+retry the conversion. App, Design, PDF, and Animation conversions do
 not accept a channel or repo; Trace creates an isolated managed repo and moves the session to cloud.
 Design System authoring is not a standalone conversion target because it requires a source repo and
 its dedicated creation flow. Add `--tool`, `--model`, or `--reasoning` when the destination needs an
@@ -126,6 +143,11 @@ Start a separate session only for independent or parallel work.
 ```
 
 Use `--self` instead of an ID to target the current session. Be careful: stopping or archiving `--self` can end your own ability to continue. If another session is actively running, queueing is normally the least disruptive way to add follow-up work.
+
+When linking a pull request, Trace validates the session repository, channel repository, and GitHub
+remote before recording the PR. If an association is missing, inspect the relevant repo or channel,
+use `repo attach-remote` or `channel link-repo` with verified values, then retry `session link-pr`.
+Never replace a conflicting existing association automatically.
 
 For monitoring, take bounded snapshots with `session events`. Use `--follow` only when continuous monitoring is actually requested, and stop following once the requested condition is met. If follow mode reports that its replay window exceeded 1,000 events, rerun the command to take a fresh snapshot and follow from its latest cursor.
 

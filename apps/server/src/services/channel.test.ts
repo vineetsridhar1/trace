@@ -125,6 +125,106 @@ describe("ChannelService", () => {
     });
   });
 
+  it("links a repository to a repo-less channel and emits the full channel update", async () => {
+    prismaMock.channel.findFirstOrThrow.mockResolvedValueOnce({
+      id: "channel-1",
+      organizationId: "org-1",
+      repoId: null,
+    });
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({ userId: "user-1" });
+    prismaMock.repo.findFirst.mockResolvedValueOnce({
+      id: "repo-1",
+      name: "app",
+      defaultBranch: "main",
+    });
+    prismaMock.channel.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.channel.findUniqueOrThrow.mockResolvedValueOnce({
+      id: "channel-1",
+      name: "Project",
+      type: "coding",
+      visibility: "public",
+      ownerId: "user-1",
+      position: 0,
+      groupId: null,
+      repoId: "repo-1",
+      repo: { id: "repo-1", name: "app" },
+      baseBranch: "main",
+      setupScript: null,
+      runScripts: [],
+    });
+
+    const service = new ChannelService();
+    await service.linkRepo("channel-1", "repo-1", undefined, "user", "user-1");
+
+    expect(prismaMock.channel.updateMany).toHaveBeenCalledWith({
+      where: { id: "channel-1", repoId: null },
+      data: { repoId: "repo-1", baseBranch: "main" },
+    });
+    expect(prismaMock.channel.findFirstOrThrow).toHaveBeenCalledWith({
+      where: {
+        id: "channel-1",
+        members: { some: { userId: "user-1", leftAt: null } },
+      },
+      select: { id: true, organizationId: true, repoId: true },
+    });
+    expect(prismaMock.channel.findUniqueOrThrow).toHaveBeenCalledWith({
+      where: { id: "channel-1" },
+      include: { repo: { select: { id: true, name: true } } },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "channel_updated",
+        payload: {
+          channel: expect.objectContaining({
+            id: "channel-1",
+            repoId: "repo-1",
+            repo: { id: "repo-1", name: "app" },
+            baseBranch: "main",
+          }),
+        },
+      }),
+      prismaMock,
+    );
+  });
+
+  it("refuses to replace a channel's linked repository", async () => {
+    prismaMock.channel.findFirstOrThrow.mockResolvedValueOnce({
+      id: "channel-1",
+      organizationId: "org-1",
+      repoId: "repo-existing",
+    });
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({ userId: "user-1" });
+    prismaMock.repo.findFirst.mockResolvedValueOnce({
+      id: "repo-new",
+      name: "new-app",
+      defaultBranch: "main",
+    });
+
+    const service = new ChannelService();
+    await expect(
+      service.linkRepo("channel-1", "repo-new", undefined, "user", "user-1"),
+    ).rejects.toThrow("Channel already has a linked repository");
+    expect(prismaMock.channel.update).not.toHaveBeenCalled();
+  });
+
+  it("does not let a non-member link a repository to a public channel", async () => {
+    prismaMock.channel.findFirstOrThrow.mockRejectedValueOnce(new Error("Not found"));
+
+    const service = new ChannelService();
+    await expect(
+      service.linkRepo("channel-1", "repo-1", undefined, "user", "user-2"),
+    ).rejects.toThrow("Not found");
+
+    expect(prismaMock.channel.findFirstOrThrow).toHaveBeenCalledWith({
+      where: {
+        id: "channel-1",
+        members: { some: { userId: "user-2", leftAt: null } },
+      },
+      select: { id: true, organizationId: true, repoId: true },
+    });
+    expect(prismaMock.channel.updateMany).not.toHaveBeenCalled();
+  });
+
   it("excludes private channel owners from member-only lists after leaving", async () => {
     prismaMock.channel.findMany.mockResolvedValueOnce([]);
 
@@ -174,29 +274,6 @@ describe("ChannelService", () => {
         "user-1",
       ),
     ).rejects.toThrow("Not found");
-
-    expect(prismaMock.channel.create).not.toHaveBeenCalled();
-  });
-
-  it("requires a repo when creating a coding channel", async () => {
-    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
-      userId: "user-1",
-      organizationId: "org-1",
-    });
-
-    const service = new ChannelService();
-
-    await expect(
-      service.create(
-        {
-          organizationId: "org-1",
-          name: "backend",
-          type: "coding",
-        },
-        "user",
-        "user-1",
-      ),
-    ).rejects.toThrow("repoId is required for coding channels");
 
     expect(prismaMock.channel.create).not.toHaveBeenCalled();
   });
@@ -261,7 +338,7 @@ describe("ChannelService", () => {
     expect(prismaMock.channel.create).not.toHaveBeenCalled();
   });
 
-  it("allows a user org member to create a channel and adds the AI user as a default member", async () => {
+  it("allows a user to create a repo-less project and adds the AI user as a default member", async () => {
     const createdAt = new Date("2026-04-02T00:00:00.000Z");
     prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
       userId: "user-1",
@@ -270,7 +347,7 @@ describe("ChannelService", () => {
     prismaMock.channel.create.mockResolvedValueOnce({
       id: "channel-1",
       name: "general",
-      type: "text",
+      type: "coding",
       visibility: "public",
       ownerId: "user-1",
       position: 0,
@@ -296,7 +373,7 @@ describe("ChannelService", () => {
       {
         organizationId: "org-1",
         name: "general",
-        type: "text",
+        type: "coding",
         position: 0,
       } as any,
       "user",
@@ -329,6 +406,101 @@ describe("ChannelService", () => {
         },
       }),
       expect.anything(),
+    );
+  });
+
+  it("starts a project created with a repository on that repository's default branch", async () => {
+    const createdAt = new Date("2026-04-02T00:00:00.000Z");
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      organizationId: "org-1",
+    });
+    prismaMock.repo.findFirst.mockResolvedValueOnce({ name: "healthcare", defaultBranch: "trunk" });
+    prismaMock.channel.create.mockResolvedValueOnce({
+      id: "channel-1",
+      name: "general",
+      type: "coding",
+      visibility: "public",
+      ownerId: "user-1",
+      position: 0,
+      organizationId: "org-1",
+      groupId: null,
+      repoId: "repo-1",
+      baseBranch: "trunk",
+    });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({ userId: TRACE_AI_USER_ID });
+    prismaMock.channelMember.findMany.mockResolvedValueOnce([
+      { channelId: "channel-1", userId: "user-1", joinedAt: createdAt, leftAt: null },
+    ]);
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      { id: "user-1", name: "User One", avatarUrl: null },
+    ]);
+
+    const service = new ChannelService();
+    await service.create(
+      {
+        organizationId: "org-1",
+        name: "general",
+        type: "coding",
+        repoId: "repo-1",
+        position: 0,
+      },
+      "user",
+      "user-1",
+    );
+
+    expect(prismaMock.channel.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ repoId: "repo-1", baseBranch: "trunk" }),
+      }),
+    );
+  });
+
+  it("keeps an explicit base branch when a project is created with a repository", async () => {
+    const createdAt = new Date("2026-04-02T00:00:00.000Z");
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      organizationId: "org-1",
+    });
+    prismaMock.repo.findFirst.mockResolvedValueOnce({ name: "healthcare", defaultBranch: "trunk" });
+    prismaMock.channel.create.mockResolvedValueOnce({
+      id: "channel-1",
+      name: "general",
+      type: "coding",
+      visibility: "public",
+      ownerId: "user-1",
+      position: 0,
+      organizationId: "org-1",
+      groupId: null,
+      repoId: "repo-1",
+      baseBranch: "develop",
+    });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({ userId: TRACE_AI_USER_ID });
+    prismaMock.channelMember.findMany.mockResolvedValueOnce([
+      { channelId: "channel-1", userId: "user-1", joinedAt: createdAt, leftAt: null },
+    ]);
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      { id: "user-1", name: "User One", avatarUrl: null },
+    ]);
+
+    const service = new ChannelService();
+    await service.create(
+      {
+        organizationId: "org-1",
+        name: "general",
+        type: "coding",
+        repoId: "repo-1",
+        baseBranch: "develop",
+        position: 0,
+      },
+      "user",
+      "user-1",
+    );
+
+    expect(prismaMock.channel.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ repoId: "repo-1", baseBranch: "develop" }),
+      }),
     );
   });
 
@@ -584,6 +756,61 @@ describe("ChannelService", () => {
       select: { organizationId: true },
     });
     expect(prismaMock.channel.update).not.toHaveBeenCalled();
+  });
+
+  it("attaches a repository to an existing project", async () => {
+    prismaMock.channel.findFirstOrThrow.mockResolvedValueOnce({ organizationId: "org-1" });
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      organizationId: "org-1",
+    });
+    prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+    prismaMock.channel.update.mockResolvedValueOnce({
+      id: "channel-1",
+      name: "Launch",
+      type: "coding",
+      visibility: "public",
+      ownerId: "user-1",
+      position: 0,
+      groupId: null,
+      repoId: "repo-1",
+      repo: { id: "repo-1", name: "launch" },
+      baseBranch: "main",
+      setupScript: null,
+      runScripts: [],
+    });
+
+    const service = new ChannelService();
+    await service.update(
+      "channel-1",
+      { repoId: "repo-1", baseBranch: "main" },
+      "user",
+      "user-1",
+    );
+
+    expect(prismaMock.repo.findFirst).toHaveBeenCalledWith({
+      where: { id: "repo-1", organizationId: "org-1" },
+      select: { id: true },
+    });
+    expect(prismaMock.channel.update).toHaveBeenCalledWith({
+      where: { id: "channel-1" },
+      data: { repoId: "repo-1", baseBranch: "main" },
+      include: { repo: { select: { id: true, name: true } } },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "channel_updated",
+        payload: {
+          channel: expect.objectContaining({
+            id: "channel-1",
+            repoId: "repo-1",
+            repo: { id: "repo-1", name: "launch" },
+            baseBranch: "main",
+          }),
+        },
+      }),
+      expect.anything(),
+    );
   });
 
   it("includes repo metadata in the join event payload", async () => {

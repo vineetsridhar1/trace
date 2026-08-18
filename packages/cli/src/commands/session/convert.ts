@@ -18,7 +18,7 @@ export const sessionConvertCommand = defineCommand({
   path: ["session", "convert"],
   description: "Convert the current general session into a specialized session",
   examples: [
-    '"$TRACE_CLI" session convert --kind coding --channel <channel-id> --json',
+    '"$TRACE_CLI" session convert --channel <channel-id> --json',
     '"$TRACE_CLI" session convert --kind app --json',
   ],
   effects: [
@@ -32,7 +32,9 @@ export const sessionConvertCommand = defineCommand({
   ],
   notes: [
     "Conversion starts from a General session. Design System authoring uses its dedicated creation flow.",
-    "Coding requires a channel; --repo may only supply a repository when that channel has none.",
+    "Coding is the default target and may be selected automatically for focused coding work.",
+    "Coding requires a project/channel with a linked repository so Trace can create its worktree.",
+    "Before any non-coding conversion, ask the user to confirm that exact target kind and wait for their response.",
   ],
   options: [
     {
@@ -48,7 +50,7 @@ export const sessionConvertCommand = defineCommand({
       kind: "string",
       valueName: "KIND",
       choices: CONVERSION_KINDS,
-      description: "Target session kind",
+      description: "Target session kind (default: coding)",
     },
     {
       name: "channel",
@@ -56,13 +58,6 @@ export const sessionConvertCommand = defineCommand({
       kind: "string",
       valueName: "ID",
       description: "Target coding channel",
-    },
-    {
-      name: "repo",
-      flag: "--repo",
-      kind: "string",
-      valueName: "ID",
-      description: "Repository for a coding channel without one",
     },
     {
       name: "tool",
@@ -88,9 +83,9 @@ export const sessionConvertCommand = defineCommand({
     },
   ],
   async run(ctx, parsed) {
-    const kind = optionString(parsed, "kind") as SessionGroupKind | undefined;
-    if (!kind || !CONVERSION_KINDS.includes(kind as (typeof CONVERSION_KINDS)[number])) {
-      usage(`--kind is required and must be one of: ${CONVERSION_KINDS.join(", ")}`);
+    const kind = (optionString(parsed, "kind") ?? "coding") as SessionGroupKind;
+    if (!CONVERSION_KINDS.includes(kind as (typeof CONVERSION_KINDS)[number])) {
+      usage(`--kind must be one of: ${CONVERSION_KINDS.join(", ")}`);
     }
 
     const client = await ctx.client();
@@ -112,7 +107,6 @@ export const sessionConvertCommand = defineCommand({
     let channelId: string | undefined;
     let repoId: string | undefined;
     const explicitChannelId = optionString(parsed, "channel");
-    const explicitRepoId = optionString(parsed, "repo");
     if (kind === "coding") {
       channelId = explicitChannelId ?? source.session.channel?.id;
       if (!channelId) {
@@ -129,19 +123,14 @@ export const sessionConvertCommand = defineCommand({
       if (!channel.channel) usage(`Channel not found: ${channelId}`);
 
       const impliedRepo = channel.channel.repo ?? null;
-      if (impliedRepo && explicitRepoId && explicitRepoId !== impliedRepo.id) {
-        usage(
-          `The selected channel uses repo ${impliedRepo.id} (${impliedRepo.name}); remove --repo or use that repo`,
-        );
-      }
-      repoId = impliedRepo?.id ?? explicitRepoId;
+      repoId = impliedRepo?.id;
       if (!repoId) {
         usage(
-          "The selected channel has no linked repository. Provide --repo <repo-id>, or choose a coding channel with a repository.",
+          `The selected project/channel has no linked repository, so Trace cannot create a coding worktree. Link one with "$TRACE_CLI" channel link-repo ${channelId} <repo-id> --json, then retry.`,
         );
       }
-    } else if (explicitChannelId || explicitRepoId) {
-      usage(`${kind} conversions create an isolated workspace; remove --channel and --repo`);
+    } else if (explicitChannelId) {
+      usage(`${kind} conversions create an isolated workspace; remove --channel`);
     }
 
     const input: ConvertSessionGroupInput = {

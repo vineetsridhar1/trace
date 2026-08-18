@@ -1559,6 +1559,7 @@ input CreateChannelInput {
 
 input UpdateChannelInput {
   name: String
+  repoId: ID
   baseBranch: String
   setupScript: String
   runScripts: JSON
@@ -2078,6 +2079,7 @@ type Mutation {
   setOrgSecret(input: SetOrgSecretInput!): OrgSecret!
   deleteOrgSecret(orgId: ID!, id: ID!): Boolean!
   updateChannel(id: ID!, input: UpdateChannelInput!): Channel!
+  linkChannelRepo(channelId: ID!, repoId: ID!, baseBranch: String): Channel!
   joinChannel(channelId: ID!): Channel!
   addChannelMember(input: AddChannelMemberInput!): Channel!
   deleteChannel(id: ID!): Boolean!
@@ -2251,7 +2253,9 @@ type Mutation {
   linkEntityToProject(entityType: EntityType!, entityId: ID!, projectId: ID!): Project!
   createOrganization(input: CreateOrganizationInput!): OrgMember!
   createRepo(input: CreateRepoInput!): Repo!
+  registerRepo(input: CreateRepoInput!): Repo!
   updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
+  attachRepoRemote(repoId: ID!, remoteUrl: String!): Repo!
   deleteRepo(id: ID!): Boolean!
   createProject(input: CreateProjectInput!): Project!
   dismissInboxItem(id: ID!): InboxItem!

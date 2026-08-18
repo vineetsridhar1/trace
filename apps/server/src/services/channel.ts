@@ -104,17 +104,16 @@ export class ChannelService {
       });
 
       const channelType = input.type ?? "coding";
-      if (channelType === "coding" && !input.repoId) {
-        throw new ValidationError("repoId is required for coding channels");
-      }
       let repoName: string | null = null;
+      let repoDefaultBranch: string | null = null;
       if (input.repoId) {
         const repo = await tx.repo.findFirst({
           where: { id: input.repoId, organizationId: input.organizationId },
-          select: { name: true },
+          select: { name: true, defaultBranch: true },
         });
         if (!repo) throw new NotFoundError("Repo", input.repoId!);
         repoName = repo.name;
+        repoDefaultBranch = repo.defaultBranch;
       }
       if (input.groupId) {
         await tx.channelGroup.findFirstOrThrow({
@@ -141,7 +140,9 @@ export class ChannelService {
         position: input.position ?? null,
         groupId: input.groupId ?? null,
         repo: input.repoId && repoName ? { id: input.repoId, name: repoName } : null,
-        baseBranch: input.baseBranch ?? null,
+        // Match linkRepo: a channel created with a repo starts on that repo's
+        // default branch unless the caller picked one.
+        baseBranch: input.baseBranch ?? repoDefaultBranch,
         projectIds: input.projectIds ?? [],
       });
 
@@ -174,7 +175,10 @@ export class ChannelService {
   ) {
     const channel = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const existing = await tx.channel.findFirstOrThrow({
-        where: { id: channelId, ...visibleChannelWhere(actorId) },
+        where: {
+          id: channelId,
+          members: { some: { userId: actorId, leftAt: null } },
+        },
         select: { organizationId: true },
       });
 
@@ -185,6 +189,18 @@ export class ChannelService {
       });
 
       const data: Record<string, unknown> = {};
+      const updatesRepo = Object.prototype.hasOwnProperty.call(input, "repoId");
+      if (updatesRepo) {
+        if (input.repoId) {
+          const repo = await tx.repo.findFirst({
+            where: { id: input.repoId, organizationId: existing.organizationId },
+            select: { id: true },
+          });
+          if (!repo) throw new NotFoundError("Repo", input.repoId);
+        }
+        data.repoId = input.repoId ?? null;
+        if (!input.repoId) data.baseBranch = null;
+      }
       if (input.name !== undefined && input.name !== null) data.name = input.name;
       if (input.baseBranch !== undefined) data.baseBranch = input.baseBranch || null;
       if (input.setupScript !== undefined) data.setupScript = input.setupScript || null;
@@ -211,7 +227,11 @@ export class ChannelService {
         return tx.channel.findUniqueOrThrow({ where: { id: channelId } });
       }
 
-      const updated = await tx.channel.update({ where: { id: channelId }, data });
+      const updated = await tx.channel.update({
+        where: { id: channelId },
+        data,
+        include: { repo: { select: { id: true, name: true } } },
+      });
 
       await eventService.create(
         {
@@ -229,6 +249,7 @@ export class ChannelService {
               position: updated.position,
               groupId: updated.groupId,
               repoId: updated.repoId,
+              repo: updated.repo,
               baseBranch: updated.baseBranch,
               setupScript: updated.setupScript,
               runScripts: updated.runScripts,
@@ -244,6 +265,96 @@ export class ChannelService {
     });
 
     return channel;
+  }
+
+  async linkRepo(
+    channelId: string,
+    repoId: string,
+    baseBranch: string | undefined,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.channel.findFirstOrThrow({
+        where: {
+          id: channelId,
+          members: { some: { userId: actorId, leftAt: null } },
+        },
+        select: { id: true, organizationId: true, repoId: true },
+      });
+
+      await tx.orgMember.findUniqueOrThrow({
+        where: {
+          userId_organizationId: { userId: actorId, organizationId: existing.organizationId },
+        },
+      });
+
+      const repo = await tx.repo.findFirst({
+        where: { id: repoId, organizationId: existing.organizationId },
+        select: { id: true, name: true, defaultBranch: true },
+      });
+      if (!repo) throw new NotFoundError("Repo", repoId);
+
+      if (existing.repoId) {
+        if (existing.repoId !== repoId) {
+          throw new ValidationError(
+            "Channel already has a linked repository; detach it before linking another",
+          );
+        }
+        return tx.channel.findUniqueOrThrow({
+          where: { id: channelId },
+          include: { repo: { select: { id: true, name: true } } },
+        });
+      }
+
+      const branch = baseBranch?.trim() || repo.defaultBranch;
+      const result = await tx.channel.updateMany({
+        where: { id: channelId, repoId: null },
+        data: { repoId, baseBranch: branch },
+      });
+      const updated = await tx.channel.findUniqueOrThrow({
+        where: { id: channelId },
+        include: { repo: { select: { id: true, name: true } } },
+      });
+      if (result.count === 0) {
+        if (updated.repoId !== repoId) {
+          throw new ValidationError(
+            "Channel already has a linked repository; detach it before linking another",
+          );
+        }
+        return updated;
+      }
+
+      await eventService.create(
+        {
+          organizationId: existing.organizationId,
+          scopeType: "system",
+          scopeId: existing.organizationId,
+          eventType: "channel_updated",
+          payload: {
+            channel: {
+              id: updated.id,
+              name: updated.name,
+              type: updated.type,
+              visibility: updated.visibility,
+              ownerId: updated.ownerId,
+              position: updated.position,
+              groupId: updated.groupId,
+              repoId: updated.repoId,
+              repo: updated.repo,
+              baseBranch: updated.baseBranch,
+              setupScript: updated.setupScript,
+              runScripts: updated.runScripts,
+            },
+          },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return updated;
+    });
   }
 
   async join(channelId: string, actorType: ActorType, actorId: string) {

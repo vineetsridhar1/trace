@@ -3,6 +3,7 @@ import { client } from "./urql";
 import { START_SESSION_MUTATION, useEntityStore } from "@trace/client-core";
 import { navigateToSession, navigateToSessionGroup } from "../stores/ui";
 import type { CreatableGeneratedProjectKind } from "../components/sidebar/generated-project-types";
+import { buildQuickSessionStartInput, type QuickSessionOptions } from "./quick-session-input";
 
 const pendingQuickSessionChannels = new Set<string>();
 const pendingGeneratedProjectKinds = new Set<CreatableGeneratedProjectKind>();
@@ -21,14 +22,15 @@ export function getChannelRepoId(channelId: string): string | undefined {
 }
 
 /**
- * Create a new not_started session and let the user choose the runtime later.
+ * Create a new General session and let the user choose the runtime later.
+ * Existing groups retain their own kind.
  * Used by both Cmd+N and the + session button.
  *
  * Starts the session, then navigates once the service returns the real IDs.
  */
 export async function createQuickSession(
   channelId: string,
-  options: { sessionGroupId?: string; visibility?: "public" | "private"; tool?: string } = {},
+  options: QuickSessionOptions = {},
 ): Promise<void> {
   if (pendingQuickSessionChannels.has(channelId)) return;
   pendingQuickSessionChannels.add(channelId);
@@ -38,14 +40,7 @@ export async function createQuickSession(
   try {
     const result = await client
       .mutation(START_SESSION_MUTATION, {
-        input: {
-          deferRuntimeSelection: true,
-          channelId,
-          repoId: channelRepoId ?? undefined,
-          sessionGroupId: options.sessionGroupId,
-          visibility: options.visibility,
-          tool: options.tool,
-        },
+        input: buildQuickSessionStartInput(channelId, channelRepoId, options),
       })
       .toPromise();
 
@@ -79,36 +74,42 @@ export async function createQuickSession(
   }
 }
 
-export async function createAppSession(): Promise<boolean> {
-  return createGeneratedProjectSession("app");
-}
-
 export function buildGeneratedProjectStartInput(
   kind: CreatableGeneratedProjectKind,
   designSystemVersionId?: string,
+  channelId?: string | null,
 ) {
   return {
     kind,
     hosting: "cloud" as const,
+    ...(channelId ? { channelId } : {}),
     ...(kind === "design" && designSystemVersionId ? { designSystemVersionId } : {}),
   };
 }
 
-export async function createDesignSession(designSystemVersionId?: string): Promise<boolean> {
-  return createGeneratedProjectSession("design", designSystemVersionId);
+export async function createAppSession(channelId?: string | null): Promise<boolean> {
+  return createGeneratedProjectSession("app", undefined, channelId);
 }
 
-export async function createPdfSession(): Promise<boolean> {
-  return createGeneratedProjectSession("pdf");
+export async function createDesignSession(
+  designSystemVersionId?: string,
+  channelId?: string | null,
+): Promise<boolean> {
+  return createGeneratedProjectSession("design", designSystemVersionId, channelId);
 }
 
-export async function createAnimationSession(): Promise<boolean> {
-  return createGeneratedProjectSession("animation");
+export async function createPdfSession(channelId?: string | null): Promise<boolean> {
+  return createGeneratedProjectSession("pdf", undefined, channelId);
+}
+
+export async function createAnimationSession(channelId?: string | null): Promise<boolean> {
+  return createGeneratedProjectSession("animation", undefined, channelId);
 }
 
 async function createGeneratedProjectSession(
   kind: CreatableGeneratedProjectKind,
   designSystemVersionId?: string,
+  channelId?: string | null,
 ): Promise<boolean> {
   if (pendingGeneratedProjectKinds.has(kind)) return false;
   pendingGeneratedProjectKinds.add(kind);
@@ -117,7 +118,7 @@ async function createGeneratedProjectSession(
   try {
     const result = await client
       .mutation(START_SESSION_MUTATION, {
-        input: buildGeneratedProjectStartInput(kind, designSystemVersionId),
+        input: buildGeneratedProjectStartInput(kind, designSystemVersionId, channelId),
       })
       .toPromise();
 
@@ -134,7 +135,7 @@ async function createGeneratedProjectSession(
       return false;
     }
 
-    navigateToSessionGroup(null, session.sessionGroupId, session.id);
+    navigateToSessionGroup(channelId ?? null, session.sessionGroupId, session.id);
     return true;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

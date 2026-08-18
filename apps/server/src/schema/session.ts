@@ -21,7 +21,11 @@ import {
   deriveSessionGroupStatus,
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
-import { assertScopeAccess, canViewSessionGroup } from "../services/access.js";
+import {
+  assertChannelAccess,
+  assertScopeAccess,
+  canViewSessionGroup,
+} from "../services/access.js";
 import { designCommitPreviewUrl } from "../lib/design-preview-url.js";
 import { animationCommitPreviewUrl } from "../lib/animation-preview-url.js";
 import { sessionMessageService } from "../services/session-message.js";
@@ -425,8 +429,11 @@ export const sessionQueries = {
 };
 
 export const sessionMutations = {
-  startSession: (_: unknown, args: { input: StartSessionInput }, ctx: Context) => {
+  startSession: async (_: unknown, args: { input: StartSessionInput }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
+    if (args.input.channelId) {
+      await assertChannelAccess(args.input.channelId, ctx.userId, orgId);
+    }
     return sessionService.start({
       ...args.input,
       imageKeys: args.input.attachmentKeys ?? undefined,
@@ -510,12 +517,16 @@ export const sessionMutations = {
   ) => {
     const organizationId = requireOrgContext(ctx);
     await assertScopeAccess("session", args.sessionId, ctx.userId, organizationId);
-    return sessionService.linkPullRequest({
-      sessionId: args.sessionId,
-      prUrl: args.prUrl,
-      organizationId,
-      actorId: ctx.userId,
-    });
+    try {
+      return await sessionService.linkPullRequest({
+        sessionId: args.sessionId,
+        prUrl: args.prUrl,
+        organizationId,
+        actorId: ctx.userId,
+      });
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
   },
   renameSessionGroup: (_: unknown, args: { id: string; name: string }, ctx: Context) => {
     return sessionService.renameGroup(

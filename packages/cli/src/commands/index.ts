@@ -3,10 +3,13 @@ import { artifactCommand } from "./artifact.js";
 import { appCommands } from "./app/index.js";
 import { browserCommands } from "./browser/index.js";
 import { channelListCommand } from "./channel/list.js";
+import { channelLinkRepoCommand } from "./channel/link-repo.js";
 import { contextCommand } from "./context.js";
 import { integrationCommands } from "./integration/index.js";
 import { portCommands } from "./port/index.js";
 import { repoListCommand } from "./repo/list.js";
+import { repoAttachRemoteCommand } from "./repo/attach-remote.js";
+import { repoCreateCommand } from "./repo/create.js";
 import { sessionCommands } from "./session/index.js";
 import { terminalCommands } from "./terminal/index.js";
 
@@ -17,7 +20,10 @@ export const commands: readonly CommandDefinition[] = [
   ...integrationCommands,
   ...portCommands,
   channelListCommand,
+  channelLinkRepoCommand,
   repoListCommand,
+  repoCreateCommand,
+  repoAttachRemoteCommand,
   ...sessionCommands,
   ...terminalCommands,
   artifactCommand,
@@ -135,20 +141,30 @@ export const commandGroups: readonly CommandGroupDefinition[] = [
     description: "Discover channels available to the session owner",
     workflow: [
       'Run "$TRACE_CLI" channel list --member-only --json to list eligible destinations.',
+      'If a project has no repository, run "$TRACE_CLI" channel link-repo <channel-id> <repo-id> --json.',
       'Choose a channel ID and pass it to "$TRACE_CLI" session start --channel <channel-id>.',
     ],
-    examples: ['"$TRACE_CLI" channel list --member-only --json'],
+    examples: [
+      '"$TRACE_CLI" channel list --member-only --json',
+      '"$TRACE_CLI" channel link-repo <channel-id> <repo-id> --json',
+    ],
     notes: ["Channels are the collaboration and session destination in Trace."],
   },
   {
     name: "repo",
-    description: "Discover repositories in the current organization",
+    description: "Create and discover repositories in the current organization",
     workflow: [
       'Run "$TRACE_CLI" repo list --json to find a repository ID.',
-      'Use the repository ID with a channel that has no linked repository: "$TRACE_CLI" session start --channel <channel-id> --repo <repo-id>.',
+      'If the repository is not registered yet, run "$TRACE_CLI" repo create <name> --json.',
+      'If the repository is local-only, run "$TRACE_CLI" repo attach-remote <repo-id> <remote-url> --json.',
+      'Link it to a project with "$TRACE_CLI" channel link-repo <channel-id> <repo-id> --json.',
     ],
-    examples: ['"$TRACE_CLI" repo list --json'],
-    notes: ["Repositories support coding channels; they are not standalone session destinations."],
+    examples: [
+      '"$TRACE_CLI" repo list --json',
+      '"$TRACE_CLI" repo create app --json',
+      '"$TRACE_CLI" repo attach-remote <repo-id> https://github.com/acme/app.git --json',
+    ],
+    notes: ["Repositories provide optional context for projects, artifacts, and sessions."],
   },
   {
     name: "artifact",

@@ -204,6 +204,45 @@ const PI_INSTALL_COMMAND = "npm install -g @earendil-works/pi-coding-agent";
 const PI_INSTALL_DOCS_URL = "https://pi.dev/docs/latest/quickstart";
 const ORG_GITHUB_TOKEN_SECRET_NAME = "GITHUB_TOKEN";
 
+type GitHubPullRequestRef = GitHubRepoRef & {
+  number: string;
+  prUrl: string;
+  remoteUrl: string;
+};
+
+function parseGitHubPullRequestUrl(url: URL): GitHubPullRequestRef | null {
+  if (url.hostname.toLowerCase() !== "github.com") return null;
+  const parts = url.pathname.split("/").filter(Boolean);
+  if (parts.length < 4 || parts[2] !== "pull" || !/^\d+$/.test(parts[3])) return null;
+  const [, , , number] = parts;
+  let owner: string;
+  let repo: string;
+  try {
+    owner = decodeURIComponent(parts[0] ?? "");
+    repo = decodeURIComponent(parts[1] ?? "");
+  } catch {
+    return null;
+  }
+  const validOwner = /^(?!-)[A-Za-z0-9-]{1,39}$/.test(owner) && !owner.endsWith("-");
+  const validRepo = /^[A-Za-z0-9._-]{1,100}$/.test(repo);
+  if (!validOwner || !validRepo || !number) return null;
+  return {
+    owner,
+    repo,
+    number,
+    prUrl: `https://github.com/${owner}/${repo}/pull/${number}`,
+    remoteUrl: `https://github.com/${owner}/${repo}.git`,
+  };
+}
+
+function isSameGitHubRepo(remoteUrl: string, expected: GitHubRepoRef): boolean {
+  const actual = parseGitHubRepo(remoteUrl);
+  return (
+    actual?.owner.toLowerCase() === expected.owner.toLowerCase() &&
+    actual.repo.toLowerCase() === expected.repo.toLowerCase()
+  );
+}
+
 function normalizeClientSource(source: string | null | undefined): string | null {
   const trimmed = source?.trim();
   return trimmed ? trimmed : null;
@@ -1077,7 +1116,7 @@ When you need a Trace platform capability, first run \`"$TRACE_CLI" --help --jso
 </system-instruction>`;
 
 const GENERAL_SESSION_INSTRUCTION = `\n\n<system-instruction>
-This is a Trace general agent session. Coordinate, monitor, answer questions, and use the managed Trace CLI to discover the relevant channel, repository, and sessions. Do not edit code or create a specialized workspace in this session. When this conversation becomes one focused task, convert this session to the matching Coding, App, Design, PDF, or Animation kind. Coding requires a coding channel, which normally supplies its repository. Creation kinds use isolated managed cloud workspaces. A successful conversion preserves the conversation, prepares the target workspace, and resumes the request automatically. If the CLI returns an error, report that exact failure and do not imply the conversion happened. When work is independent or parallel, create a linked session instead.
+This is a Trace general agent session. Coordinate, monitor, answer questions, and use the managed Trace CLI to discover the relevant project/channel, repository, and sessions. Do not edit code or create a specialized workspace in this session. When this conversation becomes focused coding or implementation work, convert this session to Coding automatically; coding is the default and does not require user confirmation. The selected project/channel must already have a linked repository because Trace creates a worktree from it. If no repository is linked, let conversion fail, report the exact failure, and tell the user that a repository must be attached to the project/channel before retrying. Never supply an unrelated or one-off repository to bypass that requirement. Before converting to App, Design, PDF, Animation, or any other non-coding kind, ask the user to confirm that exact kind and wait for their response; never perform a non-coding conversion automatically. A successful conversion preserves the conversation, prepares the target workspace, and resumes the request automatically. If the CLI returns an error, report that exact failure and do not imply the conversion happened. When work is independent or parallel, create a linked session instead.
 </system-instruction>`;
 
 /** Instruction appended to every prompt for repo-based sessions so the AI auto-saves each response. */
@@ -3201,7 +3240,7 @@ export class SessionService {
     if (!repo) throw new Error("Repo not found");
   }
 
-  /** Channel-less generated project groups for the Apps and Designs sidebar sections. */
+  /** Generated project groups for the global Apps and Designs indexes. */
   async listAppGroups(organizationId: string, userId: string, includeArchived = false) {
     return this.listGeneratedProjectGroups("app", organizationId, userId, includeArchived);
   }
@@ -3420,9 +3459,10 @@ export class SessionService {
   /**
    * Convert the current work unit without creating a second conversation.
    *
-   * General sessions can become coding sessions in a selected channel or
-   * creation sessions in an isolated managed cloud workspace. Design-system
-   * authoring remains a dedicated flow because it requires source-repo metadata.
+   * General sessions can become coding sessions or creation sessions while
+   * retaining their project channel. Creation workspaces use isolated managed
+   * repositories; the channel is organizational context, not their Git source.
+   * Design-system authoring remains a dedicated source-backed flow.
    */
   async convertGroup(input: ConvertSessionGroupServiceInput) {
     await assertSessionGroupAccess(input.sessionGroupId, input.actorId, input.organizationId);
@@ -3656,9 +3696,11 @@ export class SessionService {
     if (channel.repoId && input.repoId && channel.repoId !== input.repoId) {
       throw new ValidationError("Coding channel sessions must use the channel's linked repo");
     }
-    const repoId = channel.repoId ?? input.repoId ?? sourceGroup.repoId;
+    const repoId = channel.repoId;
     if (!repoId) {
-      throw new ValidationError("The selected coding channel requires a repository");
+      throw new ValidationError(
+        "The selected project/channel has no linked repository, so Trace cannot create a coding worktree. Attach a repository to the project/channel before converting to coding.",
+      );
     }
 
     // An explicit project must be valid for the destination. Otherwise keep the
@@ -4289,6 +4331,18 @@ export class SessionService {
     if (resolvedChannel && resolvedChannel.organizationId !== input.organizationId) {
       throw new Error("Channel does not belong to this organization");
     }
+    if (input.channelId) {
+      const membership = await prisma.channelMember.findFirst({
+        where: {
+          channelId: input.channelId,
+          userId: input.createdById,
+          leftAt: null,
+          channel: { organizationId: input.organizationId },
+        },
+        select: { channelId: true },
+      });
+      if (!membership) throw new AuthorizationError("Not authorized for this channel");
+    }
     const requiresCompleteCodingInput = input.clientSource === "cli" && resolvedKind === "coding";
     if (requiresCompleteCodingInput && !input.prompt?.trim()) {
       throw new ValidationError("Coding sessions require a non-empty task prompt");
@@ -4317,12 +4371,10 @@ export class SessionService {
     }
 
     const authoritativeChannelRepoId =
-      resolvedChannel?.type === "coding" ? (resolvedChannel.repoId ?? null) : null;
+      resolvedChannel?.type === "coding" && !isGeneratedProjectKind(resolvedKind)
+        ? (resolvedChannel.repoId ?? null)
+        : null;
     const authoritativeProjectRepoId = resolvedProject?.repoId ?? null;
-    if (isGeneratedProjectKind(resolvedKind) && authoritativeChannelRepoId && !existingGroup) {
-      const label = resolvedKind === "design" ? "Design" : "App";
-      throw new ValidationError(`${label} sessions cannot start in a repo-linked coding channel`);
-    }
 
     if (authoritativeChannelRepoId && input.repoId && input.repoId !== authoritativeChannelRepoId) {
       throw new Error("Coding channel sessions must use the channel's linked repo");
@@ -4369,7 +4421,7 @@ export class SessionService {
       input.branch ??
       seedGroup?.branch ??
       sourceSession?.branch ??
-      resolvedChannel?.baseBranch ??
+      (isGeneratedProjectKind(resolvedKind) ? undefined : resolvedChannel?.baseBranch) ??
       undefined;
     const sharedWorkdir = input.forceNewGroup ? null : (resolvedGroup?.workdir ?? null);
     const sharedConnection = input.forceNewGroup ? null : (resolvedGroup?.connection ?? null);
@@ -9575,7 +9627,6 @@ export class SessionService {
             },
             data: {
               kind: conversion.kind,
-              channelId: null,
               repoId: conversion.repoId,
             },
           });
@@ -9615,7 +9666,6 @@ export class SessionService {
               ...(isPrimary && {
                 ...(conversion
                   ? {
-                      channelId: null,
                       repoId: conversion.repoId,
                       readOnlyWorkspace: false,
                       tool: conversion.tool,
@@ -12726,23 +12776,85 @@ export class SessionService {
     } catch {
       throw new ValidationError("A valid pull request URL is required");
     }
-    if (url.protocol !== "https:") {
-      throw new ValidationError("The pull request URL must use HTTPS");
-    }
+    if (url.protocol !== "https:") throw new ValidationError("The pull request URL must use HTTPS");
+    const pullRequest = parseGitHubPullRequestUrl(url);
+    if (!pullRequest) throw new ValidationError("A valid GitHub pull request URL is required");
 
     const session = await prisma.session.findFirst({
       where: { id: params.sessionId, organizationId: params.organizationId },
-      select: { id: true, sessionGroupId: true },
+      select: {
+        id: true,
+        repoId: true,
+        repo: { select: { id: true, remoteUrl: true } },
+        channelId: true,
+        channel: {
+          select: {
+            id: true,
+            repoId: true,
+            repo: { select: { id: true, remoteUrl: true } },
+          },
+        },
+        sessionGroupId: true,
+        sessionGroup: {
+          select: {
+            id: true,
+            repoId: true,
+            repo: { select: { id: true, remoteUrl: true } },
+            channelId: true,
+            channel: {
+              select: {
+                id: true,
+                repoId: true,
+                repo: { select: { id: true, remoteUrl: true } },
+              },
+            },
+          },
+        },
+      },
     });
     if (!session) throw new ValidationError("Session not found");
     if (!session.sessionGroupId) {
       throw new ValidationError("Session is not part of a session group");
     }
 
+    const channel = session.sessionGroup?.channel ?? session.channel;
+    const repo = session.sessionGroup?.repo ?? session.repo ?? channel?.repo;
+    if (!repo) {
+      const channelHint = channel
+        ? ` Run \"$TRACE_CLI\" repo list --json, then \"$TRACE_CLI\" channel link-repo ${channel.id} <repo-id> --json before retrying.`
+        : " Attach a repository to the session before retrying.";
+      throw new ValidationError(
+        `This session has no repository to associate with the PR.${channelHint}`,
+      );
+    }
+
+    const groupRepoId = session.sessionGroup?.repoId ?? session.repoId;
+    if (channel?.repoId && groupRepoId && channel.repoId !== groupRepoId) {
+      throw new ValidationError(
+        `Channel ${channel.id} is linked to repository ${channel.repoId}, but this session uses repository ${groupRepoId}. Resolve the mismatch before linking the PR.`,
+      );
+    }
+    if (repo.remoteUrl && !isSameGitHubRepo(repo.remoteUrl, pullRequest)) {
+      throw new ValidationError(
+        `Repository ${repo.id} is linked to ${repo.remoteUrl}, which does not match ${pullRequest.remoteUrl}. Refusing to replace the existing remote.`,
+      );
+    }
+
+    if (!repo.remoteUrl) {
+      throw new ValidationError(
+        `Repository ${repo.id} has no remote URL. Attach its GitHub remote before linking a PR.`,
+      );
+    }
+    if (channel && !channel.repoId) {
+      throw new ValidationError(
+        `Channel ${channel.id} has no linked repository. Link repository ${repo.id} before linking a PR.`,
+      );
+    }
+
     await this.markPrOpened({
       sessionGroupId: session.sessionGroupId,
       eventSessionId: session.id,
-      prUrl: url.toString(),
+      prUrl: pullRequest.prUrl,
       organizationId: params.organizationId,
       actorId: params.actorId ?? "trace-cli",
     });

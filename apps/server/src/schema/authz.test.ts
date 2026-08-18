@@ -80,6 +80,7 @@ vi.mock("../services/ticket.js", () => ({
 
 vi.mock("../services/session.js", () => ({
   sessionService: {
+    start: vi.fn(),
     list: vi.fn(),
     listByUser: vi.fn(),
     get: vi.fn(),
@@ -94,6 +95,12 @@ vi.mock("../services/session.js", () => ({
     clearQueuedMessages: vi.fn(),
     reorderQueuedMessages: vi.fn(),
     getQueuedMessageSessionId: vi.fn().mockResolvedValue("session-1"),
+  },
+}));
+
+vi.mock("../services/channel.js", () => ({
+  channelService: {
+    linkRepo: vi.fn(),
   },
 }));
 
@@ -148,7 +155,7 @@ import { ticketMutations, ticketQueries, ticketSubscriptions } from "./ticket.js
 import { sessionQueries, sessionSubscriptions, sessionTypeResolvers } from "./session.js";
 import { sessionMutations } from "./session.js";
 import { channelGroupQueries } from "./channelGroup.js";
-import { channelSubscriptions, channelTypeResolvers } from "./channel.js";
+import { channelMutations, channelSubscriptions, channelTypeResolvers } from "./channel.js";
 import { eventQueries, eventSubscriptions } from "./event.js";
 import { inboxQueries } from "./inbox.js";
 import { assertChannelAccess, assertScopeAccess } from "../services/access.js";
@@ -161,6 +168,7 @@ import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 import { channelGroupService } from "../services/channelGroup.js";
 import { inboxService } from "../services/inbox.js";
+import { channelService } from "../services/channel.js";
 
 const ctx = {
   userId: "user-1",
@@ -220,6 +228,24 @@ describe("GraphQL authz guards", () => {
       "Not authorized for this organization",
     );
     expect(inboxService.listForUser).not.toHaveBeenCalled();
+  });
+
+  it("requires active channel access for session creation and repository linking", async () => {
+    await sessionMutations.startSession(
+      {},
+      { input: { kind: "general", channelId: "channel-1" } },
+      ctx,
+    );
+    await channelMutations.linkChannelRepo(
+      {},
+      { channelId: "channel-1", repoId: "repo-1" },
+      ctx,
+    );
+
+    expect(assertChannelAccess).toHaveBeenNthCalledWith(1, "channel-1", "user-1", "org-1");
+    expect(assertChannelAccess).toHaveBeenNthCalledWith(2, "channel-1", "user-1", "org-1");
+    expect(sessionService.start).toHaveBeenCalled();
+    expect(channelService.linkRepo).toHaveBeenCalled();
   });
 
   it("guards session mutations by active org and scope", async () => {

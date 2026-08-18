@@ -643,8 +643,8 @@ describe("SessionService", () => {
         const sourceGroup = makeSessionGroup({
           id: "group-general",
           kind: "general",
-          channelId: null,
-          channel: null,
+          channelId: "channel-1",
+          channel: { id: "channel-1", name: "healthcare" },
           repoId: null,
           repo: null,
           branch: null,
@@ -672,8 +672,8 @@ describe("SessionService", () => {
           repoId: managedRepo.id,
           repo: managedRepo,
           branch: managedRepo.defaultBranch,
-          channelId: null,
-          channel: null,
+          channelId: "channel-1",
+          channel: { id: "channel-1", name: "healthcare" },
           workdir: sourceGroup.workdir,
           connection: {
             state: "connected",
@@ -716,8 +716,8 @@ describe("SessionService", () => {
                 hosting: "local",
                 repoId: null,
                 repo: null,
-                channelId: null,
-                channel: null,
+                channelId: "channel-1",
+                channel: { id: "channel-1", name: "healthcare" },
                 workdir: sourceGroup.workdir,
                 connection: convertedSession.connection,
               }),
@@ -752,7 +752,6 @@ describe("SessionService", () => {
             where: expect.objectContaining({ id: sourceGroup.id, kind: "general" }),
             data: expect.objectContaining({
               kind,
-              channelId: null,
               repoId: managedRepo.id,
             }),
           }),
@@ -762,7 +761,6 @@ describe("SessionService", () => {
           expect.objectContaining({
             data: expect.objectContaining({
               hosting: "cloud",
-              channelId: null,
               repoId: managedRepo.id,
               readOnlyWorkspace: false,
               projects: { deleteMany: {} },
@@ -773,6 +771,10 @@ describe("SessionService", () => {
             }),
           }),
         );
+        const groupUpdate = prismaMock.sessionGroup.updateMany.mock.calls[0]?.[0];
+        const sessionUpdate = prismaMock.session.update.mock.calls[0]?.[0];
+        expect(groupUpdate?.data).not.toHaveProperty("channelId");
+        expect(sessionUpdate?.data).not.toHaveProperty("channelId");
         await vi.waitFor(() => {
           expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -1279,6 +1281,35 @@ describe("SessionService", () => {
           }),
         }),
       );
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+    });
+
+    it("requires the project channel itself to have a repository before coding conversion", async () => {
+      const sourceGroup = makeSessionGroup({
+        id: "group-general",
+        kind: "general",
+        channelId: "channel-1",
+        repoId: "repo-fallback",
+      });
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
+        .mockResolvedValueOnce({ ...sourceGroup, sessions: [makeSession()] });
+      prismaMock.channel.findFirst.mockResolvedValueOnce({ id: "channel-1", repoId: null });
+
+      await expect(
+        service.convertGroup({
+          sessionGroupId: sourceGroup.id,
+          kind: "coding",
+          channelId: "channel-1",
+          repoId: "repo-fallback",
+          organizationId: "org-1",
+          actorId: "user-1",
+        }),
+      ).rejects.toThrow(
+        "The selected project/channel has no linked repository, so Trace cannot create a coding worktree",
+      );
+
+      expect(prismaMock.repo.findFirst).not.toHaveBeenCalled();
       expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
 
@@ -1858,6 +1889,10 @@ describe("SessionService", () => {
   });
 
   describe("start", () => {
+    beforeEach(() => {
+      prismaMock.channelMember.findFirst.mockResolvedValue({ channelId: "channel-1" });
+    });
+
     it("returns the original session for a repeated client mutation id", async () => {
       const existingSession = makeSession({ id: "session-existing" });
       prismaMock.event.findFirst.mockResolvedValueOnce({ scopeId: existingSession.id } as never);
@@ -2180,6 +2215,93 @@ describe("SessionService", () => {
           prompt: "Explore onboarding",
         } as unknown as StartSessionServiceInput),
       ).rejects.toThrow("Design sessions require cloud hosting");
+    });
+
+    it("creates a design in a repo-linked project without using the project repo", async () => {
+      const repo = await managedGitServiceMock.createManagedRepo({
+        organizationId: "org-1",
+        name: "Design source",
+        actorType: "user",
+        actorId: "user-1",
+      });
+      managedGitServiceMock.createManagedRepo.mockClear();
+      const sessionGroup = makeSessionGroup({
+        kind: "design",
+        channelId: "channel-1",
+        repoId: repo.id,
+        repo,
+        branch: repo.defaultBranch,
+      });
+      const session = makeSession({
+        hosting: "cloud",
+        channelId: "channel-1",
+        repoId: repo.id,
+        repo,
+        branch: repo.defaultBranch,
+        sessionGroup,
+      });
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "project-repo-1",
+        baseBranch: "develop",
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        kind: "design",
+        channelId: "channel-1",
+        hosting: "cloud",
+      } as unknown as StartSessionServiceInput);
+
+      expect(managedGitServiceMock.createManagedRepo).toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            kind: "design",
+            channelId: "channel-1",
+            repoId: "managed-repo-1",
+            branch: "main",
+          }),
+        }),
+      );
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            channelId: "channel-1",
+            repoId: "managed-repo-1",
+            branch: "main",
+          }),
+        }),
+      );
+    });
+
+    it("rejects starting a session in a channel where the actor is not a member", async () => {
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: null,
+        baseBranch: null,
+      });
+      prismaMock.channelMember.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-2",
+          kind: "general",
+          channelId: "channel-1",
+          deferRuntimeSelection: true,
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Not authorized for this channel");
+
+      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
     });
 
     it("rejects design-system versions for non-Design sessions", async () => {
@@ -6103,6 +6225,10 @@ describe("SessionService", () => {
 
       const command = sessionRouterMock.send.mock.calls.at(-1)?.[1];
       expect(command?.prompt).toContain("This is a Trace general agent session");
+      expect(command?.prompt).toContain(
+        "coding is the default and does not require user confirmation",
+      );
+      expect(command?.prompt).toContain("never perform a non-coding conversion automatically");
       expect(command?.prompt).not.toContain("trace-<slug>-<descriptive-name>");
       expect(command?.prompt).not.toContain("git add -A");
     });
@@ -14147,6 +14273,120 @@ describe("SessionService", () => {
   });
 
   describe("pr lifecycle", () => {
+    it("requires the agent to attach a missing remote and channel repo before linking a PR", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        repoId: "repo-1",
+        repo: { id: "repo-1", remoteUrl: null },
+        channelId: "channel-1",
+        channel: { id: "channel-1", repoId: null, repo: null },
+        sessionGroupId: "group-1",
+        sessionGroup: {
+          id: "group-1",
+          repoId: "repo-1",
+          repo: { id: "repo-1", remoteUrl: null },
+          channelId: "channel-1",
+          channel: { id: "channel-1", repoId: null, repo: null },
+        },
+      });
+      const markPrOpenedSpy = vi.spyOn(service, "markPrOpened");
+
+      await expect(
+        service.linkPullRequest({
+          sessionId: "session-1",
+          prUrl: "https://github.com/acme/app/pull/42",
+          organizationId: "org-1",
+          actorId: "user-1",
+        }),
+      ).rejects.toThrow(
+        "Repository repo-1 has no remote URL. Attach its GitHub remote before linking a PR.",
+      );
+      expect(markPrOpenedSpy).not.toHaveBeenCalled();
+    });
+
+    it("rejects shell metacharacters in GitHub PR repository names", async () => {
+      const markPrOpenedSpy = vi.spyOn(service, "markPrOpened");
+
+      await expect(
+        service.linkPullRequest({
+          sessionId: "session-1",
+          prUrl: "https://github.com/acme/repo$(whoami)/pull/42",
+          organizationId: "org-1",
+          actorId: "user-1",
+        }),
+      ).rejects.toThrow("A valid GitHub pull request URL is required");
+
+      expect(prismaMock.session.findFirst).not.toHaveBeenCalled();
+      expect(markPrOpenedSpy).not.toHaveBeenCalled();
+    });
+
+    it("links a PR when the session, channel, and GitHub remote agree", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        repoId: "repo-1",
+        repo: { id: "repo-1", remoteUrl: "git@github.com:acme/app.git" },
+        channelId: "channel-1",
+        channel: { id: "channel-1", repoId: "repo-1" },
+        sessionGroupId: "group-1",
+        sessionGroup: {
+          id: "group-1",
+          repoId: "repo-1",
+          repo: { id: "repo-1", remoteUrl: "git@github.com:acme/app.git" },
+          channelId: "channel-1",
+          channel: { id: "channel-1", repoId: "repo-1" },
+        },
+      });
+      parseGitHubRepoMock.mockReturnValueOnce({ owner: "acme", repo: "app" });
+      const markPrOpenedSpy = vi.spyOn(service, "markPrOpened").mockResolvedValueOnce(undefined);
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
+        makeSessionGroup({
+          prUrl: "https://github.com/acme/app/pull/42",
+        }),
+      );
+
+      await service.linkPullRequest({
+        sessionId: "session-1",
+        prUrl: "https://github.com/acme/app/pull/42/files?diff=split",
+        organizationId: "org-1",
+        actorId: "user-1",
+      });
+
+      expect(markPrOpenedSpy).toHaveBeenCalledWith({
+        sessionGroupId: "group-1",
+        eventSessionId: "session-1",
+        prUrl: "https://github.com/acme/app/pull/42",
+        organizationId: "org-1",
+        actorId: "user-1",
+      });
+    });
+
+    it("refuses to replace a repository remote that disagrees with the PR", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        repoId: "repo-1",
+        repo: { id: "repo-1", remoteUrl: "https://github.com/acme/other.git" },
+        channelId: "channel-1",
+        channel: { id: "channel-1", repoId: "repo-1" },
+        sessionGroupId: "group-1",
+        sessionGroup: {
+          id: "group-1",
+          repoId: "repo-1",
+          repo: { id: "repo-1", remoteUrl: "https://github.com/acme/other.git" },
+          channelId: "channel-1",
+          channel: { id: "channel-1", repoId: "repo-1" },
+        },
+      });
+      parseGitHubRepoMock.mockReturnValueOnce({ owner: "acme", repo: "other" });
+
+      await expect(
+        service.linkPullRequest({
+          sessionId: "session-1",
+          prUrl: "https://github.com/acme/app/pull/42",
+          organizationId: "org-1",
+        }),
+      ).rejects.toThrow("Refusing to replace the existing remote");
+    });
+
     it("does not emit a duplicate PR-opened event when the group already tracks that PR", async () => {
       prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
         prUrl: "https://github.com/trace/trace/pull/100",

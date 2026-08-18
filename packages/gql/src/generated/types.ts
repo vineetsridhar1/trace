@@ -1041,6 +1041,7 @@ export type Mutation = {
    * mid-session. Returns the message Event that kicks off the agent.
    */
   attachDesignToSession: Event;
+  attachRepoRemote: Repo;
   clearEndpointTraffic: Scalars["Boolean"]["output"];
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
@@ -1090,6 +1091,7 @@ export type Mutation = {
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
+  linkChannelRepo: Channel;
   linkEntityToProject: Project;
   linkLinkedCheckoutRepo: LinkedCheckoutActionResult;
   linkSessionPullRequest: SessionGroup;
@@ -1102,6 +1104,7 @@ export type Mutation = {
   queueSessionMessage: QueuedMessage;
   refreshDesignSystemSource: DesignSystem;
   registerPushToken: Scalars["Boolean"]["output"];
+  registerRepo: Repo;
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars["Boolean"]["output"];
   removeQueuedMessage: Scalars["Boolean"]["output"];
@@ -1214,6 +1217,11 @@ export type MutationAssignTicketArgs = {
 export type MutationAttachDesignToSessionArgs = {
   designSessionGroupId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
+};
+
+export type MutationAttachRepoRemoteArgs = {
+  remoteUrl: Scalars["String"]["input"];
+  repoId: Scalars["ID"]["input"];
 };
 
 export type MutationClearEndpointTrafficArgs = {
@@ -1428,6 +1436,12 @@ export type MutationLeaveChatArgs = {
   chatId: Scalars["ID"]["input"];
 };
 
+export type MutationLinkChannelRepoArgs = {
+  baseBranch?: InputMaybe<Scalars["String"]["input"]>;
+  channelId: Scalars["ID"]["input"];
+  repoId: Scalars["ID"]["input"];
+};
+
 export type MutationLinkEntityToProjectArgs = {
   entityId: Scalars["ID"]["input"];
   entityType: EntityType;
@@ -1490,6 +1504,10 @@ export type MutationRefreshDesignSystemSourceArgs = {
 export type MutationRegisterPushTokenArgs = {
   platform: PushPlatform;
   token: Scalars["String"]["input"];
+};
+
+export type MutationRegisterRepoArgs = {
+  input: CreateRepoInput;
 };
 
 export type MutationRegisterRepoWebhookArgs = {
@@ -3104,6 +3122,7 @@ export type UpdateChannelGroupInput = {
 export type UpdateChannelInput = {
   baseBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
   runScripts?: InputMaybe<Scalars["JSON"]["input"]>;
   setupScript?: InputMaybe<Scalars["String"]["input"]>;
 };

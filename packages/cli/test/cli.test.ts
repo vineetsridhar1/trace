@@ -153,6 +153,173 @@ describe("Trace CLI", () => {
     );
   });
 
+  it("prints the validation error when PR linking requires repository reconciliation", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_SESSION_ID", "session-1");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              errors: [
+                {
+                  message: "Repository repo-1 has no remote URL.",
+                  extensions: { code: "BAD_USER_INPUT" },
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+
+    await expect(
+      run(["session", "link-pr", "https://github.com/acme/app/pull/42", "--self", "--json"]),
+    ).resolves.toBe(4);
+    expect(stderr.mock.calls.flat().join("")).toContain('"category":"validation"');
+    expect(stderr.mock.calls.flat().join("")).toContain("Repository repo-1 has no remote URL");
+  });
+
+  it("links a repository to a repo-less channel", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: URL, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as {
+          operationName: string;
+          variables: Record<string, unknown>;
+        };
+        expect(request.operationName).toBe("TraceCliLinkChannelRepo");
+        expect(request.variables).toEqual({
+          channelId: "channel-1",
+          repoId: "repo-1",
+          baseBranch: "develop",
+        });
+        return new Response(
+          JSON.stringify({
+            data: {
+              linkChannelRepo: {
+                id: "channel-1",
+                name: "Project",
+                baseBranch: "develop",
+                repo: {
+                  id: "repo-1",
+                  name: "app",
+                  remoteUrl: null,
+                  defaultBranch: "main",
+                },
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    await expect(
+      run(["channel", "link-repo", "channel-1", "repo-1", "--branch", "develop", "--json"]),
+    ).resolves.toBe(0);
+    expect(stdout.mock.calls.flat().join("")).toContain('"baseBranch":"develop"');
+  });
+
+  it("registers a repository without creating another channel", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: URL, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as {
+          operationName: string;
+          variables: Record<string, unknown>;
+        };
+        expect(request.operationName).toBe("TraceCliRegisterRepo");
+        expect(request.variables).toEqual({
+          input: {
+            organizationId: "org-1",
+            name: "app",
+            remoteUrl: "https://github.com/acme/app.git",
+            defaultBranch: "trunk",
+          },
+        });
+        return new Response(
+          JSON.stringify({
+            data: {
+              registerRepo: {
+                id: "repo-1",
+                name: "app",
+                provider: "github",
+                remoteUrl: "https://github.com/acme/app.git",
+                defaultBranch: "trunk",
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    await expect(
+      run([
+        "repo",
+        "create",
+        "app",
+        "--remote-url",
+        "https://github.com/acme/app.git",
+        "--default-branch",
+        "trunk",
+        "--json",
+      ]),
+    ).resolves.toBe(0);
+    expect(stdout.mock.calls.flat().join("")).toContain('"id":"repo-1"');
+  });
+
+  it("attaches a remote URL to a local-only repository", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: URL, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as {
+          operationName: string;
+          variables: Record<string, unknown>;
+        };
+        expect(request.operationName).toBe("TraceCliAttachRepoRemote");
+        expect(request.variables).toEqual({
+          repoId: "repo-1",
+          remoteUrl: "https://github.com/acme/app.git",
+        });
+        return new Response(
+          JSON.stringify({
+            data: {
+              attachRepoRemote: {
+                id: "repo-1",
+                name: "app",
+                provider: "github",
+                remoteUrl: "https://github.com/acme/app.git",
+                defaultBranch: "main",
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    await expect(
+      run(["repo", "attach-remote", "repo-1", "https://github.com/acme/app.git", "--json"]),
+    ).resolves.toBe(0);
+    expect(stdout.mock.calls.flat().join("")).toContain(
+      '"remoteUrl":"https://github.com/acme/app.git"',
+    );
+  });
+
   it("documents every command and group with actionable help metadata", () => {
     for (const command of commands) {
       expect(command.examples?.length, `${command.path.join(" ")} examples`).toBeGreaterThan(0);
@@ -852,20 +1019,40 @@ describe("Trace CLI", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      run([
-        "session",
-        "convert",
-        "--kind",
-        "coding",
-        "--channel",
-        "channel-1",
-        "--tool",
-        "codex",
-        "--json",
-      ]),
+      run(["session", "convert", "--channel", "channel-1", "--tool", "codex", "--json"]),
     ).resolves.toBe(0);
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(stdout.mock.calls.flat().join("")).toContain('"id":"session-general"');
+  });
+
+  it("rejects coding conversion when the project channel has no repository", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_SESSION_ID", "session-general");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as { query: string };
+      const data = request.query.includes("TraceCliSession")
+        ? {
+            session: {
+              id: "session-general",
+              sessionGroupId: "group-general",
+              channel: { id: "channel-1", name: "Project" },
+            },
+          }
+        : { channel: { id: "channel-1", name: "Project", repo: null } };
+      return new Response(JSON.stringify({ data }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(run(["session", "convert", "--json"])).resolves.toBe(64);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(stderr.mock.calls.flat().join("")).toContain(
+      "channel link-repo channel-1 <repo-id> --json",
+    );
   });
 
   it.each(["app", "design", "pdf", "animation"] as const)(
