@@ -242,6 +242,11 @@ export function SessionGroupDetailView({
     "worktreeDeleted",
   ) as boolean | undefined;
 
+  useEffect(() => {
+    if (!groupArchivedAt) return;
+    void window.trace?.destroyBrowsersForSessionGroup(sessionGroupId);
+  }, [groupArchivedAt, sessionGroupId]);
+
   const activeSessionGroupId = useUIStore(
     (s: { activeSessionGroupId: string | null }) => s.activeSessionGroupId,
   );

@@ -166,6 +166,7 @@ declare global {
     }) => Promise<DesktopBrowserWorkspaceState>;
     hideBrowser: (input: { sessionGroupId: string; browserId: string }) => Promise<void>;
     destroyBrowser: (input: { sessionGroupId: string; browserId: string }) => Promise<void>;
+    destroyBrowsersForSessionGroup: (sessionGroupId: string) => Promise<void>;
     setBrowserBounds: (input: {
       sessionGroupId: string;
       browserId: string;

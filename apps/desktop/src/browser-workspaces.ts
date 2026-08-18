@@ -177,6 +177,24 @@ export class BrowserWorkspaceManager {
     await this.flushPersistence();
   }
 
+  async destroyAllForSessionGroup(sessionGroupId: string): Promise<void> {
+    await this.loadSnapshots();
+    const keys = new Set<string>();
+    for (const [key, workspace] of this.workspaces) {
+      if (workspace.state.sessionGroupId === sessionGroupId) keys.add(key);
+    }
+    for (const [key, snapshot] of this.snapshots) {
+      if (snapshot.sessionGroupId === sessionGroupId) keys.add(key);
+    }
+
+    for (const key of keys) {
+      const snapshot = this.snapshots.get(key);
+      const workspace = this.workspaces.get(key);
+      const browserId = workspace?.state.browserId ?? snapshot?.browserId ?? "default";
+      await this.destroy(sessionGroupId, browserId);
+    }
+  }
+
   setBounds(sessionGroupId: string, browserId: string, bounds: Electron.Rectangle) {
     const key = browserWorkspaceKey(sessionGroupId, browserId);
     if (!this.visibleWorkspaceIds.has(key)) return;
