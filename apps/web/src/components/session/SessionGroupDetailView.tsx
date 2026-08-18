@@ -402,7 +402,9 @@ export function SessionGroupDetailView({
   const [draftWorkspaceTabs, setDraftWorkspaceTabs] = useState<DraftWorkspaceTab[]>(() =>
     getStoredWorkspaceTabs(sessionGroupId),
   );
-  const [requestedActiveDraftTabId, setRequestedActiveDraftTabId] = useState<string | null>(null);
+  const [requestedActiveWorkspaceTabId, setRequestedActiveWorkspaceTabId] = useState<
+    string | null
+  >(null);
   const browserOpenRequests = useWorkspaceRequestStore(
     (state) => state.browserRequestsByGroup[sessionGroupId] ?? EMPTY_BROWSER_REQUESTS,
   );
@@ -443,7 +445,7 @@ export function SessionGroupDetailView({
       ...tabs,
       ...requestedTabs.filter((request) => !tabs.some((tab) => tab.id === request.id)),
     ]);
-    setRequestedActiveDraftTabId(requestedTabs[requestedTabs.length - 1]!.id);
+    setRequestedActiveWorkspaceTabId(requestedTabs[requestedTabs.length - 1]!.id);
     consumeBrowserOpenRequests(sessionGroupId);
   }, [browserOpenRequests, consumeBrowserOpenRequests, sessionGroupId]);
 
@@ -470,6 +472,7 @@ export function SessionGroupDetailView({
     }
     const selectedRequest = [...terminalOpenRequests].reverse().find((request) => request.select);
     if (selectedRequest) {
+      setRequestedActiveWorkspaceTabId(`terminal:${selectedRequest.terminalId}`);
       setActiveSessionId(selectedRequest.sessionId);
       if (useUIStore.getState().activeSessionGroupId === sessionGroupId) {
         setActiveTerminalId(selectedRequest.terminalId);
@@ -1119,8 +1122,8 @@ export function SessionGroupDetailView({
     trafficEndpointId,
   ]);
 
-  const preferredWorkspaceTabId = requestedActiveDraftTabId
-    ? requestedActiveDraftTabId
+  const preferredWorkspaceTabId = requestedActiveWorkspaceTabId
+    ? requestedActiveWorkspaceTabId
     : activeArtifactId
     ? `artifact:${activeArtifactId}`
     : activeFilePath
@@ -1134,10 +1137,10 @@ export function SessionGroupDetailView({
             : draftWorkspaceTabs[0]?.id ?? null;
 
   useEffect(() => {
-    if (!requestedActiveDraftTabId) return;
-    const timeoutId = window.setTimeout(() => setRequestedActiveDraftTabId(null), 0);
+    if (!requestedActiveWorkspaceTabId) return;
+    const timeoutId = window.setTimeout(() => setRequestedActiveWorkspaceTabId(null), 0);
     return () => window.clearTimeout(timeoutId);
-  }, [requestedActiveDraftTabId]);
+  }, [requestedActiveWorkspaceTabId]);
 
   const handleActivateWorkspaceTab = useCallback(
     (tabId: string) => {
@@ -1276,6 +1279,9 @@ export function SessionGroupDetailView({
                     });
                   });
                 return;
+              }
+              if (surface === "browser") {
+                setRequestedActiveWorkspaceTabId(tabId);
               }
               setDraftWorkspaceTabs((drafts) =>
                 drafts.map((candidate) =>

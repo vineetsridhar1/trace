@@ -22,6 +22,29 @@ function NewTabHarness() {
   );
 }
 
+function ForegroundTabHarness() {
+  const [preferredTabId, setPreferredTabId] = useState("chat");
+  return (
+    <>
+      <button type="button" onClick={() => setPreferredTabId("browser")}>
+        Foreground browser
+      </button>
+      <SpatialWorkspace
+        persistenceKey="spatial-workspace-foreground-test"
+        tabs={[
+          { id: "chat", label: "Chat", icon: null },
+          { id: "browser", label: "Browser", icon: null },
+        ]}
+        preferredActiveTabId={preferredTabId}
+        onActivateTab={() => undefined}
+        onCloseTab={() => undefined}
+        onNewTab={() => "draft:new"}
+        renderTab={(tabId) => <div data-rendered-tab={tabId} />}
+      />
+    </>
+  );
+}
+
 describe("SpatialWorkspace", () => {
   let renderer: ReactTestRenderer | null = null;
 
@@ -64,6 +87,21 @@ describe("SpatialWorkspace", () => {
     });
 
     expect(renderer.root.findByProps({ "data-rendered-tab": "draft:new" })).toBeDefined();
+  });
+
+  it("foregrounds a requested workspace tab", async () => {
+    await act(async () => {
+      renderer = create(<ForegroundTabHarness />);
+    });
+
+    if (!renderer) throw new Error("Expected the workspace to mount");
+    expect(renderer.root.findByProps({ "data-rendered-tab": "chat" })).toBeDefined();
+
+    await act(async () => {
+      renderer?.root.findByProps({ children: "Foreground browser" }).props.onClick();
+    });
+
+    expect(renderer.root.findByProps({ "data-rendered-tab": "browser" })).toBeDefined();
   });
 
   it("restores global resize state when unmounted mid-drag", async () => {
