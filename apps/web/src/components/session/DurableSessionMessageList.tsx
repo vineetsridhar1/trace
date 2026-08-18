@@ -3,6 +3,9 @@ import type { SessionMessage } from "@trace/gql";
 import { AssistantText } from "./messages/AssistantText";
 import { UserBubble } from "./messages/UserBubble";
 
+// Height of the gradient fade above the floating composer.
+const BOTTOM_FADE_HEIGHT = 48;
+
 function attachmentKeys(value: unknown): string[] | undefined {
   return Array.isArray(value) && value.every((item) => typeof item === "string")
     ? (value as string[])
@@ -36,32 +39,60 @@ export function DurableSessionMessageList({
     if (list) list.scrollTop = list.scrollHeight;
   }, [loading]);
 
-  if (error) return <div className="flex h-full items-center justify-center text-sm text-destructive">Failed to load messages</div>;
+  if (error)
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-destructive">
+        Failed to load messages
+      </div>
+    );
 
   return (
-    <div ref={listRef} className="h-full overflow-y-auto px-4" style={{ paddingBottom: bottomPadding }}>
+    <div
+      ref={listRef}
+      className="h-full overflow-y-auto px-4"
+      style={
+        bottomPadding
+          ? {
+              paddingBottom: bottomPadding,
+              maskImage: `linear-gradient(to bottom, #000 calc(100% - ${bottomPadding + BOTTOM_FADE_HEIGHT}px), transparent calc(100% - ${bottomPadding}px))`,
+              WebkitMaskImage: `linear-gradient(to bottom, #000 calc(100% - ${bottomPadding + BOTTOM_FADE_HEIGHT}px), transparent calc(100% - ${bottomPadding}px))`,
+            }
+          : undefined
+      }
+    >
       <div className="mx-auto w-[90%] py-4">
         {hasOlder && (
-          <button type="button" onClick={onLoadOlder} disabled={loadingOlder} className="mb-3 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50">
+          <button
+            type="button"
+            onClick={onLoadOlder}
+            disabled={loadingOlder}
+            className="mb-3 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
             {loadingOlder ? "Loading older messages…" : "Load older messages"}
           </button>
         )}
-        {!hasOlder && messages.length > 0 && <div className="mb-3 text-center text-xs text-muted-foreground">Beginning of session</div>}
-        {loading ? <div className="text-sm text-muted-foreground">Loading messages…</div> : messages.map((message) => (
-          <div key={message.id} className="pb-3">
-            {message.role === "assistant" ? (
-              <AssistantText text={message.text} eventId={message.sourceEventId} />
-            ) : (
-              <UserBubble
-                text={message.text}
-                timestamp={message.createdAt}
-                actorId={message.actor.id}
-                actorName={message.actor.name}
-                imageKeys={attachmentKeys(message.attachments)}
-              />
-            )}
-          </div>
-        ))}
+        {!hasOlder && messages.length > 0 && (
+          <div className="mb-3 text-center text-xs text-muted-foreground">Beginning of session</div>
+        )}
+        {loading ? (
+          <div className="text-sm text-muted-foreground">Loading messages…</div>
+        ) : (
+          messages.map((message) => (
+            <div key={message.id} className="pb-3">
+              {message.role === "assistant" ? (
+                <AssistantText text={message.text} eventId={message.sourceEventId} />
+              ) : (
+                <UserBubble
+                  text={message.text}
+                  timestamp={message.createdAt}
+                  actorId={message.actor.id}
+                  actorName={message.actor.name}
+                  imageKeys={attachmentKeys(message.attachments)}
+                />
+              )}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
