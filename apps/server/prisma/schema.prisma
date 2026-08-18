@@ -866,10 +866,14 @@ model SessionMessage {
   session       Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   organizationId String
   role          SessionMessageRole
+  eventType     EventType
   actorType     ActorType
   actorId       String
   text          String
   content       Json
+  payload       Json
+  metadata      Json?
+  parentEventId String?
   attachments   Json?
   sourceEventId String             @unique
   createdAt     DateTime           @default(now())
@@ -1285,6 +1289,7 @@ model Event {
   @@index([organizationId, eventType])
   @@index([organizationId, timestamp])
   @@index([parentId])
+  @@index([scopeType, eventType, timestamp, id])
 }
 
 model PendingStorageObjectDeletion {

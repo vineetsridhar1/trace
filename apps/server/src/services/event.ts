@@ -157,12 +157,7 @@ export class EventService {
   }
 
   private shouldMaterializeSessionMessage(input: CreateEventInput): boolean {
-    return (
-      input.scopeType === "session" &&
-      (input.eventType === "session_started" ||
-        input.eventType === "message_sent" ||
-        input.eventType === "session_output")
-    );
+    return input.scopeType === "session";
   }
 
   async createMany(inputs: CreateEventInput[]) {

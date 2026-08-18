@@ -1,11 +1,22 @@
 import type { Event as PrismaEvent, Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
+import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
 type SessionMessageSource = Pick<
   PrismaEvent,
-  "id" | "scopeType" | "scopeId" | "eventType" | "payload" | "actorType" | "actorId" | "organizationId" | "timestamp"
+  | "id"
+  | "scopeType"
+  | "scopeId"
+  | "eventType"
+  | "payload"
+  | "actorType"
+  | "actorId"
+  | "organizationId"
+  | "timestamp"
+  | "parentId"
+  | "metadata"
 >;
 
 type MessageData = {
@@ -46,7 +57,9 @@ export function sessionMessageDataFromEvent(event: SessionMessageSource): Messag
   if (!payload) return null;
 
   if (event.eventType === "session_started") {
-    if (typeof payload.prompt !== "string") return null;
+    if (typeof payload.prompt !== "string") {
+      return { role: "system", text: "", content: event.payload as Prisma.InputJsonValue };
+    }
     return {
       role: "user",
       text: payload.prompt,
@@ -56,7 +69,9 @@ export function sessionMessageDataFromEvent(event: SessionMessageSource): Messag
   }
 
   if (event.eventType === "message_sent") {
-    if (typeof payload.text !== "string") return null;
+    if (typeof payload.text !== "string") {
+      return { role: userRole(event.actorType), text: "", content: event.payload as Prisma.InputJsonValue };
+    }
     const attachmentKeys = stringArray(payload.attachmentKeys);
     return {
       role: userRole(event.actorType),
@@ -66,10 +81,14 @@ export function sessionMessageDataFromEvent(event: SessionMessageSource): Messag
     };
   }
 
-  if (event.eventType !== "session_output" || payload.type !== "assistant") return null;
+  if (event.eventType !== "session_output" || payload.type !== "assistant") {
+    return { role: "system", text: "", content: event.payload as Prisma.InputJsonValue };
+  }
   const message = asRecord(payload.message);
   const content = message?.content;
-  if (!Array.isArray(content)) return null;
+  if (!Array.isArray(content)) {
+    return { role: "system", text: "", content: event.payload as Prisma.InputJsonValue };
+  }
 
   return {
     role: "assistant",
@@ -88,10 +107,14 @@ export function sessionMessageCreateDataFromEvent(
     sessionId: event.scopeId,
     organizationId: event.organizationId,
     role: data.role,
-    actorType: event.actorType,
-    actorId: event.actorId,
+    eventType: event.eventType,
+    actorType: data.role === "assistant" ? "agent" : event.actorType,
+    actorId: data.role === "assistant" ? TRACE_AI_USER_ID : event.actorId,
     text: data.text,
     content: data.content,
+    payload: event.payload as Prisma.InputJsonValue,
+    ...(event.metadata ? { metadata: event.metadata as Prisma.InputJsonValue } : {}),
+    ...(event.parentId ? { parentEventId: event.parentId } : {}),
     ...(data.attachments ? { attachments: data.attachments } : {}),
     sourceEventId: event.id,
     createdAt: event.timestamp,
@@ -110,9 +133,20 @@ export class SessionMessageService {
     });
   }
 
-  async list(sessionId: string, before?: Date, limit = 100) {
+  async list(sessionId: string, before?: Date, beforeMessageId?: string, limit = 100) {
+    if (before && !beforeMessageId) throw new Error("beforeMessageId is required with before");
     const messages = await prisma.sessionMessage.findMany({
-      where: { sessionId, ...(before ? { createdAt: { lt: before } } : {}) },
+      where: {
+        sessionId,
+        ...(before
+          ? {
+              OR: [
+                { createdAt: { lt: before } },
+                { AND: [{ createdAt: before }, { id: { lt: beforeMessageId! } }] },
+              ],
+            }
+          : {}),
+      },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: Math.max(1, Math.min(limit, 200)),
     });

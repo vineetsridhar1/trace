@@ -7,10 +7,14 @@ CREATE TABLE "SessionMessage" (
     "sessionId" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
     "role" "SessionMessageRole" NOT NULL,
+    "eventType" "EventType" NOT NULL,
     "actorType" "ActorType" NOT NULL,
     "actorId" TEXT NOT NULL,
     "text" TEXT NOT NULL,
     "content" JSONB NOT NULL,
+    "payload" JSONB NOT NULL,
+    "metadata" JSONB,
+    "parentEventId" TEXT,
     "attachments" JSONB,
     "sourceEventId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -21,6 +25,7 @@ CREATE TABLE "SessionMessage" (
 CREATE UNIQUE INDEX "SessionMessage_sourceEventId_key" ON "SessionMessage"("sourceEventId");
 CREATE INDEX "SessionMessage_sessionId_createdAt_id_idx" ON "SessionMessage"("sessionId", "createdAt", "id");
 CREATE INDEX "SessionMessage_organizationId_createdAt_id_idx" ON "SessionMessage"("organizationId", "createdAt", "id");
+CREATE INDEX "Event_scopeType_eventType_timestamp_id_idx" ON "Event"("scopeType", "eventType", "timestamp", "id");
 
 ALTER TABLE "SessionMessage"
   ADD CONSTRAINT "SessionMessage_sessionId_fkey"
