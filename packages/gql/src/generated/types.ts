@@ -865,7 +865,8 @@ export type EventType =
   | "ticket_linked"
   | "ticket_unassigned"
   | "ticket_unlinked"
-  | "ticket_updated";
+  | "ticket_updated"
+  | "workspace_browser_open_requested";
 
 export type HiddenSessionTab = {
   __typename?: "HiddenSessionTab";
@@ -1097,6 +1098,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  openWorkspaceBrowser: Scalars["Boolean"]["output"];
   queueSessionMessage: QueuedMessage;
   refreshDesignSystemSource: DesignSystem;
   registerPushToken: Scalars["Boolean"]["output"];
@@ -1291,7 +1293,9 @@ export type MutationCreateSessionEndpointPreviewArgs = {
 };
 
 export type MutationCreateTerminalArgs = {
+  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
   cols: Scalars["Int"]["input"];
+  openInWorkspace?: InputMaybe<Scalars["Boolean"]["input"]>;
   rows: Scalars["Int"]["input"];
   sessionId: Scalars["ID"]["input"];
 };
@@ -1464,6 +1468,11 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationOpenWorkspaceBrowserArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+  url: Scalars["String"]["input"];
 };
 
 export type MutationQueueSessionMessageArgs = {

@@ -298,6 +298,23 @@ var traceCliOperations = {
     argumentPaths: ["sessionId", "cols", "rows"],
     document: `mutation TraceCliCreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) { createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) { ${TERMINAL_FIELDS} } }`
   }),
+  openTerminal: operation({
+    name: "TraceCliOpenTerminal",
+    type: "mutation",
+    rootField: "createTerminal",
+    capability: "terminal:control",
+    argumentPaths: ["sessionId", "cols", "rows", "openInWorkspace"],
+    document: `mutation TraceCliOpenTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) { createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows, openInWorkspace: true) { ${TERMINAL_FIELDS} } }`
+  }),
+  openWorkspaceBrowser: operation({
+    name: "TraceCliOpenWorkspaceBrowser",
+    type: "mutation",
+    rootField: "openWorkspaceBrowser",
+    capability: "workspace:control",
+    argumentPaths: ["sessionGroupId", "url"],
+    sessionGroupArgumentPath: "sessionGroupId",
+    document: `mutation TraceCliOpenWorkspaceBrowser($sessionGroupId: ID!, $url: String!) { openWorkspaceBrowser(sessionGroupId: $sessionGroupId, url: $url) }`
+  }),
   sendTerminalInput: operation({
     name: "TraceCliSendTerminalInput",
     type: "mutation",
@@ -1490,6 +1507,43 @@ var appCommands = [
   ...appRuntimeCommands,
   deployCommand,
   statusCommand
+];
+
+// src/commands/browser/index.ts
+function requireCurrentSessionGroup(env) {
+  const sessionGroupId = env.TRACE_SESSION_GROUP_ID;
+  if (!sessionGroupId) {
+    throw new CliError(
+      "This command requires an active Trace session group",
+      ExitCode.validation,
+      "validation"
+    );
+  }
+  return sessionGroupId;
+}
+var browserCommands = [
+  defineCommand({
+    path: ["browser", "open"],
+    description: "Open a website in a new browser tab in the current Trace workspace",
+    examples: ['"$TRACE_CLI" browser open https://example.com --json'],
+    effects: [
+      "Requests a browser tab for the requesting user in the current session group."
+    ],
+    output: "A request confirmation containing the website URL.",
+    nextSteps: ["The tab opens when an eligible Trace client receives the request."],
+    positionals: [{ name: "url", required: true }],
+    async run(ctx, input) {
+      const variables = {
+        sessionGroupId: requireCurrentSessionGroup(ctx.env),
+        url: input.positionals[0]
+      };
+      await (await ctx.client()).graphql(
+        traceCliOperations.openWorkspaceBrowser,
+        variables
+      );
+      ctx.output({ requested: true, url: variables.url }, `Requested ${variables.url}`);
+    }
+  })
 ];
 
 // src/commands/organization.ts
@@ -2912,6 +2966,46 @@ var terminalCommands = [
     }
   }),
   defineCommand({
+    path: ["terminal", "open"],
+    description: "Open and select a new terminal tab, optionally running a command",
+    examples: [
+      '"$TRACE_CLI" terminal open --json',
+      '"$TRACE_CLI" terminal open "pnpm dev" --json'
+    ],
+    effects: [
+      "Creates a PTY and selects its tab for the requesting user.",
+      "When provided, the command is sent directly to the PTY and is never stored in Trace events."
+    ],
+    output: "The new terminal metadata and whether a command was sent, without echoing command text.",
+    nextSteps: ['Use "$TRACE_CLI" terminal capture <terminal-id> --json to inspect output.'],
+    positionals: [{ name: "command", required: false }],
+    options: [
+      sessionOption,
+      { name: "cols", flag: "--cols", kind: "integer", valueName: "N", min: 20, max: 500, description: "Columns, from 20 to 500 (default: 80)" },
+      { name: "rows", flag: "--rows", kind: "integer", valueName: "N", min: 5, max: 200, description: "Rows, from 5 to 200 (default: 24)" }
+    ],
+    async run(ctx, input) {
+      const variables = {
+        sessionId: resolveSessionId(ctx, optionString(input, "session")),
+        cols: optionInteger(input, "cols") ?? 80,
+        rows: optionInteger(input, "rows") ?? 24
+      };
+      const client = await ctx.client();
+      const result = await client.graphql(traceCliOperations.openTerminal, variables);
+      const command = input.positionals[0];
+      if (command) {
+        await client.graphql(
+          traceCliOperations.sendTerminalInput,
+          { terminalId: result.createTerminal.id, data: `${command}\r` }
+        );
+      }
+      ctx.output(
+        { terminal: result.createTerminal, commandSent: !!command },
+        terminalLine(result.createTerminal)
+      );
+    }
+  }),
+  defineCommand({
     path: ["terminal", "capture"],
     description: "Capture bounded terminal scrollback; ANSI is preserved by default",
     examples: ['"$TRACE_CLI" terminal capture <terminal-id> --plain --json'],
@@ -3002,6 +3096,7 @@ var terminalCommands = [
 var commands = [
   contextCommand,
   ...appCommands,
+  ...browserCommands,
   ...integrationCommands,
   ...portCommands,
   channelListCommand,
@@ -3011,6 +3106,15 @@ var commands = [
   artifactCommand
 ];
 var commandGroups = [
+  {
+    name: "browser",
+    description: "Open websites in the current Trace workspace",
+    workflow: ['Run "$TRACE_CLI" browser open <url> --json to request a browser tab.'],
+    examples: ['"$TRACE_CLI" browser open https://example.com --json'],
+    notes: [
+      "Browser requests target only the requesting user and the current session group."
+    ]
+  },
   {
     name: "app",
     description: "Control live cloud-session applications and durable deployments",
@@ -3093,11 +3197,13 @@ var commandGroups = [
     workflow: [
       'Run "$TRACE_CLI" terminal list --json to discover terminals in the current session.',
       'Run "$TRACE_CLI" terminal create --json only when a shared terminal is needed.',
+      'Run "$TRACE_CLI" terminal open [command] --json to create and select a terminal tab.',
       'Use "$TRACE_CLI" terminal send <terminal-id> <text> --enter, then terminal capture, to run and inspect a command.',
       "Use terminal key only for its documented allowlisted keys; use terminal destroy when the terminal is no longer needed."
     ],
     examples: [
       '"$TRACE_CLI" terminal create --cols 120 --rows 30 --json',
+      '"$TRACE_CLI" terminal open "pnpm test" --json',
       '"$TRACE_CLI" terminal send <terminal-id> "pnpm test" --enter --json',
       '"$TRACE_CLI" terminal capture <terminal-id> --plain --json'
     ],

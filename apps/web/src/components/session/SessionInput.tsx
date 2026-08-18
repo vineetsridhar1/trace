@@ -9,7 +9,7 @@ import {
   type SessionEntity,
 } from "@trace/client-core";
 import { client } from "../../lib/urql";
-import { CREATE_TERMINAL_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
+import { QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { type InteractionMode, MODE_CYCLE, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
@@ -31,7 +31,7 @@ import { useAddAttachments, MAX_ATTACHMENTS } from "./useAddAttachments";
 import { useAuthStore } from "@trace/client-core";
 import { useDraftsStore } from "../../stores/drafts";
 import { useComposerStore } from "../../stores/composer";
-import { useTerminalStore } from "../../stores/terminal";
+import { requestSessionTerminal } from "../../lib/terminal-creation";
 import { useAttachmentOpen } from "./AttachmentOpenContext";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
@@ -48,6 +48,7 @@ export function SessionInput({
   sessionGroupId,
   onAccessRequested,
   condensed = false,
+  centered = false,
 }: {
   sessionId: string;
   onStop: () => void;
@@ -55,6 +56,7 @@ export function SessionInput({
   sessionGroupId?: string | null;
   onAccessRequested?: () => void | Promise<void>;
   condensed?: boolean;
+  centered?: boolean;
 }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
@@ -227,31 +229,13 @@ export function SessionInput({
         isSendingRef.current = true;
         setIsSending(true);
         try {
-          const result = await client
-            .mutation(CREATE_TERMINAL_MUTATION, { sessionId, cols: 80, rows: 24 })
-            .toPromise();
-
-          if (result.error) {
-            throw result.error;
-          }
-
-          const terminal = result.data?.createTerminal as { id: string } | null | undefined;
-          if (!terminal) {
-            throw new Error("Failed to open terminal");
-          }
-
-          useTerminalStore
-            .getState()
-            .addTerminal(terminal.id, sessionId, sessionGroupId, "connecting", {
-              customName: "Pi Login",
-              initialCommand: "pi\n/login",
-              submitInitialCommand: false,
-            });
-
-          const ui = useUIStore.getState();
-          ui.setActiveSessionId(sessionId);
-          ui.setActiveTerminalId(terminal.id);
-          ui.setShowTerminalPanel(true);
+          await requestSessionTerminal({
+            sessionId,
+            customName: "Pi Login",
+            initialCommand: "pi\n/login",
+            submitInitialCommand: false,
+            select: true,
+          }).completion;
           setDraftText(sessionId, "", "");
         } catch (error) {
           toast.error(error instanceof Error ? error.message : "Failed to open Pi login terminal");
@@ -427,7 +411,11 @@ export function SessionInput({
   return (
     <div
       className={
-        condensed ? "shrink-0 bg-background px-3 pb-3" : "shrink-0 bg-background px-4 pb-8"
+        centered
+          ? "pointer-events-auto w-full bg-transparent px-8"
+          : condensed
+            ? "shrink-0 bg-background px-3 pb-3"
+            : "shrink-0 bg-background px-4 pb-8"
       }
     >
       <DesignPickerDialog
@@ -435,7 +423,25 @@ export function SessionInput({
         open={showDesignPicker}
         onOpenChange={setShowDesignPicker}
       />
-      <div className={condensed ? "relative mx-auto w-full" : "relative mx-auto w-[90%]"}>
+      <div
+        className={
+          centered
+            ? "relative mx-auto w-full max-w-3xl"
+            : condensed
+              ? "relative mx-auto w-full"
+              : "relative mx-auto w-[90%]"
+        }
+      >
+        {centered ? (
+          <div className="mb-7 text-center">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+              What do you want to work on?
+            </h1>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Add instructions, images, or files to start this session.
+            </p>
+          </div>
+        ) : null}
         {preparing && (
           <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
             <TraceLoader size={12} showLabel={false} className="shrink-0" />

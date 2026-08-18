@@ -61,6 +61,7 @@ import { designSystemMutations, designSystemQueries } from "./design-system.js";
 import { artifactMutations, artifactQueries, artifactTypeResolvers } from "./artifact.js";
 import { restrictAgentRootResolvers } from "../lib/agent-authorization.js";
 import { appIntegrationMutations, appIntegrationQueries } from "./app-integrations.js";
+import { workspaceMutations } from "./workspace.js";
 
 const queries = {
   ...organizationQueries,
@@ -106,6 +107,7 @@ const mutations = {
   ...designSystemMutations,
   ...artifactMutations,
   ...appIntegrationMutations,
+  ...workspaceMutations,
 };
 
 const subscriptions = {

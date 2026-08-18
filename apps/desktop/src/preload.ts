@@ -36,4 +36,37 @@ contextBridge.exposeInMainWorld("trace", {
     ipcRenderer.on("menu-command", listener);
     return () => ipcRenderer.removeListener("menu-command", listener);
   },
+  activateBrowser: (input: { sessionGroupId: string; browserId: string }) =>
+    ipcRenderer.invoke("browser-activate", input),
+  hideBrowser: (input: { sessionGroupId: string; browserId: string }) =>
+    ipcRenderer.invoke("browser-hide", input),
+  destroyBrowser: (input: { sessionGroupId: string; browserId: string }) =>
+    ipcRenderer.invoke("browser-destroy", input),
+  setBrowserBounds: (input: {
+    sessionGroupId: string;
+    browserId: string;
+    bounds: Electron.Rectangle;
+  }) =>
+    ipcRenderer.invoke("browser-set-bounds", input),
+  setBrowserOverlayHidden: (input: {
+    sessionGroupId: string;
+    browserId: string;
+    hidden: boolean;
+  }) =>
+    ipcRenderer.invoke("browser-set-overlay-hidden", input),
+  navigateBrowser: (input: { sessionGroupId: string; browserId: string; url: string }) =>
+    ipcRenderer.invoke("browser-navigate", input),
+  goBrowserBack: (input: { sessionGroupId: string; browserId: string }) =>
+    ipcRenderer.invoke("browser-back", input),
+  goBrowserForward: (input: { sessionGroupId: string; browserId: string }) =>
+    ipcRenderer.invoke("browser-forward", input),
+  reloadBrowser: (input: { sessionGroupId: string; browserId: string }) =>
+    ipcRenderer.invoke("browser-reload", input),
+  toggleBrowserDevTools: (input: { sessionGroupId: string; browserId: string }) =>
+    ipcRenderer.invoke("browser-toggle-devtools", input),
+  onBrowserWorkspaceState: (callback: (state: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state);
+    ipcRenderer.on("browser-workspace-state", listener);
+    return () => ipcRenderer.removeListener("browser-workspace-state", listener);
+  },
 });

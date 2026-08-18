@@ -65,11 +65,13 @@ import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { terminalService } from "./terminal.js";
+import { eventService } from "./event.js";
 
 const prismaMock = prisma as any;
 const terminalRelayMock = terminalRelay as any;
 const runtimeAccessServiceMock = runtimeAccessService as any;
 const sessionRouterMock = sessionRouter as any;
+const eventServiceMock = eventService as any;
 
 describe("TerminalService", () => {
   beforeEach(() => {
@@ -117,6 +119,8 @@ describe("TerminalService", () => {
         sessionId: "session-1",
         cols: 80,
         rows: 24,
+        clientMutationId: "request-1",
+        openInWorkspace: true,
         organizationId: "org-1",
         userId: "user-1",
       });
@@ -131,6 +135,16 @@ describe("TerminalService", () => {
         80,
         24,
         "/workspace",
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "terminal_created",
+          payload: expect.objectContaining({
+            clientMutationId: "request-1",
+            openInWorkspace: true,
+            targetUserId: "user-1",
+          }),
+        }),
       );
     });
 

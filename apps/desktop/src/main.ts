@@ -37,8 +37,11 @@ import {
   shouldMovePackagedMacAppToApplicationsFolder,
 } from "./mac-install-location.js";
 import { getCodingToolStatuses, installOrUpdateCodingTool } from "./coding-tools.js";
+import { BrowserWorkspaceManager } from "./browser-workspaces.js";
 
 let mainWindow: BrowserWindow | null = null;
+const browserWorkspaces = new BrowserWorkspaceManager();
+let browserStateFlushedForQuit = false;
 const PROJECT_PARENT_SELECTION_TTL_MS = 10 * 60 * 1000;
 const projectParentSelections = new Map<
   string,
@@ -174,6 +177,7 @@ function createWindow() {
 
   const webUrl = process.env.TRACE_WEB_URL ?? defaultWebUrl;
   mainWindow.loadURL(webUrl);
+  browserWorkspaces.setWindow(mainWindow);
 
   // Open external links in the user's default browser.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -242,6 +246,7 @@ function createWindow() {
   });
 
   mainWindow.on("closed", () => {
+    browserWorkspaces.setWindow(null);
     mainWindow = null;
   });
 }
@@ -377,6 +382,42 @@ ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null
   bridge.setAuthContext(organizationId);
   return true;
 });
+ipcMain.handle("browser-activate", (_event, input: { sessionGroupId: string; browserId: string }) =>
+  browserWorkspaces.activate(input.sessionGroupId, input.browserId),
+);
+ipcMain.handle("browser-hide", (_event, input: { sessionGroupId: string; browserId: string }) =>
+  browserWorkspaces.hide(input.sessionGroupId, input.browserId),
+);
+ipcMain.handle("browser-destroy", (_event, input: { sessionGroupId: string; browserId: string }) =>
+  browserWorkspaces.destroy(input.sessionGroupId, input.browserId),
+);
+ipcMain.handle(
+  "browser-set-bounds",
+  (_event, input: { sessionGroupId: string; browserId: string; bounds: Electron.Rectangle }) => {
+    browserWorkspaces.setBounds(input.sessionGroupId, input.browserId, input.bounds);
+  },
+);
+ipcMain.handle(
+  "browser-set-overlay-hidden",
+  (_event, input: { sessionGroupId: string; browserId: string; hidden: boolean }) => {
+    browserWorkspaces.setOverlayHidden(input.sessionGroupId, input.browserId, input.hidden);
+  },
+);
+ipcMain.handle("browser-navigate", (_event, input: { sessionGroupId: string; browserId: string; url: string }) =>
+  browserWorkspaces.navigate(input.sessionGroupId, input.browserId, input.url),
+);
+ipcMain.handle("browser-back", (_event, input: { sessionGroupId: string; browserId: string }) =>
+  browserWorkspaces.goBack(input.sessionGroupId, input.browserId),
+);
+ipcMain.handle("browser-forward", (_event, input: { sessionGroupId: string; browserId: string }) =>
+  browserWorkspaces.goForward(input.sessionGroupId, input.browserId),
+);
+ipcMain.handle("browser-reload", (_event, input: { sessionGroupId: string; browserId: string }) =>
+  browserWorkspaces.reload(input.sessionGroupId, input.browserId),
+);
+ipcMain.handle("browser-toggle-devtools", (_event, input: { sessionGroupId: string; browserId: string }) =>
+  browserWorkspaces.toggleDevTools(input.sessionGroupId, input.browserId),
+);
 // Cmd+W with no in-app tab to close falls back to closing the window.
 ipcMain.on("close-window", () => mainWindow?.close());
 
@@ -419,6 +460,15 @@ app.on("window-all-closed", () => {
     bridge.disconnect();
     app.quit();
   }
+});
+
+app.on("before-quit", (event) => {
+  if (browserStateFlushedForQuit) return;
+  event.preventDefault();
+  void browserWorkspaces.flushPersistence().finally(() => {
+    browserStateFlushedForQuit = true;
+    app.quit();
+  });
 });
 
 app.on("activate", () => {

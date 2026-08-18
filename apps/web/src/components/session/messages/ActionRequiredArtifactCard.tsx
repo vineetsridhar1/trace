@@ -1,13 +1,8 @@
 import { useState } from "react";
 import { KeyRound, TerminalSquare, Wrench } from "lucide-react";
 import { getCodingToolCli, type ActionRequiredArtifact } from "@trace/shared";
-import {
-  CREATE_TERMINAL_MUTATION,
-  useEntityField,
-} from "@trace/client-core";
-import { client } from "../../../lib/urql";
-import { useTerminalStore } from "../../../stores/terminal";
-import { useUIStore } from "../../../stores/ui";
+import { useEntityField } from "@trace/client-core";
+import { requestSessionTerminal } from "../../../lib/terminal-creation";
 import { Button } from "../../ui/button";
 import { CredentialRequiredArtifactActions } from "./CredentialRequiredArtifactActions";
 
@@ -30,25 +25,17 @@ export function ActionRequiredArtifactCard({
   const sessionGroupId = useEntityField("sessions", sessionId ?? "", "sessionGroupId") as
     | string
     | undefined;
-  const setShowTerminalPanel = useUIStore((state) => state.setShowTerminalPanel);
-  const setActiveTerminalId = useUIStore((state) => state.setActiveTerminalId);
-  const addTerminal = useTerminalStore((state) => state.addTerminal);
   const [working, setWorking] = useState(false);
   const openLoginTerminal = async () => {
     if (artifact.kind !== "login_required" || !sessionGroupId || !sessionId) return;
     setWorking(true);
     try {
-      const result = await client
-        .mutation(CREATE_TERMINAL_MUTATION, { sessionId, cols: 80, rows: 24 })
-        .toPromise();
-      const terminal = result.data?.createTerminal as { id: string } | undefined;
-      if (!terminal) return;
-      addTerminal(terminal.id, sessionId, sessionGroupId, "connecting", {
+      await requestSessionTerminal({
+        sessionId,
         customName: "Sign in",
         initialCommand: LOGIN_COMMANDS[artifact.provider],
-      });
-      setActiveTerminalId(terminal.id);
-      setShowTerminalPanel(true);
+        select: true,
+      }).completion;
     } finally {
       setWorking(false);
     }

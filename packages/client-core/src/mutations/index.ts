@@ -941,8 +941,13 @@ export const CHANNEL_TERMINALS_QUERY = gql`
 `;
 
 export const CREATE_TERMINAL_MUTATION = gql`
-  mutation CreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) {
-    createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) {
+  mutation CreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!, $clientMutationId: String) {
+    createTerminal(
+      sessionId: $sessionId
+      cols: $cols
+      rows: $rows
+      clientMutationId: $clientMutationId
+    ) {
       id
       sessionId
     }

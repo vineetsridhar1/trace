@@ -18,6 +18,7 @@ export const TRACE_CLI_CAPABILITIES = [
   "session:archive",
   "session:link-pr",
   "terminal:control",
+  "workspace:control",
 ] as const;
 
 export const TRACE_CLI_ARTIFACT_MAX_BYTES = 64 * 1024 * 1024;
@@ -325,6 +326,23 @@ export const traceCliOperations = {
     capability: "terminal:control",
     argumentPaths: ["sessionId", "cols", "rows"],
     document: `mutation TraceCliCreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) { createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) { ${TERMINAL_FIELDS} } }`,
+  }),
+  openTerminal: operation({
+    name: "TraceCliOpenTerminal",
+    type: "mutation",
+    rootField: "createTerminal",
+    capability: "terminal:control",
+    argumentPaths: ["sessionId", "cols", "rows", "openInWorkspace"],
+    document: `mutation TraceCliOpenTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) { createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows, openInWorkspace: true) { ${TERMINAL_FIELDS} } }`,
+  }),
+  openWorkspaceBrowser: operation({
+    name: "TraceCliOpenWorkspaceBrowser",
+    type: "mutation",
+    rootField: "openWorkspaceBrowser",
+    capability: "workspace:control",
+    argumentPaths: ["sessionGroupId", "url"],
+    sessionGroupArgumentPath: "sessionGroupId",
+    document: `mutation TraceCliOpenWorkspaceBrowser($sessionGroupId: ID!, $url: String!) { openWorkspaceBrowser(sessionGroupId: $sessionGroupId, url: $url) }`,
   }),
   sendTerminalInput: operation({
     name: "TraceCliSendTerminalInput",

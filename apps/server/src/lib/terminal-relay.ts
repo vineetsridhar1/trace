@@ -23,6 +23,7 @@ interface TerminalEntry {
   ownerUserId: string | null;
   frontendWs: WebSocket | null;
   remoteFrontendReplicaId?: string;
+  remoteFrontendAttachmentId?: string;
   /** User who currently has a frontend WebSocket attached to this terminal. */
   attachedUserId: string | null;
   ready: boolean;
@@ -62,7 +63,7 @@ export class TerminalRelay {
   private sessionGroupTerminals = new Map<string, Set<string>>();
   /** Reverse index for repo/channel terminals on a specific runtime. */
   private channelTerminals = new Map<string, Set<string>>();
-  private remoteFrontendSockets = new Map<string, WebSocket>();
+  private remoteFrontendSockets = new Map<string, { ws: WebSocket; attachmentId: string }>();
   private pendingOperations = new Map<
     string,
     { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
@@ -120,10 +121,21 @@ export class TerminalRelay {
     });
     realtimeBackplane.on("terminal_frontend_attach", (envelope) => {
       const input = this.backplanePayload(envelope.payload);
-      if (!input || typeof input.terminalId !== "string") return;
+      if (
+        !input ||
+        typeof input.terminalId !== "string" ||
+        typeof input.attachmentId !== "string" ||
+        typeof input.userId !== "string"
+      )
+        return;
       const entry = this.terminals.get(input.terminalId);
       if (!entry) return;
+      entry.frontendWs = null;
       entry.remoteFrontendReplicaId = envelope.sourceReplicaId;
+      entry.remoteFrontendAttachmentId = input.attachmentId;
+      entry.attachedUserId = input.userId;
+      entry.hasEverAttached = true;
+      this.cancelOrphanCleanup(input.terminalId);
       const messages = [
         ...(entry.scrollback.length > 0
           ? [JSON.stringify({ type: "output", data: entry.scrollback.join("") })]
@@ -134,16 +146,17 @@ export class TerminalRelay {
       entry.buffer = [];
       void realtimeBackplane.send(envelope.sourceReplicaId, "terminal_frontend_messages", {
         terminalId: input.terminalId,
+        attachmentId: input.attachmentId,
         messages,
       });
     });
     realtimeBackplane.on("terminal_frontend_messages", (envelope) => {
       const input = this.backplanePayload(envelope.payload);
-      if (!input || typeof input.terminalId !== "string" || !Array.isArray(input.messages)) return;
-      const ws = this.remoteFrontendSockets.get(input.terminalId);
-      if (!ws || ws.readyState !== ws.OPEN) return;
+      if (!input || typeof input.terminalId !== "string" || typeof input.attachmentId !== "string" || !Array.isArray(input.messages)) return;
+      const attachment = this.remoteFrontendSockets.get(input.terminalId);
+      if (!attachment || attachment.attachmentId !== input.attachmentId || attachment.ws.readyState !== attachment.ws.OPEN) return;
       for (const message of input.messages) {
-        if (typeof message === "string") ws.send(message);
+        if (typeof message === "string") attachment.ws.send(message);
       }
     });
     realtimeBackplane.on("terminal_frontend_command", (envelope) => {
@@ -151,6 +164,7 @@ export class TerminalRelay {
       if (
         !input ||
         typeof input.terminalId !== "string" ||
+        typeof input.attachmentId !== "string" ||
         (input.commandType !== "input" && input.commandType !== "resize") ||
         !input.payload ||
         typeof input.payload !== "object" ||
@@ -158,6 +172,13 @@ export class TerminalRelay {
       ) {
         return;
       }
+      const entry = this.terminals.get(input.terminalId);
+      if (
+        !entry ||
+        entry.remoteFrontendReplicaId !== envelope.sourceReplicaId ||
+        entry.remoteFrontendAttachmentId !== input.attachmentId
+      )
+        return;
       this.relayFromFrontend(
         input.terminalId,
         input.commandType,
@@ -166,10 +187,15 @@ export class TerminalRelay {
     });
     realtimeBackplane.on("terminal_frontend_detach", (envelope) => {
       const input = this.backplanePayload(envelope.payload);
-      if (!input || typeof input.terminalId !== "string") return;
+      if (!input || typeof input.terminalId !== "string" || typeof input.attachmentId !== "string") return;
       const entry = this.terminals.get(input.terminalId);
-      if (entry?.remoteFrontendReplicaId === envelope.sourceReplicaId) {
+      if (
+        entry?.remoteFrontendReplicaId === envelope.sourceReplicaId &&
+        entry.remoteFrontendAttachmentId === input.attachmentId
+      ) {
         entry.remoteFrontendReplicaId = undefined;
+        entry.remoteFrontendAttachmentId = undefined;
+        entry.attachedUserId = null;
         this.scheduleOrphanCleanup(input.terminalId);
       }
     });
@@ -611,6 +637,8 @@ export class TerminalRelay {
     const entry = this.terminals.get(terminalId);
     if (!entry) return false;
     entry.frontendWs = ws;
+    entry.remoteFrontendReplicaId = undefined;
+    entry.remoteFrontendAttachmentId = undefined;
     entry.attachedUserId = userId;
     entry.hasEverAttached = true;
     const hadBufferedReady = entry.buffer.some((msg) => msg.includes('"type":"ready"'));
@@ -648,9 +676,12 @@ export class TerminalRelay {
     if (this.attachFrontend(terminalId, ws, userId)) return true;
     const descriptor = await terminalDirectory.get(terminalId);
     if (!descriptor || descriptor.frontendReplicaId === realtimeBackplane.replicaId) return false;
-    this.remoteFrontendSockets.set(terminalId, ws);
+    const attachmentId = randomUUID();
+    this.remoteFrontendSockets.set(terminalId, { ws, attachmentId });
     await realtimeBackplane.send(descriptor.frontendReplicaId, "terminal_frontend_attach", {
       terminalId,
+      attachmentId,
+      userId,
     });
     return true;
   }
@@ -897,6 +928,7 @@ export class TerminalRelay {
     if (entry.remoteFrontendReplicaId) {
       void realtimeBackplane.send(entry.remoteFrontendReplicaId, "terminal_frontend_messages", {
         terminalId: msg.terminalId,
+        attachmentId: entry.remoteFrontendAttachmentId,
         messages: [serialized],
       });
       if (isTerminalEnd) this.removeTerminal(msg.terminalId);
@@ -924,10 +956,13 @@ export class TerminalRelay {
   ): void {
     const entry = this.terminals.get(terminalId);
     if (!entry) {
+      const attachment = this.remoteFrontendSockets.get(terminalId);
+      if (!attachment) return;
       void terminalDirectory.get(terminalId).then((descriptor) => {
         if (!descriptor || descriptor.frontendReplicaId === realtimeBackplane.replicaId) return;
         return realtimeBackplane.send(descriptor.frontendReplicaId, "terminal_frontend_command", {
           terminalId,
+          attachmentId: attachment.attachmentId,
           commandType: type,
           payload,
         });
@@ -1022,13 +1057,14 @@ export class TerminalRelay {
         this.scheduleOrphanCleanup(terminalId);
       }
     }
-    for (const [terminalId, frontendWs] of this.remoteFrontendSockets) {
-      if (frontendWs !== ws) continue;
+    for (const [terminalId, attachment] of this.remoteFrontendSockets) {
+      if (attachment.ws !== ws) continue;
       this.remoteFrontendSockets.delete(terminalId);
       void terminalDirectory.get(terminalId).then((descriptor) => {
         if (!descriptor || descriptor.frontendReplicaId === realtimeBackplane.replicaId) return;
         return realtimeBackplane.send(descriptor.frontendReplicaId, "terminal_frontend_detach", {
           terminalId,
+          attachmentId: attachment.attachmentId,
         });
       });
     }
@@ -1058,6 +1094,12 @@ export class TerminalRelay {
       if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
         entry.frontendWs.send(JSON.stringify({ type: "error", message: "Bridge access revoked" }));
         entry.frontendWs.close(1008, "Bridge access revoked");
+      } else if (entry.remoteFrontendReplicaId && entry.remoteFrontendAttachmentId) {
+        void realtimeBackplane.send(entry.remoteFrontendReplicaId, "terminal_frontend_messages", {
+          terminalId,
+          attachmentId: entry.remoteFrontendAttachmentId,
+          messages: [JSON.stringify({ type: "error", message: "Bridge access revoked" })],
+        });
       }
       this.destroyTerminal(terminalId);
     }

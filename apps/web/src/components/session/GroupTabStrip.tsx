@@ -1,15 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Circle,
-  Activity,
-  FilePlus2,
-  FileCode,
-  GitCompareArrows,
-  MessageSquarePlus,
-  Plus,
-  TerminalSquare,
-  X,
-} from "lucide-react";
+import { Circle, Activity, FileCode, GitCompareArrows, Plus, X } from "lucide-react";
 import type { SessionEntity } from "@trace/client-core";
 import type { TerminalEntry } from "../../stores/terminal";
 import { cn } from "../../lib/utils";
@@ -22,13 +12,6 @@ import {
   terminalStatusLabel,
 } from "./sessionStatus";
 import { AgentStatusIcon } from "./AgentStatusIcon";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import { ArtifactTab } from "../artifact/ArtifactTab";
 
@@ -48,6 +31,7 @@ export interface OpenFileTab {
 interface GroupTabStripProps {
   sessionTabs: SessionEntity[];
   terminals: TerminalEntry[];
+  pinnedTerminalIds: Readonly<Record<string, boolean>>;
   groupSessions: SessionEntity[];
   selectedSessionId: string | null;
   activeTerminalId: string | null;
@@ -71,10 +55,7 @@ interface GroupTabStripProps {
   onSelectTraffic: () => void;
   onCloseTraffic: () => void;
   onNewChat: () => void;
-  onOpenTerminal: () => void;
-  onOpenFilePalette: () => void;
   canNewChat: boolean;
-  canOpenTerminal: boolean;
 }
 
 const tabBase =
@@ -89,6 +70,7 @@ const tabInactive =
 export function GroupTabStrip({
   sessionTabs,
   terminals,
+  pinnedTerminalIds,
   groupSessions,
   selectedSessionId,
   activeTerminalId,
@@ -112,17 +94,13 @@ export function GroupTabStrip({
   onSelectTraffic,
   onCloseTraffic,
   onNewChat,
-  onOpenTerminal,
-  onOpenFilePalette,
   canNewChat,
-  canOpenTerminal,
 }: GroupTabStripProps) {
   const sessionDoneBadges = useUIStore(
     (s: { sessionDoneBadges: Record<string, boolean> }) => s.sessionDoneBadges,
   );
   const sessionById = new Map(groupSessions.map((s) => [s.id, s]));
   const tabRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [editingTerminalId, setEditingTerminalId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
@@ -143,44 +121,22 @@ export function GroupTabStrip({
     el?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
   }, [activeKey]);
 
-  // Cmd+T to open the new tab dropdown
+  // Cmd+T creates another agent, matching the plus button.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "t") {
+      if ((e.metaKey || e.ctrlKey) && e.key === "t" && canNewChat) {
         e.preventDefault();
-        setDropdownOpen((v: boolean) => !v);
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  // Number key shortcuts when dropdown is open
-  useEffect(() => {
-    if (!dropdownOpen) return;
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "1" && canNewChat) {
-        e.preventDefault();
-        setDropdownOpen(false);
         onNewChat();
-      } else if (e.key === "2" && canOpenTerminal) {
-        e.preventDefault();
-        setDropdownOpen(false);
-        onOpenTerminal();
-      } else if (e.key === "3") {
-        e.preventDefault();
-        setDropdownOpen(false);
-        onOpenFilePalette();
       }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [dropdownOpen, canNewChat, canOpenTerminal, onNewChat, onOpenTerminal, onOpenFilePalette]);
+  }, [canNewChat, onNewChat]);
 
   return (
     <TooltipProvider delay={300}>
       <div className="app-region-drag relative shrink-0 bg-surface-mid after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border">
-        <div className="native-scrollbar overflow-x-auto">
+        <div className="app-region-no-drag no-scrollbar overflow-x-auto overflow-y-hidden">
           <div className="flex min-w-max items-end gap-0 px-2 pt-1">
             {sessionTabs.map((session) => {
               const displayAgentStatus = getDisplayAgentStatus(
@@ -262,6 +218,7 @@ export function GroupTabStrip({
             })}
 
             {terminals.map((terminal, index) => {
+              if (!pinnedTerminalIds[terminal.id]) return null;
               const session = sessionById.get(terminal.sessionId);
               const defaultLabel = session
                 ? `Terminal ${index + 1} · ${session.name}`
@@ -408,31 +365,16 @@ export function GroupTabStrip({
               );
             })}
 
-            <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-              <DropdownMenuTrigger
-                className="inline-flex shrink-0 items-center justify-center px-2.5 py-2 text-muted-foreground transition-colors hover:text-foreground"
-                title="New tab (⌘T)"
-              >
-                <Plus size={14} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem disabled={!canNewChat} onClick={onNewChat}>
-                  <MessageSquarePlus size={14} />
-                  Agent
-                  <DropdownMenuShortcut>1</DropdownMenuShortcut>
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={!canOpenTerminal} onClick={onOpenTerminal}>
-                  <TerminalSquare size={14} />
-                  Terminal
-                  <DropdownMenuShortcut>2</DropdownMenuShortcut>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onOpenFilePalette}>
-                  <FilePlus2 size={14} />
-                  File
-                  <DropdownMenuShortcut>3</DropdownMenuShortcut>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <button
+              type="button"
+              onClick={onNewChat}
+              disabled={!canNewChat}
+              className="inline-flex shrink-0 items-center justify-center px-2.5 py-2 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-40"
+              title="New agent (⌘T)"
+              aria-label="New agent"
+            >
+              <Plus size={14} />
+            </button>
           </div>
         </div>
       </div>

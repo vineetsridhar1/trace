@@ -6,6 +6,7 @@ import { client } from "../lib/urql";
 import { reconcileManualElementSaved } from "../stores/design-editor";
 import { reconcileIntegrationEvent } from "../stores/integrations";
 import { reconcileTerminalEvent } from "../stores/terminal-events";
+import { reconcileWorkspaceRequestEvent } from "../stores/workspace-requests";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
   subscription OrgEvents($organizationId: ID!) {
@@ -45,6 +46,7 @@ export function useOrgEvents() {
         handleOrgEvent(event);
         reconcileIntegrationEvent(event);
         reconcileTerminalEvent(event);
+        reconcileWorkspaceRequestEvent(event);
         if (event.eventType === "manual_element_saved") {
           reconcileManualElementSaved(event.payload);
         }

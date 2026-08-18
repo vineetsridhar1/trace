@@ -166,6 +166,75 @@ describe("Trace CLI", () => {
     }
   });
 
+  it("opens a browser tab in the current session group", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-1");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test");
+    const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as {
+        operationName: string;
+        variables: Record<string, unknown>;
+      };
+      expect(request.operationName).toBe("TraceCliOpenWorkspaceBrowser");
+      expect(request.variables).toEqual({
+        sessionGroupId: "group-1",
+        url: "example.com",
+      });
+      return new Response(JSON.stringify({ data: { openWorkspaceBrowser: true } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(run(["browser", "open", "example.com", "--json"])).resolves.toBe(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("opens a terminal tab and sends an optional command without echoing it", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_SESSION_ID", "session-1");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test");
+    const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as {
+        operationName: string;
+        variables: Record<string, unknown>;
+      };
+      if (request.operationName === "TraceCliOpenTerminal") {
+        return new Response(
+          JSON.stringify({
+            data: {
+              createTerminal: {
+                id: "terminal-1",
+                sessionId: "session-1",
+                status: "active",
+                cols: 80,
+                rows: 24,
+                connected: true,
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      expect(request.operationName).toBe("TraceCliSendTerminalInput");
+      expect(request.variables).toEqual({ terminalId: "terminal-1", data: "pnpm test\r" });
+      return new Response(JSON.stringify({ data: { sendTerminalInput: true } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(run(["terminal", "open", "pnpm test", "--json"])).resolves.toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const output = stdout.mock.calls.flat().join("");
+    expect(output).toContain('"commandSent":true');
+    expect(output).not.toContain("pnpm test");
+  });
+
   it("submits explicit app deployment facts without analyzing the project", async () => {
     vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
     vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-app");
