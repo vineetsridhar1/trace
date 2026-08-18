@@ -156,7 +156,6 @@ declare global {
     installOrUpdateCodingTool: (toolId: string) => Promise<DesktopCodingToolStatus>;
     getBridgeStatus: () => Promise<DesktopBridgeConnectionStatus>;
     getBridgeInfo: () => Promise<DesktopBridgeInfo>;
-    getBrowserLinkedCheckoutStatus: (repoId: string) => Promise<DesktopLinkedCheckoutStatus>;
     setBridgeLabel: (label: string) => Promise<DesktopBridgeInfo>;
     setBridgeAuthContext: (organizationId: string | null) => Promise<boolean>;
     onBridgeStatus: (callback: (status: DesktopBridgeConnectionStatus) => void) => () => void;

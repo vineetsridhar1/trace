@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, LoaderCircle, RefreshCw } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { useAttachedCheckoutForGroup, useDesktopBridgeInfo } from "../../stores/bridges";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
@@ -20,15 +21,11 @@ export function BrowserWorkspacePanel({
   sessionGroupId,
   browserId,
   initialUrl,
-  repoId,
-  branch,
   onTitleChange,
 }: {
   sessionGroupId: string;
   browserId: string;
   initialUrl?: string;
-  repoId?: string | null;
-  branch?: string | null;
   onTitleChange?: (browserId: string, title: string) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -37,7 +34,12 @@ export function BrowserWorkspacePanel({
   const [state, setState] = useState<DesktopBrowserWorkspaceState>(EMPTY_BROWSER_STATE);
   const [inputValue, setInputValue] = useState("about:blank");
   const [error, setError] = useState<string | null>(null);
-  const [syncStatus, setSyncStatus] = useState<BranchSyncStatus>("checking");
+  const attachedCheckout = useAttachedCheckoutForGroup(sessionGroupId);
+  const desktopBridgeInfo = useDesktopBridgeInfo();
+  const syncStatus = getBranchSyncStatus(
+    attachedCheckout?.bridgeInstanceId ?? null,
+    desktopBridgeInfo?.instanceId,
+  );
 
   useEffect(() => {
     onTitleChange?.(browserId, state.title);
@@ -106,30 +108,6 @@ export function BrowserWorkspacePanel({
       void window.trace?.hideBrowser({ sessionGroupId, browserId });
     };
   }, [browserId, initialUrl, sessionGroupId, syncBounds]);
-
-  useEffect(() => {
-    if (!window.trace || !repoId || !branch) {
-      setSyncStatus("unavailable");
-      return;
-    }
-    let cancelled = false;
-    const refresh = () => {
-      void window.trace!
-        .getBrowserLinkedCheckoutStatus(repoId)
-        .then((nextStatus) => {
-          if (!cancelled) setSyncStatus(getBranchSyncStatus(nextStatus, sessionGroupId, branch));
-        })
-        .catch(() => {
-          if (!cancelled) setSyncStatus("unavailable");
-        });
-    };
-    refresh();
-    const interval = window.setInterval(refresh, 15_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [branch, repoId, sessionGroupId]);
 
   const perform = useCallback((action: () => Promise<DesktopBrowserWorkspaceState>) => {
     setError(null);
@@ -252,25 +230,15 @@ export function BrowserWorkspacePanel({
   );
 }
 
-type BranchSyncStatus = "checking" | "synced" | "behind" | "outOfSync" | "unavailable";
+type BranchSyncStatus = "checking" | "synced" | "behind" | "outOfSync";
 
 export function getBranchSyncStatus(
-  status: DesktopLinkedCheckoutStatus,
-  sessionGroupId: string,
-  branch: string,
+  attachedBridgeInstanceId: string | null,
+  desktopBridgeInstanceId: string | null | undefined,
 ): BranchSyncStatus {
-  if (
-    status.attachedSessionGroupId !== sessionGroupId ||
-    status.targetBranch !== branch ||
-    status.hasUncommittedChanges ||
-    status.lastSyncError
-  ) {
-    return "outOfSync";
-  }
-  if (!status.lastSyncedCommitSha || status.currentCommitSha !== status.lastSyncedCommitSha) {
-    return "behind";
-  }
-  return "synced";
+  if (desktopBridgeInstanceId === undefined) return "checking";
+  if (!attachedBridgeInstanceId) return "outOfSync";
+  return attachedBridgeInstanceId === desktopBridgeInstanceId ? "synced" : "behind";
 }
 
 function branchSyncStatusColor(status: BranchSyncStatus) {
@@ -285,13 +253,11 @@ function branchSyncStatusLabel(status: BranchSyncStatus) {
     case "synced":
       return "Branch is spotlighted and synced";
     case "behind":
-      return "Spotlighted branch is behind. Press Spotlight to sync this branch.";
+      return "Branch is spotlighted on another bridge. Press Spotlight to sync it here.";
     case "outOfSync":
-      return "Branch is not spotlighted or has local changes. Press Spotlight to sync this branch.";
+      return "Branch is not spotlighted. Press Spotlight to sync this branch.";
     case "checking":
       return "Checking branch sync status";
-    case "unavailable":
-      return "Branch sync status is unavailable";
   }
 }
 

@@ -38,7 +38,6 @@ import {
 } from "./mac-install-location.js";
 import { getCodingToolStatuses, installOrUpdateCodingTool } from "./coding-tools.js";
 import { BrowserWorkspaceManager } from "./browser-workspaces.js";
-import { getLinkedCheckoutStatus } from "./linked-checkout.js";
 
 let mainWindow: BrowserWindow | null = null;
 const browserWorkspaces = new BrowserWorkspaceManager();
@@ -366,9 +365,6 @@ ipcMain.handle("install-or-update-coding-tool", async (_event, toolId: string) =
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
 ipcMain.handle("get-bridge-info", () => bridge.getInfo());
-ipcMain.handle("get-browser-linked-checkout-status", (_event, repoId: string) =>
-  getLinkedCheckoutStatus(repoId),
-);
 ipcMain.handle("set-bridge-label", async (_event, label: string) => {
   await setBridgeLabel(label);
   bridge.updateLabel();
