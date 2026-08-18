@@ -21,6 +21,8 @@ type ExecErrorWithOutput = Error & {
 };
 
 const GIT_OPERATION_TIMEOUT_MS = 60_000;
+/** Network fetches on a large repo routinely outlast the local-operation budget. */
+const GIT_FETCH_TIMEOUT_MS = 10 * 60_000;
 const WORKTREE_REMOVAL_TIMEOUT_MS = 5 * 60_000;
 const backgroundRemovalByRepo = new Map<string, Promise<void>>();
 
@@ -93,17 +95,56 @@ async function resetWorktreeToRef(worktreePath: string, ref: string): Promise<vo
   await execFileAsync("git", ["reset", "--hard", ref], { cwd: worktreePath });
   // Preserve ignored setup artifacts such as node_modules. Recursively deleting
   // them can take minutes and blocks every other Git operation on the machine.
-  await execFileAsync("git", ["clean", "-ffd"], { cwd: worktreePath });
+  try {
+    await execFileAsync("git", ["clean", "-ffd"], { cwd: worktreePath });
+  } catch (error) {
+    // `git clean` exits non-zero when a single path resists removal — typically
+    // a process writing into the tree while the walk runs ("Directory not
+    // empty"). The checkout is already at the requested ref and is perfectly
+    // usable, so a leftover path must not fail workspace prep.
+    console.warn(
+      `[worktree] git clean left paths behind in ${worktreePath}: ${getErrorMessage(error)}`,
+    );
+  }
+}
+
+/**
+ * True when the worktree holds work that a reset would destroy: staged or
+ * unstaged changes to tracked files, or untracked files. Ignored paths (build
+ * output, `node_modules`) don't count — `--porcelain` omits them by default.
+ *
+ * An unreadable status is reported as "has work" so recovery never discards a
+ * workspace it failed to inspect.
+ */
+async function hasUncommittedWork(worktreePath: string): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["status", "--porcelain", "--untracked-files=normal", "-z"],
+      { cwd: worktreePath },
+    );
+    return stdout.trim().length > 0;
+  } catch (error) {
+    console.warn(
+      `[worktree] could not read status of ${worktreePath}, assuming it has uncommitted work: ${getErrorMessage(error)}`,
+    );
+    return true;
+  }
 }
 
 async function switchWorktreeToBranch(
   worktreePath: string,
   branch: string,
   baseRef: string | null,
+  preserveLocalWork = false,
 ): Promise<void> {
-  await execFileAsync("git", ["checkout", "-f", "-B", branch, ...(baseRef ? [baseRef] : [])], {
-    cwd: worktreePath,
-  });
+  // `-f` discards uncommitted changes and a start point re-baselines the
+  // branch, so a branch-name repair on a workspace with live work does neither.
+  await execFileAsync(
+    "git",
+    ["checkout", ...(preserveLocalWork ? [] : ["-f"]), "-B", branch, ...(baseRef ? [baseRef] : [])],
+    { cwd: worktreePath },
+  );
 }
 
 async function isUsableWorktree(worktreePath: string): Promise<boolean> {
@@ -266,7 +307,12 @@ export async function createWorktree({
 
   // Fetch latest so origin refs are up to date when a remote exists.
   if (!baseCommitSha) {
-    if (hasOrigin) await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
+    if (hasOrigin) {
+      await execFileAsync("git", ["fetch", "origin"], {
+        cwd: repoPath,
+        timeout: GIT_FETCH_TIMEOUT_MS,
+      });
+    }
   } else {
     // Verify the base commit SHA is reachable locally; fetch if not
     const reachable = await execFileAsync("git", ["cat-file", "-t", baseCommitSha], {
@@ -275,7 +321,10 @@ export async function createWorktree({
       .then(() => true)
       .catch(() => false);
     if (!reachable && hasOrigin) {
-      await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
+      await execFileAsync("git", ["fetch", "origin"], {
+        cwd: repoPath,
+        timeout: GIT_FETCH_TIMEOUT_MS,
+      });
     }
   }
 
@@ -297,6 +346,10 @@ export async function createWorktree({
   // branch so the server can reconcile instead of blocking the UI.
   if (fs.existsSync(targetPath)) {
     const currentBranch = await getCurrentBranch(targetPath);
+    // Every reconnect re-prepares the workspace, so re-baselining it here would
+    // throw away whatever the agent had not committed yet. Only a workspace with
+    // nothing to lose gets reset to the requested ref.
+    const preserveLocalWork = await hasUncommittedWork(targetPath);
     if (currentBranch !== branch) {
       const canRepairRenamedBranch = shouldRepairRenamedTraceWorktreeBranch({
         currentBranch,
@@ -319,10 +372,21 @@ export async function createWorktree({
       console.warn(
         `[worktree] repairing renamed Trace worktree ${targetPath}: ${currentBranch} -> ${branch}`,
       );
-      await switchWorktreeToBranch(targetPath, branch, baseRef);
+      await switchWorktreeToBranch(
+        targetPath,
+        branch,
+        preserveLocalWork ? null : baseRef,
+        preserveLocalWork,
+      );
     }
     if (baseRef) {
-      await resetWorktreeToRef(targetPath, baseRef);
+      if (preserveLocalWork) {
+        console.warn(
+          `[worktree] adopting ${targetPath} as-is: it has uncommitted work, skipping reset to ${baseRef}`,
+        );
+      } else {
+        await resetWorktreeToRef(targetPath, baseRef);
+      }
       await setUpstreamIfRemote(repoPath, branch, baseRef);
     }
     return { workdir: targetPath, branch, slug: worktreeSlug };

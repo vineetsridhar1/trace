@@ -96,6 +96,10 @@ describe("createWorktree", () => {
           callback(null, "trace/gibbon\n");
           return {} as ReturnType<typeof execFileMock>;
         }
+        if (args[0] === "status") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
         if (args[0] === "reset" || args[0] === "clean" || args[0] === "branch") {
           callback(null, "");
           return {} as ReturnType<typeof execFileMock>;
@@ -148,6 +152,335 @@ describe("createWorktree", () => {
     );
   });
 
+  it("keeps uncommitted work in an existing worktree instead of resetting it", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    existsSyncMock.mockReturnValue(true);
+    generateAnimalSlugMock.mockReturnValue("otter");
+    getUsedSlugsMock.mockResolvedValue(new Set());
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout: string) => void,
+      ) => {
+        if (args[0] === "remote") {
+          callback(null, "git@example.com:repo.git\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "fetch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          callback(args[2] === "origin/trace/gibbon" ? null : new Error("missing ref"), "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "symbolic-ref") {
+          callback(null, "trace/gibbon\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "status") {
+          callback(null, "?? spec/interactions/agents/update_spec.rb\0");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "branch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+
+        callback(new Error(`Unexpected git call: ${args.join(" ")}`), "");
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { createWorktree } = await import("./worktree.js");
+    const result = await createWorktree({
+      repoPath: "/tmp/repo",
+      repoId: "repo-1",
+      sessionId: "session-1",
+      slug: "gibbon",
+      defaultBranch: "main",
+      startBranch: "trace/gibbon",
+      preserveBranchName: true,
+    });
+
+    expect(result).toEqual({
+      workdir: expect.stringContaining("/trace/sessions/repo-1/gibbon"),
+      branch: "trace/gibbon",
+      slug: "gibbon",
+    });
+    expect(execFileMock).not.toHaveBeenCalledWith(
+      "git",
+      ["reset", "--hard", expect.any(String)],
+      expect.anything(),
+      expect.any(Function),
+    );
+    expect(execFileMock).not.toHaveBeenCalledWith(
+      "git",
+      expect.arrayContaining(["clean"]),
+      expect.anything(),
+      expect.any(Function),
+    );
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("uncommitted work"));
+  });
+
+  it("treats an unreadable status as uncommitted work", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    existsSyncMock.mockReturnValue(true);
+    generateAnimalSlugMock.mockReturnValue("otter");
+    getUsedSlugsMock.mockResolvedValue(new Set());
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout: string) => void,
+      ) => {
+        if (args[0] === "remote") {
+          callback(null, "git@example.com:repo.git\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "fetch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          callback(args[2] === "origin/trace/gibbon" ? null : new Error("missing ref"), "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "symbolic-ref") {
+          callback(null, "trace/gibbon\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "status") {
+          callback(new Error("fatal: not a git repository"), "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "branch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+
+        callback(new Error(`Unexpected git call: ${args.join(" ")}`), "");
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { createWorktree } = await import("./worktree.js");
+    await createWorktree({
+      repoPath: "/tmp/repo",
+      repoId: "repo-1",
+      sessionId: "session-1",
+      slug: "gibbon",
+      defaultBranch: "main",
+      startBranch: "trace/gibbon",
+      preserveBranchName: true,
+    });
+
+    expect(execFileMock).not.toHaveBeenCalledWith(
+      "git",
+      ["reset", "--hard", expect.any(String)],
+      expect.anything(),
+      expect.any(Function),
+    );
+  });
+
+  it("repairs a renamed branch without discarding uncommitted work", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    existsSyncMock.mockReturnValue(true);
+    generateAnimalSlugMock.mockReturnValue("otter");
+    getUsedSlugsMock.mockResolvedValue(new Set());
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout: string) => void,
+      ) => {
+        if (args[0] === "remote") {
+          callback(null, "git@example.com:repo.git\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "fetch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          callback(args[2] === "origin/trace/renamed" ? null : new Error("missing ref"), "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "symbolic-ref") {
+          callback(null, "trace-otter\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "status") {
+          callback(null, " M app/models/agent.rb\0");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "checkout" || args[0] === "branch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+
+        callback(new Error(`Unexpected git call: ${args.join(" ")}`), "");
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { createWorktree } = await import("./worktree.js");
+    await createWorktree({
+      repoPath: "/tmp/repo",
+      repoId: "repo-1",
+      sessionId: "session-1",
+      slug: "otter",
+      defaultBranch: "main",
+      startBranch: "trace/renamed",
+      preserveBranchName: true,
+    });
+
+    // No `-f` and no start point: the branch is renamed in place, the work stays.
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      ["checkout", "-B", "trace/renamed"],
+      expect.objectContaining({ cwd: expect.stringContaining("/trace/sessions/repo-1/otter") }),
+      expect.any(Function),
+    );
+    expect(execFileMock).not.toHaveBeenCalledWith(
+      "git",
+      ["reset", "--hard", expect.any(String)],
+      expect.anything(),
+      expect.any(Function),
+    );
+  });
+
+  it("keeps the workspace usable when git clean cannot remove every path", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    existsSyncMock.mockReturnValue(true);
+    generateAnimalSlugMock.mockReturnValue("otter");
+    getUsedSlugsMock.mockResolvedValue(new Set());
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout: string, stderr: string) => void,
+      ) => {
+        if (args[0] === "remote") {
+          callback(null, "git@example.com:repo.git\n", "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "fetch") {
+          callback(null, "", "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          callback(args[2] === "origin/trace/gibbon" ? null : new Error("missing ref"), "", "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "symbolic-ref") {
+          callback(null, "trace/gibbon\n", "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "status") {
+          callback(null, "", "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "clean") {
+          callback(
+            new Error("Command failed: git clean -ffd"),
+            "",
+            "warning: failed to remove tmp/cache/bootsnap/compile-cache-iseq/3e: Directory not empty",
+          );
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "reset" || args[0] === "branch") {
+          callback(null, "", "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+
+        callback(new Error(`Unexpected git call: ${args.join(" ")}`), "", "");
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { createWorktree } = await import("./worktree.js");
+
+    await expect(
+      createWorktree({
+        repoPath: "/tmp/repo",
+        repoId: "repo-1",
+        sessionId: "session-1",
+        slug: "gibbon",
+        defaultBranch: "main",
+        startBranch: "trace/gibbon",
+        preserveBranchName: true,
+      }),
+    ).resolves.toEqual({
+      workdir: expect.stringContaining("/trace/sessions/repo-1/gibbon"),
+      branch: "trace/gibbon",
+      slug: "gibbon",
+    });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Directory not empty"));
+  });
+
+  it("gives git fetch a longer timeout than local operations", async () => {
+    existsSyncMock.mockReturnValue(true);
+    generateAnimalSlugMock.mockReturnValue("otter");
+    getUsedSlugsMock.mockResolvedValue(new Set());
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout: string) => void,
+      ) => {
+        if (args[0] === "remote") {
+          callback(null, "git@example.com:repo.git\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          callback(args[2] === "origin/trace/gibbon" ? null : new Error("missing ref"), "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "symbolic-ref") {
+          callback(null, "trace/gibbon\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "status") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        callback(null, "");
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { createWorktree } = await import("./worktree.js");
+    await createWorktree({
+      repoPath: "/tmp/repo",
+      repoId: "repo-1",
+      sessionId: "session-1",
+      slug: "gibbon",
+      defaultBranch: "main",
+      startBranch: "trace/gibbon",
+      preserveBranchName: true,
+    });
+
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      ["fetch", "origin"],
+      expect.objectContaining({ cwd: "/tmp/repo", timeout: 10 * 60_000 }),
+      expect.any(Function),
+    );
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      ["reset", "--hard", "origin/trace/gibbon"],
+      expect.objectContaining({ timeout: 60_000 }),
+      expect.any(Function),
+    );
+  });
+
   it("reuses an existing worktree checked out to a different branch", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     existsSyncMock.mockReturnValue(true);
@@ -174,6 +507,10 @@ describe("createWorktree", () => {
         }
         if (args[0] === "symbolic-ref") {
           callback(null, "feature/other\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "status") {
+          callback(null, "");
           return {} as ReturnType<typeof execFileMock>;
         }
 
@@ -232,6 +569,10 @@ describe("createWorktree", () => {
           callback(new Error("detached HEAD"), "");
           return {} as ReturnType<typeof execFileMock>;
         }
+        if (args[0] === "status") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
 
         callback(new Error(`Unexpected git call: ${args.join(" ")}`), "");
         return {} as ReturnType<typeof execFileMock>;
@@ -286,6 +627,10 @@ describe("createWorktree", () => {
         }
         if (args[0] === "symbolic-ref") {
           callback(null, "trace-otter\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "status") {
+          callback(null, "");
           return {} as ReturnType<typeof execFileMock>;
         }
         if (
@@ -364,6 +709,10 @@ describe("createWorktree", () => {
         }
         if (args[0] === "symbolic-ref") {
           callback(null, "feature/unrelated\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "status") {
+          callback(null, "");
           return {} as ReturnType<typeof execFileMock>;
         }
 
@@ -1069,6 +1418,10 @@ describe("createWorktree", () => {
           callback(null, "trace/gibbon\n");
           return {} as ReturnType<typeof execFileMock>;
         }
+        if (args[0] === "status") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
         if (args[0] === "reset" || args[0] === "clean" || args[0] === "branch") {
           callback(null, "");
           return {} as ReturnType<typeof execFileMock>;
@@ -1135,6 +1488,10 @@ describe("createWorktree", () => {
         }
         if (args[0] === "symbolic-ref") {
           callback(null, "trace/gibbon\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "status") {
+          callback(null, "");
           return {} as ReturnType<typeof execFileMock>;
         }
         if (args[0] === "reset" || args[0] === "clean" || args[0] === "branch") {
