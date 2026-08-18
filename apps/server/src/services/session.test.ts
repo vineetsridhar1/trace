@@ -4233,6 +4233,22 @@ describe("SessionService", () => {
       await expect(resolver.resolveForkBaseCommitSha(sourceSession)).resolves.toBeNull();
       expect(sessionRouterMock.inspectSessionGitSyncStatus).not.toHaveBeenCalled();
     });
+
+    it("forks from the committed HEAD when the workspace has uncommitted changes", async () => {
+      const sourceSession = makeSession({
+        repoId: "repo-1",
+        workdir: "/tmp/trace/source",
+        connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+      });
+      const resolver = service as unknown as {
+        resolveForkBaseCommitSha: (session: typeof sourceSession) => Promise<string | null>;
+      };
+      sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValueOnce(
+        makeGitSyncStatus({ headCommitSha: "committed-head", hasUncommittedChanges: true }),
+      );
+
+      await expect(resolver.resolveForkBaseCommitSha(sourceSession)).resolves.toBe("committed-head");
+    });
   });
 
   describe("file access", () => {
