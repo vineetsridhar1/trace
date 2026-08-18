@@ -84,36 +84,42 @@ export function createProjectSession(
   return createQuickSession(channelId, { ...options, kind: "general" });
 }
 
-export async function createAppSession(): Promise<boolean> {
-  return createGeneratedProjectSession("app");
-}
-
 export function buildGeneratedProjectStartInput(
   kind: CreatableGeneratedProjectKind,
   designSystemVersionId?: string,
+  channelId?: string | null,
 ) {
   return {
     kind,
     hosting: "cloud" as const,
+    ...(channelId ? { channelId } : {}),
     ...(kind === "design" && designSystemVersionId ? { designSystemVersionId } : {}),
   };
 }
 
-export async function createDesignSession(designSystemVersionId?: string): Promise<boolean> {
-  return createGeneratedProjectSession("design", designSystemVersionId);
+export async function createAppSession(channelId?: string | null): Promise<boolean> {
+  return createGeneratedProjectSession("app", undefined, channelId);
 }
 
-export async function createPdfSession(): Promise<boolean> {
-  return createGeneratedProjectSession("pdf");
+export async function createDesignSession(
+  designSystemVersionId?: string,
+  channelId?: string | null,
+): Promise<boolean> {
+  return createGeneratedProjectSession("design", designSystemVersionId, channelId);
 }
 
-export async function createAnimationSession(): Promise<boolean> {
-  return createGeneratedProjectSession("animation");
+export async function createPdfSession(channelId?: string | null): Promise<boolean> {
+  return createGeneratedProjectSession("pdf", undefined, channelId);
+}
+
+export async function createAnimationSession(channelId?: string | null): Promise<boolean> {
+  return createGeneratedProjectSession("animation", undefined, channelId);
 }
 
 async function createGeneratedProjectSession(
   kind: CreatableGeneratedProjectKind,
   designSystemVersionId?: string,
+  channelId?: string | null,
 ): Promise<boolean> {
   if (pendingGeneratedProjectKinds.has(kind)) return false;
   pendingGeneratedProjectKinds.add(kind);
@@ -122,7 +128,7 @@ async function createGeneratedProjectSession(
   try {
     const result = await client
       .mutation(START_SESSION_MUTATION, {
-        input: buildGeneratedProjectStartInput(kind, designSystemVersionId),
+        input: buildGeneratedProjectStartInput(kind, designSystemVersionId, channelId),
       })
       .toPromise();
 
@@ -139,7 +145,7 @@ async function createGeneratedProjectSession(
       return false;
     }
 
-    navigateToSessionGroup(null, session.sessionGroupId, session.id);
+    navigateToSessionGroup(channelId ?? null, session.sessionGroupId, session.id);
     return true;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

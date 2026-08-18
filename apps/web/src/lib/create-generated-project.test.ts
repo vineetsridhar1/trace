@@ -23,6 +23,14 @@ describe("buildGeneratedProjectStartInput", () => {
     });
   });
 
+  it("keeps an active project as organizational context", () => {
+    expect(buildGeneratedProjectStartInput("design", undefined, "channel-1")).toEqual({
+      kind: "design",
+      hosting: "cloud",
+      channelId: "channel-1",
+    });
+  });
+
   it("pins a selected design-system version only for Designs", () => {
     expect(buildGeneratedProjectStartInput("design", "version-3")).toEqual({
       kind: "design",

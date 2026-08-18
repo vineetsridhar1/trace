@@ -643,8 +643,8 @@ describe("SessionService", () => {
         const sourceGroup = makeSessionGroup({
           id: "group-general",
           kind: "general",
-          channelId: null,
-          channel: null,
+          channelId: "channel-1",
+          channel: { id: "channel-1", name: "healthcare" },
           repoId: null,
           repo: null,
           branch: null,
@@ -672,8 +672,8 @@ describe("SessionService", () => {
           repoId: managedRepo.id,
           repo: managedRepo,
           branch: managedRepo.defaultBranch,
-          channelId: null,
-          channel: null,
+          channelId: "channel-1",
+          channel: { id: "channel-1", name: "healthcare" },
           workdir: sourceGroup.workdir,
           connection: {
             state: "connected",
@@ -716,8 +716,8 @@ describe("SessionService", () => {
                 hosting: "local",
                 repoId: null,
                 repo: null,
-                channelId: null,
-                channel: null,
+                channelId: "channel-1",
+                channel: { id: "channel-1", name: "healthcare" },
                 workdir: sourceGroup.workdir,
                 connection: convertedSession.connection,
               }),
@@ -752,7 +752,6 @@ describe("SessionService", () => {
             where: expect.objectContaining({ id: sourceGroup.id, kind: "general" }),
             data: expect.objectContaining({
               kind,
-              channelId: null,
               repoId: managedRepo.id,
             }),
           }),
@@ -762,7 +761,6 @@ describe("SessionService", () => {
           expect.objectContaining({
             data: expect.objectContaining({
               hosting: "cloud",
-              channelId: null,
               repoId: managedRepo.id,
               readOnlyWorkspace: false,
               projects: { deleteMany: {} },
@@ -773,6 +771,10 @@ describe("SessionService", () => {
             }),
           }),
         );
+        const groupUpdate = prismaMock.sessionGroup.updateMany.mock.calls[0]?.[0];
+        const sessionUpdate = prismaMock.session.update.mock.calls[0]?.[0];
+        expect(groupUpdate?.data).not.toHaveProperty("channelId");
+        expect(sessionUpdate?.data).not.toHaveProperty("channelId");
         await vi.waitFor(() => {
           expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -2209,6 +2211,69 @@ describe("SessionService", () => {
           prompt: "Explore onboarding",
         } as unknown as StartSessionServiceInput),
       ).rejects.toThrow("Design sessions require cloud hosting");
+    });
+
+    it("creates a design in a repo-linked project without using the project repo", async () => {
+      const repo = await managedGitServiceMock.createManagedRepo({
+        organizationId: "org-1",
+        name: "Design source",
+        actorType: "user",
+        actorId: "user-1",
+      });
+      managedGitServiceMock.createManagedRepo.mockClear();
+      const sessionGroup = makeSessionGroup({
+        kind: "design",
+        channelId: "channel-1",
+        repoId: repo.id,
+        repo,
+        branch: repo.defaultBranch,
+      });
+      const session = makeSession({
+        hosting: "cloud",
+        channelId: "channel-1",
+        repoId: repo.id,
+        repo,
+        branch: repo.defaultBranch,
+        sessionGroup,
+      });
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "project-repo-1",
+        baseBranch: "develop",
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        kind: "design",
+        channelId: "channel-1",
+        hosting: "cloud",
+      } as unknown as StartSessionServiceInput);
+
+      expect(managedGitServiceMock.createManagedRepo).toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            kind: "design",
+            channelId: "channel-1",
+            repoId: "managed-repo-1",
+            branch: "main",
+          }),
+        }),
+      );
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            channelId: "channel-1",
+            repoId: "managed-repo-1",
+            branch: "main",
+          }),
+        }),
+      );
     });
 
     it("rejects design-system versions for non-Design sessions", async () => {

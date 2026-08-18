@@ -3230,7 +3230,7 @@ export class SessionService {
     if (!repo) throw new Error("Repo not found");
   }
 
-  /** Channel-less generated project groups for the Apps and Designs sidebar sections. */
+  /** Generated project groups for the global Apps and Designs indexes. */
   async listAppGroups(organizationId: string, userId: string, includeArchived = false) {
     return this.listGeneratedProjectGroups("app", organizationId, userId, includeArchived);
   }
@@ -3449,9 +3449,10 @@ export class SessionService {
   /**
    * Convert the current work unit without creating a second conversation.
    *
-   * General sessions can become coding sessions in a selected channel or
-   * creation sessions in an isolated managed cloud workspace. Design-system
-   * authoring remains a dedicated flow because it requires source-repo metadata.
+   * General sessions can become coding sessions or creation sessions while
+   * retaining their project channel. Creation workspaces use isolated managed
+   * repositories; the channel is organizational context, not their Git source.
+   * Design-system authoring remains a dedicated source-backed flow.
    */
   async convertGroup(input: ConvertSessionGroupServiceInput) {
     await assertSessionGroupAccess(input.sessionGroupId, input.actorId, input.organizationId);
@@ -4348,12 +4349,10 @@ export class SessionService {
     }
 
     const authoritativeChannelRepoId =
-      resolvedChannel?.type === "coding" ? (resolvedChannel.repoId ?? null) : null;
+      resolvedChannel?.type === "coding" && !isGeneratedProjectKind(resolvedKind)
+        ? (resolvedChannel.repoId ?? null)
+        : null;
     const authoritativeProjectRepoId = resolvedProject?.repoId ?? null;
-    if (isGeneratedProjectKind(resolvedKind) && authoritativeChannelRepoId && !existingGroup) {
-      const label = resolvedKind === "design" ? "Design" : "App";
-      throw new ValidationError(`${label} sessions cannot start in a repo-linked coding channel`);
-    }
 
     if (authoritativeChannelRepoId && input.repoId && input.repoId !== authoritativeChannelRepoId) {
       throw new Error("Coding channel sessions must use the channel's linked repo");
@@ -4400,7 +4399,7 @@ export class SessionService {
       input.branch ??
       seedGroup?.branch ??
       sourceSession?.branch ??
-      resolvedChannel?.baseBranch ??
+      (isGeneratedProjectKind(resolvedKind) ? undefined : resolvedChannel?.baseBranch) ??
       undefined;
     const sharedWorkdir = input.forceNewGroup ? null : (resolvedGroup?.workdir ?? null);
     const sharedConnection = input.forceNewGroup ? null : (resolvedGroup?.connection ?? null);
@@ -9606,7 +9605,6 @@ export class SessionService {
             },
             data: {
               kind: conversion.kind,
-              channelId: null,
               repoId: conversion.repoId,
             },
           });
@@ -9646,7 +9644,6 @@ export class SessionService {
               ...(isPrimary && {
                 ...(conversion
                   ? {
-                      channelId: null,
                       repoId: conversion.repoId,
                       readOnlyWorkspace: false,
                       tool: conversion.tool,
