@@ -1,36 +1,56 @@
-import { Readable, Writable } from "node:stream";
-import { pipeline } from "node:stream/promises";
-import { describe, expect, it } from "vitest";
-import { createSourceBundleLimiter } from "./app-deployment-dispatcher.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { LauncherAppDeploymentDispatcher } from "./app-deployment-dispatcher.js";
 
-describe("app deployment source streaming", () => {
-  it("streams archives without buffering the complete source", async () => {
-    const chunks: Buffer[] = [];
-    await pipeline(
-      Readable.from([Buffer.from("abc"), Buffer.from("def")]),
-      createSourceBundleLimiter(6),
-      new Writable({
-        write(chunk: Buffer, _encoding, done) {
-          chunks.push(chunk);
-          done();
-        },
+const input = {
+  deploymentId: "deployment-1",
+  organizationId: "org-1",
+  sessionGroupId: "group-1",
+  repoId: "repo-1",
+  checkpointId: "a".repeat(40),
+  commitSha: "a".repeat(40),
+  appSlug: "notes-group1",
+  spec: { target: "static" as const, outputDirectory: "dist" },
+  callback: {
+    url: "https://trace.example.com/internal/app-deployments/deployment-1/status",
+    token: "callback-token",
+  },
+  requestedAt: "2026-08-16T00:00:00.000Z",
+};
+
+describe("LauncherAppDeploymentDispatcher", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("hands the immutable source capability to the configured launcher", async () => {
+    vi.stubEnv("TRACE_SERVER_PUBLIC_URL", "https://trace.example.com");
+    vi.stubEnv("TRACE_APP_DEPLOYMENT_LAUNCHER_URL", "https://launcher.trace.example.com");
+    vi.stubEnv("TRACE_APP_DEPLOYMENT_LAUNCHER_TOKEN", "launcher-token");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ jobId: "queue-message-1" }), { status: 202 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(new LauncherAppDeploymentDispatcher().enqueue(input)).resolves.toEqual({
+      externalJobId: "queue-message-1",
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://launcher.trace.example.com/app-deployments",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: "Bearer launcher-token",
+          "trace-idempotency-key": "deployment-1",
+        }),
+        body: expect.stringContaining(
+          '"sourceUrl":"https://trace.example.com/internal/app-deployments/deployment-1/source"',
+        ),
       }),
     );
-
-    expect(Buffer.concat(chunks).toString()).toBe("abcdef");
   });
 
-  it("rejects an archive as soon as it exceeds the source limit", async () => {
-    await expect(
-      pipeline(
-        Readable.from([Buffer.alloc(4), Buffer.alloc(3)]),
-        createSourceBundleLimiter(6),
-        new Writable({
-          write(_chunk, _encoding, done) {
-            done();
-          },
-        }),
-      ),
-    ).rejects.toThrow("exceeds");
+  it("fails clearly when the launcher is not configured", async () => {
+    await expect(new LauncherAppDeploymentDispatcher().enqueue(input)).rejects.toThrow(
+      "not configured",
+    );
   });
 });

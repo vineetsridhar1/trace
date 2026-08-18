@@ -19,6 +19,7 @@ export type AppDeploymentJob = {
   organizationId: string;
   sessionGroupId: string;
   repoId: string;
+  checkpointId: string;
   commitSha: string;
   appSlug: string;
   spec: AppDeploymentSpec;
