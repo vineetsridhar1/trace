@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { spawn } from "node:child_process";
-import type { Readable } from "node:stream";
+import { PassThrough, type Readable } from "node:stream";
 import { Prisma, type AppDeployment, type AppDeploymentStatus } from "@prisma/client";
 import type { DeployAppSessionInput } from "@trace/gql";
 import type { AppDeploymentSpec } from "@trace/shared";
@@ -215,6 +215,7 @@ export type AppDeploymentCallback = {
 export type AppDeploymentSource = {
   commitSha: string;
   stream: Readable;
+  abort(): void;
 };
 
 export class AppDeploymentService {
@@ -532,8 +533,17 @@ export class AppDeploymentService {
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
-    archive.stderr.resume();
-    return { commitSha: deployment.commitSha, stream: archive.stdout };
+    let stderr = "";
+    const stream = new PassThrough();
+    archive.stderr.on("data", (chunk: Buffer) => {
+      if (stderr.length < 64 * 1024) stderr += chunk.toString("utf8");
+    });
+    archive.on("error", (error) => stream.destroy(error));
+    archive.on("close", (code) => {
+      if (code !== 0) stream.destroy(new Error(stderr.trim() || "Unable to archive deployment source"));
+    });
+    archive.stdout.pipe(stream);
+    return { commitSha: deployment.commitSha, stream, abort: () => archive.kill() };
   }
 }
 

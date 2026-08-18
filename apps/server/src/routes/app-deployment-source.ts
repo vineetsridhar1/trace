@@ -25,6 +25,7 @@ router.get(
         if (!res.headersSent) res.status(500);
         res.end();
       });
+      res.on("close", source.abort);
       source.stream.pipe(res);
     } catch (error) {
       if (error instanceof AuthorizationError) {
