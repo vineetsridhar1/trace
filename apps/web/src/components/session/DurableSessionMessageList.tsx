@@ -31,6 +31,9 @@ export function DurableSessionMessageList({
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const initialLoad = useRef(true);
+  const visibleMessages = messages.filter(
+    (message) => message.role !== "assistant" || message.text.trim() !== "",
+  );
 
   useEffect(() => {
     if (!initialLoad.current || loading) return;
@@ -71,13 +74,13 @@ export function DurableSessionMessageList({
             {loadingOlder ? "Loading older messages…" : "Load older messages"}
           </button>
         )}
-        {!hasOlder && messages.length > 0 && (
+        {!hasOlder && visibleMessages.length > 0 && (
           <div className="mb-3 text-center text-xs text-muted-foreground">Beginning of session</div>
         )}
         {loading ? (
           <div className="text-sm text-muted-foreground">Loading messages…</div>
         ) : (
-          messages.map((message) => (
+          visibleMessages.map((message) => (
             <div key={message.id} className="pb-3">
               {message.role === "assistant" ? (
                 <AssistantText text={message.text} eventId={message.sourceEventId} />

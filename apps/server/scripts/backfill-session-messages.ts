@@ -43,7 +43,14 @@ async function main(): Promise<void> {
     });
     if (events.length === 0) break;
 
+    const sessionIds = [...new Set(events.map((event) => event.scopeId))];
+    const sessions = await prisma.session.findMany({
+      where: { id: { in: sessionIds } },
+      select: { id: true },
+    });
+    const existingSessionIds = new Set(sessions.map((session) => session.id));
     const messages = events.flatMap((event) => {
+      if (!existingSessionIds.has(event.scopeId)) return [];
       const message = sessionMessageCreateDataFromEvent(event);
       return message ? [message] : [];
     });
