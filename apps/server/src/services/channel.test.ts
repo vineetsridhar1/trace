@@ -160,6 +160,13 @@ describe("ChannelService", () => {
       where: { id: "channel-1", repoId: null },
       data: { repoId: "repo-1", baseBranch: "main" },
     });
+    expect(prismaMock.channel.findFirstOrThrow).toHaveBeenCalledWith({
+      where: {
+        id: "channel-1",
+        members: { some: { userId: "user-1", leftAt: null } },
+      },
+      select: { id: true, organizationId: true, repoId: true },
+    });
     expect(prismaMock.channel.findUniqueOrThrow).toHaveBeenCalledWith({
       where: { id: "channel-1" },
       include: { repo: { select: { id: true, name: true } } },
@@ -198,6 +205,24 @@ describe("ChannelService", () => {
       service.linkRepo("channel-1", "repo-new", undefined, "user", "user-1"),
     ).rejects.toThrow("Channel already has a linked repository");
     expect(prismaMock.channel.update).not.toHaveBeenCalled();
+  });
+
+  it("does not let a non-member link a repository to a public channel", async () => {
+    prismaMock.channel.findFirstOrThrow.mockRejectedValueOnce(new Error("Not found"));
+
+    const service = new ChannelService();
+    await expect(
+      service.linkRepo("channel-1", "repo-1", undefined, "user", "user-2"),
+    ).rejects.toThrow("Not found");
+
+    expect(prismaMock.channel.findFirstOrThrow).toHaveBeenCalledWith({
+      where: {
+        id: "channel-1",
+        members: { some: { userId: "user-2", leftAt: null } },
+      },
+      select: { id: true, organizationId: true, repoId: true },
+    });
+    expect(prismaMock.channel.updateMany).not.toHaveBeenCalled();
   });
 
   it("excludes private channel owners from member-only lists after leaving", async () => {

@@ -53,11 +53,12 @@ export const channelMutations = {
     await assertChannelAccess(args.id, ctx.userId);
     return channelService.update(args.id, args.input, ctx.actorType, ctx.userId);
   },
-  linkChannelRepo: (
+  linkChannelRepo: async (
     _: unknown,
     args: { channelId: string; repoId: string; baseBranch?: string },
     ctx: Context,
   ) => {
+    await assertChannelAccess(args.channelId, ctx.userId, requireOrgContext(ctx));
     return channelService.linkRepo(
       args.channelId,
       args.repoId,

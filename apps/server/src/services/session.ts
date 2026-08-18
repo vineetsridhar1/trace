@@ -214,8 +214,18 @@ function parseGitHubPullRequestUrl(url: URL): GitHubPullRequestRef | null {
   if (url.hostname.toLowerCase() !== "github.com") return null;
   const parts = url.pathname.split("/").filter(Boolean);
   if (parts.length < 4 || parts[2] !== "pull" || !/^\d+$/.test(parts[3])) return null;
-  const [owner, repo, , number] = parts;
-  if (!owner || !repo || !number) return null;
+  const [, , , number] = parts;
+  let owner: string;
+  let repo: string;
+  try {
+    owner = decodeURIComponent(parts[0] ?? "");
+    repo = decodeURIComponent(parts[1] ?? "");
+  } catch {
+    return null;
+  }
+  const validOwner = /^(?!-)[A-Za-z0-9-]{1,39}$/.test(owner) && !owner.endsWith("-");
+  const validRepo = /^[A-Za-z0-9._-]{1,100}$/.test(repo);
+  if (!validOwner || !validRepo || !number) return null;
   return {
     owner,
     repo,
@@ -4320,6 +4330,18 @@ export class SessionService {
     }
     if (resolvedChannel && resolvedChannel.organizationId !== input.organizationId) {
       throw new Error("Channel does not belong to this organization");
+    }
+    if (input.channelId) {
+      const membership = await prisma.channelMember.findFirst({
+        where: {
+          channelId: input.channelId,
+          userId: input.createdById,
+          leftAt: null,
+          channel: { organizationId: input.organizationId },
+        },
+        select: { channelId: true },
+      });
+      if (!membership) throw new AuthorizationError("Not authorized for this channel");
     }
     const requiresCompleteCodingInput = input.clientSource === "cli" && resolvedKind === "coding";
     if (requiresCompleteCodingInput && !input.prompt?.trim()) {
@@ -12818,19 +12840,14 @@ export class SessionService {
       );
     }
 
-    const remediation: string[] = [];
     if (!repo.remoteUrl) {
-      remediation.push(
-        `\"$TRACE_CLI\" repo attach-remote ${repo.id} ${pullRequest.remoteUrl} --json`,
+      throw new ValidationError(
+        `Repository ${repo.id} has no remote URL. Attach its GitHub remote before linking a PR.`,
       );
     }
     if (channel && !channel.repoId) {
-      remediation.push(`\"$TRACE_CLI\" channel link-repo ${channel.id} ${repo.id} --json`);
-    }
-    if (remediation.length > 0) {
-      remediation.push(`\"$TRACE_CLI\" session link-pr ${pullRequest.prUrl} ${session.id} --json`);
       throw new ValidationError(
-        `Repository association is required before linking this PR. Run these commands in order:\n${remediation.join("\n")}`,
+        `Channel ${channel.id} has no linked repository. Link repository ${repo.id} before linking a PR.`,
       );
     }
 

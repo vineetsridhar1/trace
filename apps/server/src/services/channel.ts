@@ -175,7 +175,10 @@ export class ChannelService {
   ) {
     const channel = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const existing = await tx.channel.findFirstOrThrow({
-        where: { id: channelId, ...visibleChannelWhere(actorId) },
+        where: {
+          id: channelId,
+          members: { some: { userId: actorId, leftAt: null } },
+        },
         select: { organizationId: true },
       });
 
@@ -273,7 +276,10 @@ export class ChannelService {
   ) {
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const existing = await tx.channel.findFirstOrThrow({
-        where: { id: channelId, ...visibleChannelWhere(actorId) },
+        where: {
+          id: channelId,
+          members: { some: { userId: actorId, leftAt: null } },
+        },
         select: { id: true, organizationId: true, repoId: true },
       });
 

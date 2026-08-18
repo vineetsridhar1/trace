@@ -4,9 +4,7 @@ import { buildQuickSessionStartInput } from "./quick-session-input";
 describe("buildQuickSessionStartInput", () => {
   it("creates a general project session with the linked repo as context", () => {
     expect(
-      buildQuickSessionStartInput("channel-1", "repo-1", {
-        kind: "general",
-      }),
+      buildQuickSessionStartInput("channel-1", "repo-1"),
     ).toEqual({
       deferRuntimeSelection: true,
       kind: "general",
@@ -17,9 +15,7 @@ describe("buildQuickSessionStartInput", () => {
 
   it("allows a project without a repo to start a general session", () => {
     expect(
-      buildQuickSessionStartInput("channel-1", undefined, {
-        kind: "general",
-      }),
+      buildQuickSessionStartInput("channel-1", undefined),
     ).toEqual({
       deferRuntimeSelection: true,
       kind: "general",

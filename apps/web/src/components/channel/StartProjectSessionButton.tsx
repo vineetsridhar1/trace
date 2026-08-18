@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { LoaderCircle, Plus } from "lucide-react";
-import { createProjectSession } from "../../lib/create-quick-session";
+import { createQuickSession } from "../../lib/create-quick-session";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 export function StartProjectSessionButton({ channelId }: { channelId: string }) {
@@ -10,7 +10,7 @@ export function StartProjectSessionButton({ channelId }: { channelId: string }) 
     if (starting) return;
     setStarting(true);
     try {
-      await createProjectSession(channelId);
+      await createQuickSession(channelId);
     } finally {
       setStarting(false);
     }

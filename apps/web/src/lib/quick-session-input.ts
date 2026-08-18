@@ -12,11 +12,12 @@ export function buildQuickSessionStartInput(
   repoId: string | undefined,
   options: QuickSessionOptions = {},
 ) {
+  const kind = options.kind ?? (options.sessionGroupId ? undefined : "general");
   return {
     deferRuntimeSelection: true,
     channelId,
     ...(repoId ? { repoId } : {}),
-    ...(options.kind ? { kind: options.kind } : {}),
+    ...(kind ? { kind } : {}),
     ...(options.sessionGroupId ? { sessionGroupId: options.sessionGroupId } : {}),
     ...(options.visibility ? { visibility: options.visibility } : {}),
     ...(options.tool ? { tool: options.tool } : {}),

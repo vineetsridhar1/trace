@@ -22,7 +22,8 @@ export function getChannelRepoId(channelId: string): string | undefined {
 }
 
 /**
- * Create a new not_started session and let the user choose the runtime later.
+ * Create a new General session and let the user choose the runtime later.
+ * Existing groups retain their own kind.
  * Used by both Cmd+N and the + session button.
  *
  * Starts the session, then navigates once the service returns the real IDs.
@@ -71,17 +72,6 @@ export async function createQuickSession(
   } finally {
     pendingQuickSessionChannels.delete(channelId);
   }
-}
-
-/**
- * Start flexible work in a project. The general session inherits the project's
- * repository as context and can later convert in place to coding or an artifact.
- */
-export function createProjectSession(
-  channelId: string,
-  options: Omit<QuickSessionOptions, "kind" | "sessionGroupId"> = {},
-): Promise<void> {
-  return createQuickSession(channelId, { ...options, kind: "general" });
 }
 
 export function buildGeneratedProjectStartInput(

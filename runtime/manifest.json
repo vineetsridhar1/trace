@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "version": 29,
   "protocolVersion": 1,
-  "contentHash": "3e255b51fc20e1e019144f260379c2f9c73111c0da808c456b0216b4401a96e8",
+  "contentHash": "da3f00ae021e34787062fddb073f265115a83f9fa267a085ef894597de7310b3",
   "files": [
     "bin/trace",
     "bin/trace.mjs",

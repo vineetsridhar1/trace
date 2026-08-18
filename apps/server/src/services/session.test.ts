@@ -1889,6 +1889,10 @@ describe("SessionService", () => {
   });
 
   describe("start", () => {
+    beforeEach(() => {
+      prismaMock.channelMember.findFirst.mockResolvedValue({ channelId: "channel-1" });
+    });
+
     it("returns the original session for a repeated client mutation id", async () => {
       const existingSession = makeSession({ id: "session-existing" });
       prismaMock.event.findFirst.mockResolvedValueOnce({ scopeId: existingSession.id } as never);
@@ -2274,6 +2278,30 @@ describe("SessionService", () => {
           }),
         }),
       );
+    });
+
+    it("rejects starting a session in a channel where the actor is not a member", async () => {
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: null,
+        baseBranch: null,
+      });
+      prismaMock.channelMember.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-2",
+          kind: "general",
+          channelId: "channel-1",
+          deferRuntimeSelection: true,
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Not authorized for this channel");
+
+      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
     });
 
     it("rejects design-system versions for non-Design sessions", async () => {
@@ -14271,13 +14299,24 @@ describe("SessionService", () => {
           actorId: "user-1",
         }),
       ).rejects.toThrow(
-        [
-          "Repository association is required before linking this PR. Run these commands in order:",
-          '"$TRACE_CLI" repo attach-remote repo-1 https://github.com/acme/app.git --json',
-          '"$TRACE_CLI" channel link-repo channel-1 repo-1 --json',
-          '"$TRACE_CLI" session link-pr https://github.com/acme/app/pull/42 session-1 --json',
-        ].join("\n"),
+        "Repository repo-1 has no remote URL. Attach its GitHub remote before linking a PR.",
       );
+      expect(markPrOpenedSpy).not.toHaveBeenCalled();
+    });
+
+    it("rejects shell metacharacters in GitHub PR repository names", async () => {
+      const markPrOpenedSpy = vi.spyOn(service, "markPrOpened");
+
+      await expect(
+        service.linkPullRequest({
+          sessionId: "session-1",
+          prUrl: "https://github.com/acme/repo$(whoami)/pull/42",
+          organizationId: "org-1",
+          actorId: "user-1",
+        }),
+      ).rejects.toThrow("A valid GitHub pull request URL is required");
+
+      expect(prismaMock.session.findFirst).not.toHaveBeenCalled();
       expect(markPrOpenedSpy).not.toHaveBeenCalled();
     });
 

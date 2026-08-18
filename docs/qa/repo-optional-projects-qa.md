@@ -168,8 +168,9 @@ than a bug fix.
   convert to coding (group became `kind: coding`, repo `healthcare`, branch `trace-moth`).
 - Conversion cannot be bypassed: supplying an explicit `repoId` to a channel with no linked repo
   still fails with the actionable message (G7).
-- The PR remediation loop works: `link-pr` failed with three exact commands, running them in order
-  made the retry succeed, and `/pull/42/files` was canonicalized to `/pull/42`.
+- The PR association loop works: `link-pr` reported the missing remote and channel association;
+  attaching verified values made the retry succeed, and `/pull/42/files` was canonicalized to
+  `/pull/42`.
 - SSH remote `git@github.com:Acme/SshRepo.git` correctly matched PR URL
   `https://github.com/acme/sshrepo/pull/7` (case-insensitive).
 - `channel_updated` carries the full `repo` object, so the dialog reflected the new repository with

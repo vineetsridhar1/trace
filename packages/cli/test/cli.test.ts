@@ -153,7 +153,7 @@ describe("Trace CLI", () => {
     );
   });
 
-  it("prints repository reconciliation commands when PR linking requires them", async () => {
+  it("prints the validation error when PR linking requires repository reconciliation", async () => {
     vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
     vi.stubEnv("TRACE_SESSION_ID", "session-1");
     vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
@@ -166,8 +166,7 @@ describe("Trace CLI", () => {
             JSON.stringify({
               errors: [
                 {
-                  message:
-                    'Repository association is required. Run "$TRACE_CLI" repo attach-remote repo-1 https://github.com/acme/app.git --json',
+                  message: "Repository repo-1 has no remote URL.",
                   extensions: { code: "BAD_USER_INPUT" },
                 },
               ],
@@ -181,7 +180,7 @@ describe("Trace CLI", () => {
       run(["session", "link-pr", "https://github.com/acme/app/pull/42", "--self", "--json"]),
     ).resolves.toBe(4);
     expect(stderr.mock.calls.flat().join("")).toContain('"category":"validation"');
-    expect(stderr.mock.calls.flat().join("")).toContain("repo attach-remote repo-1");
+    expect(stderr.mock.calls.flat().join("")).toContain("Repository repo-1 has no remote URL");
   });
 
   it("links a repository to a repo-less channel", async () => {

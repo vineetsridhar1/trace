@@ -13,12 +13,12 @@ export const sessionLinkPrCommand = defineCommand({
   effects: ["Marks the session group as in review and emits the pull-request-opened event."],
   output: "The linked session group and its pull request URL.",
   nextSteps: [
-    "If Trace reports missing repository associations, run the exact remediation commands in order and retry this command.",
+    'Use "$TRACE_CLI" repo attach-remote or channel link-repo when Trace reports a missing association, then retry this command.',
     "Report the PR URL only after Trace confirms the link.",
   ],
   notes: [
     "Trace validates that the session repository, channel repository, and GitHub PR all agree before linking.",
-    "Missing associations are never filled silently; the error provides safe repo attach-remote and channel link-repo commands.",
+    "Missing associations are never filled or replaced silently.",
   ],
   positionals: [{ name: "pr-url", required: true }, { name: "session-id" }],
   options: [
