@@ -2314,6 +2314,7 @@ export type QuerySessionGroupsArgs = {
 
 export type QuerySessionMessagesArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeMessageId?: InputMaybe<Scalars["ID"]["input"]>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
   sessionId: Scalars["ID"]["input"];
 };
@@ -5404,6 +5405,34 @@ export type SessionEventsLiveSubscription = {
       avatarUrl?: string | null;
     };
   };
+};
+
+export type SessionMessagesQueryVariables = Exact<{
+  sessionId: Scalars["ID"]["input"];
+  before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeMessageId?: InputMaybe<Scalars["ID"]["input"]>;
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+}>;
+
+export type SessionMessagesQuery = {
+  __typename?: "Query";
+  sessionMessages: Array<{
+    __typename?: "SessionMessage";
+    id: string;
+    role: SessionMessageRole;
+    text: string;
+    content: JsonValue;
+    attachments?: JsonValue | null;
+    sourceEventId: string;
+    createdAt: string;
+    actor: {
+      __typename?: "Actor";
+      id: string;
+      type: ActorType;
+      name?: string | null;
+      avatarUrl?: string | null;
+    };
+  }>;
 };
 
 export type SessionPromptIndexQueryVariables = Exact<{
@@ -13116,6 +13145,97 @@ export const SessionEventsLiveDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionEventsLiveSubscription, SessionEventsLiveSubscriptionVariables>;
+export const SessionMessagesDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionMessages" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "before" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "DateTime" } },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "beforeMessageId" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionMessages" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "before" },
+                value: { kind: "Variable", name: { kind: "Name", value: "before" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "beforeMessageId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "beforeMessageId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "limit" },
+                value: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "role" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "actor" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "type" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "text" } },
+                { kind: "Field", name: { kind: "Name", value: "content" } },
+                { kind: "Field", name: { kind: "Name", value: "attachments" } },
+                { kind: "Field", name: { kind: "Name", value: "sourceEventId" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SessionMessagesQuery, SessionMessagesQueryVariables>;
 export const SessionPromptIndexDocument = {
   kind: "Document",
   definitions: [

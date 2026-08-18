@@ -6,7 +6,7 @@ import { pubsub, topics } from "../lib/pubsub.js";
 import { redis } from "../lib/redis.js";
 import { isLocalMode } from "../lib/mode.js";
 import { pushNotificationService } from "./pushNotificationService.js";
-import { sessionMessageService } from "./session-message.js";
+import { sessionMessageDataFromEvent, sessionMessageService } from "./session-message.js";
 
 // Approximate cap on the per-org Redis event stream. The durable copy of every
 // event lives in Postgres (see `query`); this stream is only a fan-out tail, so
@@ -157,12 +157,17 @@ export class EventService {
   }
 
   private shouldMaterializeSessionMessage(input: CreateEventInput): boolean {
-    return (
-      input.scopeType === "session" &&
-      (input.eventType === "session_started" ||
-        input.eventType === "message_sent" ||
-        input.eventType === "session_output")
-    );
+    return sessionMessageDataFromEvent({
+      id: input.id ?? "",
+      organizationId: input.organizationId,
+      scopeType: input.scopeType,
+      scopeId: input.scopeId,
+      eventType: input.eventType,
+      payload: input.payload,
+      actorType: input.actorType,
+      actorId: input.actorId,
+      timestamp: input.timestamp ?? new Date(),
+    }) !== null;
   }
 
   async createMany(inputs: CreateEventInput[]) {

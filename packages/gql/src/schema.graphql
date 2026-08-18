@@ -1913,7 +1913,12 @@ type Query {
     excludePayloadTypes: [String!]
   ): [Event!]!
   sessionPromptIndex(organizationId: ID!, sessionId: ID!): [SessionPromptIndexItem!]!
-  sessionMessages(sessionId: ID!, before: DateTime, limit: Int): [SessionMessage!]!
+  sessionMessages(
+    sessionId: ID!
+    before: DateTime
+    beforeMessageId: ID
+    limit: Int
+  ): [SessionMessage!]!
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
   availableRuntimes(tool: CodingTool!, sessionGroupId: ID): [SessionRuntimeInstance!]!
   myBridgeRuntimes: [BridgeRuntime!]!

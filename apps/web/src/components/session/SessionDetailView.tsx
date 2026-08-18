@@ -3,7 +3,7 @@ import { gql } from "@urql/core";
 import type { Artifact, QueuedMessage } from "@trace/gql";
 import { toast } from "sonner";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
-import { useSessionPromptIndex } from "../../hooks/useSessionPromptIndex";
+import { useSessionMessages } from "../../hooks/useSessionMessages";
 import {
   useEntityStore,
   useEntityField,
@@ -14,7 +14,8 @@ import {
   type SessionGroupEntity,
 } from "@trace/client-core";
 import { EventScopeContext } from "./EventScopeContext";
-import { SessionMessageList, type SessionListNode } from "./SessionMessageList";
+import type { SessionListNode } from "./SessionMessageList";
+import { DurableSessionMessageList } from "./DurableSessionMessageList";
 import { SessionHeader } from "./SessionHeader";
 import { SessionInput } from "./SessionInput";
 import { SessionDropzone } from "./SessionDropzone";
@@ -246,16 +247,8 @@ export function SessionDetailView({
     eventIds,
     timelineItems,
     timelineMode,
-    loading,
-    loadingOlder,
-    hasOlder,
-    error,
-    fetchOlderEvents,
-    fetchEventsAroundEvent,
   } = useSessionEvents(sessionId, { skip: isOptimistic === true });
-  const { items: promptIndexItems } = useSessionPromptIndex(sessionId, {
-    skip: isOptimistic === true,
-  });
+  const durableMessages = useSessionMessages(sessionId, isOptimistic === true);
   const scopeKey = eventScopeKey("session", sessionId);
   const events = useScopedEvents(scopeKey);
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
@@ -443,7 +436,7 @@ export function SessionDetailView({
       });
   }, [sessionId, isOptimistic]);
 
-  const { nodes, completedAgentTools, toolResultByUseId } = useMemo(
+  const { nodes } = useMemo(
     () => buildSessionNodes(eventIds, events),
     [eventIds, events],
   );
@@ -494,7 +487,6 @@ export function SessionDetailView({
     () => findMessageActionsEventIds(eventIds, events),
     [eventIds, events],
   );
-  const initialEventsLoading = loading && eventIds.length === 0;
   const connectionState = getConnectionState(connection);
   const groupConnectionState = getConnectionState(groupConnection);
   const groupRuntimeConnected = groupConnectionState === "connected";
@@ -689,9 +681,9 @@ export function SessionDetailView({
         >
           <div className="flex flex-1 flex-col overflow-hidden">
             <div className="relative flex-1 overflow-hidden">
-              {error ? (
+              {durableMessages.error ? (
                 <div className="flex h-full items-center justify-center">
-                  <p className="text-sm text-destructive">Failed to load events</p>
+                  <p className="text-sm text-destructive">Failed to load messages</p>
                 </div>
               ) : condensed && !showQuestion ? (
                 <CondensedSessionMessages
@@ -700,32 +692,17 @@ export function SessionDetailView({
                   bottomPadding={bottomBarHeight}
                 />
               ) : (
-                <SessionMessageList
-                  key={sessionId}
-                  sessionId={sessionId}
-                  nodes={listNodes}
-                  promptIndexItems={promptIndexItems}
-                  initialLoading={initialEventsLoading}
-                  hasOlder={hasOlder}
-                  loadingOlder={loadingOlder}
-                  onLoadOlder={fetchOlderEvents}
-                  onLoadAroundEvent={fetchEventsAroundEvent}
-                  completedAgentTools={completedAgentTools}
-                  toolResultByUseId={toolResultByUseId}
-                  scrollToEventId={scrollToEventId}
-                  onScrollComplete={onScrollComplete}
-                  activePlanId={activePlan?.node.id}
-                  replacedQuestionIds={replacedQuestionIds}
-                  planComments={planComments}
-                  onAddPlanComment={handleAddPlanComment}
-                  onRemovePlanComment={handleRemovePlanComment}
-                  onForkSession={onForkSession}
-                  canForkSession={canForkSession}
-                  messageActionsEventIds={messageActionsEventIds}
-                  scrollPaddingBottom={bottomBarHeight}
+                <DurableSessionMessageList
+                  messages={durableMessages.messages}
+                  loading={durableMessages.loading}
+                  error={durableMessages.error}
+                  hasOlder={durableMessages.hasOlder}
+                  loadingOlder={durableMessages.loadingOlder}
+                  onLoadOlder={durableMessages.fetchOlder}
+                  bottomPadding={bottomBarHeight}
                 />
               )}
-              {initialEventsLoading && (
+              {durableMessages.loading && (
                 <div className="absolute inset-0 bg-background pointer-events-none">
                   <div className="flex flex-col gap-4 p-4">
                     {Array.from({ length: 4 }).map((_, i) => (

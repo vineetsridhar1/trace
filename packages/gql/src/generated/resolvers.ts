@@ -2315,6 +2315,7 @@ export type QuerySessionGroupsArgs = {
 
 export type QuerySessionMessagesArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeMessageId?: InputMaybe<Scalars["ID"]["input"]>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
   sessionId: Scalars["ID"]["input"];
 };

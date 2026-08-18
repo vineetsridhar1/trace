@@ -31,11 +31,12 @@ async function main(): Promise<void> {
   let batches = 0;
 
   while (true) {
+    const cursorWhere = afterCursor(cursor);
     const events = await prisma.event.findMany({
       where: {
         scopeType: "session",
         eventType: { in: ["session_started", "message_sent", "session_output"] },
-        ...(afterCursor(cursor) ? { AND: [afterCursor(cursor)!] } : {}),
+        ...(cursorWhere ? { AND: [cursorWhere] } : {}),
       },
       orderBy: [{ timestamp: "asc" }, { id: "asc" }],
       take: batchSize,

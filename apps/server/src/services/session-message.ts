@@ -1,12 +1,15 @@
 import type { Event as PrismaEvent, Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
+import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
 type SessionMessageSource = Pick<
   PrismaEvent,
-  "id" | "scopeType" | "scopeId" | "eventType" | "payload" | "actorType" | "actorId" | "organizationId" | "timestamp"
->;
+  "id" | "scopeType" | "scopeId" | "eventType" | "actorType" | "actorId" | "organizationId" | "timestamp"
+> & {
+  payload: Prisma.JsonValue | Prisma.InputJsonValue;
+};
 
 type MessageData = {
   role: "user" | "assistant" | "system";
@@ -88,8 +91,10 @@ export function sessionMessageCreateDataFromEvent(
     sessionId: event.scopeId,
     organizationId: event.organizationId,
     role: data.role,
-    actorType: event.actorType,
-    actorId: event.actorId,
+    // Runtime output events are system-authored transport records. The
+    // durable transcript records the actual assistant speaker instead.
+    actorType: data.role === "assistant" ? "agent" : event.actorType,
+    actorId: data.role === "assistant" ? TRACE_AI_USER_ID : event.actorId,
     text: data.text,
     content: data.content,
     ...(data.attachments ? { attachments: data.attachments } : {}),
@@ -110,9 +115,19 @@ export class SessionMessageService {
     });
   }
 
-  async list(sessionId: string, before?: Date, limit = 100) {
+  async list(sessionId: string, before?: Date, beforeMessageId?: string, limit = 100) {
+    const cursor = before
+      ? {
+          OR: [
+            { createdAt: { lt: before } },
+            ...(beforeMessageId
+              ? [{ AND: [{ createdAt: before }, { id: { lt: beforeMessageId } }] }]
+              : []),
+          ],
+        }
+      : {};
     const messages = await prisma.sessionMessage.findMany({
-      where: { sessionId, ...(before ? { createdAt: { lt: before } } : {}) },
+      where: { sessionId, ...cursor },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: Math.max(1, Math.min(limit, 200)),
     });
