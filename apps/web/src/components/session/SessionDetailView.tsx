@@ -3,7 +3,6 @@ import { gql } from "@urql/core";
 import type { Artifact, QueuedMessage } from "@trace/gql";
 import { toast } from "sonner";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
-import { useSessionMessages } from "../../hooks/useSessionMessages";
 import { useSessionPromptIndex } from "../../hooks/useSessionPromptIndex";
 import {
   useEntityStore,
@@ -16,7 +15,6 @@ import {
 } from "@trace/client-core";
 import { EventScopeContext } from "./EventScopeContext";
 import { SessionMessageList, type SessionListNode } from "./SessionMessageList";
-import { DurableSessionMessageList } from "./DurableSessionMessageList";
 import { SessionHeader } from "./SessionHeader";
 import { SessionInput } from "./SessionInput";
 import { SessionDropzone } from "./SessionDropzone";
@@ -257,21 +255,8 @@ export function SessionDetailView({
   const { items: promptIndexItems } = useSessionPromptIndex(sessionId, {
     skip: isOptimistic === true,
   });
-  const durableMessages = useSessionMessages(sessionId, isOptimistic === true);
   const scopeKey = eventScopeKey("session", sessionId);
   const events = useScopedEvents(scopeKey);
-  const latestEvent = eventIds.length > 0 ? events[eventIds[eventIds.length - 1]] : undefined;
-  const latestEventPayload = latestEvent?.payload as Record<string, unknown> | undefined;
-  const isLatestConversationEvent =
-    latestEvent?.eventType === "session_started" ||
-    latestEvent?.eventType === "message_sent" ||
-    (latestEvent?.eventType === "session_output" && latestEventPayload?.type === "assistant");
-  const lastConversationEventIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!isLatestConversationEvent || latestEvent?.id === lastConversationEventIdRef.current) return;
-    lastConversationEventIdRef.current = latestEvent?.id ?? null;
-    void durableMessages.refresh();
-  }, [durableMessages.refresh, isLatestConversationEvent, latestEvent?.id]);
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
     | string
@@ -508,14 +493,6 @@ export function SessionDetailView({
     () => findMessageActionsEventIds(eventIds, events),
     [eventIds, events],
   );
-  // The transcript backfill is resumable, so historic sessions may not have
-  // durable rows yet after the feature deploy. Their event transcript remains
-  // authoritative until those rows are present.
-  const useEventTranscriptFallback =
-    !durableMessages.loading &&
-    !durableMessages.error &&
-    durableMessages.messages.length === 0 &&
-    listNodes.length > 0;
   const initialEventsLoading = eventsLoading && eventIds.length === 0;
   const connectionState = getConnectionState(connection);
   const groupConnectionState = getConnectionState(groupConnection);
@@ -713,17 +690,13 @@ export function SessionDetailView({
         >
           <div className="flex flex-1 flex-col overflow-hidden">
             <div className="relative flex-1 overflow-hidden">
-              {durableMessages.error && !useEventTranscriptFallback ? (
-                <div className="flex h-full items-center justify-center">
-                  <p className="text-sm text-destructive">Failed to load messages</p>
-                </div>
-              ) : condensed && !showQuestion ? (
+              {condensed && !showQuestion ? (
                 <CondensedSessionMessages
                   summary={compactSummary}
                   active={agentStatus === "active"}
                   bottomPadding={bottomBarHeight}
                 />
-              ) : useEventTranscriptFallback ? (
+              ) : (
                 <SessionMessageList
                   key={sessionId}
                   sessionId={sessionId}
@@ -748,19 +721,8 @@ export function SessionDetailView({
                   messageActionsEventIds={messageActionsEventIds}
                   scrollPaddingBottom={bottomBarHeight}
                 />
-              ) : (
-                <DurableSessionMessageList
-                  messages={durableMessages.messages}
-                  loading={durableMessages.loading}
-                  error={durableMessages.error}
-                  hasOlder={durableMessages.hasOlder}
-                  loadingOlder={durableMessages.loadingOlder}
-                  onLoadOlder={durableMessages.fetchOlder}
-                  bottomPadding={bottomBarHeight}
-                />
               )}
-              {(durableMessages.loading ||
-                (useEventTranscriptFallback && initialEventsLoading)) && (
+              {initialEventsLoading && (
                 <div className="absolute inset-0 bg-background pointer-events-none">
                   <div className="flex flex-col gap-4 p-4">
                     {Array.from({ length: 4 }).map((_, i) => (
