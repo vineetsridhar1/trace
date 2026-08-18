@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput, TokenUsage } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
+import { traceMcpUrl } from "./trace-mcp.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 
@@ -134,6 +135,15 @@ export class CodexAdapter implements CodingToolAdapter {
     }
     if (reasoningEffort) {
       args.push("--config", `model_reasoning_effort="${reasoningEffort}"`);
+    }
+    const mcpUrl = traceMcpUrl(runtimeEnv);
+    if (mcpUrl) {
+      args.push(
+        "--config",
+        `mcp_servers.trace.url=${JSON.stringify(mcpUrl)}`,
+        "--config",
+        'mcp_servers.trace.bearer_token_env_var="TRACE_INVOCATION_TOKEN"',
+      );
     }
     if (this.threadId) {
       args.push(this.threadId);

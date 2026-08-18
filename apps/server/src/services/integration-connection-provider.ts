@@ -1,8 +1,32 @@
+import type { AgentToolSource } from "../config/supported-integrations.js";
+
 export type IntegrationProxyResponse = {
   status: number;
   contentType: string | null;
   body: Buffer;
 };
+
+export type IntegrationToolDefinition = {
+  id: string;
+  name: string;
+  description: string | null;
+  inputSchema: Record<string, unknown>;
+};
+
+export interface IntegrationToolProvider {
+  listTools(input: {
+    connectionId: string;
+    providerConfigKey: string;
+    source: Exclude<AgentToolSource, "none">;
+  }): Promise<IntegrationToolDefinition[]>;
+  callTool(input: {
+    connectionId: string;
+    providerConfigKey: string;
+    source: Exclude<AgentToolSource, "none">;
+    toolId: string;
+    arguments: Record<string, unknown>;
+  }): Promise<Record<string, unknown>>;
+}
 
 export interface IntegrationConnectionProvider {
   isConfigured(): boolean;
