@@ -944,9 +944,13 @@ type SessionMessage {
   id: ID!
   sessionId: ID!
   role: SessionMessageRole!
+  eventType: EventType!
   actor: Actor!
   text: String!
   content: JSON!
+  payload: JSON!
+  metadata: JSON
+  parentEventId: ID
   attachments: JSON
   sourceEventId: ID!
   createdAt: DateTime!
@@ -1913,7 +1917,7 @@ type Query {
     excludePayloadTypes: [String!]
   ): [Event!]!
   sessionPromptIndex(organizationId: ID!, sessionId: ID!): [SessionPromptIndexItem!]!
-  sessionMessages(sessionId: ID!, before: DateTime, limit: Int): [SessionMessage!]!
+  sessionMessages(sessionId: ID!, before: DateTime, beforeMessageId: ID, limit: Int): [SessionMessage!]!
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
   availableRuntimes(tool: CodingTool!, sessionGroupId: ID): [SessionRuntimeInstance!]!
   myBridgeRuntimes: [BridgeRuntime!]!

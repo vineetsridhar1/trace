@@ -111,11 +111,16 @@ export const sessionQueries = {
   },
   sessionMessages: async (
     _: unknown,
-    args: { sessionId: string; before?: Date | null; limit?: number | null },
+    args: { sessionId: string; before?: Date | null; beforeMessageId?: string | null; limit?: number | null },
     ctx: Context,
   ) => {
     await assertScopeAccess("session", args.sessionId, ctx.userId, requireOrgContext(ctx));
-    return sessionMessageService.list(args.sessionId, args.before ?? undefined, args.limit ?? undefined);
+    return sessionMessageService.list(
+      args.sessionId,
+      args.before ?? undefined,
+      args.beforeMessageId ?? undefined,
+      args.limit ?? undefined,
+    );
   },
   mySessions: (
     _: unknown,
