@@ -21,6 +21,10 @@ export type DesktopCodingToolStatus = {
 
 type NpmTool = CodingToolCli & { packageName: string };
 
+export type PackageManager =
+  | { kind: "homebrew"; packageName: string; cask: boolean }
+  | { kind: "npm"; packageName: string };
+
 const NPM_TOOLS: Readonly<Record<string, NpmTool>> = {
   claude_code: { ...CODING_TOOL_CLIS.claude_code, packageName: "@anthropic-ai/claude-code" },
   codex: { ...CODING_TOOL_CLIS.codex, packageName: "@openai/codex" },
@@ -53,6 +57,31 @@ async function getLatestNpmVersion(packageName: string): Promise<string | null> 
     });
     const value: unknown = JSON.parse(stdout);
     return typeof value === "string" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getLatestHomebrewVersion({
+  packageName,
+  cask,
+}: Extract<PackageManager, { kind: "homebrew" }>): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync(
+      "brew",
+      ["info", "--json=v2", ...(cask ? ["--cask"] : []), packageName],
+      {
+        timeout: COMMAND_TIMEOUT_MS,
+        windowsHide: true,
+        env: buildChildProcessEnv(),
+      },
+    );
+    const value: unknown = JSON.parse(stdout);
+    if (!value || typeof value !== "object") return null;
+    const packages = (value as Record<string, unknown>)[cask ? "casks" : "formulae"];
+    if (!Array.isArray(packages) || packages.length !== 1) return null;
+    const version = (packages[0] as Record<string, unknown>).version;
+    return typeof version === "string" ? version : null;
   } catch {
     return null;
   }
@@ -98,13 +127,68 @@ function getOwningNpmPrefix(executablePath: string | null): string | null {
   return null;
 }
 
+export function getPackageManager(
+  toolId: string,
+  executablePath: string | null,
+  resolvePath: (path: string) => string = realpathSync,
+): PackageManager | null {
+  if (toolId === "codex" && executablePath) {
+    try {
+      const resolvedPath = resolvePath(executablePath);
+      if (/(?:^|[\\/])Caskroom[\\/]codex[\\/]/.test(resolvedPath)) {
+        return { kind: "homebrew", packageName: "codex", cask: true };
+      }
+      if (/(?:^|[\\/])Cellar[\\/]codex[\\/]/.test(resolvedPath)) {
+        return { kind: "homebrew", packageName: "codex", cask: false };
+      }
+    } catch {
+      // Fall back to npm metadata when the executable cannot be resolved.
+    }
+  }
+
+  const npmTool = NPM_TOOLS[toolId];
+  return npmTool ? { kind: "npm", packageName: npmTool.packageName } : null;
+}
+
+async function getLatestVersion(packageManager: PackageManager | null): Promise<string | null> {
+  if (!packageManager) return null;
+  return packageManager.kind === "homebrew"
+    ? getLatestHomebrewVersion(packageManager)
+    : getLatestNpmVersion(packageManager.packageName);
+}
+
+export function getInstallCommand(
+  tool: CodingToolCli,
+  packageManager: PackageManager | null,
+  npmPrefix: string | null,
+): { executable: string; args: string[] } {
+  if (packageManager?.kind === "homebrew") {
+    return {
+      executable: "brew",
+      args: ["upgrade", ...(packageManager.cask ? ["--cask"] : []), packageManager.packageName],
+    };
+  }
+  if (packageManager?.kind === "npm") {
+    return {
+      executable: "npm",
+      args: [
+        ...(npmPrefix ? ["--prefix", npmPrefix] : []),
+        "install",
+        "--global",
+        `${packageManager.packageName}@latest`,
+      ],
+    };
+  }
+  return { executable: "/bin/sh", args: ["-lc", tool.install] };
+}
+
 export async function getCodingToolStatuses(): Promise<DesktopCodingToolStatus[]> {
   return Promise.all(
     Object.values(CODING_TOOL_CLIS).map(async (tool) => {
-      const npmTool = NPM_TOOLS[tool.tool];
       const executablePath = resolveExecutable(tool.command);
+      const packageManager = getPackageManager(tool.tool, executablePath);
       if (!executablePath) {
-        const latestVersion = npmTool ? await getLatestNpmVersion(npmTool.packageName) : null;
+        const latestVersion = await getLatestVersion(packageManager);
         return {
           tool: tool.tool,
           label: tool.label,
@@ -115,7 +199,7 @@ export async function getCodingToolStatuses(): Promise<DesktopCodingToolStatus[]
       }
 
       const installedVersion = await getInstalledVersion(executablePath);
-      const latestVersion = npmTool ? await getLatestNpmVersion(npmTool.packageName) : null;
+      const latestVersion = await getLatestVersion(packageManager);
       const comparison =
         installedVersion && latestVersion ? compareVersions(installedVersion, latestVersion) : null;
       return {
@@ -132,19 +216,13 @@ export async function getCodingToolStatuses(): Promise<DesktopCodingToolStatus[]
 export async function installOrUpdateCodingTool(toolId: string): Promise<DesktopCodingToolStatus> {
   const tool = CODING_TOOL_CLIS[toolId];
   if (!tool) throw new Error("Unsupported coding tool.");
-  const npmTool = NPM_TOOLS[toolId];
-  const npmPrefix = getOwningNpmPrefix(resolveExecutable(tool.command));
-  const command = npmTool
-    ? {
-        executable: "npm",
-        args: [
-          ...(npmPrefix ? ["--prefix", npmPrefix] : []),
-          "install",
-          "--global",
-          `${npmTool.packageName}@latest`,
-        ],
-      }
-    : { executable: "/bin/sh", args: ["-lc", tool.install] };
+  const executablePath = resolveExecutable(tool.command);
+  const packageManager = getPackageManager(toolId, executablePath);
+  const command = getInstallCommand(
+    tool,
+    packageManager,
+    packageManager?.kind === "npm" ? getOwningNpmPrefix(executablePath) : null,
+  );
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command.executable, command.args, {
@@ -190,7 +268,7 @@ export async function installOrUpdateCodingTool(toolId: string): Promise<Desktop
       installedVersion: null,
       latestVersion: null,
     };
-  if (npmTool && (!status.installedVersion || !status.latestVersion)) {
+  if (packageManager?.kind === "npm" && (!status.installedVersion || !status.latestVersion)) {
     throw new Error(
       `${tool.label} was installed, but Trace could not verify its version. Check your connection, then try again.`,
     );
