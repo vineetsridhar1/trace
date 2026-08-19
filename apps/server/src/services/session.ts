@@ -4717,6 +4717,29 @@ export class SessionService {
       sessionRouter.bindSession(session.id, runtimeKeyToBind);
     }
 
+    // A session that joins an existing workspace never runs `prepare`, so the
+    // bridge has no workspace recorded under this new session id and would
+    // refuse to start the agent. Register the group's prepared path — awaited,
+    // so it precedes any command the caller delivers for this session.
+    if (runtimeToBind && !needsRuntimeProvisioning && session.workdir) {
+      const tracked = await sendRuntimeCommand(
+        runtimeToBind,
+        {
+          type: "track_session",
+          sessionId: session.id,
+          workdir: session.workdir,
+          readOnly: session.readOnlyWorkspace,
+          sessionGroupId: session.sessionGroupId,
+        },
+        input.organizationId,
+      );
+      if (tracked !== "delivered") {
+        console.warn(
+          `[session] failed to track the shared workspace for ${session.id}: ${tracked}`,
+        );
+      }
+    }
+
     // Only provision the runtime immediately when a prompt is provided.
     // Sessions created without a prompt (e.g. Cmd+N) defer provisioning
     // until the user sends their first message.
