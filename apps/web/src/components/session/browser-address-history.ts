@@ -9,21 +9,35 @@ export function readBrowserAddressHistory(storage: Pick<Storage, "getItem">): st
       storage.getItem(BROWSER_ADDRESS_HISTORY_STORAGE_KEY) ?? "[]",
     ) as unknown;
     if (!Array.isArray(saved)) return [];
-    return saved
-      .filter((value): value is string => typeof value === "string" && isRememberedAddress(value))
-      .slice(0, MAX_BROWSER_ADDRESS_HISTORY_ITEMS);
+    const history: string[] = [];
+    const remembered = new Set<string>();
+    for (const value of saved) {
+      if (typeof value !== "string") continue;
+      const address = sanitizeBrowserAddressHistoryEntry(value);
+      if (!address || remembered.has(address)) continue;
+      history.push(address);
+      remembered.add(address);
+      if (history.length === MAX_BROWSER_ADDRESS_HISTORY_ITEMS) break;
+    }
+    return history;
   } catch {
     return [];
   }
 }
 
 export function rememberBrowserAddress(history: string[], address: string): string[] {
-  if (!isRememberedAddress(address)) return history;
-  const normalizedAddress = address.trim();
-  return [normalizedAddress, ...history.filter((entry) => entry !== normalizedAddress)].slice(
-    0,
-    MAX_BROWSER_ADDRESS_HISTORY_ITEMS,
-  );
+  const sanitizedAddress = sanitizeBrowserAddressHistoryEntry(address);
+  if (!sanitizedAddress) return history;
+  const remembered = new Set([sanitizedAddress]);
+  const sanitizedHistory = [sanitizedAddress];
+  for (const entry of history) {
+    const sanitizedEntry = sanitizeBrowserAddressHistoryEntry(entry);
+    if (!sanitizedEntry || remembered.has(sanitizedEntry)) continue;
+    sanitizedHistory.push(sanitizedEntry);
+    remembered.add(sanitizedEntry);
+    if (sanitizedHistory.length === MAX_BROWSER_ADDRESS_HISTORY_ITEMS) break;
+  }
+  return sanitizedHistory;
 }
 
 export function saveBrowserAddressHistory(
@@ -37,7 +51,16 @@ export function saveBrowserAddressHistory(
   }
 }
 
-function isRememberedAddress(value: string) {
-  const trimmed = value.trim();
-  return Boolean(trimmed) && trimmed !== "about:blank";
+export function sanitizeBrowserAddressHistoryEntry(value: string): string | null {
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    url.username = "";
+    url.password = "";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
