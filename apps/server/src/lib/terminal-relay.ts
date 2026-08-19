@@ -73,6 +73,17 @@ export class TerminalRelay {
     }
   >();
   private static OPERATION_TIMEOUT_MS = 5_000;
+  /** Cross-replica attaches awaiting confirmation from the owning replica. */
+  private pendingRemoteAttaches = new Map<
+    string,
+    { settle: (attached: boolean) => void; timer: ReturnType<typeof setTimeout> }
+  >();
+  /**
+   * How long to wait for the owning replica to confirm a cross-replica attach.
+   * Without a confirmation a dead owner swallows the attach and the frontend
+   * renders a terminal that never becomes ready.
+   */
+  private static REMOTE_ATTACH_TIMEOUT_MS = 2_000;
 
   constructor() {
     realtimeBackplane.on("terminal_operation_response", (envelope) => {
@@ -149,7 +160,14 @@ export class TerminalRelay {
       )
         return;
       const entry = this.terminals.get(input.terminalId);
-      if (!entry) return;
+      if (!entry) {
+        void realtimeBackplane.send(envelope.sourceReplicaId, "terminal_frontend_attach_result", {
+          terminalId: input.terminalId,
+          attachmentId: input.attachmentId,
+          attached: false,
+        });
+        return;
+      }
       entry.frontendWs = null;
       entry.remoteFrontendReplicaId = envelope.sourceReplicaId;
       entry.remoteFrontendAttachmentId = input.attachmentId;
@@ -164,11 +182,21 @@ export class TerminalRelay {
         ...(entry.ready ? [JSON.stringify({ type: "ready" })] : []),
       ];
       entry.buffer = [];
+      void realtimeBackplane.send(envelope.sourceReplicaId, "terminal_frontend_attach_result", {
+        terminalId: input.terminalId,
+        attachmentId: input.attachmentId,
+        attached: true,
+      });
       void realtimeBackplane.send(envelope.sourceReplicaId, "terminal_frontend_messages", {
         terminalId: input.terminalId,
         attachmentId: input.attachmentId,
         messages,
       });
+    });
+    realtimeBackplane.on("terminal_frontend_attach_result", (envelope) => {
+      const input = this.backplanePayload(envelope.payload);
+      if (!input || typeof input.attachmentId !== "string") return;
+      this.settleRemoteAttach(input.attachmentId, input.attached === true);
     });
     realtimeBackplane.on("terminal_frontend_messages", (envelope) => {
       const input = this.backplanePayload(envelope.payload);
@@ -710,12 +738,39 @@ export class TerminalRelay {
     if (!descriptor || descriptor.frontendReplicaId === realtimeBackplane.replicaId) return false;
     const attachmentId = randomUUID();
     this.remoteFrontendSockets.set(terminalId, { ws, attachmentId });
+    const confirmed = this.awaitRemoteAttach(attachmentId);
     await realtimeBackplane.send(descriptor.frontendReplicaId, "terminal_frontend_attach", {
       terminalId,
       attachmentId,
       userId,
     });
-    return true;
+    if (await confirmed) return true;
+
+    // The owning replica is gone or no longer holds the terminal. Drop the
+    // stale routing record so the frontend's attach retry re-resolves it.
+    const attachment = this.remoteFrontendSockets.get(terminalId);
+    if (attachment?.attachmentId === attachmentId) this.remoteFrontendSockets.delete(terminalId);
+    terminalDirectory.invalidate(terminalId);
+    return false;
+  }
+
+  private awaitRemoteAttach(attachmentId: string): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      const timer = setTimeout(
+        () => this.settleRemoteAttach(attachmentId, false),
+        TerminalRelay.REMOTE_ATTACH_TIMEOUT_MS,
+      );
+      timer.unref?.();
+      this.pendingRemoteAttaches.set(attachmentId, { settle: resolve, timer });
+    });
+  }
+
+  private settleRemoteAttach(attachmentId: string, attached: boolean): void {
+    const pending = this.pendingRemoteAttaches.get(attachmentId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    this.pendingRemoteAttaches.delete(attachmentId);
+    pending.settle(attached);
   }
 
   /** Detach the frontend WebSocket (e.g. on disconnect). */
