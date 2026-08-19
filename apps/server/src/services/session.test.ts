@@ -3904,6 +3904,60 @@ describe("SessionService", () => {
       );
     });
 
+    it("registers the shared workspace with the bridge for a new tab in an existing group", async () => {
+      const groupConnection = {
+        state: "connected",
+        runtimeInstanceId: "runtime-a",
+        runtimeLabel: "Laptop A",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+      };
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
+        makeSessionGroup({
+          workdir: "/tmp/trace/shared",
+          repoId: "repo-1",
+          branch: "feature/shared",
+          connection: groupConnection,
+        }),
+      );
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      prismaMock.session.create.mockResolvedValueOnce(
+        makeSession({
+          id: "session-2",
+          hosting: "local",
+          workdir: "/tmp/trace/shared",
+          branch: "feature/shared",
+          connection: groupConnection,
+        }),
+      );
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        sessionGroupId: "group-1",
+        prompt: "Audit this plan",
+      } as unknown as StartSessionServiceInput);
+
+      expect(sessionRouterMock.sendToRuntimeAsync).toHaveBeenCalledWith(
+        "runtime-a",
+        {
+          type: "track_session",
+          sessionId: "session-2",
+          workdir: "/tmp/trace/shared",
+          readOnly: false,
+          sessionGroupId: "group-1",
+        },
+        "org-1",
+      );
+    });
+
     it("rejects runtime selection when adding a session to an established group", async () => {
       const groupConnection = {
         state: "connected",
