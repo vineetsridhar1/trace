@@ -12,7 +12,9 @@ export function normalizeWorkspaceBrowserUrl(value: string): string {
   const input = value.trim();
   if (!input) throw new WorkspaceBrowserUrlError("Browser URL is required");
   if (input === "about:blank") return input;
-  const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(input) ? input : `https://${input}`;
+  const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(input)
+    ? input
+    : `${isLocalDevelopmentAddress(input) ? "http" : "https"}://${input}`;
   let url: URL;
   try {
     url = new URL(candidate);
@@ -40,4 +42,11 @@ export function isWorkspaceBrowserUrl(rawUrl: string): boolean {
 
 function isWorkspaceBrowserScheme(url: URL): boolean {
   return url.protocol === "http:" || url.protocol === "https:";
+}
+
+function isLocalDevelopmentAddress(value: string): boolean {
+  return (
+    /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0)(?::\d+)?(?:[/?#]|$)/i.test(value) ||
+    /^\[::1\](?::\d+)?(?:[/?#]|$)/i.test(value)
+  );
 }
