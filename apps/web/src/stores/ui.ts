@@ -160,6 +160,7 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
 
   openSessionTab: (groupId: string, sessionId: string) => {
     set((s: UIState) => {
+      if (s.hiddenSessionTabsByGroup[groupId]?.[sessionId]) return {};
       const existing = s.openSessionTabsByGroup[groupId] ?? [];
       if (existing.includes(sessionId)) return {};
       return {
@@ -204,10 +205,21 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
       const openTabs = s.openSessionTabsByGroup[groupId] ?? [];
       const nextTabs = openTabs.filter((id) => id !== sessionId);
       const closingActiveTab = s.activeSessionId === sessionId;
-      if (closingActiveTab && nextTabs.length === 0) {
+      const nextActiveSessionId = closingActiveTab ? (nextTabs[0] ?? null) : s.activeSessionId;
+      let lastSelectedSessionIdsByGroup = s.lastSelectedSessionIdsByGroup;
+      if (closingActiveTab) {
         const channelId = resolveChannelIdForSessionGroup(groupId, s.activeChannelId);
-        persistActiveSessionNav(groupId, null);
-        replaceNav(channelId, groupId, null, "main", null, s.channelSubPage);
+        persistActiveSessionNav(groupId, nextActiveSessionId);
+        replaceNav(channelId, groupId, nextActiveSessionId, "main", null, s.channelSubPage);
+        if (nextActiveSessionId) {
+          lastSelectedSessionIdsByGroup = {
+            ...s.lastSelectedSessionIdsByGroup,
+            [groupId]: nextActiveSessionId,
+          };
+        } else {
+          const { [groupId]: _, ...remaining } = s.lastSelectedSessionIdsByGroup;
+          lastSelectedSessionIdsByGroup = remaining;
+        }
       }
       return {
         openSessionTabsByGroup: { ...s.openSessionTabsByGroup, [groupId]: nextTabs },
@@ -215,7 +227,8 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
           ...s.hiddenSessionTabsByGroup,
           [groupId]: { ...s.hiddenSessionTabsByGroup[groupId], [sessionId]: hiddenAt },
         },
-        activeSessionId: closingActiveTab ? (nextTabs[0] ?? null) : s.activeSessionId,
+        activeSessionId: nextActiveSessionId,
+        lastSelectedSessionIdsByGroup,
       };
     });
   },
@@ -240,10 +253,11 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
   initSessionTabs: (groupId: string, sessionIds: string[]) => {
     set((s: UIState) => {
       if (s.openSessionTabsByGroup[groupId]) return {};
+      const hiddenTabs = s.hiddenSessionTabsByGroup[groupId] ?? {};
       return {
         openSessionTabsByGroup: {
           ...s.openSessionTabsByGroup,
-          [groupId]: sessionIds,
+          [groupId]: sessionIds.filter((sessionId) => !hiddenTabs[sessionId]),
         },
       };
     });

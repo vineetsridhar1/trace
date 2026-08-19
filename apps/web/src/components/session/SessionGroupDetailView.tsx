@@ -488,10 +488,20 @@ export function SessionGroupDetailView({
   // Auto-select the most recent session if none is selected
   useEffect(() => {
     if (activeSessionGroupId !== sessionGroupId) return;
+    // A terminal can remain open after its owning chat tab is hidden. Do not
+    // replace that terminal with a fallback session while it is selected.
+    if (activeTerminalId) return;
     if (sessionTabs.length === 0) return;
     if (activeSessionId && sessionTabs.some((s: SessionEntity) => s.id === activeSessionId)) return;
     setActiveSessionId(sessionTabs[0].id);
-  }, [activeSessionGroupId, activeSessionId, sessionGroupId, sessionTabs, setActiveSessionId]);
+  }, [
+    activeSessionGroupId,
+    activeSessionId,
+    activeTerminalId,
+    sessionGroupId,
+    sessionTabs,
+    setActiveSessionId,
+  ]);
 
   const activeSessionBelongsToGroup = groupSessions.some(
     (session: SessionEntity) => session.id === activeSessionId,
@@ -509,12 +519,15 @@ export function SessionGroupDetailView({
   useEffect(() => {
     if (activeSessionGroupId !== sessionGroupId) return;
     if (!activeSessionId || !activeSessionBelongsToGroup) return;
+    // Hidden tabs are only reopened by the explicit Restore action.
+    if (hiddenSessionIds.has(activeSessionId)) return;
     if (openTabIds?.includes(activeSessionId)) return;
     openSessionTab(sessionGroupId, activeSessionId);
   }, [
     activeSessionGroupId,
     activeSessionBelongsToGroup,
     activeSessionId,
+    hiddenSessionIds,
     openSessionTab,
     openTabIds,
     sessionGroupId,

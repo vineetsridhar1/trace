@@ -69,4 +69,34 @@ describe("artifact tabs", () => {
       hiddenSessionTabsByGroup: { group_1: { session_1: "2026-08-17T00:00:00.000Z" } },
     });
   });
+
+  it("does not reopen a hidden session through implicit tab initialization", () => {
+    useUIStore.setState({
+      hiddenSessionTabsByGroup: { group_1: { session_2: "2026-08-17T00:00:00.000Z" } },
+    });
+
+    const state = useUIStore.getState();
+    state.initSessionTabs("group_1", ["session_1", "session_2"]);
+    state.openSessionTab("group_1", "session_2");
+
+    expect(useUIStore.getState().openSessionTabsByGroup.group_1).toEqual(["session_1"]);
+  });
+
+  it("replaces the persisted active session when hiding the selected tab", () => {
+    useUIStore.setState({
+      activeChannelId: "channel_1",
+      activeSessionGroupId: "group_1",
+      activeSessionId: "session_2",
+      openSessionTabsByGroup: { group_1: ["session_1", "session_2"] },
+      lastSelectedSessionIdsByGroup: { group_1: "session_2" },
+    });
+
+    useUIStore.getState().hideSessionTab("group_1", "session_2", "2026-08-17T00:00:00.000Z");
+
+    expect(useUIStore.getState()).toMatchObject({
+      activeSessionId: "session_1",
+      lastSelectedSessionIdsByGroup: { group_1: "session_1" },
+    });
+    expect(localStorage.getItem("trace:activeSessionId")).toBe("session_1");
+  });
 });
