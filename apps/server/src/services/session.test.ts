@@ -656,6 +656,9 @@ describe("SessionService", () => {
         expect.objectContaining({
           type: "upgrade_workspace",
           repoId: "repo-1",
+          slug: "ladybug",
+          branch: "main",
+          preserveBranchName: false,
         }),
         expect.objectContaining({ organizationId: "org-1" }),
       );

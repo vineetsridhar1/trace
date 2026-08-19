@@ -3908,6 +3908,9 @@ export class SessionService {
             sessionStatus: getRunningSessionStatus(result.session.sessionStatus),
           }
         : undefined,
+      // A general-session slug identifies its scratch directory, not an existing
+      // worktree branch. Keep the persisted branch as the base and generate trace-<slug>.
+      { preserveBranchName: false },
     );
 
     return result.session;
@@ -11727,6 +11730,7 @@ export class SessionService {
     },
     pendingCommand: PendingSessionCommand | null,
     extraData?: Partial<Prisma.SessionUpdateInput>,
+    workspaceOptions?: { preserveBranchName?: boolean },
   ) {
     if (pendingCommand) {
       await this.storePendingCommand(
@@ -11748,11 +11752,13 @@ export class SessionService {
         sessionId,
         sessionGroupId: session.sessionGroupId ?? undefined,
         slug: session.sessionGroup?.slug ?? undefined,
-        preserveBranchName: shouldPreserveWorkspaceBranchName({
-          slug: session.sessionGroup?.slug,
-          branch: session.branch,
-          channelBaseBranch: session.channel?.baseBranch,
-        }),
+        preserveBranchName:
+          workspaceOptions?.preserveBranchName ??
+          shouldPreserveWorkspaceBranchName({
+            slug: session.sessionGroup?.slug,
+            branch: session.branch,
+            channelBaseBranch: session.channel?.baseBranch,
+          }),
         repoId: repo.id,
         repoName: repo.name,
         repoRemoteUrl: repo.remoteUrl,
