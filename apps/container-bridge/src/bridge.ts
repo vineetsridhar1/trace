@@ -561,6 +561,21 @@ export class ContainerBridge implements IBridgeClient {
         break;
       }
 
+      case "track_session": {
+        // The server vouches for a workspace this bridge already prepared for a
+        // sibling session in the same group.
+        // Supersede any in-flight prepare so its late completion cannot
+        // overwrite the path the server just named.
+        this.beginWorkspacePreparation(cmd.sessionId);
+        this.sessionWorkdirs.set(cmd.sessionId, cmd.workdir);
+        if (cmd.readOnly) {
+          this.readOnlySessions.add(cmd.sessionId);
+        } else {
+          this.readOnlySessions.delete(cmd.sessionId);
+        }
+        break;
+      }
+
       case "list_workspace_slugs": {
         getWorkspaceSlugs(cmd.repoId)
           .then((slugs) => {
