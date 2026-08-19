@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   terminalDirectoryGet: vi.fn(),
   terminalDirectoryRegister: vi.fn(),
   terminalDirectoryRemove: vi.fn(),
+  terminalDirectoryInvalidate: vi.fn(),
   backplaneSend: vi.fn(() => Promise.resolve()),
   backplaneHandlers: new Map<
     string,
@@ -42,6 +43,7 @@ vi.mock("./terminal-directory.js", () => ({
     get: mocks.terminalDirectoryGet,
     register: mocks.terminalDirectoryRegister,
     remove: mocks.terminalDirectoryRemove,
+    invalidate: mocks.terminalDirectoryInvalidate,
   },
 }));
 
@@ -64,6 +66,26 @@ vi.mock("./realtime-backplane.js", () => ({
 }));
 
 import { TerminalRelay } from "./terminal-relay.js";
+
+/** Make the (mocked) owning replica confirm every cross-replica attach. */
+function acknowledgeRemoteAttaches(): void {
+  mocks.backplaneSend.mockImplementation(((
+    _target: string,
+    kind: string,
+    payload: { terminalId?: string; attachmentId?: string },
+  ) => {
+    if (kind === "terminal_frontend_attach") {
+      mocks.backplaneHandlers
+        .get("terminal_frontend_attach_result")
+        ?.at(-1)
+        ?.({
+          sourceReplicaId: "replica-owner",
+          payload: { ...payload, attached: true },
+        });
+    }
+    return Promise.resolve();
+  }) as never);
+}
 
 function createOpenWs() {
   return {
@@ -102,6 +124,7 @@ describe("TerminalRelay runtime identity", () => {
     );
     mocks.isRuntimeGenerationCurrent.mockReturnValue(true);
     mocks.terminalDirectoryGet.mockResolvedValue(undefined);
+    mocks.backplaneSend.mockImplementation((() => Promise.resolve()) as never);
   });
 
   it("accepts bridge terminal messages from the org-scoped runtime key", async () => {
@@ -327,6 +350,7 @@ describe("TerminalRelay runtime identity", () => {
       terminalId: "term-remote",
       frontendReplicaId: "replica-owner",
     });
+    acknowledgeRemoteAttaches();
 
     await relay.attachFrontendDistributed("term-remote", ws as never, "user-1");
     const attachPayload = mocks.backplaneSend.mock.calls.at(-1)?.[2] as
@@ -347,6 +371,54 @@ describe("TerminalRelay runtime identity", () => {
         },
       );
     });
+  });
+
+  it("rejects a cross-replica attach the owning replica no longer holds", async () => {
+    const relay = new TerminalRelay();
+    const ws = createOpenWs();
+    mocks.terminalDirectoryGet.mockResolvedValue({
+      terminalId: "term-remote",
+      frontendReplicaId: "replica-owner",
+    });
+    // The owning replica restarted: it answers, but without the terminal.
+    mocks.backplaneSend.mockImplementation(((
+      _target: string,
+      kind: string,
+      payload: { attachmentId?: string },
+    ) => {
+      if (kind === "terminal_frontend_attach") {
+        mocks.backplaneHandlers
+          .get("terminal_frontend_attach_result")
+          ?.at(-1)
+          ?.({ sourceReplicaId: "replica-owner", payload: { ...payload, attached: false } });
+      }
+      return Promise.resolve();
+    }) as never);
+
+    await expect(
+      relay.attachFrontendDistributed("term-remote", ws as never, "user-1"),
+    ).resolves.toBe(false);
+    expect(mocks.terminalDirectoryInvalidate).toHaveBeenCalledWith("term-remote");
+  });
+
+  it("rejects a cross-replica attach the owning replica never confirms", async () => {
+    vi.useFakeTimers();
+    try {
+      const relay = new TerminalRelay();
+      const ws = createOpenWs();
+      mocks.terminalDirectoryGet.mockResolvedValue({
+        terminalId: "term-remote",
+        frontendReplicaId: "replica-gone",
+      });
+
+      const attached = relay.attachFrontendDistributed("term-remote", ws as never, "user-1");
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      await expect(attached).resolves.toBe(false);
+      expect(mocks.terminalDirectoryInvalidate).toHaveBeenCalledWith("term-remote");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("revokes a remotely attached terminal for its authenticated user", () => {
