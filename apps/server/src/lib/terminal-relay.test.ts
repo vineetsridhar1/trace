@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./session-router.js", () => ({
+  runtimeRouterKey: (runtimeInstanceId: string, organizationId: string) =>
+    `${organizationId}:${runtimeInstanceId}`,
   sessionRouter: {
     getRuntime: mocks.getRuntime,
     send: mocks.send,
@@ -151,6 +153,61 @@ describe("TerminalRelay runtime identity", () => {
 
     expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: "ready" }));
     expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: "output", data: "hello" }));
+  });
+
+  it("accepts bridge terminal messages when the creating replica does not own the bridge socket", async () => {
+    const relay = new TerminalRelay();
+    const ws = createOpenWs();
+    // The replica serving the createTerminal mutation holds no socket for this
+    // runtime, so it cannot look the org-scoped router key up locally.
+    mocks.getRuntime.mockReturnValue(undefined);
+
+    const terminalId = relay.createTerminal(
+      "session-1",
+      "group-1",
+      "org-1",
+      "bridge-1",
+      "user-1",
+      80,
+      24,
+      "/repo",
+    );
+    relay.attachFrontend(terminalId, ws as never, "user-1");
+
+    await relay.relayFromBridge({ type: "terminal_ready", terminalId }, "org-1:bridge-1");
+    await relay.relayFromBridge(
+      { type: "terminal_output", terminalId, data: "hello" },
+      "org-1:bridge-1",
+    );
+
+    expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: "ready" }));
+    expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: "output", data: "hello" }));
+  });
+
+  it("reports an undeliverable terminal_create to an already-attached frontend", async () => {
+    const relay = new TerminalRelay();
+    const ws = createOpenWs();
+    mocks.send.mockReturnValueOnce("runtime_disconnected");
+
+    const terminalId = relay.createTerminal(
+      "session-1",
+      "group-1",
+      "org-1",
+      "bridge-1",
+      "user-1",
+      80,
+      24,
+      "/repo",
+    );
+    relay.attachFrontend(terminalId, ws as never, "user-1");
+    await vi.waitFor(() =>
+      expect(ws.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: "error",
+          message: "Terminal creation failed: runtime_disconnected",
+        }),
+      ),
+    );
   });
 
   it("ignores terminal messages from a superseded runtime generation", async () => {

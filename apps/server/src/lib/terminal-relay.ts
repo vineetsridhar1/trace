@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import type WebSocket from "ws";
 import { prisma } from "./db.js";
-import { sessionRouter } from "./session-router.js";
+import { runtimeRouterKey, sessionRouter } from "./session-router.js";
 import { terminalDirectory } from "./terminal-directory.js";
 import { realtimeBackplane } from "./realtime-backplane.js";
 
@@ -283,13 +283,15 @@ export class TerminalRelay {
     );
     void createDelivery.then((result) => {
       if (result === "delivered") return;
-      // Bridge not available — buffer an error so the frontend gets feedback on attach
-      const errorMsg = JSON.stringify({
-        type: "error",
-        message: `Terminal creation failed: ${result}`,
+      // Bridge not available — surface the failure through the normal relay path
+      // so an already-attached frontend hears about it. Buffering it here would
+      // strand the error: the buffer is only flushed on attach, and the frontend
+      // attaches within milliseconds of the mutation.
+      void this.relayFromBridge({
+        type: "terminal_error",
+        terminalId,
+        error: `Terminal creation failed: ${result}`,
       });
-      const entry = this.terminals.get(terminalId);
-      if (entry) entry.buffer.push(errorMsg);
     });
 
     return terminalId;
@@ -367,12 +369,11 @@ export class TerminalRelay {
       )
       .then((result) => {
         if (result === "delivered") return;
-        const entry = this.terminals.get(terminalId);
-        if (entry) {
-          entry.buffer.push(
-            JSON.stringify({ type: "error", message: `Terminal creation failed: ${result}` }),
-          );
-        }
+        void this.relayFromBridge({
+          type: "terminal_error",
+          terminalId,
+          error: `Terminal creation failed: ${result}`,
+        });
       });
 
     return terminalId;
@@ -1188,8 +1189,18 @@ export class TerminalRelay {
     return `${channelId}:${runtimeInstanceId}`;
   }
 
+  /**
+   * The router key the bridge's own replica tags inbound terminal messages
+   * with. `sessionRouter.getRuntime` only sees runtimes whose WebSocket this
+   * process holds, so a terminal created on a replica that doesn't own the
+   * bridge socket must derive the org-scoped key itself — otherwise the entry
+   * records a bare instance id, the runtime check in `relayFromBridge` never
+   * matches, and every `terminal_ready`/`terminal_output` is dropped.
+   */
   private resolveRuntimeKey(runtimeInstanceId: string, organizationId?: string | null): string {
-    return sessionRouter.getRuntime(runtimeInstanceId, organizationId)?.key ?? runtimeInstanceId;
+    const localKey = sessionRouter.getRuntime(runtimeInstanceId, organizationId)?.key;
+    if (localKey) return localKey;
+    return organizationId ? runtimeRouterKey(runtimeInstanceId, organizationId) : runtimeInstanceId;
   }
 
   private backplanePayload(payload: unknown): Record<string, unknown> | null {
