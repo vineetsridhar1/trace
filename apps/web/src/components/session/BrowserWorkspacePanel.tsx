@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, LoaderCircle, RefreshCw } from "lucide-react";
-import { cn } from "../../lib/utils";
 import { useAttachedCheckoutForGroup, useDesktopBridgeInfo } from "../../stores/bridges";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
+import { BrowserAddressBar } from "./BrowserAddressBar";
+import {
+  readBrowserAddressHistory,
+  rememberBrowserAddress,
+  saveBrowserAddressHistory,
+} from "./browser-address-history";
 
 const EMPTY_BROWSER_STATE: DesktopBrowserWorkspaceState = {
   sessionGroupId: "",
@@ -29,10 +31,12 @@ export function BrowserWorkspacePanel({
   onTitleChange?: (browserId: string, title: string) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
-  const addressInputRef = useRef<HTMLInputElement>(null);
   const addressEditingRef = useRef(false);
   const [state, setState] = useState<DesktopBrowserWorkspaceState>(EMPTY_BROWSER_STATE);
   const [inputValue, setInputValue] = useState("about:blank");
+  const [addressHistory, setAddressHistory] = useState(() =>
+    readBrowserAddressHistory(localStorage),
+  );
   const [error, setError] = useState<string | null>(null);
   const attachedCheckout = useAttachedCheckoutForGroup(sessionGroupId);
   const desktopBridgeInfo = useDesktopBridgeInfo();
@@ -44,6 +48,18 @@ export function BrowserWorkspacePanel({
   useEffect(() => {
     onTitleChange?.(browserId, state.title);
   }, [browserId, onTitleChange, state.title]);
+
+  const rememberAddress = useCallback((address: string) => {
+    setAddressHistory((history) => {
+      const nextHistory = rememberBrowserAddress(history, address);
+      if (nextHistory !== history) saveBrowserAddressHistory(localStorage, nextHistory);
+      return nextHistory;
+    });
+  }, []);
+
+  useEffect(() => {
+    rememberAddress(state.url);
+  }, [rememberAddress, state.url]);
 
   const syncBounds = useCallback(() => {
     const content = contentRef.current;
@@ -146,80 +162,34 @@ export function BrowserWorkspacePanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface-deep">
-      <form
-        className="app-region-drag flex shrink-0 items-center gap-2 border-b border-border bg-surface-mid px-3 py-2"
-        onSubmit={(event) => {
-          event.preventDefault();
+      <BrowserAddressBar
+        addressHistory={addressHistory}
+        canGoBack={state.canGoBack}
+        canGoForward={state.canGoForward}
+        inputValue={inputValue}
+        loading={state.loading}
+        syncStatusColor={branchSyncStatusColor(syncStatus)}
+        syncStatusLabel={branchSyncStatusLabel(syncStatus)}
+        onAddressFocus={() => {
+          addressEditingRef.current = true;
+        }}
+        onAddressBlur={() => {
           addressEditingRef.current = false;
-          addressInputRef.current?.blur();
+          setInputValue(state.url);
+        }}
+        onGoBack={() => perform(() => window.trace!.goBrowserBack({ sessionGroupId, browserId }))}
+        onGoForward={() =>
+          perform(() => window.trace!.goBrowserForward({ sessionGroupId, browserId }))
+        }
+        onInputChange={setInputValue}
+        onNavigate={() => {
+          addressEditingRef.current = false;
           perform(() =>
             window.trace!.navigateBrowser({ sessionGroupId, browserId, url: inputValue }),
           );
         }}
-      >
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="app-region-no-drag h-7 w-7"
-          disabled={!state.canGoBack}
-          onClick={() => perform(() => window.trace!.goBrowserBack({ sessionGroupId, browserId }))}
-          aria-label="Back"
-        >
-          <ChevronLeft size={16} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="app-region-no-drag h-7 w-7"
-          disabled={!state.canGoForward}
-          onClick={() =>
-            perform(() => window.trace!.goBrowserForward({ sessionGroupId, browserId }))
-          }
-          aria-label="Forward"
-        >
-          <ChevronRight size={16} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="app-region-no-drag h-7 w-7"
-          onClick={() => perform(() => window.trace!.reloadBrowser({ sessionGroupId, browserId }))}
-          aria-label="Reload"
-        >
-          {state.loading ? (
-            <LoaderCircle className="animate-spin" size={15} />
-          ) : (
-            <RefreshCw size={15} />
-          )}
-        </Button>
-        <Input
-          ref={addressInputRef}
-          value={inputValue}
-          onChange={(event) => setInputValue(event.target.value)}
-          onFocus={() => {
-            addressEditingRef.current = true;
-          }}
-          onBlur={() => {
-            addressEditingRef.current = false;
-            setInputValue(state.url);
-          }}
-          className="app-region-no-drag h-8 flex-1 bg-background/70 text-xs"
-          aria-label="Browser URL"
-          placeholder="Enter a URL"
-          spellCheck={false}
-        />
-        <span
-          className="app-region-no-drag flex h-7 items-center gap-1.5 px-1.5 text-xs text-muted-foreground"
-          title={branchSyncStatusLabel(syncStatus)}
-          aria-label={branchSyncStatusLabel(syncStatus)}
-        >
-          <span className={cn("h-2 w-2 rounded-full", branchSyncStatusColor(syncStatus))} />
-          Sync
-        </span>
-      </form>
+        onReload={() => perform(() => window.trace!.reloadBrowser({ sessionGroupId, browserId }))}
+      />
       {error ? (
         <p className="shrink-0 border-b border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
           {error}
