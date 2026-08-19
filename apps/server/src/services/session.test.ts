@@ -118,6 +118,8 @@ vi.mock("@trace/shared", () => {
     isSupportedReasoningEffort: vi.fn().mockReturnValue(true),
     hasQuestionBlock: vi.fn().mockReturnValue(false),
     hasPlanBlock: vi.fn().mockReturnValue(false),
+    actionRequiredArtifactForToolError: vi.fn().mockReturnValue(null),
+    actionRequiredArtifactForToolOutput: vi.fn().mockReturnValue(null),
     MAX_WORKSPACE_NAME_LENGTH: 80,
     CODING_TOOL_IDS: ["claude_code", "codex", "pi", "antigravity", "cursor_composer", "custom"],
     resolveGitHubCloneUrl: vi.fn(
@@ -5325,7 +5327,11 @@ describe("SessionService", () => {
         agentStatus: "done",
         sessionStatus: "in_progress",
         sessionGroupId: "group-1",
+        workdir: "/workspaces/session-1",
+        connection: { runtimeInstanceId: "runtime-1" },
       });
+      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce({ key: "runtime-1" });
+      sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValueOnce(branch);
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
         organizationId: "org-1",
         sessionGroupId: "group-1",
@@ -5356,6 +5362,39 @@ describe("SessionService", () => {
       expect(
         (data.message as { content: Array<{ text?: string }> }).content[0].text ?? "",
       ).not.toContain("<trace-branch>");
+    });
+
+    it("ignores a trace-branch tag that does not match the prepared workspace", async () => {
+      const data = {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "text",
+              text: "<trace-branch>branch-from-another-checkout</trace-branch>",
+            },
+          ],
+        },
+      };
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        organizationId: "org-1",
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+        workdir: "/workspaces/session-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+      });
+      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce({ key: "runtime-1" });
+      sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValueOnce("actual-session-branch");
+
+      await service.recordOutput("session-1", data as Record<string, unknown>);
+
+      expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith("runtime-1", {
+        sessionId: "session-1",
+        workdirHint: "/workspaces/session-1",
+      });
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
     });
 
     it("records the first pending question for a tool_use id", async () => {
@@ -6860,11 +6899,7 @@ describe("SessionService", () => {
       expect(prompt.match(/<conversation-history>/g) ?? []).toHaveLength(1);
     });
 
-    it("treats delivery as disconnected when the home runtime is unavailable", async () => {
-      // sessionRouter.send returns "runtime_disconnected" when the expected
-      // home runtime isn't currently registered. sendMessage must queue the
-      // message as pendingRun, persist the failure with autoRetryable: false,
-      // and emit a connection_lost event.
+    it("keeps messages durable instead of delivering while the workspace is disconnected", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
         makeSession({
           agentStatus: "done",
@@ -6881,21 +6916,6 @@ describe("SessionService", () => {
           },
         }),
       );
-      prismaMock.session.findUnique.mockResolvedValue({
-        agentStatus: "done",
-        sessionStatus: "in_progress",
-        connection: {
-          state: "disconnected",
-          runtimeInstanceId: "runtime-a",
-          runtimeLabel: "Laptop A",
-          retryCount: 0,
-          canRetry: true,
-          canMove: true,
-        },
-        sessionGroupId: "group-1",
-      });
-      sessionRouterMock.send.mockReturnValue("runtime_disconnected");
-
       await service.sendMessage({
         sessionId: "session-1",
         text: "hello from laptop B",
@@ -6903,11 +6923,7 @@ describe("SessionService", () => {
         actorId: "user-1",
       });
 
-      expect(sessionRouterMock.send).toHaveBeenCalledWith(
-        "session-1",
-        expect.objectContaining({ type: "send" }),
-        { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
-      );
+      expect(sessionRouterMock.send).not.toHaveBeenCalled();
       expect(prismaMock.session.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: "session-1" },
@@ -6919,28 +6935,12 @@ describe("SessionService", () => {
           }),
         }),
       );
-      // persistConnectionFailure must mark this as non-auto-retryable because
-      // the home bridge is the cause — only Move/home-return can unblock.
-      const connectionWrites = prismaMock.session.updateMany.mock.calls.filter(
-        (call: unknown[]) => {
-          const arg = call[0] as
-            | { data?: { connection?: { autoRetryable?: boolean } } }
-            | undefined;
-          return arg?.data?.connection !== undefined;
-        },
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "message_sent",
+          payload: expect.objectContaining({ deliveryStatus: "pending_runtime" }),
+        }),
       );
-      expect(connectionWrites.length).toBeGreaterThan(0);
-      const lastConn = connectionWrites[connectionWrites.length - 1][0].data.connection as {
-        autoRetryable?: boolean;
-        lastError?: string;
-      };
-      expect(lastConn.autoRetryable).toBe(false);
-      expect(lastConn.lastError).toContain("Laptop A");
-      const connectionLostCalls = eventServiceMock.create.mock.calls.filter((call: unknown[]) => {
-        const arg = call[0] as { payload?: { type?: string } } | undefined;
-        return arg?.payload?.type === "connection_lost";
-      });
-      expect(connectionLostCalls.length).toBeGreaterThan(0);
     });
 
     it("does not auto-retry when the home runtime does not support the session tool", async () => {
@@ -7951,17 +7951,17 @@ describe("SessionService", () => {
         }),
         { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
       );
-      const connectedUpdateIndex = prismaMock.session.updateMany.mock.calls.findIndex((call) => {
+      const preparingUpdateIndex = prismaMock.session.updateMany.mock.calls.findIndex((call) => {
         const data = call[0].data as { connection?: { state?: string } };
-        return data.connection?.state === "connected";
+        return data.connection?.state === "connecting";
       });
-      expect(connectedUpdateIndex).toBeGreaterThanOrEqual(0);
-      const connectedUpdate = prismaMock.session.updateMany.mock.calls[connectedUpdateIndex];
-      expect(connectedUpdate?.[0].data.connection).toEqual(
+      expect(preparingUpdateIndex).toBeGreaterThanOrEqual(0);
+      const preparingUpdate = prismaMock.session.updateMany.mock.calls[preparingUpdateIndex];
+      expect(preparingUpdate?.[0].data.connection).toEqual(
         expect.objectContaining({ runtimeInstanceId: "runtime-a" }),
       );
       expect(
-        prismaMock.session.updateMany.mock.invocationCallOrder[connectedUpdateIndex]!,
+        prismaMock.session.updateMany.mock.invocationCallOrder[preparingUpdateIndex]!,
       ).toBeLessThan(sessionRouterMock.send.mock.invocationCallOrder[0]!);
     });
 
@@ -8009,7 +8009,7 @@ describe("SessionService", () => {
         expect.objectContaining({
           data: expect.objectContaining({
             connection: expect.objectContaining({
-              state: "connected",
+              state: "connecting",
             }),
           }),
         }),
@@ -9353,6 +9353,7 @@ describe("SessionService", () => {
         pendingRun: null,
         agentStatus: "not_started",
         sessionStatus: "in_progress",
+        connection: { state: "connecting", retryCount: 0, canRetry: true, canMove: true },
       });
       prismaMock.session.update.mockResolvedValueOnce(
         makeSession({
@@ -9374,6 +9375,7 @@ describe("SessionService", () => {
           agentStatus: "not_started",
           sessionStatus: "in_progress",
           workdir: "/tmp/trace/workspace",
+          connection: expect.objectContaining({ state: "connected" }),
           pendingRun: expect.anything(),
           readOnlyWorkspace: false,
         },

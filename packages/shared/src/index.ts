@@ -134,6 +134,7 @@ export type {
 export {
   BRIDGE_PROTOCOL_VERSION,
   GENERAL_WORKSPACE_PROTOCOL_VERSION,
+  resolveBridgeWorkdir,
   parseBranchOutput,
   parseWorktreeListPorcelain,
   walkDir,

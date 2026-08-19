@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatGitError, gitEnv, gitLockErrorMessage, isGitAuthError } from "./git-utils.js";
+import {
+  formatGitError,
+  gitBranchInUseMessage,
+  gitEnv,
+  gitLockErrorMessage,
+  isGitAuthError,
+  stripGitProgress,
+} from "./git-utils.js";
 
 describe("git-utils", () => {
   it("disables interactive git credential prompts", () => {
@@ -38,6 +45,45 @@ describe("git-utils", () => {
     );
     expect(formatGitError(error)).toContain("/Users/dev/repo/.git/index.lock");
     expect(formatGitError(error)).not.toContain("fatal:");
+  });
+
+  it("drops checkout progress frames from a failure", () => {
+    const progress = Array.from(
+      { length: 200 },
+      (_, i) => `Updating files:  ${i}% (${i * 500}/113756)`,
+    ).join("\r");
+    const error = Object.assign(new Error("Command failed"), {
+      stderr:
+        `Preparing worktree (checking out 'trace-session')\n${progress}\r` +
+        "fatal: 'trace-session' is already used by worktree at '/Users/dev/repo'",
+    });
+
+    expect(stripGitProgress(`a\rUpdating files:  5% (1/2)\rb`)).toBe("a\nb");
+    expect(formatGitError(error)).not.toContain("Updating files");
+  });
+
+  it("names the checkout holding a branch instead of repeating git's wording", () => {
+    const error = Object.assign(new Error("Command failed"), {
+      stderr:
+        "Preparing worktree (checking out 'trace-session')\n" +
+        "fatal: 'trace-session' is already used by worktree at '/Users/dev/repo'",
+    });
+
+    expect(gitBranchInUseMessage(error.stderr)).toBe(
+      "Branch trace-session is already checked out at /Users/dev/repo. " +
+        "Switch that checkout to another branch, or move this session to it.",
+    );
+    expect(formatGitError(error)).toBe(gitBranchInUseMessage(error.stderr));
+  });
+
+  it("caps a long error, keeping the tail where git reports the failure", () => {
+    const error = Object.assign(new Error("Command failed"), {
+      stderr: `${"warning: noise\n".repeat(500)}fatal: the actual problem`,
+    });
+
+    const formatted = formatGitError(error);
+    expect(formatted.length).toBeLessThanOrEqual(801);
+    expect(formatted).toContain("fatal: the actual problem");
   });
 
   it("leaves unrelated git errors untouched", () => {

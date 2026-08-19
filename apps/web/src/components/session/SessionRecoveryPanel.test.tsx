@@ -50,7 +50,7 @@ async function renderPanel(
   return renderer;
 }
 
-describe("SessionRecoveryPanel owned local bridge retry", () => {
+describe("SessionRecoveryPanel retry policy", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -70,57 +70,46 @@ describe("SessionRecoveryPanel owned local bridge retry", () => {
     vi.unstubAllGlobals();
   });
 
-  it("invokes the existing retry mutation once when an owned local session opens", async () => {
+  it("does not auto-retry a non-transient failure, even for the local bridge owner", async () => {
     mocks.access = bridgeAccess();
-    const renderer = await renderPanel();
+    await renderPanel();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(mocks.mutation).not.toHaveBeenCalled();
+  });
 
+  it("does not turn remounts into retries for a non-transient failure", async () => {
+    mocks.access = bridgeAccess();
+    const failed = { ...retryableConnection, lastError: "worktree in use" };
+    const renderer = await renderPanel(failed);
+    await act(async () => renderer.unmount());
+    mountedRenderers.length = 0;
+    await renderPanel(failed);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+
+    expect(mocks.mutation).not.toHaveBeenCalled();
+  });
+
+  it("uses the single backoff policy for transient failures", async () => {
+    const connection = { ...retryableConnection, autoRetryable: true };
+    await renderPanel(connection);
+
+    expect(mocks.mutation).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
     expect(mocks.mutation).toHaveBeenCalledTimes(1);
     expect(mocks.mutation).toHaveBeenCalledWith("retry-session-connection", {
       sessionId: "session-1",
     });
 
-    await act(async () =>
-      renderer.update(
-        <SessionRecoveryPanel sessionId="session-1" connection={retryableConnection} />,
-      ),
-    );
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.advanceTimersByTimeAsync(4_000);
     });
-    expect(mocks.mutation).toHaveBeenCalledTimes(1);
-  });
-
-  it.each([
-    ["a shared local bridge", bridgeAccess({ isOwner: false })],
-    ["a cloud runtime", bridgeAccess({ hostingMode: "cloud" })],
-  ])("does not invoke retry for %s", async (_label, access) => {
-    mocks.access = access;
-    await renderPanel();
-
-    expect(mocks.mutation).not.toHaveBeenCalled();
-  });
-
-  it("does not invoke retry when the connection cannot retry", async () => {
-    mocks.access = bridgeAccess();
-    await renderPanel({ ...retryableConnection, canRetry: false });
-
-    expect(mocks.mutation).not.toHaveBeenCalled();
-  });
-
-  it("does not duplicate a backoff retry when ownership resolves later", async () => {
-    const connection = { ...retryableConnection, autoRetryable: true };
-    const renderer = await renderPanel(connection);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2_000);
-    });
-    expect(mocks.mutation).toHaveBeenCalledTimes(1);
-
-    mocks.access = bridgeAccess();
-    await act(async () => {
-      renderer.update(<SessionRecoveryPanel sessionId="session-1" connection={connection} />);
-    });
-
-    expect(mocks.mutation).toHaveBeenCalledTimes(1);
+    expect(mocks.mutation).toHaveBeenCalledTimes(2);
   });
 });
