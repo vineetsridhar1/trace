@@ -1011,10 +1011,19 @@ export class ContainerBridge implements IBridgeClient {
   }): Promise<void> {
     const resolvedTool = tool ?? this.defaultTool;
     await ensureToolReady(resolvedTool);
+    const traceRuntime = await this.traceRuntime;
     const playwrightSession = await this.preparePlaywrightSession(
       sessionId,
       runtimeEnv?.TRACE_INVOCATION_ID,
     );
+    const invocationEnv = buildTraceInvocationEnv({
+      runtimeEnv: { ...runtimeEnv, ...playwrightSession?.env },
+      serverUrl: this.serverUrl,
+      skillsDir: traceRuntime.skillsDir,
+      binDir: traceRuntime.binDir,
+      nodeBinary: process.execPath,
+      basePath: process.env.PATH,
+    });
 
     // If tool changed, abort old adapter and create a fresh one
     const prevTool = this.sessionTools.get(sessionId);
@@ -1190,7 +1199,7 @@ export class ContainerBridge implements IBridgeClient {
       reasoningEffort,
       enableClaudeInChrome,
       toolSessionId,
-      runtimeEnv: { ...runtimeEnv, ...playwrightSession?.env },
+      runtimeEnv: invocationEnv,
     });
   }
 }

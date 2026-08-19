@@ -110,7 +110,11 @@ function envEntryBytes(key: string, value: string): number {
 }
 
 function isEssentialEnvKey(key: string): boolean {
-  return ESSENTIAL_ENV_KEYS.has(key) || key.startsWith("LC_");
+  // TRACE_ vars carry the agent's own identity and CLI surface (invocation
+  // token, session ids, $TRACE_CLI). Dropping the largest non-essential entries
+  // on overflow would evict the token first, leaving the agent with prompt
+  // instructions telling it to use a CLI it can no longer authenticate.
+  return ESSENTIAL_ENV_KEYS.has(key) || key.startsWith("LC_") || key.startsWith("TRACE_");
 }
 
 export function buildChildProcessEnv(

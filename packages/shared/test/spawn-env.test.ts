@@ -75,6 +75,29 @@ describe("buildChildProcessEnv", () => {
     expect(env.PLAYWRIGHT_MCP_OUTPUT_DIR).toBe("/tmp/trace-playwright/123");
   });
 
+  it("keeps the invocation token even when it is the largest droppable value", () => {
+    // Overflow pruning drops the biggest non-essential entries first. A long
+    // invocation token would be the first to go, silently leaving the agent
+    // unable to authenticate the CLI its prompt tells it to use.
+    const filler = Object.fromEntries(
+      Array.from({ length: 61 }, (_, index) => [`FILLER_${index}`, "f".repeat(1024)]),
+    );
+    const env = buildChildProcessEnv({
+      HOME: "/home/coder",
+      PATH: "/usr/bin",
+      AI_GATEWAY_API_KEY: "sk-gateway",
+      TRACE_INVOCATION_TOKEN: "t".repeat(4 * 1024),
+      TRACE_CLI: "/trace/runtime/bin/trace",
+      TRACE_SKILLS_DIR: "/trace/runtime/skills",
+      ...filler,
+    });
+
+    expect(env.TRACE_INVOCATION_TOKEN).toBe("t".repeat(4 * 1024));
+    expect(env.TRACE_CLI).toBe("/trace/runtime/bin/trace");
+    expect(env.TRACE_SKILLS_DIR).toBe("/trace/runtime/skills");
+    expect(Object.keys(env).some((key) => key.startsWith("FILLER_"))).toBe(true);
+  });
+
   it("loads the od-ai key when the GUI environment does not have it", () => {
     const binDir = mkdtempSync(join(tmpdir(), "trace-od-ai-"));
     const keyHelper = join(binDir, "od-ai-key");

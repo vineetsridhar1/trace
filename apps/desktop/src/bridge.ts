@@ -67,6 +67,8 @@ import {
 } from "./worktree.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { generalWorkspacePath, removeGeneralWorkspace } from "@trace/shared/general-workspace";
+import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
+import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
 import { TerminalManager } from "@trace/shared/adapters";
 import { collectTrackedPrWorkspaces, type TrackedSessionWorkspace } from "./pr-tracking.js";
 
@@ -352,6 +354,7 @@ export class BridgeClient implements IBridgeClient {
   private terminalManager: TerminalManager;
   private autoSyncManager: LinkedCheckoutAutoSyncManager;
   private getSessionCookieHeader: (url: string) => Promise<string | null>;
+  private traceRuntime = ensureTraceRuntime(path.join(os.homedir(), ".trace", "runtime"));
 
   private gitExec: GitExecFn = (args, cwd) =>
     new Promise((resolve, reject) => {
@@ -858,6 +861,7 @@ export class BridgeClient implements IBridgeClient {
     interactionMode,
     toolSessionId,
     imageUrls,
+    runtimeEnv,
   }: {
     sessionId: string;
     prompt: string;
@@ -869,6 +873,7 @@ export class BridgeClient implements IBridgeClient {
     interactionMode?: string;
     toolSessionId?: string;
     imageUrls?: string[];
+    runtimeEnv?: Record<string, string>;
   }) {
     if (!cwd) {
       console.warn(
@@ -876,6 +881,21 @@ export class BridgeClient implements IBridgeClient {
       );
     }
     const workdir = cwd ?? os.homedir();
+    // Local sessions get the same managed CLI surface as cloud ones: the server
+    // mints the session/invocation vars, and the runtime install supplies the
+    // `trace` shim and skills the prompt instructions point at.
+    const traceRuntime = await this.traceRuntime;
+    const invocationEnv = buildTraceInvocationEnv({
+      runtimeEnv,
+      serverUrl: this.serverUrl,
+      skillsDir: traceRuntime.skillsDir,
+      binDir: traceRuntime.binDir,
+      nodeBinary: process.execPath,
+      basePath: process.env.PATH,
+      // The desktop bridge runs inside Electron, so the shim has to re-enter
+      // this binary as plain Node rather than booting another Electron app.
+      electronRunAsNode: true,
+    });
 
     // If tool changed, abort old adapter and create a fresh one
     const prevTool = this.sessionTools.get(sessionId);
@@ -1038,6 +1058,7 @@ export class BridgeClient implements IBridgeClient {
       reasoningEffort,
       enableClaudeInChrome,
       toolSessionId,
+      runtimeEnv: invocationEnv,
     });
   }
 
@@ -1079,6 +1100,7 @@ export class BridgeClient implements IBridgeClient {
       interactionMode: cmd.interactionMode,
       toolSessionId: cmd.toolSessionId,
       imageUrls: cmd.imageUrls,
+      runtimeEnv: cmd.runtimeEnv,
     });
   }
 
