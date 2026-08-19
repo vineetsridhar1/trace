@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Code2, LoaderCircle, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, LoaderCircle, RefreshCw } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { useAttachedCheckoutForGroup, useDesktopBridgeInfo } from "../../stores/bridges";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
@@ -33,6 +34,12 @@ export function BrowserWorkspacePanel({
   const [state, setState] = useState<DesktopBrowserWorkspaceState>(EMPTY_BROWSER_STATE);
   const [inputValue, setInputValue] = useState("about:blank");
   const [error, setError] = useState<string | null>(null);
+  const attachedCheckout = useAttachedCheckoutForGroup(sessionGroupId);
+  const desktopBridgeInfo = useDesktopBridgeInfo();
+  const syncStatus = getBranchSyncStatus(
+    attachedCheckout?.bridgeInstanceId ?? null,
+    desktopBridgeInfo?.instanceId,
+  );
 
   useEffect(() => {
     onTitleChange?.(browserId, state.title);
@@ -204,21 +211,14 @@ export function BrowserWorkspacePanel({
           placeholder="Enter a URL"
           spellCheck={false}
         />
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className={cn(
-            "app-region-no-drag h-7 gap-1.5 text-xs",
-            state.devToolsOpen && "bg-surface-hover text-foreground",
-          )}
-          onClick={() =>
-            perform(() => window.trace!.toggleBrowserDevTools({ sessionGroupId, browserId }))
-          }
+        <span
+          className="app-region-no-drag flex h-7 items-center gap-1.5 px-1.5 text-xs text-muted-foreground"
+          title={branchSyncStatusLabel(syncStatus)}
+          aria-label={branchSyncStatusLabel(syncStatus)}
         >
-          <Code2 size={14} />
-          DevTools
-        </Button>
+          <span className={cn("h-2 w-2 rounded-full", branchSyncStatusColor(syncStatus))} />
+          Sync
+        </span>
       </form>
       {error ? (
         <p className="shrink-0 border-b border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
@@ -228,6 +228,37 @@ export function BrowserWorkspacePanel({
       <div ref={contentRef} className="min-h-0 flex-1" aria-label={state.title} />
     </div>
   );
+}
+
+type BranchSyncStatus = "checking" | "synced" | "behind" | "outOfSync";
+
+export function getBranchSyncStatus(
+  attachedBridgeInstanceId: string | null,
+  desktopBridgeInstanceId: string | null | undefined,
+): BranchSyncStatus {
+  if (desktopBridgeInstanceId === undefined) return "checking";
+  if (!attachedBridgeInstanceId) return "outOfSync";
+  return attachedBridgeInstanceId === desktopBridgeInstanceId ? "synced" : "behind";
+}
+
+function branchSyncStatusColor(status: BranchSyncStatus) {
+  if (status === "synced") return "bg-emerald-500";
+  if (status === "behind") return "bg-amber-400";
+  if (status === "outOfSync") return "bg-destructive";
+  return "bg-muted-foreground";
+}
+
+function branchSyncStatusLabel(status: BranchSyncStatus) {
+  switch (status) {
+    case "synced":
+      return "Branch is spotlighted and synced";
+    case "behind":
+      return "Branch is spotlighted on another bridge. Press Spotlight to sync it here.";
+    case "outOfSync":
+      return "Branch is not spotlighted. Press Spotlight to sync this branch.";
+    case "checking":
+      return "Checking branch sync status";
+  }
 }
 
 function isBrowserState(value: unknown): value is DesktopBrowserWorkspaceState {

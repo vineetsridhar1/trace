@@ -56,6 +56,7 @@ export function useSessionApplicationsData(sessionGroupId: string) {
   const processLogTable = useEntityStore((state) => state.sessionApplicationLogs);
   const endpointTable = useEntityStore((state) => state.sessionEndpoints);
   const setupRunTable = useEntityStore((state) => state.sessionSetupScriptRuns);
+  const workflowRunTable = useEntityStore((state) => state.sessionApplicationWorkflowRuns);
 
   const refresh = useCallback(async () => {
     const result = await client
@@ -127,6 +128,15 @@ export function useSessionApplicationsData(sessionGroupId: string) {
     () => Object.values(setupRunTable).filter((run) => run.sessionGroupId === sessionGroupId),
     [sessionGroupId, setupRunTable],
   );
+  // Cloud provisioning auto-starts the configured applications, so a live
+  // workflow run (or a process still coming up) means the app is still booting.
+  const starting = useMemo(
+    () =>
+      Object.values(workflowRunTable).some(
+        (run) => run.sessionGroupId === sessionGroupId && run.status === "running",
+      ) || processes.some((process) => process.status === "starting"),
+    [processes, sessionGroupId, workflowRunTable],
+  );
 
   // Depend on a stable key derived from the group's process IDs, not the
   // `processes` array identity — otherwise any process upsert anywhere refires
@@ -164,6 +174,12 @@ export function useSessionApplicationsData(sessionGroupId: string) {
     }
     return grouped;
   }, [endpoints]);
+  const previewUrl = useMemo(
+    () =>
+      endpoints.find((endpoint) => endpoint.status === "enabled" && endpoint.url.trim())?.url ??
+      null,
+    [endpoints],
+  );
   const latestSetupRunByScript = useMemo(() => {
     const latest = new Map<string, SessionSetupScriptRun>();
     for (const run of setupRuns) {
@@ -188,6 +204,8 @@ export function useSessionApplicationsData(sessionGroupId: string) {
     loadProcessLogs,
     processLogsById,
     processesByKey,
+    previewUrl,
     refresh,
+    starting,
   };
 }

@@ -348,6 +348,28 @@ describe("BrowserWorkspaceManager", () => {
     expect(latestContents().getURL()).toBe("about:blank");
   });
 
+  it("destroys every browser and snapshot for an archived session group", async () => {
+    const store = new MemorySnapshotStore();
+    const manager = new BrowserWorkspaceManager({ snapshotStore: store });
+    const window = createWindow();
+    manager.setWindow(window);
+    await manager.activate("group-a", "browser-a");
+    const firstContents = latestContents();
+    await manager.activate("group-a", "browser-b");
+    const secondContents = latestContents();
+    await manager.activate("group-b", "browser-c");
+
+    await manager.destroyAllForSessionGroup("group-a");
+
+    expect(firstContents.closed).toBe(true);
+    expect(secondContents.closed).toBe(true);
+    expect(latestContents().closed).toBe(false);
+    expect(store.value).toEqual([
+      { sessionGroupId: "group-b", browserId: "browser-c", url: "about:blank" },
+    ]);
+    expect(window.contentView.removeChildView).toHaveBeenCalledTimes(2);
+  });
+
   it("closes DevTools before freezing and restores them after activation", async () => {
     const manager = new BrowserWorkspaceManager({ snapshotStore: new MemorySnapshotStore() });
     manager.setWindow(createWindow());
@@ -411,26 +433,23 @@ describe("BrowserWorkspaceManager", () => {
     expect(electronMocks.sharedSession.devicePermissionHandler?.()).toBe(false);
   });
 
-  it("allows hardened web popups and rejects non-web popup protocols", async () => {
+  it("opens web popups as Trace browser tabs and rejects non-web popup protocols", async () => {
     const manager = new BrowserWorkspaceManager({ snapshotStore: new MemorySnapshotStore() });
-    manager.setWindow(createWindow());
+    const window = createWindow();
+    manager.setWindow(window);
     await manager.activate("group-a");
+    vi.mocked(window.webContents.send).mockClear();
     const handler = latestContents().windowOpenHandler;
     if (!handler) throw new Error("Expected a popup handler.");
 
     const allowed = handler({ url: "https://accounts.example.com/login" });
-    expect(allowed).toMatchObject({
-      action: "allow",
-      overrideBrowserWindowOptions: {
-        webPreferences: {
-          contextIsolation: true,
-          nodeIntegration: false,
-          partition: "persist:trace-browser",
-          sandbox: true,
-        },
-      },
+    expect(allowed).toEqual({ action: "deny" });
+    expect(window.webContents.send).toHaveBeenCalledWith("browser-tab-open-requested", {
+      sessionGroupId: "group-a",
+      url: "https://accounts.example.com/login",
     });
     expect(handler({ url: "file:///etc/passwd" })).toEqual({ action: "deny" });
+    expect(window.webContents.send).toHaveBeenCalledTimes(1);
   });
 
   it("rejects non-web URLs restored from persisted workspace state", async () => {

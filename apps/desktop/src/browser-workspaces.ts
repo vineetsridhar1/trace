@@ -177,6 +177,24 @@ export class BrowserWorkspaceManager {
     await this.flushPersistence();
   }
 
+  async destroyAllForSessionGroup(sessionGroupId: string): Promise<void> {
+    await this.loadSnapshots();
+    const keys = new Set<string>();
+    for (const [key, workspace] of this.workspaces) {
+      if (workspace.state.sessionGroupId === sessionGroupId) keys.add(key);
+    }
+    for (const [key, snapshot] of this.snapshots) {
+      if (snapshot.sessionGroupId === sessionGroupId) keys.add(key);
+    }
+
+    for (const key of keys) {
+      const snapshot = this.snapshots.get(key);
+      const workspace = this.workspaces.get(key);
+      const browserId = workspace?.state.browserId ?? snapshot?.browserId ?? "default";
+      await this.destroy(sessionGroupId, browserId);
+    }
+  }
+
   setBounds(sessionGroupId: string, browserId: string, bounds: Electron.Rectangle) {
     const key = browserWorkspaceKey(sessionGroupId, browserId);
     if (!this.visibleWorkspaceIds.has(key)) return;
@@ -306,7 +324,7 @@ export class BrowserWorkspaceManager {
     this.workspaces.set(key, workspace);
     this.configureSession(view.webContents.session);
     this.bindWorkspaceEvents(workspace);
-    this.configureWindowOpening(view.webContents);
+    this.configureWindowOpening(workspace);
     if (workspace.state.url !== "about:blank") {
       void this.loadWorkspaceUrl(workspace, workspace.state.url).catch((error: unknown) => {
         console.warn("[browser] failed to restore browser workspace", error);
@@ -432,27 +450,19 @@ export class BrowserWorkspaceManager {
     });
   }
 
-  private configureWindowOpening(webContents: WebContents) {
-    webContents.setWindowOpenHandler(({ url }) => this.windowOpenResponse(url));
-    webContents.on("did-create-window", (popup) => {
-      this.configureSession(popup.webContents.session);
-      this.configureWindowOpening(popup.webContents);
-      this.bindContextMenu(popup.webContents);
-    });
+  private configureWindowOpening(workspace: BrowserWorkspace) {
+    workspace.view.webContents.setWindowOpenHandler(({ url }) =>
+      this.windowOpenResponse(workspace, url),
+    );
   }
 
-  private windowOpenResponse(url: string): WindowOpenHandlerResponse {
+  private windowOpenResponse(workspace: BrowserWorkspace, url: string): WindowOpenHandlerResponse {
     if (!isAllowedBrowserUrl(url)) return { action: "deny" };
-    return {
-      action: "allow",
-      overrideBrowserWindowOptions: {
-        width: 1000,
-        height: 720,
-        autoHideMenuBar: true,
-        backgroundColor: "#18181b",
-        webPreferences: browserWebPreferences(),
-      },
-    };
+    this.window?.webContents.send("browser-tab-open-requested", {
+      sessionGroupId: workspace.state.sessionGroupId,
+      url,
+    });
+    return { action: "deny" };
   }
 
   private configureSession(browserSession: Session) {

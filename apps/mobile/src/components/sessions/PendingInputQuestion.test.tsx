@@ -93,10 +93,6 @@ vi.mock("./question-flow/QuestionFlowOption", () => ({
   },
 }));
 
-vi.mock("./question-flow/QuestionFlowReview", () => ({
-  QuestionFlowReview: () => React.createElement("QuestionFlowReview"),
-}));
-
 import { PendingInputQuestion } from "./PendingInputQuestion";
 
 const question: Question = {
@@ -118,7 +114,7 @@ describe("PendingInputQuestion", () => {
     submitMock.mockReset().mockResolvedValue([]);
   });
 
-  it("selects You decide and waits for the normal review and send actions", async () => {
+  it("selects You decide and sends from the final question", async () => {
     let renderer!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       renderer = TestRenderer.create(
@@ -138,10 +134,6 @@ describe("PendingInputQuestion", () => {
     expect(closeMock).not.toHaveBeenCalled();
 
     await act(async () => footerProps?.onPrimary());
-    expect(footerProps?.label).toBe("Send 1 answer");
-    expect(submitMock).not.toHaveBeenCalled();
-
-    await act(async () => footerProps?.onPrimary());
     expect(submitMock).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: "session-1",
@@ -153,7 +145,7 @@ describe("PendingInputQuestion", () => {
     await act(async () => renderer.unmount());
   });
 
-  it("keeps the review open and offers retry when sending fails", async () => {
+  it("offers retry when sending fails", async () => {
     submitMock.mockRejectedValueOnce(new Error("offline"));
     let renderer!: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -168,7 +160,6 @@ describe("PendingInputQuestion", () => {
     });
 
     await act(async () => decideProps?.onPress());
-    await act(async () => footerProps?.onPrimary());
     await act(async () => footerProps?.onPrimary());
 
     expect(closeMock).not.toHaveBeenCalled();

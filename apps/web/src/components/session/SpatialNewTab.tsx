@@ -33,31 +33,42 @@ interface SpatialNewTabProps {
   sessionId: string | null;
   canStartChat: boolean;
   canStartTerminal: boolean;
-  canShowApplications: boolean;
+  applicationUrl: string | null;
   defaultTool?: string | null;
   defaultModel?: string | null;
   defaultReasoningEffort?: string | null;
   onStartChat: (input: SpatialNewChatInput) => Promise<boolean>;
   onConvert: (surface: WorkspaceSurface) => void;
+  onOpenApplication: (url: string) => void;
+  onOpenApplications: () => void;
 }
 
 const quickStarts: Array<{
+  id: "browser" | "terminal" | "application";
   surface: WorkspaceSurface;
   label: string;
   detail: string;
   icon: typeof Globe;
 }> = [
-  { surface: "browser", label: "Open browser", detail: "Preview a running app", icon: Globe },
   {
+    id: "browser",
+    surface: "browser",
+    label: "Open browser",
+    detail: "Preview a running app",
+    icon: Globe,
+  },
+  {
+    id: "terminal",
     surface: "terminal",
     label: "Open terminal",
     detail: "Start a shell or task",
     icon: TerminalSquare,
   },
   {
-    surface: "applications",
-    label: "Applications",
-    detail: "See working cloud URLs",
+    id: "application",
+    surface: "browser",
+    label: "Open application",
+    detail: "Open the running app preview",
     icon: AppWindow,
   },
 ];
@@ -66,12 +77,14 @@ export function SpatialNewTab({
   sessionId,
   canStartChat,
   canStartTerminal,
-  canShowApplications,
+  applicationUrl,
   defaultTool,
   defaultModel,
   defaultReasoningEffort,
   onStartChat,
   onConvert,
+  onOpenApplication,
+  onOpenApplications,
 }: SpatialNewTabProps) {
   const editorRef = useRef<ChatEditorHandle>(null);
   const organizationId = useAuthStore((state) => state.activeOrgId);
@@ -92,9 +105,6 @@ export function SpatialNewTab({
   );
   const { attachments, addAttachments, removeAttachment, setUploading, clearAttachments } =
     useHomeComposerAttachments();
-  const availableStarts = quickStarts.filter(
-    (item) => item.surface !== "applications" || canShowApplications,
-  );
   const effortOptions = getReasoningEffortsForTool(tool);
 
   useEffect(() => {
@@ -191,29 +201,40 @@ export function SpatialNewTab({
           />
         </div>
 
-        <div
-          className={cn(
-            "mt-4 grid grid-cols-2 gap-2",
-            availableStarts.length > 2 && "md:grid-cols-3",
-          )}
-        >
-          {availableStarts.slice(0, 4).map((item) => {
+        <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3">
+          {quickStarts.map((item) => {
             const Icon = item.icon;
             const disabled = item.surface === "terminal" && !canStartTerminal;
+            const applicationUnavailable = item.id === "application" && !applicationUrl;
             return (
               <button
-                key={item.surface}
+                key={item.id}
                 type="button"
-                onClick={() => onConvert(item.surface)}
+                onClick={() => {
+                  if (applicationUnavailable) {
+                    onOpenApplications();
+                    return;
+                  }
+                  if (item.id === "application" && applicationUrl) {
+                    onOpenApplication(applicationUrl);
+                    return;
+                  }
+                  onConvert(item.surface);
+                }}
                 disabled={disabled}
-                className="group rounded-xl border border-border bg-surface-mid p-3 text-left transition-colors hover:border-muted-foreground/50 hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+                className={cn(
+                  "group rounded-xl border border-border bg-surface-mid p-3 text-left transition-colors hover:border-muted-foreground/50 hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40",
+                  applicationUnavailable && "opacity-40",
+                )}
               >
                 <span className="flex items-center gap-2 text-xs font-medium text-foreground">
                   <Icon size={13} className="text-muted-foreground group-hover:text-foreground" />
                   {item.label}
                 </span>
                 <span className="mt-1.5 block text-[10px] leading-4 text-muted-foreground">
-                  {item.detail}
+                  {applicationUnavailable
+                    ? "Start an application to open its preview"
+                    : item.detail}
                 </span>
               </button>
             );

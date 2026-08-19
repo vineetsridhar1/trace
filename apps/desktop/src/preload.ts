@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld("trace", {
     ipcRenderer.invoke("browser-hide", input),
   destroyBrowser: (input: { sessionGroupId: string; browserId: string }) =>
     ipcRenderer.invoke("browser-destroy", input),
+  destroyBrowsersForSessionGroup: (sessionGroupId: string) =>
+    ipcRenderer.invoke("browser-destroy-group", sessionGroupId),
   setBrowserBounds: (input: {
     sessionGroupId: string;
     browserId: string;
@@ -68,5 +70,10 @@ contextBridge.exposeInMainWorld("trace", {
     const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state);
     ipcRenderer.on("browser-workspace-state", listener);
     return () => ipcRenderer.removeListener("browser-workspace-state", listener);
+  },
+  onBrowserTabOpenRequested: (callback: (request: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: unknown) => callback(request);
+    ipcRenderer.on("browser-tab-open-requested", listener);
+    return () => ipcRenderer.removeListener("browser-tab-open-requested", listener);
   },
 });

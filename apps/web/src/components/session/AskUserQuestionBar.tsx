@@ -3,7 +3,6 @@ import { useQuestionState } from "@trace/client-core";
 import type { Question } from "@trace/shared";
 import type { FileAttachment } from "./ImageAttachmentBar";
 import { QuestionCollapsedTray } from "./questions/QuestionCollapsedTray";
-import { QuestionReview } from "./questions/QuestionReview";
 import { QuestionStack } from "./questions/QuestionStack";
 import { QuestionTrayFooter } from "./questions/QuestionTrayFooter";
 import { QuestionTrayFrame } from "./questions/QuestionTrayFrame";
@@ -33,19 +32,15 @@ export function AskUserQuestionBar({
   const references = useQuestionReferenceAttachments();
   const { beginTransfer, cancelTransfer, clearQuestionReferences } = references;
   const state = useQuestionState(node, references.referenceValues);
-  const [reviewing, setReviewing] = useState(false);
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
   const question = state.question;
   const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
   const hasLaterAnswers = state.answers.slice(state.page + 1).some((answer) => answer.answered);
-  const answeredCount = reviewing
-    ? state.total
-    : hasLaterAnswers
-      ? state.answers.filter((answer) => answer.answered).length
-      : state.page;
-  const validationError =
-    !reviewing && state.currentSelected.size > 0 && state.validationMessage !== null;
+  const answeredCount = hasLaterAnswers
+    ? state.answers.filter((answer) => answer.answered).length
+    : state.page;
+  const validationError = state.currentSelected.size > 0 && state.validationMessage !== null;
 
   const responseAttachments = node.questions.some((candidate) => candidate.type === "reference")
     ? references.attachments
@@ -69,14 +64,13 @@ export function AskUserQuestionBar({
   }, [beginTransfer, cancelTransfer, onResponse, responseAttachments, state.buildResponse]);
   const advance = useCallback(() => {
     if (!state.currentValid) return;
-    if (state.isLastPage) setReviewing(true);
+    if (state.isLastPage) void send();
     else state.goNext();
-  }, [state.currentValid, state.goNext, state.isLastPage]);
+  }, [send, state.currentValid, state.goNext, state.isLastPage]);
   const decideAndAdvance = useCallback(() => {
     if (type === "reference") clearQuestionReferences(state.page);
     state.decideForMe();
-    if (state.isLastPage) setReviewing(true);
-    else state.goNext();
+    if (!state.isLastPage) state.goNext();
   }, [
     clearQuestionReferences,
     state.decideForMe,
@@ -88,11 +82,9 @@ export function AskUserQuestionBar({
 
   useQuestionKeyboard({
     disabled: collapsed || sending,
-    reviewing,
     question,
     type,
     onDismiss,
-    onSend: send,
     onAdvance: advance,
     onToggle: state.toggleOption,
   });
@@ -135,52 +127,23 @@ export function AskUserQuestionBar({
   );
   return (
     <QuestionTrayFrame
-      label={
-        reviewing
-          ? "Ready to send"
-          : validationError
-            ? "Not enough to continue"
-            : "Answer before I continue"
-      }
-      meta={
-        reviewing
-          ? `${state.total} answer${state.total === 1 ? "" : "s"}`
-          : validationError && question.min != null
-            ? `minimum ${question.min}`
-            : meta
-      }
+      label={validationError ? "Not enough to continue" : "Answer before I continue"}
+      meta={validationError && question.min != null ? `minimum ${question.min}` : meta}
       tone={validationError ? "error" : "pending"}
       onExit={onDismiss}
       footer={
         <QuestionTrayFooter
-          reviewing={reviewing}
           total={state.total}
-          disabled={sending || (reviewing ? !state.hasAllAnswers : !state.currentValid)}
+          isLastQuestion={state.isLastPage}
+          disabled={sending || !state.currentValid}
           sending={sending}
-          backDisabled={!reviewing && state.isFirstPage}
-          onPrimary={reviewing ? send : advance}
-          onBack={() => {
-            if (reviewing) setReviewing(false);
-            else state.goPrev();
-          }}
+          backDisabled={state.isFirstPage}
+          onPrimary={advance}
+          onBack={state.goPrev}
         />
       }
     >
-      {reviewing ? (
-        <div className="grid gap-2">
-          <QuestionReview
-            questions={node.questions}
-            answers={state.answers}
-            onEdit={(index) => {
-              state.setPage(index);
-              setReviewing(false);
-            }}
-          />
-          <span className="font-mono text-[9px] leading-3 text-muted-foreground">
-            {questionTrayHint(type, true)}
-          </span>
-        </div>
-      ) : state.total > 1 ? (
+      {state.total > 1 ? (
         <QuestionStack
           questions={node.questions}
           answers={state.answers}

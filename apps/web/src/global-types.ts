@@ -175,6 +175,7 @@ declare global {
     }) => Promise<DesktopBrowserWorkspaceState>;
     hideBrowser: (input: { sessionGroupId: string; browserId: string }) => Promise<void>;
     destroyBrowser: (input: { sessionGroupId: string; browserId: string }) => Promise<void>;
+    destroyBrowsersForSessionGroup: (sessionGroupId: string) => Promise<void>;
     setBrowserBounds: (input: {
       sessionGroupId: string;
       browserId: string;
@@ -207,6 +208,7 @@ declare global {
       browserId: string;
     }) => Promise<DesktopBrowserWorkspaceState>;
     onBrowserWorkspaceState: (callback: (state: unknown) => void) => () => void;
+    onBrowserTabOpenRequested: (callback: (request: unknown) => void) => () => void;
   }
 
   interface Window {

@@ -149,19 +149,11 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    backgroundColor: "#00000000",
-    transparent: true,
+    backgroundColor: "#18181b",
     ...(process.platform === "darwin"
       ? {
-          vibrancy: "fullscreen-ui" as const,
-          visualEffectState: "active" as const,
           titleBarStyle: "hiddenInset" as const,
           trafficLightPosition: { x: 18, y: 17 } as const,
-        }
-      : {}),
-    ...(process.platform === "win32"
-      ? {
-          backgroundMaterial: "acrylic" as const,
         }
       : {}),
     icon: appIconPath,
@@ -409,6 +401,9 @@ ipcMain.handle("browser-hide", (_event, input: { sessionGroupId: string; browser
 );
 ipcMain.handle("browser-destroy", (_event, input: { sessionGroupId: string; browserId: string }) =>
   browserWorkspaces.destroy(input.sessionGroupId, input.browserId),
+);
+ipcMain.handle("browser-destroy-group", (_event, sessionGroupId: string) =>
+  browserWorkspaces.destroyAllForSessionGroup(sessionGroupId),
 );
 ipcMain.handle(
   "browser-set-bounds",

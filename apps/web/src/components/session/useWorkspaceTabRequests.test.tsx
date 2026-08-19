@@ -22,6 +22,8 @@ describe("useWorkspaceTabRequests", () => {
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     vi.stubGlobal("localStorage", { getItem: vi.fn(() => null), setItem: vi.fn() });
+    vi.stubGlobal("window", {});
+    window.trace = undefined;
     useWorkspaceRequestStore.setState({
       browserRequestsByGroup: {},
       terminalRequestsByGroup: {},
@@ -80,5 +82,33 @@ describe("useWorkspaceTabRequests", () => {
       latest?.handleTabReplacementsApplied(["draft:other"]);
     });
     expect(latest?.tabReplacements).toEqual({ "draft:blank": "terminal:term-1" });
+  });
+
+  it("creates and foregrounds a browser tab for a native popup request", async () => {
+    let callback: ((request: unknown) => void) | undefined;
+    const unsubscribe = vi.fn();
+    window.trace = {
+      onBrowserTabOpenRequested: (nextCallback: (request: unknown) => void) => {
+        callback = nextCallback;
+        return unsubscribe;
+      },
+    } as unknown as TraceElectronBridge;
+    vi.stubGlobal("crypto", { randomUUID: () => "popup-tab" });
+    await act(async () => {
+      renderer = create(<Harness />);
+    });
+
+    await act(async () => {
+      callback?.({ sessionGroupId: "group-1", url: "https://accounts.example.com/login" });
+    });
+
+    expect(latest?.draftTabs).toEqual([
+      {
+        id: "draft:popup-tab",
+        surface: "browser",
+        initialUrl: "https://accounts.example.com/login",
+      },
+    ]);
+    expect(latest?.foregroundTabId).toBe("draft:popup-tab");
   });
 });

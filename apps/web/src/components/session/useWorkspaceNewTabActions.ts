@@ -69,6 +69,20 @@ export function useWorkspaceNewTabActions({
     ],
   );
 
+  const openApplicationInTab = useCallback(
+    (tabId: string, url: string) => {
+      setForegroundTabId(tabId);
+      setDraftTabs((drafts) =>
+        drafts.map((candidate) =>
+          candidate.id === tabId
+            ? { ...candidate, surface: "browser", initialUrl: url }
+            : candidate,
+        ),
+      );
+    },
+    [setDraftTabs, setForegroundTabId],
+  );
+
   const startChatInTab = useCallback(
     async (tabId: string, input: SpatialNewChatInput) => {
       const sessionId = await startChat(input);
@@ -86,5 +100,5 @@ export function useWorkspaceNewTabActions({
     [setDraftTabs, startChat],
   );
 
-  return { convertTab, startChatInTab };
+  return { convertTab, openApplicationInTab, startChatInTab };
 }

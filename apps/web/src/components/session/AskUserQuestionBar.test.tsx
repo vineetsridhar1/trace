@@ -76,7 +76,7 @@ describe("AskUserQuestionBar", () => {
     expect(markup).not.toContain("fixed inset-0");
     expect(markup.indexOf("number keys pick")).toBeLessThan(markup.indexOf("You decide"));
     expect(markup.indexOf("You decide")).toBeLessThan(markup.indexOf(">Back<"));
-    expect(markup.indexOf(">Back<")).toBeLessThan(markup.indexOf(">Next<"));
+    expect(markup.indexOf(">Back<")).toBeLessThan(markup.indexOf(">Send 1 answer<"));
     expect(markup).toContain('aria-label="Go to previous question" disabled=""');
   });
 
@@ -153,7 +153,7 @@ describe("AskUserQuestionBar", () => {
         />,
       );
     });
-    expect(findButton(renderer.root, "Next").props.disabled).toBe(false);
+    expect(findButton(renderer.root, "Send 1 answer").props.disabled).toBe(false);
     await act(async () => renderer.unmount());
   });
 
@@ -190,8 +190,6 @@ describe("AskUserQuestionBar", () => {
       );
     });
     await act(async () => findButton(renderer.root, "Yes").props.onClick());
-    await act(async () => findButton(renderer.root, "Next").props.onClick());
-
     await act(async () => {
       const send = findButton(renderer.root, "Send 1 answer");
       void send.props.onClick();
@@ -232,8 +230,7 @@ describe("AskUserQuestionBar", () => {
         preventDefault: vi.fn(),
       } as unknown as KeyboardEvent),
     );
-    expect(findButton(renderer.root, "Next")).toBeDefined();
-    expect(renderer.root.findAllByProps({ children: "Send 1 answer" })).toHaveLength(0);
+    expect(findButton(renderer.root, "Send 1 answer")).toBeDefined();
     await act(async () => renderer.unmount());
   });
 
@@ -263,7 +260,7 @@ describe("AskUserQuestionBar", () => {
         />,
       );
     });
-    expect(findButton(renderer.root, "Next").props.disabled).toBe(true);
+    expect(findButton(renderer.root, "Send 1 answer").props.disabled).toBe(true);
     expect(JSON.stringify(renderer.toJSON())).toContain("Choose an answer for new.");
     await act(async () => renderer.unmount());
   });
@@ -285,11 +282,11 @@ describe("AskUserQuestionBar", () => {
       );
     });
     await act(async () => findButton(renderer.root, "Something else").props.onClick());
-    expect(findButton(renderer.root, "Next").props.disabled).toBe(true);
+    expect(findButton(renderer.root, "Send 1 answer").props.disabled).toBe(true);
     const textarea = renderer.root.findByType("textarea");
     await act(async () => textarea.props.onChange({ target: { value: "Use a kiosk" } }));
     expect(findButton(renderer.root, "Something else").props["aria-pressed"]).toBe(true);
-    expect(findButton(renderer.root, "Next").props.disabled).toBe(false);
+    expect(findButton(renderer.root, "Send 1 answer").props.disabled).toBe(false);
     await act(async () => renderer.unmount());
   });
 
@@ -318,7 +315,6 @@ describe("AskUserQuestionBar", () => {
     const textarea = renderer.root.findByType("textarea");
     await act(async () => textarea.props.onChange({ target: { value: "Use a tablet kiosk" } }));
     expect(findButton(renderer.root, "Yes").props["aria-pressed"]).toBe(false);
-    await act(async () => findButton(renderer.root, "Next").props.onClick());
     await act(async () => findButton(renderer.root, "Send 1 answer").props.onClick());
 
     expect(onResponse).toHaveBeenCalledWith(
@@ -345,7 +341,7 @@ describe("AskUserQuestionBar", () => {
     });
     const textarea = renderer.root.findByType("textarea");
     await act(async () => textarea.props.onChange({ target: { value: "A custom direction" } }));
-    expect(findButton(renderer.root, "Next").props.disabled).toBe(false);
+    expect(findButton(renderer.root, "Send 1 answer").props.disabled).toBe(false);
     await act(async () => renderer.unmount());
   });
 
@@ -397,7 +393,7 @@ describe("AskUserQuestionBar", () => {
     };
     await act(async () => shiftedTextarea.props.onKeyDown(shiftEnter));
     expect(shiftEnter.preventDefault).not.toHaveBeenCalled();
-    expect(findButton(renderer.root, "Next")).toBeDefined();
+    expect(findButton(renderer.root, "Send 1 answer")).toBeDefined();
     await act(async () => renderer.unmount());
   });
 
@@ -432,7 +428,7 @@ describe("AskUserQuestionBar", () => {
     expect(JSON.stringify(renderer.toJSON())).toContain("brand.pdf");
 
     await act(async () => findButton(renderer.root, "Next").props.onClick());
-    expect(findButton(renderer.root, "Next").props.disabled).toBe(true);
+    expect(findButton(renderer.root, "Send 2 answers").props.disabled).toBe(true);
     expect(JSON.stringify(renderer.toJSON())).not.toContain("brand.pdf");
 
     await act(async () => renderer.unmount());
@@ -466,7 +462,6 @@ describe("AskUserQuestionBar", () => {
       (candidate) => candidate.type === "input" && candidate.props.type === "file",
     );
     await act(async () => fileInput.props.onChange({ target: { files: [file], value: "" } }));
-    await act(async () => findButton(renderer.root, "Next").props.onClick());
     await act(async () => findButton(renderer.root, "Send 1 answer").props.onClick());
 
     expect(onResponse).toHaveBeenCalledWith(
