@@ -49,7 +49,7 @@ export function SpatialTabButton({
           "group mb-0 flex shrink-0 items-center rounded-t-lg border-b-2 transition-[background-color,border-color,color,opacity]",
           compact ? "h-8 max-w-40" : "h-9 max-w-56",
           active
-            ? "border-blue-400 bg-background text-foreground"
+            ? "border-x border-t border-border border-b-background bg-surface text-foreground shadow-sm"
             : "border-transparent text-muted-foreground hover:bg-surface-hover/70 hover:text-foreground",
           isDragging && "opacity-0",
           isOver && !isDragging && "ring-1 ring-inset ring-blue-400/70",
@@ -93,4 +93,3 @@ export function SpatialTabButton({
     </motion.div>
   );
 }
-
