@@ -59,7 +59,10 @@ export function SpatialTabButton({
           type="button"
           onClick={onActivate}
           onDoubleClick={onDoubleClick}
-          className="flex min-w-0 flex-1 cursor-grab items-center gap-2 overflow-hidden py-2 pl-3 active:cursor-grabbing"
+          className={cn(
+            "flex min-w-0 flex-1 items-center gap-2 overflow-hidden py-2 pl-3",
+            isDragging ? "cursor-grabbing" : "cursor-pointer",
+          )}
           title={tab.label}
           aria-current={active ? "page" : undefined}
           {...listeners}
