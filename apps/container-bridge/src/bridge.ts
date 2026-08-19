@@ -30,6 +30,7 @@ import {
   inspectSessionGitSyncStatus,
   BridgeOutbox,
   BRIDGE_PROTOCOL_VERSION,
+  resolveBridgeWorkdir,
 } from "@trace/shared";
 import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
@@ -111,6 +112,9 @@ export class ContainerBridge implements IBridgeClient {
   /** Max consecutive connection failures before the process exits, allowing the machine to stop. */
   private static MAX_RECONNECT_FAILURES = 20;
   private sessionWorkdirs = new Map<string, string>();
+  /** Fences late completions from superseded prepare commands. */
+  private workspacePrepareVersions = new Map<string, number>();
+  private nextWorkspacePrepareVersion = 0;
   /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
   private pendingWorktrees = new Map<
     string,
@@ -325,6 +329,17 @@ export class ContainerBridge implements IBridgeClient {
     this.activeRuns.delete(sessionId);
   }
 
+  private beginWorkspacePreparation(sessionId: string): number {
+    const version = ++this.nextWorkspacePrepareVersion;
+    this.workspacePrepareVersions.set(sessionId, version);
+    this.sessionWorkdirs.delete(sessionId);
+    return version;
+  }
+
+  private isCurrentWorkspacePreparation(sessionId: string, version: number): boolean {
+    return this.workspacePrepareVersions.get(sessionId) === version;
+  }
+
   private async preparePlaywrightSession(
     sessionId: string,
     invocationId: string | undefined,
@@ -377,11 +392,26 @@ export class ContainerBridge implements IBridgeClient {
 
       case "run":
       case "send": {
+        const workdir = resolveBridgeWorkdir({
+          workspaceMode: cmd.workspaceMode,
+          cwd: cmd.cwd,
+          preparedWorkdir: this.sessionWorkdirs.get(cmd.sessionId),
+          homeDir: os.homedir(),
+        });
+        if (!workdir) {
+          this.send({
+            type: "workspace_failed",
+            sessionId: cmd.sessionId,
+            error:
+              "Trace refused to start the agent because this session has no prepared workspace.",
+          });
+          break;
+        }
         this.runPrompt({
           sessionId: cmd.sessionId,
           prompt: cmd.prompt ?? "",
           appendSystemPrompt: cmd.appendSystemPrompt,
-          cwd: cmd.cwd ?? os.homedir(),
+          cwd: workdir,
           tool: cmd.tool,
           model: cmd.model,
           reasoningEffort: cmd.reasoningEffort,
@@ -416,16 +446,19 @@ export class ContainerBridge implements IBridgeClient {
           baseCommitSha,
           readOnly,
         } = cmd;
+        const prepareVersion = this.beginWorkspacePreparation(sessionId);
 
         (async () => {
           try {
             const repoResult = await ensureRepo(repoId, repoRemoteUrl, branch, defaultBranch);
+            if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
             this.send({ type: "repo_linked", repoId });
 
             if (readOnly) {
               // Read-only mode: skip worktree, use the bare repo path directly
               const workdir = getRepoPath(repoId);
               if (!workdir) throw new Error(`Repo path not found after ensureRepo for ${repoId}`);
+              if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
               this.sessionWorkdirs.set(sessionId, workdir);
               this.readOnlySessions.add(sessionId);
               this.send({ type: "register_session", sessionId });
@@ -456,6 +489,7 @@ export class ContainerBridge implements IBridgeClient {
                   .catch(() => undefined);
               }
               const { workdir, branch: worktreeBranch, slug: worktreeSlug } = await worktreePromise;
+              if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
               this.sessionWorkdirs.set(sessionId, workdir);
               this.send({ type: "register_session", sessionId });
               this.send({
@@ -468,6 +502,7 @@ export class ContainerBridge implements IBridgeClient {
               });
             }
           } catch (err) {
+            if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
             const message = err instanceof Error ? err.message : String(err);
             console.error(`[container-bridge] workspace failed for ${sessionId}:`, message);
             this.send({ type: "workspace_failed", sessionId, error: message });
@@ -478,14 +513,17 @@ export class ContainerBridge implements IBridgeClient {
 
       case "prepare_general": {
         const workdir = generalWorkspacePath(cmd.sessionGroupId ?? cmd.sessionId);
+        const prepareVersion = this.beginWorkspacePreparation(cmd.sessionId);
         fs.promises
           .mkdir(workdir, { recursive: true })
           .then(() => {
+            if (!this.isCurrentWorkspacePreparation(cmd.sessionId, prepareVersion)) return;
             this.sessionWorkdirs.set(cmd.sessionId, workdir);
             this.send({ type: "register_session", sessionId: cmd.sessionId });
             this.send({ type: "workspace_ready", sessionId: cmd.sessionId, workdir });
           })
           .catch((err: Error) => {
+            if (!this.isCurrentWorkspacePreparation(cmd.sessionId, prepareVersion)) return;
             this.send({ type: "workspace_failed", sessionId: cmd.sessionId, error: err.message });
           });
         break;
@@ -556,6 +594,7 @@ export class ContainerBridge implements IBridgeClient {
           sourceRepository,
         } = cmd;
         const previousWorkdir = this.sessionWorkdirs.get(sessionId);
+        const prepareVersion = this.beginWorkspacePreparation(sessionId);
         (async () => {
           try {
             const { workdir, slug: workspaceSlug } = await createAppWorkspace({
@@ -587,6 +626,7 @@ export class ContainerBridge implements IBridgeClient {
                 { mode: 0o444 },
               );
             }
+            if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
             this.sessionWorkdirs.set(sessionId, workdir);
             this.send({ type: "register_session", sessionId });
             this.send({
@@ -606,6 +646,7 @@ export class ContainerBridge implements IBridgeClient {
               );
             }
           } catch (err) {
+            if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
             const message = err instanceof Error ? err.message : String(err);
             console.error(`[container-bridge] app workspace failed for ${sessionId}:`, message);
             this.send({ type: "workspace_failed", sessionId, error: message });
@@ -626,10 +667,12 @@ export class ContainerBridge implements IBridgeClient {
           preserveBranchName,
         } = cmd;
         const previousWorkdir = this.sessionWorkdirs.get(sessionId);
+        const prepareVersion = this.beginWorkspacePreparation(sessionId);
 
         (async () => {
           try {
             const repoResult = await ensureRepo(repoId, repoRemoteUrl, branch, defaultBranch);
+            if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
             this.send({ type: "repo_linked", repoId });
             const {
               workdir,
@@ -644,6 +687,7 @@ export class ContainerBridge implements IBridgeClient {
               sessionGroupId,
               slug,
             });
+            if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
             this.sessionWorkdirs.set(sessionId, workdir);
             this.readOnlySessions.delete(sessionId);
             this.send({
@@ -671,6 +715,7 @@ export class ContainerBridge implements IBridgeClient {
               );
             }
           } catch (err) {
+            if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
             const message = err instanceof Error ? err.message : String(err);
             console.error(`[container-bridge] workspace upgrade failed for ${sessionId}:`, message);
             this.send({ type: "workspace_failed", sessionId, error: message });
@@ -725,6 +770,7 @@ export class ContainerBridge implements IBridgeClient {
           this.sessionWorkdirs.get(cmd.sessionId) ??
           null;
         this.sessionWorkdirs.delete(cmd.sessionId);
+        this.workspacePrepareVersions.delete(cmd.sessionId);
         this.terminalManager.destroyForSession(cmd.sessionId);
 
         // App sessions run managed dev-server processes (keyed by

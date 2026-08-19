@@ -34,6 +34,7 @@ import {
   BridgeOutbox,
   BRIDGE_PROTOCOL_VERSION,
   actionRequiredArtifactForToolError,
+  resolveBridgeWorkdir,
 } from "@trace/shared";
 import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
@@ -343,8 +344,9 @@ export class BridgeClient implements IBridgeClient {
   private pendingWorktrees = new Map<string, Promise<CreatedWorktree>>();
   /** In-flight workspace prep per session, so prompts can wait for it to finish */
   private sessionPrepares = new Map<string, Promise<void>>();
-  /** Prompts held because workspace prep failed; replayed once prep succeeds */
-  private deferredRuns = new Map<string, BridgeRunCommand | BridgeSendCommand>();
+  /** Fences late completions from superseded prepare commands. */
+  private workspacePrepareVersions = new Map<string, number>();
+  private nextWorkspacePrepareVersion = 0;
   /** Sessions running in read-only mode (no worktree, using user's repo checkout) */
   private readOnlySessions = new Set<string>();
   private pendingInputToolUseIds = new Map<string, string>();
@@ -865,7 +867,7 @@ export class BridgeClient implements IBridgeClient {
   }: {
     sessionId: string;
     prompt: string;
-    cwd?: string;
+    cwd: string;
     tool?: string;
     model?: string;
     reasoningEffort?: string;
@@ -875,12 +877,7 @@ export class BridgeClient implements IBridgeClient {
     imageUrls?: string[];
     runtimeEnv?: Record<string, string>;
   }) {
-    if (!cwd) {
-      console.warn(
-        `[bridge] No cwd provided for session ${sessionId}, falling back to home directory (${os.homedir()})`,
-      );
-    }
-    const workdir = cwd ?? os.homedir();
+    const workdir = cwd;
     const traceRuntime = await this.traceRuntime;
     const invocationEnv = buildTraceInvocationEnv({
       runtimeEnv,
@@ -1061,9 +1058,9 @@ export class BridgeClient implements IBridgeClient {
    * A reconnect re-prepares the workspace, and the server can deliver the user's
    * message while that is still running. Spawning the coding tool then would
    * point it at a tree being rewritten by `git reset`/`git clean`. If prep fails
-   * outright the prompt is held rather than dropped: the server has already
-   * cleared its own copy, so this is the only remaining one, and a later
-   * successful prep replays it.
+   * outright the command is refused. The service layer retains commands while
+   * workspace state is not ready, so the bridge never becomes their durable
+   * owner.
    */
   private async runAfterWorkspacePrep(cmd: BridgeRunCommand | BridgeSendCommand) {
     const { sessionId } = cmd;
@@ -1073,19 +1070,28 @@ export class BridgeClient implements IBridgeClient {
         await prepare;
       } catch {
         // workspace_failed was already reported by the prepare handler.
-        this.deferredRuns.set(sessionId, cmd);
-        console.warn(
-          `[bridge] holding prompt for session ${sessionId} until workspace prep succeeds`,
-        );
         return;
       }
+    }
+    const workdir = resolveBridgeWorkdir({
+      workspaceMode: cmd.workspaceMode,
+      cwd: cmd.cwd,
+      preparedWorkdir: this.sessionWorkdirs.get(sessionId),
+      homeDir: os.homedir(),
+    });
+    if (!workdir) {
+      this.markWorkspaceFailed(
+        sessionId,
+        "Trace refused to start the agent because this session has no prepared workspace.",
+      );
+      return;
     }
     await this.runPrompt({
       sessionId,
       prompt: cmd.prompt ?? "",
       // Prefer the freshly prepared workdir: the server's `cwd` was read before
       // prep ran and can name a path that prep has since moved or renamed.
-      cwd: this.sessionWorkdirs.get(sessionId) ?? cmd.cwd,
+      cwd: workdir,
       tool: cmd.tool,
       model: cmd.model,
       reasoningEffort: cmd.reasoningEffort,
@@ -1097,12 +1103,36 @@ export class BridgeClient implements IBridgeClient {
     });
   }
 
-  private flushDeferredRun(sessionId: string) {
-    const deferred = this.deferredRuns.get(sessionId);
-    if (!deferred) return;
-    this.deferredRuns.delete(sessionId);
-    console.warn(`[bridge] replaying held prompt for session ${sessionId}`);
-    this.handleCommand(deferred);
+  private beginWorkspacePreparation(sessionId: string): number {
+    const version = ++this.nextWorkspacePrepareVersion;
+    this.workspacePrepareVersions.set(sessionId, version);
+    // A previous path is not proof that the new preparation is safe to use.
+    this.sessionWorkdirs.delete(sessionId);
+    return version;
+  }
+
+  private isCurrentWorkspacePreparation(sessionId: string, version: number): boolean {
+    return this.workspacePrepareVersions.get(sessionId) === version;
+  }
+
+  private markWorkspaceReady(sessionId: string, workdir: string, version?: number) {
+    if (version !== undefined && !this.isCurrentWorkspacePreparation(sessionId, version)) return;
+    this.sessionWorkdirs.set(sessionId, workdir);
+  }
+
+  private markWorkspaceFailed(sessionId: string, error: string, version?: number) {
+    if (version !== undefined && !this.isCurrentWorkspacePreparation(sessionId, version)) return;
+    this.send({ type: "workspace_failed", sessionId, error });
+  }
+
+  private trackWorkspacePreparation(sessionId: string, prepared: Promise<void>) {
+    this.sessionPrepares.set(sessionId, prepared);
+    const clearPrepare = () => {
+      if (this.sessionPrepares.get(sessionId) === prepared) {
+        this.sessionPrepares.delete(sessionId);
+      }
+    };
+    void prepared.then(clearPrepare, clearPrepare);
   }
 
   private handleCommand(cmd: BridgeCommand) {
@@ -1128,27 +1158,29 @@ export class BridgeClient implements IBridgeClient {
         } = cmd;
         const repoConfig = getRepoConfig(repoId);
         const repoPath = repoConfig?.path;
+        const prepareVersion = this.beginWorkspacePreparation(sessionId);
 
         if (!repoPath) {
-          this.send({
-            type: "workspace_failed",
+          this.markWorkspaceFailed(
             sessionId,
-            error: `No local path configured for repo "${repoName}" (${repoId}). Configure it in Settings.`,
-          });
+            `No local path configured for repo "${repoName}" (${repoId}). Configure it in Settings.`,
+            prepareVersion,
+          );
           break;
         }
 
         // Adopting an existing worktree takes precedence: use it as-is (its own
         // branch, no reset), rather than creating or reusing a Trace worktree.
         if (adoptWorktreePath) {
-          adoptWorktree({
+          const prepared = adoptWorktree({
             repoPath,
             repoId,
             worktreePath: adoptWorktreePath,
             slug,
           })
             .then(({ workdir, branch: adoptedBranch, slug: adoptedSlug }) => {
-              this.sessionWorkdirs.set(sessionId, workdir);
+              this.markWorkspaceReady(sessionId, workdir, prepareVersion);
+              if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
               this.sessionGroupIds.set(sessionId, sessionGroupId ?? null);
               this.readOnlySessions.delete(sessionId);
               this.send({
@@ -1161,14 +1193,16 @@ export class BridgeClient implements IBridgeClient {
               void this.pollLocalPrStatuses();
             })
             .catch((err: Error) => {
-              this.send({ type: "workspace_failed", sessionId, error: err.message });
+              this.markWorkspaceFailed(sessionId, err.message, prepareVersion);
+              throw err;
             });
+          this.trackWorkspacePreparation(sessionId, prepared);
           break;
         }
 
         if (readOnly) {
           // Read-only mode: skip worktree, use the user's actual repo checkout
-          this.sessionWorkdirs.set(sessionId, repoPath);
+          this.markWorkspaceReady(sessionId, repoPath, prepareVersion);
           this.sessionGroupIds.set(sessionId, sessionGroupId ?? null);
           this.readOnlySessions.add(sessionId);
           this.send({ type: "workspace_ready", sessionId, workdir: repoPath });
@@ -1198,7 +1232,8 @@ export class BridgeClient implements IBridgeClient {
         }
         const prepared = worktreePromise
           .then(({ workdir, branch: worktreeBranch, slug: worktreeSlug, warning }) => {
-            this.sessionWorkdirs.set(sessionId, workdir);
+            this.markWorkspaceReady(sessionId, workdir, prepareVersion);
+            if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
             this.sessionGroupIds.set(sessionId, sessionGroupId ?? null);
             this.send({
               type: "workspace_ready",
@@ -1211,41 +1246,33 @@ export class BridgeClient implements IBridgeClient {
             void this.pollLocalPrStatuses();
           })
           .catch((err: Error) => {
-            this.send({ type: "workspace_failed", sessionId, error: err.message });
+            this.markWorkspaceFailed(sessionId, err.message, prepareVersion);
             throw err;
           });
         // Tracked so a prompt arriving mid-prep waits for the workspace instead
         // of running against a tree that is being reset underneath it. Settling
         // is observed here first (registered before any waiter), so a waiter
         // resumes with the workdir already recorded and the entry cleared.
-        this.sessionPrepares.set(sessionId, prepared);
-        const clearPrepare = () => {
-          if (this.sessionPrepares.get(sessionId) === prepared) {
-            this.sessionPrepares.delete(sessionId);
-          }
-        };
-        void prepared.then(
-          () => {
-            clearPrepare();
-            this.flushDeferredRun(sessionId);
-          },
-          () => clearPrepare(),
-        );
+        this.trackWorkspacePreparation(sessionId, prepared);
         break;
       }
       case "prepare_general": {
         const { sessionId, sessionGroupId } = cmd;
         const workdir = generalWorkspacePath(sessionGroupId ?? sessionId);
-        fs.promises
+        const prepareVersion = this.beginWorkspacePreparation(sessionId);
+        const prepared = fs.promises
           .mkdir(workdir, { recursive: true })
           .then(() => {
-            this.sessionWorkdirs.set(sessionId, workdir);
+            this.markWorkspaceReady(sessionId, workdir, prepareVersion);
+            if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
             this.sessionGroupIds.set(sessionId, sessionGroupId ?? null);
             this.send({ type: "workspace_ready", sessionId, workdir });
           })
           .catch((err: Error) => {
-            this.send({ type: "workspace_failed", sessionId, error: err.message });
+            this.markWorkspaceFailed(sessionId, err.message, prepareVersion);
+            throw err;
           });
+        this.trackWorkspacePreparation(sessionId, prepared);
         break;
       }
       case "cleanup_general_workspace": {
@@ -1348,17 +1375,18 @@ export class BridgeClient implements IBridgeClient {
         const repoConfig = getRepoConfig(repoId);
         const repoPath = repoConfig?.path;
         const previousWorkdir = this.sessionWorkdirs.get(sessionId);
+        const prepareVersion = this.beginWorkspacePreparation(sessionId);
 
         if (!repoPath) {
-          this.send({
-            type: "workspace_failed",
+          this.markWorkspaceFailed(
             sessionId,
-            error: `No local path configured for repo "${repoName}" (${repoId}). Configure it in Settings.`,
-          });
+            `No local path configured for repo "${repoName}" (${repoId}). Configure it in Settings.`,
+            prepareVersion,
+          );
           break;
         }
 
-        createWorktree({
+        const prepared = createWorktree({
           repoPath,
           repoId,
           sessionId,
@@ -1369,7 +1397,8 @@ export class BridgeClient implements IBridgeClient {
           preserveBranchName,
         })
           .then(({ workdir, branch: worktreeBranch, slug: worktreeSlug }) => {
-            this.sessionWorkdirs.set(sessionId, workdir);
+            this.markWorkspaceReady(sessionId, workdir, prepareVersion);
+            if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
             this.sessionGroupIds.set(sessionId, sessionGroupId ?? null);
             this.readOnlySessions.delete(sessionId);
             this.send({
@@ -1398,13 +1427,13 @@ export class BridgeClient implements IBridgeClient {
             void this.pollLocalPrStatuses();
           })
           .catch((err: Error) => {
-            this.send({ type: "workspace_failed", sessionId, error: err.message });
+            this.markWorkspaceFailed(sessionId, err.message, prepareVersion);
+            throw err;
           });
+        this.trackWorkspacePreparation(sessionId, prepared);
         break;
       }
       case "terminate": {
-        // An explicit stop cancels a prompt still waiting on workspace prep.
-        this.deferredRuns.delete(cmd.sessionId);
         const adapter = this.adapters.get(cmd.sessionId);
         if (adapter) {
           // Abort the running process but keep the adapter so it retains
@@ -1437,10 +1466,11 @@ export class BridgeClient implements IBridgeClient {
         this.reportedToolSessionIds.delete(cmd.sessionId);
         this.pendingInputToolUseIds.delete(cmd.sessionId);
         this.sessionRunSequence.delete(cmd.sessionId);
-        this.deferredRuns.delete(cmd.sessionId);
         const wasReadOnly = this.readOnlySessions.has(cmd.sessionId);
         this.readOnlySessions.delete(cmd.sessionId);
         this.sessionWorkdirs.delete(cmd.sessionId);
+        this.sessionPrepares.delete(cmd.sessionId);
+        this.workspacePrepareVersions.delete(cmd.sessionId);
         this.sessionGroupIds.delete(cmd.sessionId);
         this.terminalManager.destroyForSession(cmd.sessionId);
 
@@ -1463,7 +1493,9 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "track_session": {
-        this.sessionWorkdirs.set(cmd.sessionId, cmd.workdir);
+        const prepareVersion = this.beginWorkspacePreparation(cmd.sessionId);
+        this.sessionPrepares.delete(cmd.sessionId);
+        this.markWorkspaceReady(cmd.sessionId, cmd.workdir, prepareVersion);
         this.sessionGroupIds.set(cmd.sessionId, cmd.sessionGroupId ?? null);
         if (cmd.readOnly) {
           this.readOnlySessions.add(cmd.sessionId);

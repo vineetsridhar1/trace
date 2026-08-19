@@ -5472,8 +5472,10 @@ export class SessionService {
       return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
     }
 
-    // If workspace is still being prepared, queue the run for later
-    if (session.agentStatus === "not_started" && !session.workdir) {
+    // Keep the command durable until a managed workspace is ready. A failed or
+    // reconnecting session can have a stale workdir, so path presence alone is
+    // not sufficient admission.
+    if (!this.workspaceIsReady(session)) {
       const pendingCommand: PendingSessionCommand = {
         type: "run",
         prompt: prompt ?? null,
@@ -5482,27 +5484,26 @@ export class SessionService {
         ...(imageKeys?.length ? { imageKeys } : {}),
       };
       const commands = this.parsePendingCommands(session.pendingRun);
-      const needsProvisioning = !!session.repoId || session.hosting === "cloud";
-      if (needsProvisioning) {
-        assertCloudRepoRemoteAvailable(session.hosting, session.repo);
-      }
-      const markLocalPreparing = session.hosting === "local" && needsProvisioning;
+      assertCloudRepoRemoteAvailable(session.hosting, session.repo);
+      const alreadyProvisioning = isRuntimeStartupState(conn.state);
+      const shouldProvision = session.agentStatus === "not_started" && !alreadyProvisioning;
       const updated = await prisma.session.update({
         where: { id },
         data: {
           pendingRun: pendingRunValue([...commands, pendingCommand]),
-          agentStatus: "active",
+          ...(shouldProvision ? { agentStatus: "active" } : {}),
           sessionStatus: getRunningSessionStatus(session.sessionStatus),
-          ...(markLocalPreparing && {
-            connection: this.mergeConnection(session.connection, {
-              state: "connecting",
-              ...(runtimeBinding.runtimeId &&
-                !conn.runtimeInstanceId && {
-                  runtimeInstanceId: runtimeBinding.runtimeId,
-                  runtimeLabel: runtimeBinding.runtimeLabel ?? undefined,
-                }),
+          ...(shouldProvision &&
+            session.hosting === "local" && {
+              connection: this.mergeConnection(session.connection, {
+                state: "connecting",
+                ...(runtimeBinding.runtimeId &&
+                  !conn.runtimeInstanceId && {
+                    runtimeInstanceId: runtimeBinding.runtimeId,
+                    runtimeLabel: runtimeBinding.runtimeLabel ?? undefined,
+                  }),
+              }),
             }),
-          }),
         },
         include: SESSION_INCLUDE,
       });
@@ -5511,8 +5512,7 @@ export class SessionService {
       // kick it off now that the user has sent their first message.
       // A local bridge may already be bound here; only a startup connection
       // state means preparation is already in progress.
-      const alreadyProvisioning = isRuntimeStartupState(conn.state);
-      if (needsProvisioning && !alreadyProvisioning) {
+      if (shouldProvision) {
         this.provisionRuntime({
           sessionId: id,
           sessionGroupId: session.sessionGroupId,
@@ -5596,6 +5596,7 @@ export class SessionService {
     const command = {
       type: "run" as const,
       sessionId: id,
+      workspaceMode: this.workspaceMode(session),
       prompt: resolvedPrompt ?? undefined,
       appendSystemPrompt: generatedProjectInstruction(
         session.sessionGroup?.kind,
@@ -6484,6 +6485,8 @@ export class SessionService {
         agentStatus: true,
         sessionStatus: true,
         sessionGroupId: true,
+        workdir: true,
+        connection: true,
       },
     });
     if (!session) return;
@@ -6526,9 +6529,10 @@ export class SessionService {
       await this.updateName(sessionId, extractedTitle);
     }
 
-    // If we found a branch tag, update the branch on session + session group
+    // Treat the assistant tag as a notification, not authority. Only the branch
+    // observed in the session's active workspace may update persisted state.
     if (extractedBranch) {
-      await this.updateBranch(sessionId, extractedBranch);
+      await this.updateBranchFromWorkspace(sessionId, extractedBranch, session);
     }
 
     // If this output contains a QuestionBlock or PlanBlock, transition to needs_input immediately.
@@ -6768,6 +6772,43 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+  }
+
+  private async updateBranchFromWorkspace(
+    sessionId: string,
+    reportedBranch: string,
+    session: { organizationId: string; workdir: string | null; connection: unknown },
+  ): Promise<void> {
+    const connection = this.parseConnection(session.connection);
+    const runtime =
+      sessionRouter.getRuntimeForSession(sessionId) ??
+      (connection.runtimeInstanceId
+        ? runtimeMetadata(connection.runtimeInstanceId, session.organizationId)
+        : undefined);
+    if (!runtime || !session.workdir) {
+      console.warn(
+        `[session] ignoring branch report for ${sessionId}: active workspace is unavailable`,
+      );
+      return;
+    }
+
+    try {
+      const actualBranch = await sessionRouter.inspectSessionCurrentBranch(runtime.key, {
+        sessionId,
+        workdirHint: session.workdir,
+      });
+      if (actualBranch?.trim() !== reportedBranch) {
+        console.warn(
+          `[session] ignoring branch report for ${sessionId}: agent reported ${reportedBranch}, workspace is ${actualBranch ?? "detached"}`,
+        );
+        return;
+      }
+      await this.updateBranch(sessionId, reportedBranch);
+    } catch (error) {
+      console.warn(
+        `[session] ignoring unverifiable branch report for ${sessionId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   async complete(id: string, options?: { drainPending?: boolean }) {
@@ -7064,31 +7105,31 @@ export class SessionService {
       throw new Error("Cannot send messages: session worktree has been deleted");
     }
 
-    // If runtime was deferred (session created without a prompt), provision it
-    // now and queue the message for delivery once the workspace is ready.
-    if (session.agentStatus === "not_started" && !session.workdir && !session.toolSessionId) {
-      const needsProvisioning = !!session.repoId || session.hosting === "cloud";
-      if (needsProvisioning) {
-        assertCloudRepoRemoteAvailable(session.hosting, session.repo);
-        const pendingSessionStatus = getRunningSessionStatus(session.sessionStatus);
-        const pendingCommand: PendingSessionCommand = {
-          type: "send",
-          prompt: text,
-          interactionMode: interactionMode ?? null,
-          clientSource: normalizeClientSource(clientSource),
-          ...(imageKeys?.length ? { imageKeys } : {}),
-          ...(designAttachments?.length ? { designAttachments } : {}),
-        };
-        const markLocalPreparing = session.hosting === "local";
-        await this.storePendingCommand(
-          sessionId,
-          pendingCommand,
-          {
-            agentStatus: "active",
-            sessionStatus: pendingSessionStatus,
-            lastMessageAt: new Date(),
-            ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
-            ...(markLocalPreparing && {
+    // The service owns undelivered commands. Never hand a managed command to a
+    // bridge until workspace_ready establishes both its path and connection.
+    if (!this.workspaceIsReady(session)) {
+      assertCloudRepoRemoteAvailable(session.hosting, session.repo);
+      const pendingSessionStatus = getRunningSessionStatus(session.sessionStatus);
+      const pendingCommand: PendingSessionCommand = {
+        type: "send",
+        prompt: text,
+        interactionMode: interactionMode ?? null,
+        clientSource: normalizeClientSource(clientSource),
+        ...(imageKeys?.length ? { imageKeys } : {}),
+        ...(designAttachments?.length ? { designAttachments } : {}),
+      };
+      const alreadyStarting = isRuntimeStartupState(conn.state);
+      const shouldProvision = session.agentStatus === "not_started" && !alreadyStarting;
+      await this.storePendingCommand(
+        sessionId,
+        pendingCommand,
+        {
+          ...(shouldProvision ? { agentStatus: "active" } : {}),
+          sessionStatus: pendingSessionStatus,
+          lastMessageAt: new Date(),
+          ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
+          ...(shouldProvision &&
+            session.hosting === "local" && {
               connection: this.mergeConnection(session.connection, {
                 state: "connecting",
                 ...(runtimeBinding.runtimeId &&
@@ -7098,55 +7139,53 @@ export class SessionService {
                   }),
               }),
             }),
-          },
-          session.pendingRun,
-        );
+        },
+        session.pendingRun,
+      );
 
-        const alreadyStarting = isRuntimeStartupState(conn.state);
-        if (!alreadyStarting) {
-          this.provisionRuntime({
-            sessionId,
-            sessionGroupId: session.sessionGroupId,
-            sessionGroupKind: session.sessionGroup?.kind,
+      if (shouldProvision) {
+        this.provisionRuntime({
+          sessionId,
+          sessionGroupId: session.sessionGroupId,
+          sessionGroupKind: session.sessionGroup?.kind,
+          slug: session.sessionGroup?.slug,
+          preserveBranchName: shouldPreserveWorkspaceBranchName({
             slug: session.sessionGroup?.slug,
-            preserveBranchName: shouldPreserveWorkspaceBranchName({
-              slug: session.sessionGroup?.slug,
-              branch: session.branch,
-              channelBaseBranch: session.channel?.baseBranch,
-            }),
-            hosting: session.hosting,
-            tool: activeTool,
-            model: activeModel,
-            reasoningEffort: activeReasoningEffort,
-            repo: session.repo,
             branch: session.branch,
-            createdById: session.createdById,
-            organizationId: session.organizationId,
-            readOnly: session.readOnlyWorkspace,
-            expectedHomeRuntimeId: runtimeBinding.runtimeId ?? conn.runtimeInstanceId,
-            adapterType: conn.adapterType,
-          });
-        }
-
-        const event = await eventService.create({
+            channelBaseBranch: session.channel?.baseBranch,
+          }),
+          hosting: session.hosting,
+          tool: activeTool,
+          model: activeModel,
+          reasoningEffort: activeReasoningEffort,
+          repo: session.repo,
+          branch: session.branch,
+          createdById: session.createdById,
           organizationId: session.organizationId,
-          scopeType: "session",
-          scopeId: sessionId,
-          eventType: "message_sent",
-          payload: {
-            text,
-            clientSource: normalizeClientSource(clientSource),
-            deliveryStatus: "pending_runtime",
-            agentStatus: "active",
-            sessionStatus: pendingSessionStatus,
-            ...(imageKeys?.length ? { attachmentKeys: imageKeys, imageKeys } : {}),
-            ...(clientMutationId ? { clientMutationId } : {}),
-          },
-          actorType,
-          actorId,
+          readOnly: session.readOnlyWorkspace,
+          expectedHomeRuntimeId: runtimeBinding.runtimeId ?? conn.runtimeInstanceId,
+          adapterType: conn.adapterType,
         });
-        return event;
       }
+
+      const event = await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "message_sent",
+        payload: {
+          text,
+          clientSource: normalizeClientSource(clientSource),
+          deliveryStatus: "pending_runtime",
+          ...(shouldProvision ? { agentStatus: "active" } : {}),
+          sessionStatus: pendingSessionStatus,
+          ...(imageKeys?.length ? { attachmentKeys: imageKeys, imageKeys } : {}),
+          ...(clientMutationId ? { clientMutationId } : {}),
+        },
+        actorType,
+        actorId,
+      });
+      return event;
     }
 
     // If session has a read-only workspace and user explicitly switched away from ask mode,
@@ -7246,6 +7285,7 @@ export class SessionService {
     const deliveryCommand = {
       type: "send" as const,
       sessionId,
+      workspaceMode: this.workspaceMode(session),
       prompt,
       appendSystemPrompt: generatedProjectInstruction(
         session.sessionGroup?.kind,
@@ -8037,10 +8077,22 @@ export class SessionService {
             sessionStatus: true,
             readOnlyWorkspace: true,
             workdir: true,
+            connection: true,
             pendingGeneralWorkspaceCleanupRuntimeId: true,
           },
         });
         const pendingCommand = this.parsePendingCommands(prev.pendingRun)[0] ?? null;
+        const previousConnection = this.parseConnection(prev.connection);
+        const readyConnection = connJson({
+          ...previousConnection,
+          state: "connected",
+          lastSeen: new Date().toISOString(),
+          lastError: undefined,
+          failedAt: undefined,
+          timedOutAt: undefined,
+          autoRetryable: true,
+          version: (previousConnection.version ?? 0) + 1,
+        });
 
         const updated = await tx.session.update({
           where: { id: sessionId },
@@ -8054,6 +8106,7 @@ export class SessionService {
               ? getRunningSessionStatus(prev.sessionStatus)
               : getIdleSessionStatus(prev.sessionStatus),
             workdir,
+            connection: readyConnection,
             ...(branch && { branch }),
             pendingRun: Prisma.DbNull,
             // Read-only sessions keep their repo checkout until an explicit
@@ -8104,6 +8157,7 @@ export class SessionService {
       payload: {
         type: "workspace_ready",
         workdir,
+        connection: session.connection,
         agentStatus: session.agentStatus,
         sessionStatus: session.sessionStatus,
         ...(sessionGroup ? { sessionGroup } : {}),
@@ -8425,10 +8479,10 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
+        hosting: true,
         agentStatus: true,
         sessionStatus: true,
         worktreeDeleted: true,
-        hosting: true,
         connection: true,
         sessionGroupId: true,
         lastUserMessageAt: true,
@@ -8751,6 +8805,7 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
+        hosting: true,
         agentStatus: true,
         sessionStatus: true,
         worktreeDeleted: true,
@@ -8797,6 +8852,16 @@ export class SessionService {
       data: { toolSessionId: null },
     });
 
+    if (!this.workspaceIsReady(session)) {
+      await this.storePendingCommand(sessionId, {
+        type: "send",
+        prompt,
+        interactionMode: options.interactionMode ?? null,
+        clientSource: null,
+      });
+      return;
+    }
+
     const invocation = await this.prepareInvocation(
       sessionId,
       session.organizationId,
@@ -8807,6 +8872,7 @@ export class SessionService {
       {
         type: "send",
         sessionId,
+        workspaceMode: this.workspaceMode(session),
         prompt,
         appendSystemPrompt: generatedProjectInstruction(
           session.sessionGroup?.kind,
@@ -9041,6 +9107,8 @@ export class SessionService {
     }
 
     const restoredAt = new Date().toISOString();
+    const needsWorkspacePreparation =
+      Boolean(session.repo) || session.sessionGroup?.kind === "general";
     const restored = await this.updateConnectionConditional(sessionId, (current) => {
       if (homeRuntimeId) {
         if (current.runtimeInstanceId !== homeRuntimeId || runtime.id !== homeRuntimeId)
@@ -9050,7 +9118,7 @@ export class SessionService {
       }
       return {
         ...current,
-        state: "connected",
+        state: needsWorkspacePreparation ? "connecting" : "connected",
         runtimeInstanceId: runtime.id,
         runtimeLabel: runtime.label,
         connectedAt: restoredAt,
@@ -9071,8 +9139,7 @@ export class SessionService {
     // Bind and attempt workspace setup if needed
     sessionRouter.bindSession(sessionId, runtime.key);
 
-    if (session.repo) {
-      const startMeta = await getSessionStartMetadata(sessionId);
+    if (needsWorkspacePreparation) {
       const isGeneratedProject = isGeneratedProjectKind(session.sessionGroup?.kind);
 
       // Managed-git credentials are bound to a connected runtime. A retry used
@@ -9093,41 +9160,53 @@ export class SessionService {
               session.createdById,
             )
           : undefined;
-      const retryPreparation = isGeneratedProject
-        ? {
-            type: "prepare_app" as const,
-            sessionId,
-            sessionGroupId: session.sessionGroupId ?? undefined,
-            sessionGroupKind: session.sessionGroup?.kind,
-            slug: session.sessionGroup?.slug ?? undefined,
-            ...(await this.createGeneratedProjectGitCredential({
-              organizationId: session.organizationId,
+      const retryPreparation =
+        session.sessionGroup?.kind === "general"
+          ? {
+              type: "prepare_general" as const,
               sessionId,
-              runtimeInstanceId: runtime.id,
-              repo: session.repo,
-              actorType,
-              actorId,
-            })),
-            ...(designSystemPackage ? { designSystemPackage } : {}),
-            ...(sourceRepository ? { sourceRepository } : {}),
-          }
-        : {
-            type: "prepare" as const,
-            sessionId,
-            sessionGroupId: session.sessionGroupId ?? undefined,
-            slug: session.sessionGroup?.slug ?? undefined,
-            preserveBranchName: shouldPreserveWorkspaceBranchName({
-              slug: session.sessionGroup?.slug,
-              branch: session.branch,
-              channelBaseBranch: session.channel?.baseBranch,
-            }),
-            repoId: session.repo.id,
-            repoName: session.repo.name,
-            repoRemoteUrl: session.repo.remoteUrl,
-            defaultBranch: session.repo.defaultBranch,
-            branch: session.branch ?? undefined,
-            readOnly: session.readOnlyWorkspace,
-          };
+              sessionGroupId: session.sessionGroupId ?? undefined,
+            }
+          : isGeneratedProject && session.repo
+            ? {
+                type: "prepare_app" as const,
+                sessionId,
+                sessionGroupId: session.sessionGroupId ?? undefined,
+                sessionGroupKind: session.sessionGroup?.kind,
+                slug: session.sessionGroup?.slug ?? undefined,
+                ...(await this.createGeneratedProjectGitCredential({
+                  organizationId: session.organizationId,
+                  sessionId,
+                  runtimeInstanceId: runtime.id,
+                  repo: session.repo,
+                  actorType,
+                  actorId,
+                })),
+                ...(designSystemPackage ? { designSystemPackage } : {}),
+                ...(sourceRepository ? { sourceRepository } : {}),
+              }
+            : session.repo
+              ? {
+                  type: "prepare" as const,
+                  sessionId,
+                  sessionGroupId: session.sessionGroupId ?? undefined,
+                  slug: session.sessionGroup?.slug ?? undefined,
+                  preserveBranchName: shouldPreserveWorkspaceBranchName({
+                    slug: session.sessionGroup?.slug,
+                    branch: session.branch,
+                    channelBaseBranch: session.channel?.baseBranch,
+                  }),
+                  repoId: session.repo.id,
+                  repoName: session.repo.name,
+                  repoRemoteUrl: session.repo.remoteUrl,
+                  defaultBranch: session.repo.defaultBranch,
+                  branch: session.branch ?? undefined,
+                  readOnly: session.readOnlyWorkspace,
+                }
+              : null;
+      if (!retryPreparation) {
+        throw new Error("Workspace preparation requires a repository or general session");
+      }
       // Re-run workspace preparation — pin delivery to the runtime we just
       // resolved (the home bridge) so no other bridge can intercept.
       const prepResult = await sendSessionCommand(sessionId, retryPreparation, {
@@ -11666,6 +11745,45 @@ export class SessionService {
     return connJson({ ...conn, ...patch });
   }
 
+  /**
+   * Sessions with managed workspace semantics may only dispatch an agent after
+   * workspace_ready. Local sessions without a repo retain their historical,
+   * explicit home-directory mode; everything else must have a prepared path.
+   */
+  private requiresPreparedWorkspace(session: {
+    hosting: string;
+    repoId?: string | null;
+    sessionGroup?: { kind?: SessionGroupKind | null } | null;
+  }): boolean {
+    return (
+      Boolean(session.repoId) ||
+      session.hosting === "cloud" ||
+      session.sessionGroup?.kind === "general" ||
+      session.sessionGroup?.kind === "app"
+    );
+  }
+
+  private workspaceMode(session: {
+    hosting: string;
+    repoId?: string | null;
+    sessionGroup?: { kind?: SessionGroupKind | null } | null;
+  }): "prepared" | "home" {
+    return this.requiresPreparedWorkspace(session) ? "prepared" : "home";
+  }
+
+  private workspaceIsReady(session: {
+    hosting: string;
+    repoId?: string | null;
+    workdir?: string | null;
+    connection: unknown;
+    sessionGroup?: { kind?: SessionGroupKind | null } | null;
+  }): boolean {
+    if (!this.requiresPreparedWorkspace(session)) return true;
+    return (
+      Boolean(session.workdir) && this.parseConnection(session.connection).state === "connected"
+    );
+  }
+
   private parsePendingCommand(raw: unknown): PendingSessionCommand | null {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
     const pending = raw as Record<string, unknown>;
@@ -11813,6 +11931,7 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
+        hosting: true,
         tool: true,
         model: true,
         reasoningEffort: true,
@@ -11837,6 +11956,12 @@ export class SessionService {
         },
       },
     });
+
+    // Enforce workspace admission at the final delivery boundary as well as at
+    // callers. Pending commands remain durable until workspace_ready records a
+    // connected prepared workspace, so a new replay path cannot bypass the
+    // isolation invariant by calling this helper directly.
+    if (!this.workspaceIsReady(session)) return null;
 
     // If no tool session ID exists, prepend conversation context so the new
     // process has the full history (same pattern as tool-switch).
@@ -11884,6 +12009,7 @@ export class SessionService {
     const command = {
       type: pending.type,
       sessionId,
+      workspaceMode: this.workspaceMode(session),
       prompt: prompt ?? undefined,
       appendSystemPrompt: appendSystemPrompt || undefined,
       tool: session.tool,
@@ -11898,6 +12024,7 @@ export class SessionService {
     } satisfies {
       type: "run" | "send";
       sessionId: string;
+      workspaceMode: "prepared" | "home";
       prompt?: string;
       appendSystemPrompt?: string;
       tool: CodingTool;
