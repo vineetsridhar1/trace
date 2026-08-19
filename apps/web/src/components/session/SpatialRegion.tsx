@@ -55,7 +55,7 @@ export function SpatialRegion({
         <div
           ref={setRailNodeRef}
           className={cn(
-            "app-region-no-drag no-scrollbar flex min-w-0 flex-1 items-end gap-1 overflow-x-auto pr-32 transition-colors",
+            "app-region-no-drag no-scrollbar flex min-w-0 flex-1 items-end gap-0 overflow-x-auto pr-32 transition-colors",
             dragging && isRailOver && "bg-blue-500/10",
           )}
         >
