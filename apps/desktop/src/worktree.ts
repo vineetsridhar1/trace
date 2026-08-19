@@ -19,11 +19,19 @@ import { formatGitError, gitEnv } from "./git-utils.js";
 type ExecErrorWithOutput = Error & {
   stdout?: string;
   stderr?: string;
+  killed?: boolean;
 };
 
 const GIT_OPERATION_TIMEOUT_MS = 60_000;
 /** Network fetches on a large repo routinely outlast the local-operation budget. */
 const GIT_FETCH_TIMEOUT_MS = 10 * 60_000;
+/**
+ * Writing a working tree is not a quick local operation on a large repo: a
+ * six-figure file count takes minutes of healthy `Updating files:` progress. On
+ * the operation budget git is killed mid-checkout, which reads as a workspace
+ * failure and leaves the session with no worktree at all.
+ */
+const GIT_CHECKOUT_TIMEOUT_MS = 10 * 60_000;
 const backgroundRemovalByRepo = new Map<string, Promise<void>>();
 
 function execFileAsync(
@@ -41,6 +49,18 @@ function execFileAsync(
           const gitError = error as ExecErrorWithOutput;
           if (typeof stdout === "string") gitError.stdout = stdout;
           if (typeof stderr === "string") gitError.stderr = stderr;
+          // A killed git leaves only the output it had already written, so
+          // without this the caller reports a truncated progress stream as if it
+          // were the error.
+          if (gitError.killed) {
+            const budgetMs = options.timeout ?? GIT_OPERATION_TIMEOUT_MS;
+            reject(
+              new Error(
+                `git ${args.slice(0, 2).join(" ")} timed out after ${Math.round(budgetMs / 1000)}s`,
+              ),
+            );
+            return;
+          }
           reject(new Error(formatGitError(gitError)));
           return;
         }
@@ -92,11 +112,17 @@ async function getCurrentBranch(worktreePath: string): Promise<string | null> {
 }
 
 async function resetWorktreeToRef(worktreePath: string, ref: string): Promise<void> {
-  await execFileAsync("git", ["reset", "--hard", ref], { cwd: worktreePath });
+  await execFileAsync("git", ["reset", "--hard", ref], {
+    cwd: worktreePath,
+    timeout: GIT_CHECKOUT_TIMEOUT_MS,
+  });
   // Preserve ignored setup artifacts such as node_modules. Recursively deleting
   // them can take minutes and blocks every other Git operation on the machine.
   try {
-    await execFileAsync("git", ["clean", "-ffd"], { cwd: worktreePath });
+    await execFileAsync("git", ["clean", "-ffd"], {
+      cwd: worktreePath,
+      timeout: GIT_CHECKOUT_TIMEOUT_MS,
+    });
   } catch (error) {
     // `git clean` exits non-zero when a single path resists removal — typically
     // a process writing into the tree while the walk runs ("Directory not
@@ -143,7 +169,7 @@ async function switchWorktreeToBranch(
   await execFileAsync(
     "git",
     ["checkout", ...(preserveLocalWork ? [] : ["-f"]), "-B", branch, ...(baseRef ? [baseRef] : [])],
-    { cwd: worktreePath },
+    { cwd: worktreePath, timeout: GIT_CHECKOUT_TIMEOUT_MS },
   );
 }
 
@@ -160,7 +186,10 @@ function getErrorMessage(error: unknown): string {
 
 async function addWorktree(repoPath: string, worktreePath: string, args: string[]): Promise<void> {
   try {
-    await execFileAsync("git", ["worktree", "add", ...args], { cwd: repoPath });
+    await execFileAsync("git", ["worktree", "add", ...args], {
+      cwd: repoPath,
+      timeout: GIT_CHECKOUT_TIMEOUT_MS,
+    });
   } catch (error) {
     if (await isUsableWorktree(worktreePath)) {
       console.warn(

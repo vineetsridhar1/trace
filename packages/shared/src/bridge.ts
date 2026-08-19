@@ -6,11 +6,32 @@
 export const BRIDGE_PROTOCOL_VERSION = 5;
 export const GENERAL_WORKSPACE_PROTOCOL_VERSION = 3;
 
+/**
+ * Resolve the only directory a bridge may use to start an agent. Missing
+ * workspaceMode is fail-safe for rolling upgrades: it means `prepared`, never
+ * an implicit home-directory fallback.
+ */
+export function resolveBridgeWorkdir(input: {
+  workspaceMode?: "prepared" | "home";
+  cwd?: string;
+  preparedWorkdir?: string;
+  homeDir: string;
+}): string | null {
+  if (input.workspaceMode === "home") return input.cwd || input.homeDir;
+  return input.preparedWorkdir || null;
+}
+
 // --- Server → Bridge commands ---
 
 export interface BridgeRunCommand {
   type: "run";
   sessionId: string;
+  /**
+   * `prepared` requires a workspace established by prepare/track_session.
+   * `home` is an explicit opt-in for legacy non-repository sessions. Bridges
+   * must never infer home-directory execution from a missing cwd.
+   */
+  workspaceMode?: "prepared" | "home";
   prompt?: string;
   appendSystemPrompt?: string;
   cwd?: string;
@@ -27,6 +48,8 @@ export interface BridgeRunCommand {
 export interface BridgeSendCommand {
   type: "send";
   sessionId: string;
+  /** See BridgeRunCommand.workspaceMode. */
+  workspaceMode?: "prepared" | "home";
   prompt: string;
   appendSystemPrompt?: string;
   cwd?: string;

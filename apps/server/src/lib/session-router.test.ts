@@ -876,7 +876,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
   });
 
-  it("runs a repo-less general session from home on an older local bridge", async () => {
+  it("refuses to run a general session from home on an older local bridge", async () => {
     const router = new SessionRouter();
     const ws = makeWs();
     router.registerRuntime({
@@ -890,6 +890,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     router.bindSession("session-1", "runtime-1");
 
     const onWorkspaceReady = vi.fn();
+    const onFailed = vi.fn();
     router.createRuntime({
       sessionId: "session-1",
       sessionGroupId: "group-1",
@@ -901,10 +902,15 @@ describe("SessionRouter runtime adapter dispatch", () => {
       createdById: "user-1",
       organizationId: "org-1",
       onWorkspaceReady,
-      onFailed: vi.fn(),
+      onFailed,
     });
 
-    await vi.waitFor(() => expect(onWorkspaceReady).toHaveBeenCalledWith(""));
+    await vi.waitFor(() =>
+      expect(onFailed).toHaveBeenCalledWith(
+        "This Trace runtime is too old to create an isolated workspace. Upgrade it before retrying this session.",
+      ),
+    );
+    expect(onWorkspaceReady).not.toHaveBeenCalled();
     expect(ws.send).not.toHaveBeenCalled();
   });
 

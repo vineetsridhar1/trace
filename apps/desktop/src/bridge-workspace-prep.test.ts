@@ -80,6 +80,7 @@ const SEND = {
   sessionId: "session-1",
   prompt: "keep going",
   cwd: "/stale/workdir",
+  workspaceMode: "prepared",
   tool: "codex",
 };
 
@@ -93,7 +94,8 @@ function createHarness(): Harness {
     sessionGroupIds: new Map<string, string | null>(),
     pendingWorktrees: new Map(),
     sessionPrepares: new Map(),
-    deferredRuns: new Map(),
+    workspacePrepareVersions: new Map(),
+    nextWorkspacePrepareVersion: 0,
     readOnlySessions: new Set<string>(),
     send: (msg: BridgeMessage) => sent.push(msg),
     pollLocalPrStatuses: vi.fn().mockResolvedValue(undefined),
@@ -141,7 +143,7 @@ describe("BridgeClient workspace prep gating", () => {
     });
   });
 
-  it("holds a prompt when prep fails and replays it once prep succeeds", async () => {
+  it("refuses a failed-prep prompt and runs only after the service redelivers", async () => {
     createWorktreeMock
       .mockRejectedValueOnce(
         new Error(
@@ -164,20 +166,61 @@ describe("BridgeClient workspace prep gating", () => {
     );
     expect(runPrompt).not.toHaveBeenCalled();
 
-    // The user retries the connection, which re-prepares the workspace.
+    // The service remains the durable owner. It redelivers only after a retry
+    // has prepared the workspace successfully.
     handleCommand(PREPARE);
+    await vi.waitFor(() =>
+      expect(sent).toContainEqual(
+        expect.objectContaining({ type: "workspace_ready", workdir: "/prepared/coyote" }),
+      ),
+    );
+    expect(runPrompt).not.toHaveBeenCalled();
+    handleCommand(SEND);
 
     await vi.waitFor(() => expect(runPrompt).toHaveBeenCalledTimes(1));
     const args = runPrompt.mock.calls[0][0] as RunPromptArgs;
     expect(args).toMatchObject({ prompt: "keep going", cwd: "/prepared/coyote" });
   });
 
-  it("runs immediately when no prep is in flight", async () => {
+  it("refuses a prepared-workspace prompt that arrives after prep already failed", async () => {
+    createWorktreeMock.mockRejectedValue(new Error("git worktree add timed out after 600s"));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const { handleCommand, sent, runPrompt } = createHarness();
+    handleCommand(PREPARE);
+    await vi.waitFor(() =>
+      expect(sent).toEqual([expect.objectContaining({ type: "workspace_failed" })]),
+    );
+
+    // Nothing is in flight any more, and the server's `cwd` is the session's
+    // stored workdir — empty, because no prep has ever succeeded. Running now
+    // would drop the coding tool outside every worktree.
+    handleCommand({ ...SEND, cwd: "" });
+
+    await vi.waitFor(() => expect(runPrompt).not.toHaveBeenCalled());
+  });
+
+  it("uses only the bridge-tracked path for a prepared workspace", async () => {
     const { handleCommand, runPrompt } = createHarness();
+    handleCommand({
+      type: "track_session",
+      sessionId: "session-1",
+      workdir: "/tracked/workdir",
+    });
     handleCommand(SEND);
 
     await vi.waitFor(() => expect(runPrompt).toHaveBeenCalledTimes(1));
     const args = runPrompt.mock.calls[0][0] as RunPromptArgs;
-    expect(args.cwd).toBe("/stale/workdir");
+    expect(args.cwd).toBe("/tracked/workdir");
+  });
+
+  it("allows home-directory execution only when the command opts in", async () => {
+    const { handleCommand, runPrompt } = createHarness();
+    handleCommand({ ...SEND, workspaceMode: "home", cwd: "" });
+
+    await vi.waitFor(() => expect(runPrompt).toHaveBeenCalledTimes(1));
+    const args = runPrompt.mock.calls[0][0] as RunPromptArgs;
+    expect(args.cwd).toBeTruthy();
+    expect(args.cwd).not.toBe("/stale/workdir");
   });
 });

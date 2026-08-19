@@ -49,9 +49,47 @@ export function isGitAuthError(message: string): boolean {
   );
 }
 
+/**
+ * Git writes checkout/transfer progress to stderr as `\r`-separated segments, so
+ * a failure part-way through a large clone or worktree checkout carries
+ * thousands of `Updating files: N% (x/y)` frames ahead of the one line that says
+ * what went wrong. Every consumer of a git error here is a human-facing message,
+ * and none of them want the frames.
+ */
+const GIT_PROGRESS_LINE = /^(?:remote: )?[A-Za-z][A-Za-z ]+:\s+\d+%.*$/;
+
+/** Keeps the tail: `fatal:` lands at the end of a git error, not the start. */
+const GIT_ERROR_MAX_LENGTH = 800;
+
+export function stripGitProgress(message: string): string {
+  const kept = message
+    .split(/\r\n|\r|\n/)
+    .filter((line) => !GIT_PROGRESS_LINE.test(line.trim()))
+    .join("\n")
+    .trim();
+  if (kept.length <= GIT_ERROR_MAX_LENGTH) return kept;
+  return `…${kept.slice(kept.length - GIT_ERROR_MAX_LENGTH)}`;
+}
+
+/**
+ * Git refuses to check a branch out twice, and its own wording ("is already used
+ * by worktree at") reads as a Trace bug rather than as a checkout the user can
+ * move. Retrying can never clear it, so the message has to name the fix.
+ */
+export function gitBranchInUseMessage(message: string): string | null {
+  const match = /'([^']+)' is already used by worktree at '([^']+)'/.exec(message);
+  if (!match) return null;
+  return (
+    `Branch ${match[1]} is already checked out at ${match[2]}. ` +
+    `Switch that checkout to another branch, or move this session to it.`
+  );
+}
+
 function explainGitError(message: string): string {
   if (isGitAuthError(message)) return GIT_AUTH_ERROR;
-  return gitLockErrorMessage(message) ?? message;
+  return (
+    gitBranchInUseMessage(message) ?? gitLockErrorMessage(message) ?? stripGitProgress(message)
+  );
 }
 
 export function formatGitError(error: unknown): string {

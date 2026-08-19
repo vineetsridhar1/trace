@@ -478,7 +478,7 @@ describe("createWorktree", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("Directory not empty"));
   });
 
-  it("gives git fetch a longer timeout than local operations", async () => {
+  it("gives fetches and working-tree writes a longer timeout than quick local operations", async () => {
     existsSyncMock.mockReturnValue(true);
     generateAnimalSlugMock.mockReturnValue("otter");
     getUsedSlugsMock.mockResolvedValue(new Set());
@@ -527,9 +527,17 @@ describe("createWorktree", () => {
       expect.objectContaining({ cwd: "/tmp/repo", timeout: 10 * 60_000 }),
       expect.any(Function),
     );
+    // Writing a working tree is not a quick operation on a large repo: on the
+    // 60s budget git is killed mid-checkout and the session loses its worktree.
     expect(execFileMock).toHaveBeenCalledWith(
       "git",
       ["reset", "--hard", "origin/trace/gibbon"],
+      expect.objectContaining({ timeout: 10 * 60_000 }),
+      expect.any(Function),
+    );
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      ["symbolic-ref", "--short", "-q", "HEAD"],
       expect.objectContaining({ timeout: 60_000 }),
       expect.any(Function),
     );

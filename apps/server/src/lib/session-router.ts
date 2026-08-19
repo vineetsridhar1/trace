@@ -2389,9 +2389,9 @@ export class SessionRouter {
             ? this.getRuntime(expectedHomeRuntimeId, options.organizationId)
             : this.getRuntimeForSession(options.sessionId);
           if ((runtime?.protocolVersion ?? 1) < GENERAL_WORKSPACE_PROTOCOL_VERSION) {
-            // Older bridges do not understand prepare_general. Preserve their
-            // established home-directory behavior until they are upgraded.
-            options.onWorkspaceReady?.(adapterType === "provisioned" ? "/home/coder" : "");
+            options.onFailed(
+              "This Trace runtime is too old to create an isolated workspace. Upgrade it before retrying this session.",
+            );
             return;
           }
           const result = await this.sendAsync(

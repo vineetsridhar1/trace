@@ -51,7 +51,6 @@ export function SessionRecoveryPanel({
   const [showPicker, setShowPicker] = useState(false);
   const [autoRetryCount, setAutoRetryCount] = useState(0);
   const autoRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const retriedSessionId = useRef<string | null>(null);
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | undefined;
@@ -71,7 +70,6 @@ export function SessionRecoveryPanel({
   const autoRetryable = (connection?.autoRetryable as boolean | undefined) ?? true;
 
   const doRetry = useCallback(async () => {
-    retriedSessionId.current = sessionId;
     setRetrying(true);
     try {
       await client.mutation(RETRY_SESSION_CONNECTION_MUTATION, { sessionId }).toPromise();
@@ -125,13 +123,6 @@ export function SessionRecoveryPanel({
     setAutoRetryCount(0);
     await doRetry();
   }, [doRetry]);
-
-  useEffect(() => {
-    if (retriedSessionId.current === sessionId) return;
-    if (!canRetry || moveBridgeAccess?.hostingMode !== "local" || !moveBridgeAccess.isOwner) return;
-
-    void handleManualRetry().catch(() => {});
-  }, [canRetry, handleManualRetry, moveBridgeAccess, sessionId]);
 
   const autoRetrying = canRetry && autoRetryable && autoRetryCount < MAX_AUTO_RETRIES;
   const autoRetriesExhausted = canRetry && autoRetryable && autoRetryCount >= MAX_AUTO_RETRIES;
