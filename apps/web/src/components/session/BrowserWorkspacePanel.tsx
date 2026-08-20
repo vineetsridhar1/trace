@@ -168,7 +168,7 @@ export function BrowserWorkspacePanel({
         canGoForward={state.canGoForward}
         inputValue={inputValue}
         loading={state.loading}
-        syncStatusColor={branchSyncStatusColor(syncStatus)}
+        syncStatusColor="bg-emerald-500"
         syncStatusLabel={branchSyncStatusLabel(syncStatus)}
         onAddressFocus={() => {
           addressEditingRef.current = true;
@@ -209,13 +209,6 @@ export function getBranchSyncStatus(
   if (desktopBridgeInstanceId === undefined) return "checking";
   if (!attachedBridgeInstanceId) return "outOfSync";
   return attachedBridgeInstanceId === desktopBridgeInstanceId ? "synced" : "behind";
-}
-
-function branchSyncStatusColor(status: BranchSyncStatus) {
-  if (status === "synced") return "bg-emerald-500";
-  if (status === "behind") return "bg-amber-400";
-  if (status === "outOfSync") return "bg-destructive";
-  return "bg-muted-foreground";
 }
 
 function branchSyncStatusLabel(status: BranchSyncStatus) {
