@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { client } from "../../lib/urql";
 import { SESSION_TERMINALS_QUERY } from "@trace/client-core";
-import { useTerminalStore } from "../../stores/terminal";
+import { terminalSessionScopeKey, useTerminalStore } from "../../stores/terminal";
 import { useUIStore } from "../../stores/ui";
 import type { Terminal } from "@trace/gql";
 import { requestSessionTerminal } from "../../lib/terminal-creation";
@@ -15,12 +15,14 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const setActiveTerminalId = useUIStore((s) => s.setActiveTerminalId);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
+  const markTerminalsRestored = useTerminalStore((s) => s.markTerminalsRestored);
 
   const ensureSessionTerminals = useCallback(
     async (sessionId: string) => {
       const existing = terminals.filter((t) => t.sessionId === sessionId);
       if (existing.length > 0) return existing;
 
+      markTerminalsRestored(terminalSessionScopeKey(sessionId));
       const result = await client.query(SESSION_TERMINALS_QUERY, { sessionId }).toPromise();
       const restored = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
       for (const t of restored) {
@@ -35,27 +37,32 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
         status: "active" as const,
       }));
     },
-    [addTerminal, sessionGroupId, terminals],
+    [addTerminal, markTerminalsRestored, sessionGroupId, terminals],
   );
 
   const handleOpenTerminal = useCallback(
     async (session: { id: string; _optimistic?: boolean } | null, terminalAllowed: boolean) => {
       if (!session || session._optimistic || !terminalAllowed) return;
-      const existing = await ensureSessionTerminals(session.id);
-      if (existing.length > 0) {
-        setActiveSessionId(session.id);
-        setActiveTerminalId(existing[0].id);
-        return;
+
+      // On the first open for a session, restore terminals that already exist
+      // on the server instead of spawning a duplicate. After that every open
+      // request creates a new terminal — an empty local list means the user
+      // closed the terminals they had, not that none have been loaded yet.
+      const alreadyRestored =
+        useTerminalStore.getState().restoredScopeKeys[terminalSessionScopeKey(session.id)] === true;
+      if (!alreadyRestored) {
+        const existing = await ensureSessionTerminals(session.id);
+        if (existing.length > 0) {
+          setActiveSessionId(session.id);
+          setActiveTerminalId(existing[0].id);
+          return;
+        }
       }
 
       setActiveSessionId(session.id);
       await requestSessionTerminal({ sessionId: session.id, select: true }).completion;
     },
-    [
-      ensureSessionTerminals,
-      setActiveSessionId,
-      setActiveTerminalId,
-    ],
+    [ensureSessionTerminals, setActiveSessionId, setActiveTerminalId],
   );
 
   const handleCreateTerminal = useCallback(

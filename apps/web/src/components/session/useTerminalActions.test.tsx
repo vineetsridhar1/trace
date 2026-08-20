@@ -41,6 +41,8 @@ describe("useTerminalActions", () => {
       terminals: {},
       pinnedTerminalIds: {},
       terminalCreationIntents: {},
+      closedTerminalIds: {},
+      restoredScopeKeys: {},
     });
     useUIStore.setState({
       activeSessionGroupId: "group-1",

@@ -7,6 +7,8 @@ describe("terminal pinning", () => {
       terminals: {},
       pinnedTerminalIds: {},
       terminalCreationIntents: {},
+      closedTerminalIds: {},
+      restoredScopeKeys: {},
     });
   });
 
@@ -30,6 +32,16 @@ describe("terminal pinning", () => {
 
     expect(useTerminalStore.getState().terminals).toEqual({});
     expect(useTerminalStore.getState().pinnedTerminalIds).toEqual({});
+  });
+
+  it("does not let a stale terminal list re-add a terminal closed in this tab", () => {
+    const store = useTerminalStore.getState();
+    store.addTerminal("terminal-1", "session-1", "group-1", "active");
+    useTerminalStore.getState().removeTerminal("terminal-1");
+
+    useTerminalStore.getState().addTerminal("terminal-1", "session-1", "group-1", "active");
+
+    expect(useTerminalStore.getState().terminals).toEqual({});
   });
 
   it("consumes only the creation intent with the matching request and session", () => {

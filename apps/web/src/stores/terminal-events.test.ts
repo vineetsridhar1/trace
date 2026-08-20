@@ -29,6 +29,8 @@ describe("terminal lifecycle event reconciliation", () => {
       terminals: {},
       pinnedTerminalIds: {},
       terminalCreationIntents: {},
+      closedTerminalIds: {},
+      restoredScopeKeys: {},
     });
     useUIStore.setState({
       activeSessionGroupId: null,

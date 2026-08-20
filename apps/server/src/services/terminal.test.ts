@@ -21,6 +21,13 @@ vi.mock("../lib/terminal-relay.js", () => ({
   },
 }));
 
+vi.mock("../lib/terminal-directory.js", () => ({
+  terminalDirectory: {
+    listForSession: vi.fn().mockResolvedValue([]),
+    listForSessionGroup: vi.fn().mockResolvedValue([]),
+  },
+}));
+
 vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     getRuntimeForSession: vi.fn(),
@@ -62,6 +69,7 @@ vi.mock("./session.js", () => {
 
 import { prisma } from "../lib/db.js";
 import { sessionRouter } from "../lib/session-router.js";
+import { terminalDirectory } from "../lib/terminal-directory.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { terminalService } from "./terminal.js";
@@ -69,6 +77,7 @@ import { eventService } from "./event.js";
 
 const prismaMock = prisma as any;
 const terminalRelayMock = terminalRelay as any;
+const terminalDirectoryMock = terminalDirectory as any;
 const runtimeAccessServiceMock = runtimeAccessService as any;
 const sessionRouterMock = sessionRouter as any;
 const eventServiceMock = eventService as any;
@@ -95,6 +104,8 @@ describe("TerminalService", () => {
       id: terminalId,
       sessionId: terminalRelayMock.getSessionId(terminalId) ?? "session-1",
     }));
+    terminalDirectoryMock.listForSession.mockResolvedValue([]);
+    terminalDirectoryMock.listForSessionGroup.mockResolvedValue([]);
     terminalRelayMock.destroyTerminalDistributed.mockImplementation((terminalId: string) => {
       terminalRelayMock.destroyTerminal(terminalId);
       return Promise.resolve();
@@ -558,6 +569,68 @@ describe("TerminalService", () => {
       expect(result).toEqual([
         { id: "term-1", sessionId: "session-1" },
         { id: "term-2", sessionId: "session-2" },
+      ]);
+    });
+
+    it("lists terminals owned by another replica", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        sessionGroupId: "group-1",
+        hosting: "cloud",
+        createdById: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+      });
+      terminalRelayMock.getTerminalsForSessionGroup.mockReturnValueOnce([]);
+      terminalDirectoryMock.listForSessionGroup.mockResolvedValueOnce([
+        {
+          terminalId: "term-remote",
+          frontendReplicaId: "replica-other",
+          kind: "session",
+          sessionId: "session-1",
+          sessionGroupId: "group-1",
+          ownerUserId: "user-1",
+          runtimeInstanceId: "runtime-1",
+          organizationId: "org-1",
+          cols: 120,
+          rows: 40,
+        },
+        {
+          terminalId: "term-other-user",
+          frontendReplicaId: "replica-other",
+          kind: "session",
+          sessionId: "session-1",
+          sessionGroupId: "group-1",
+          ownerUserId: "user-2",
+          runtimeInstanceId: "runtime-1",
+          organizationId: "org-1",
+        },
+      ]);
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          hosting: "cloud",
+          createdById: "user-1",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ]);
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+
+      const result = await terminalService.listForSession({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+
+      expect(result).toEqual([
+        {
+          id: "term-remote",
+          sessionId: "session-1",
+          status: "ready",
+          cols: 120,
+          rows: 40,
+          connected: true,
+          closed: false,
+        },
       ]);
     });
 

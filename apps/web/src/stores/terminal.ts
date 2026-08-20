@@ -30,10 +30,27 @@ export interface TerminalCreationIntent extends AddTerminalOptions {
   createdAt: number;
 }
 
+/**
+ * How many destroyed terminal ids to remember. Terminal ids are unique per
+ * creation, so this only has to outlive the queries and events still in flight
+ * for a terminal the user just closed.
+ */
+const MAX_CLOSED_TERMINAL_IDS = 200;
+
 interface TerminalState {
   terminals: Record<string, TerminalEntry>;
   pinnedTerminalIds: Record<string, boolean>;
   terminalCreationIntents: Record<string, TerminalCreationIntent>;
+  /** Terminals closed in this tab. Guards against a stale list re-adding them. */
+  closedTerminalIds: Record<string, boolean>;
+  /**
+   * Scopes whose pre-existing terminals were already loaded from the server.
+   * An empty terminal list is not the same as "not loaded yet" — closing every
+   * terminal also empties it, and re-querying then resurrects closed tabs.
+   */
+  restoredScopeKeys: Record<string, boolean>;
+  markTerminalsRestored: (scopeKey: string) => void;
+  clearTerminalsRestored: (scopeKey: string) => void;
   addTerminal: (
     id: string,
     sessionId: string,
@@ -58,6 +75,21 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
   terminals: {},
   pinnedTerminalIds: {},
   terminalCreationIntents: {},
+  closedTerminalIds: {},
+  restoredScopeKeys: {},
+
+  markTerminalsRestored: (scopeKey: string) =>
+    set((state: TerminalState) => {
+      if (state.restoredScopeKeys[scopeKey]) return {};
+      return { restoredScopeKeys: { ...state.restoredScopeKeys, [scopeKey]: true } };
+    }),
+
+  clearTerminalsRestored: (scopeKey: string) =>
+    set((state: TerminalState) => {
+      if (!state.restoredScopeKeys[scopeKey]) return {};
+      const { [scopeKey]: _, ...rest } = state.restoredScopeKeys;
+      return { restoredScopeKeys: rest };
+    }),
 
   addTerminal: (
     id: string,
@@ -67,6 +99,7 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
     opts?: AddTerminalOptions,
   ) =>
     set((state: TerminalState) => {
+      if (state.closedTerminalIds[id]) return {};
       const existing = state.terminals[id];
       return {
         terminals: {
@@ -166,9 +199,32 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
     set((state: TerminalState) => {
       const { [id]: _, ...rest } = state.terminals;
       const { [id]: _pinned, ...remainingPinnedIds } = state.pinnedTerminalIds;
-      return { terminals: rest, pinnedTerminalIds: remainingPinnedIds };
+      return {
+        terminals: rest,
+        pinnedTerminalIds: remainingPinnedIds,
+        closedTerminalIds: rememberClosedTerminalId(state.closedTerminalIds, id),
+      };
     }),
 }));
+
+function rememberClosedTerminalId(
+  closedTerminalIds: Record<string, boolean>,
+  id: string,
+): Record<string, boolean> {
+  if (closedTerminalIds[id]) return closedTerminalIds;
+  const ids = [...Object.keys(closedTerminalIds), id].slice(-MAX_CLOSED_TERMINAL_IDS);
+  return Object.fromEntries(ids.map((closedId) => [closedId, true]));
+}
+
+/** Scope key for a group's pre-existing terminals. */
+export function terminalGroupScopeKey(sessionGroupId: string): string {
+  return `group:${sessionGroupId}`;
+}
+
+/** Scope key for a single session's pre-existing terminals. */
+export function terminalSessionScopeKey(sessionId: string): string {
+  return `session:${sessionId}`;
+}
 
 export function useSessionGroupTerminals(sessionGroupId: string): TerminalEntry[] {
   const terminals = useTerminalStore((state: TerminalState) => state.terminals);
