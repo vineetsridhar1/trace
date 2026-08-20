@@ -948,12 +948,13 @@ describe("SessionRouter runtime adapter dispatch", () => {
     expect(ws.send).not.toHaveBeenCalled();
   });
 
-  it("pins initial local prepare delivery to the selected home bridge", async () => {
+  it("prepares a general session on a remote-owned compatible runtime", async () => {
     const router = new SessionRouter();
     const runtimeId = "runtime-remote-owner";
     const organizationId = "org-1";
     const runtimeKey = runtimeRouterKey(runtimeId, organizationId);
     const remoteDelivery = vi.spyOn(router, "sendToRuntimeAsync").mockResolvedValue("delivered");
+    const onFailed = vi.fn();
     const descriptor = await runtimeDirectory.register(
       {
         key: runtimeKey,
@@ -964,6 +965,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         ownershipEpoch: 0,
         label: "Remote laptop",
         hostingMode: "local",
+        protocolVersion: 3,
         supportedTools: ["codex"],
         registeredRepoIds: ["repo-1"],
         linkedCheckoutStatuses: [],
@@ -977,28 +979,26 @@ describe("SessionRouter runtime adapter dispatch", () => {
     try {
       router.createRuntime({
         sessionId: "session-1",
+        sessionGroupId: "group-1",
+        sessionGroupKind: "general",
         hosting: "local",
         adapterType: "local",
         expectedHomeRuntimeId: runtimeId,
         tool: "codex",
-        repo: {
-          id: "repo-1",
-          name: "repo",
-          remoteUrl: "https://github.com/acme/repo.git",
-          defaultBranch: "main",
-        },
+        repo: null,
         createdById: "user-1",
         organizationId,
-        onFailed: vi.fn(),
+        onFailed,
       });
 
       await vi.waitFor(() => expect(remoteDelivery).toHaveBeenCalledOnce());
 
       expect(remoteDelivery).toHaveBeenCalledWith(
         runtimeId,
-        expect.objectContaining({ type: "prepare", sessionId: "session-1" }),
+        expect.objectContaining({ type: "prepare_general", sessionId: "session-1" }),
         organizationId,
       );
+      expect(onFailed).not.toHaveBeenCalled();
     } finally {
       await runtimeDirectory.remove(runtimeKey, descriptor.connectionGeneration);
       router.dispose();
