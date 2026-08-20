@@ -16,14 +16,22 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
   const setActiveTerminalId = useUIStore((s) => s.setActiveTerminalId);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const markTerminalsRestored = useTerminalStore((s) => s.markTerminalsRestored);
+  const clearTerminalsRestored = useTerminalStore((s) => s.clearTerminalsRestored);
 
   const ensureSessionTerminals = useCallback(
     async (sessionId: string) => {
       const existing = terminals.filter((t) => t.sessionId === sessionId);
       if (existing.length > 0) return existing;
 
-      markTerminalsRestored(terminalSessionScopeKey(sessionId));
+      const scopeKey = terminalSessionScopeKey(sessionId);
+      markTerminalsRestored(scopeKey);
       const result = await client.query(SESSION_TERMINALS_QUERY, { sessionId }).toPromise();
+      if (result.error) {
+        // Leave the scope unclaimed so the next open can look again rather
+        // than spawning a duplicate of a terminal this session already has.
+        clearTerminalsRestored(scopeKey);
+        return [];
+      }
       const restored = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
       for (const t of restored) {
         if (!useTerminalStore.getState().terminals[t.id]) {
@@ -37,7 +45,7 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
         status: "active" as const,
       }));
     },
-    [addTerminal, markTerminalsRestored, sessionGroupId, terminals],
+    [addTerminal, clearTerminalsRestored, markTerminalsRestored, sessionGroupId, terminals],
   );
 
   const handleOpenTerminal = useCallback(

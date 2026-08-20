@@ -559,33 +559,35 @@ export function SessionGroupDetailView({
   // lifecycle changes arrive through the organization event stream, so
   // re-querying would only resurrect terminals the user has since closed.
   useEffect(() => {
-    let aborted = false;
     if (!firstGroupSessionId) return;
 
     const scopeKey = terminalGroupScopeKey(sessionGroupId);
     if (useTerminalStore.getState().restoredScopeKeys[scopeKey]) return;
+    // Claim the scope before the query resolves so a re-render cannot fire a
+    // second one, and release it unless the terminals actually arrived — a
+    // claim that outlives a failed or abandoned query would hide the group's
+    // pre-existing terminals until a reload.
     markTerminalsRestored(scopeKey);
+    let restored = false;
 
     void client
       .query(SESSION_TERMINALS_QUERY, { sessionId: firstGroupSessionId })
       .toPromise()
       .then((result: { data?: Record<string, unknown>; error?: unknown }) => {
-        if (aborted) return;
-        if (result.error) {
-          // Let a later mount try again instead of leaving the group's
-          // pre-existing terminals invisible until a reload.
-          clearTerminalsRestored(scopeKey);
-          return;
-        }
+        if (result.error) return;
+        restored = true;
         const serverTerminals = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
         for (const terminal of serverTerminals) {
           if (!useTerminalStore.getState().terminals[terminal.id]) {
             addTerminal(terminal.id, terminal.sessionId, sessionGroupId, "active");
           }
         }
+      })
+      .finally(() => {
+        if (!restored) clearTerminalsRestored(scopeKey);
       });
     return () => {
-      aborted = true;
+      if (!restored) clearTerminalsRestored(scopeKey);
     };
   }, [
     firstGroupSessionId,

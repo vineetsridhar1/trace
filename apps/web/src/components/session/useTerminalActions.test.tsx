@@ -7,15 +7,21 @@ import { useTerminalActions } from "./useTerminalActions";
 import type { Event } from "@trace/gql";
 
 const mutation = vi.fn();
+const query = vi.fn();
 
 vi.mock("../../lib/urql", () => ({
   client: {
     mutation: (...args: unknown[]) => mutation(...args),
+    query: (...args: unknown[]) => query(...args),
   },
 }));
 
 interface TerminalActions {
   handleCreateTerminal: (
+    session: { id: string; _optimistic?: boolean } | null,
+    terminalAllowed: boolean,
+  ) => Promise<void>;
+  handleOpenTerminal: (
     session: { id: string; _optimistic?: boolean } | null,
     terminalAllowed: boolean,
   ) => Promise<void>;
@@ -30,6 +36,7 @@ function Harness({ onReady }: { onReady: (actions: TerminalActions) => void }) {
 describe("useTerminalActions", () => {
   beforeEach(() => {
     mutation.mockReset();
+    query.mockReset();
     vi.stubGlobal("localStorage", {
       getItem: vi.fn(() => null),
       setItem: vi.fn(),
@@ -101,5 +108,39 @@ describe("useTerminalActions", () => {
     expect(useUIStore.getState().activeSessionId).toBe("session-1");
     expect(useUIStore.getState().activeTerminalId).toBe("terminal-1");
     expect(useTerminalStore.getState().pinnedTerminalIds["terminal-1"]).toBeUndefined();
+  });
+  it("creates a new terminal instead of restoring one the user closed", async () => {
+    query.mockReturnValue({
+      toPromise: async () => ({
+        data: { sessionTerminals: [{ id: "terminal-1", sessionId: "session-1" }] },
+      }),
+    });
+    mutation.mockReturnValue({
+      toPromise: async () => ({ data: { createTerminal: { id: "terminal-2" } } }),
+    });
+    let actions: TerminalActions | undefined;
+    act(() => {
+      create(<Harness onReady={(value) => (actions = value)} />);
+    });
+
+    // First open restores the terminal that already exists on the server.
+    await act(async () => {
+      await actions!.handleOpenTerminal({ id: "session-1" }, true);
+    });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(mutation).not.toHaveBeenCalled();
+    expect(useUIStore.getState().activeTerminalId).toBe("terminal-1");
+
+    act(() => {
+      useTerminalStore.getState().removeTerminal("terminal-1");
+    });
+
+    // The store is empty again, but that means "closed", not "never loaded" —
+    // opening a terminal must not re-query and hand back the closed one.
+    await act(async () => {
+      await actions!.handleOpenTerminal({ id: "session-1" }, true);
+    });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(mutation).toHaveBeenCalled();
   });
 });
