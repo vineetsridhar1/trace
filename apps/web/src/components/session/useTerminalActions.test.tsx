@@ -143,4 +143,36 @@ describe("useTerminalActions", () => {
     expect(query).toHaveBeenCalledTimes(1);
     expect(mutation).toHaveBeenCalled();
   });
+
+  it("shares an in-flight terminal restore across concurrent opens", async () => {
+    let resolveQuery:
+      | ((value: { data: { sessionTerminals: Array<{ id: string; sessionId: string }> } }) => void)
+      | undefined;
+    query.mockReturnValue({
+      toPromise: () =>
+        new Promise<{ data: { sessionTerminals: Array<{ id: string; sessionId: string }> } }>(
+          (resolve) => {
+            resolveQuery = resolve;
+          },
+        ),
+    });
+    let actions: TerminalActions | undefined;
+    act(() => {
+      create(<Harness onReady={(value) => (actions = value)} />);
+    });
+
+    const first = actions!.handleOpenTerminal({ id: "session-1" }, true);
+    const second = actions!.handleOpenTerminal({ id: "session-1" }, true);
+    expect(query).toHaveBeenCalledTimes(1);
+
+    resolveQuery?.({
+      data: { sessionTerminals: [{ id: "terminal-1", sessionId: "session-1" }] },
+    });
+    await act(async () => {
+      await Promise.all([first, second]);
+    });
+
+    expect(mutation).not.toHaveBeenCalled();
+    expect(useUIStore.getState().activeTerminalId).toBe("terminal-1");
+  });
 });

@@ -6,6 +6,8 @@ import { useUIStore } from "../../stores/ui";
 import type { Terminal } from "@trace/gql";
 import { requestSessionTerminal } from "../../lib/terminal-creation";
 
+const pendingTerminalOpens = new Map<string, Promise<void>>();
+
 interface TerminalActionsArgs {
   sessionGroupId: string;
   terminals: Array<{ id: string; sessionId: string }>;
@@ -52,23 +54,40 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
     async (session: { id: string; _optimistic?: boolean } | null, terminalAllowed: boolean) => {
       if (!session || session._optimistic || !terminalAllowed) return;
 
-      // On the first open for a session, restore terminals that already exist
-      // on the server instead of spawning a duplicate. After that every open
-      // request creates a new terminal — an empty local list means the user
-      // closed the terminals they had, not that none have been loaded yet.
-      const alreadyRestored =
-        useTerminalStore.getState().restoredScopeKeys[terminalSessionScopeKey(session.id)] === true;
-      if (!alreadyRestored) {
-        const existing = await ensureSessionTerminals(session.id);
-        if (existing.length > 0) {
-          setActiveSessionId(session.id);
-          setActiveTerminalId(existing[0].id);
-          return;
-        }
+      const pending = pendingTerminalOpens.get(session.id);
+      if (pending) {
+        await pending;
+        return;
       }
 
-      setActiveSessionId(session.id);
-      await requestSessionTerminal({ sessionId: session.id, select: true }).completion;
+      const open = (async () => {
+        // On the first open for a session, restore terminals that already exist
+        // on the server instead of spawning a duplicate. After that every open
+        // request creates a new terminal — an empty local list means the user
+        // closed the terminals they had, not that none have been loaded yet.
+        const alreadyRestored =
+          useTerminalStore.getState().restoredScopeKeys[terminalSessionScopeKey(session.id)] ===
+          true;
+        if (!alreadyRestored) {
+          const existing = await ensureSessionTerminals(session.id);
+          if (existing.length > 0) {
+            setActiveSessionId(session.id);
+            setActiveTerminalId(existing[0].id);
+            return;
+          }
+        }
+
+        setActiveSessionId(session.id);
+        await requestSessionTerminal({ sessionId: session.id, select: true }).completion;
+      })();
+      pendingTerminalOpens.set(session.id, open);
+      try {
+        await open;
+      } finally {
+        if (pendingTerminalOpens.get(session.id) === open) {
+          pendingTerminalOpens.delete(session.id);
+        }
+      }
     },
     [ensureSessionTerminals, setActiveSessionId, setActiveTerminalId],
   );

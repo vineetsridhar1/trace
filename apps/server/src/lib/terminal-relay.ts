@@ -283,6 +283,8 @@ export class TerminalRelay {
       ownerUserId,
       runtimeInstanceId,
       organizationId: organizationId ?? undefined,
+      cols,
+      rows,
     });
     const ids = this.sessionTerminals.get(sessionId) ?? new Set();
     ids.add(terminalId);
@@ -367,6 +369,8 @@ export class TerminalRelay {
       ownerUserId,
       runtimeInstanceId,
       organizationId,
+      cols,
+      rows,
     });
 
     const sessionIds = this.sessionTerminals.get(sessionId) ?? new Set();
@@ -571,6 +575,8 @@ export class TerminalRelay {
           repoId: channel.repoId,
           ownerUserId,
           runtimeInstanceId,
+          cols: 80,
+          rows: 24,
         });
 
         const sessionTerminals = this.sessionTerminals.get(sessionId) ?? new Set();
@@ -616,6 +622,8 @@ export class TerminalRelay {
         organizationId: sessionContext?.organizationId ?? runtimeOrganizationId,
         ownerUserId,
         runtimeInstanceId,
+        cols: 80,
+        rows: 24,
       });
 
       const ids = this.sessionTerminals.get(sessionId) ?? new Set();

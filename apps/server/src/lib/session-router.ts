@@ -2386,7 +2386,7 @@ export class SessionRouter {
         // start in their disposable scratch directory and convert before coding.
         if (options.sessionGroupKind === "general") {
           const runtime = expectedHomeRuntimeId
-            ? this.getRuntime(expectedHomeRuntimeId, options.organizationId)
+            ? this.getRuntimeMetadata(expectedHomeRuntimeId, options.organizationId)
             : this.getRuntimeForSession(options.sessionId);
           if ((runtime?.protocolVersion ?? 1) < GENERAL_WORKSPACE_PROTOCOL_VERSION) {
             options.onFailed(

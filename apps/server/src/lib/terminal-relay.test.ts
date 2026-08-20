@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   channelFindMany: vi.fn(),
   terminalDirectoryGet: vi.fn(),
   terminalDirectoryRegister: vi.fn(),
+  terminalDirectoryRefreshDimensions: vi.fn(),
   terminalDirectoryRemove: vi.fn(),
   backplaneSend: vi.fn(() => Promise.resolve()),
   backplaneHandlers: new Map<
@@ -42,7 +43,7 @@ vi.mock("./terminal-directory.js", () => ({
     get: mocks.terminalDirectoryGet,
     register: mocks.terminalDirectoryRegister,
     remove: mocks.terminalDirectoryRemove,
-    refreshDimensions: vi.fn(),
+    refreshDimensions: mocks.terminalDirectoryRefreshDimensions,
   },
 }));
 
@@ -129,6 +130,27 @@ describe("TerminalRelay runtime identity", () => {
 
     expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: "ready" }));
     expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: "output", data: "hello" }));
+  });
+
+  it("publishes initial and resized terminal dimensions to the directory", () => {
+    const relay = new TerminalRelay();
+    const terminalId = relay.createTerminal(
+      "session-1",
+      "group-1",
+      "org-1",
+      "bridge-1",
+      "user-1",
+      120,
+      40,
+      "/repo",
+    );
+
+    expect(mocks.terminalDirectoryRegister).toHaveBeenCalledWith(
+      expect.objectContaining({ terminalId, cols: 120, rows: 40 }),
+    );
+
+    expect(relay.resizeTerminal(terminalId, 132, 50)).toBe(true);
+    expect(mocks.terminalDirectoryRefreshDimensions).toHaveBeenCalledWith(terminalId, 132, 50);
   });
 
   it("ignores terminal messages from a superseded runtime generation", async () => {
