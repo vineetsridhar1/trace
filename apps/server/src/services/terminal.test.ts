@@ -80,7 +80,10 @@ import { eventService } from "./event.js";
 
 const prismaMock = prisma as any;
 const terminalRelayMock = terminalRelay as any;
-const terminalDirectoryMock = terminalDirectory as any;
+const terminalDirectoryMock = terminalDirectory as {
+  listForSession: ReturnType<typeof vi.fn>;
+  listForSessionGroup: ReturnType<typeof vi.fn>;
+};
 const runtimeAccessServiceMock = runtimeAccessService as any;
 const sessionRouterMock = sessionRouter as any;
 const eventServiceMock = eventService as any;
