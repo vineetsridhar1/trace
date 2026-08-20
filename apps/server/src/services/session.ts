@@ -6454,6 +6454,7 @@ export class SessionService {
     interactionMode,
     clientMutationId,
     clientSource,
+    restoreClosedTab = false,
   }: {
     sessionId: string;
     text: string;
@@ -6463,6 +6464,12 @@ export class SessionService {
     interactionMode?: string;
     clientMutationId?: string;
     clientSource?: string | null;
+    /**
+     * Reopen the sender's closed tab for this session. Only an interactive
+     * send should set this — a background flush of a message queued before the
+     * tab was closed would otherwise reopen it with no user action.
+     */
+    restoreClosedTab?: boolean;
   }) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
@@ -6491,7 +6498,7 @@ export class SessionService {
         branch: true,
       },
     });
-    if (actorType === "user") {
+    if (restoreClosedTab && actorType === "user") {
       await this.restoreHiddenTab(
         sessionId,
         session.sessionGroupId,
@@ -6911,6 +6918,7 @@ export class SessionService {
     interactionMode,
     organizationId,
     clientSource,
+    restoreClosedTab = false,
   }: {
     sessionId: string;
     text: string;
@@ -6920,6 +6928,8 @@ export class SessionService {
     interactionMode?: string;
     organizationId: string;
     clientSource?: string | null;
+    /** See sendMessage — interactive callers only. */
+    restoreClosedTab?: boolean;
   }) {
     if (imageKeys?.length) {
       for (const key of imageKeys) {
@@ -6949,7 +6959,7 @@ export class SessionService {
     }
 
     const orgId = session.organizationId;
-    if (actorType === "user") {
+    if (restoreClosedTab && actorType === "user") {
       await this.restoreHiddenTab(sessionId, session.sessionGroupId, orgId, actorId, actorType);
     }
 
@@ -7143,6 +7153,7 @@ export class SessionService {
         actorType: "user",
         actorId,
         interactionMode: queuedMessage.interactionMode ?? undefined,
+        restoreClosedTab: true,
       });
     } catch (error) {
       const restoredEvent = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {

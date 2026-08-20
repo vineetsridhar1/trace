@@ -7174,7 +7174,7 @@ describe("SessionService", () => {
         organizationId: "org-1",
         createdAt: new Date("2024-01-01T00:00:00.000Z"),
       };
-      const queueOnce = async (actorType: "user" | "agent") => {
+      const queueOnce = async (actorType: "user" | "agent", restoreClosedTab: boolean = true) => {
         prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
           makeSession({ organizationId: "org-1", worktreeDeleted: false }),
         );
@@ -7186,6 +7186,7 @@ describe("SessionService", () => {
           actorId: "user-1",
           actorType,
           organizationId: "org-1",
+          restoreClosedTab,
         });
       };
 
@@ -7200,6 +7201,10 @@ describe("SessionService", () => {
 
       prismaMock.hiddenSessionTab.deleteMany.mockClear();
       await queueOnce("agent");
+      expect(prismaMock.hiddenSessionTab.deleteMany).not.toHaveBeenCalled();
+
+      // A caller that has not opted in leaves the tab closed even for a user.
+      await queueOnce("user", false);
       expect(prismaMock.hiddenSessionTab.deleteMany).not.toHaveBeenCalled();
     });
 
@@ -7323,6 +7328,63 @@ describe("SessionService", () => {
           eventType: "queued_messages_drained",
           payload: { sessionId: "session-1", queuedMessageId: "queued-1" },
         }),
+      );
+    });
+
+    it("does not reopen a closed tab when draining a queued message", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        workdir: "/tmp/worktree",
+        toolSessionId: "tool-sess-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        organizationId: "org-1",
+      });
+      prismaMock.queuedMessage.findFirst.mockResolvedValueOnce({
+        id: "queued-1",
+        sessionId: "session-1",
+        text: "carry on",
+        imageKeys: [],
+        interactionMode: null,
+        position: 0,
+        createdById: "user-1",
+        organizationId: "org-1",
+        createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      });
+      prismaMock.queuedMessage.delete.mockResolvedValueOnce({ id: "queued-1" });
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(session);
+      prismaMock.session.update.mockResolvedValueOnce(session);
+      prismaMock.hiddenSessionTab.deleteMany.mockResolvedValue({ count: 1 });
+      sessionRouterMock.send.mockReturnValue("delivered");
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-a",
+        label: "Laptop A",
+      });
+
+      const drained = await (
+        service as unknown as {
+          drainOneQueuedMessage(sessionId: string): Promise<boolean>;
+        }
+      ).drainOneQueuedMessage("session-1");
+
+      expect(drained).toBe(true);
+      // The message was queued as the user, but the drain is automatic — the
+      // tab they closed in the meantime must stay closed.
+      expect(prismaMock.hiddenSessionTab.deleteMany).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: "session_tab_restored" }),
       );
     });
 
@@ -7499,6 +7561,7 @@ describe("SessionService", () => {
         actorType: "user",
         actorId: "user-1",
         interactionMode: "ask",
+        restoreClosedTab: true,
       });
       expect(prismaMock.queuedMessage.create).not.toHaveBeenCalled();
     });

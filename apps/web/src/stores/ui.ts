@@ -60,6 +60,7 @@ export interface UIState {
   setHiddenSessionTabs: (
     groupId: string,
     tabs: Array<{ sessionId: string; hiddenAt: string }>,
+    options?: { keepHiddenSince?: string },
   ) => void;
   initSessionTabs: (groupId: string, sessionIds: string[]) => void;
   openArtifactTabsByGroup: Record<string, string[]>;
@@ -241,13 +242,30 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
     });
   },
 
-  setHiddenSessionTabs: (groupId: string, tabs: Array<{ sessionId: string; hiddenAt: string }>) =>
-    set((s: UIState) => ({
-      hiddenSessionTabsByGroup: {
-        ...s.hiddenSessionTabsByGroup,
-        [groupId]: Object.fromEntries(tabs.map((tab) => [tab.sessionId, tab.hiddenAt])),
-      },
-    })),
+  setHiddenSessionTabs: (
+    groupId: string,
+    tabs: Array<{ sessionId: string; hiddenAt: string }>,
+    options?: { keepHiddenSince?: string },
+  ) =>
+    set((s: UIState) => {
+      const snapshot = Object.fromEntries(tabs.map((tab) => [tab.sessionId, tab.hiddenAt]));
+      // A snapshot only speaks for the state at the time it was requested.
+      // Tabs hidden locally after that are still in flight server-side, so
+      // keeping them stops the response from reopening a just-closed tab.
+      const keepHiddenSince = options?.keepHiddenSince
+        ? new Date(options.keepHiddenSince).getTime()
+        : null;
+      if (keepHiddenSince !== null && !Number.isNaN(keepHiddenSince)) {
+        for (const [sessionId, hiddenAt] of Object.entries(
+          s.hiddenSessionTabsByGroup[groupId] ?? {},
+        )) {
+          if (new Date(hiddenAt).getTime() >= keepHiddenSince) snapshot[sessionId] = hiddenAt;
+        }
+      }
+      return {
+        hiddenSessionTabsByGroup: { ...s.hiddenSessionTabsByGroup, [groupId]: snapshot },
+      };
+    }),
 
   initSessionTabs: (groupId: string, sessionIds: string[]) => {
     set((s: UIState) => {

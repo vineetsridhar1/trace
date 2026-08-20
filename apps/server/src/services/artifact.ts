@@ -380,6 +380,7 @@ export class ArtifactService {
         actorId: input.actorId,
         clientMutationId: `artifact-approval:${artifact.id}`,
         clientSource: input.clientSource,
+        restoreClosedTab: true,
       });
       implementationSession = await prisma.session.findUniqueOrThrow({
         where: { id: artifact.sessionId },

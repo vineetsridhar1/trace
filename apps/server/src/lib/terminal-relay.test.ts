@@ -77,13 +77,10 @@ function acknowledgeRemoteAttaches(): void {
     payload: { terminalId?: string; attachmentId?: string },
   ) => {
     if (kind === "terminal_frontend_attach") {
-      mocks.backplaneHandlers
-        .get("terminal_frontend_attach_result")
-        ?.at(-1)
-        ?.({
-          sourceReplicaId: "replica-owner",
-          payload: { ...payload, attached: true },
-        });
+      mocks.backplaneHandlers.get("terminal_frontend_attach_result")?.at(-1)?.({
+        sourceReplicaId: "replica-owner",
+        payload: { ...payload, attached: true },
+      });
     }
     return Promise.resolve();
   }) as never);
@@ -444,10 +441,10 @@ describe("TerminalRelay runtime identity", () => {
       payload: { attachmentId?: string },
     ) => {
       if (kind === "terminal_frontend_attach") {
-        mocks.backplaneHandlers
-          .get("terminal_frontend_attach_result")
-          ?.at(-1)
-          ?.({ sourceReplicaId: "replica-owner", payload: { ...payload, attached: false } });
+        mocks.backplaneHandlers.get("terminal_frontend_attach_result")?.at(-1)?.({
+          sourceReplicaId: "replica-owner",
+          payload: { ...payload, attached: false },
+        });
       }
       return Promise.resolve();
     }) as never);
@@ -476,6 +473,86 @@ describe("TerminalRelay runtime identity", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("routes a destroy to the replica that owns the terminal", async () => {
+    const relay = new TerminalRelay();
+    mocks.terminalDirectoryGet.mockResolvedValue({
+      terminalId: "term-remote",
+      frontendReplicaId: "replica-owner",
+    });
+    mocks.backplaneSend.mockImplementation(((
+      _target: string,
+      kind: string,
+      payload: { requestId?: string },
+    ) => {
+      if (kind === "terminal_destroy_request") {
+        mocks.backplaneHandlers.get("terminal_destroy_result")?.at(-1)?.({
+          sourceReplicaId: "replica-owner",
+          payload: { requestId: payload.requestId, destroyed: true },
+        });
+      }
+      return Promise.resolve();
+    }) as never);
+
+    await expect(relay.destroyTerminalDistributed("term-remote")).resolves.toBe(true);
+    expect(mocks.backplaneSend).toHaveBeenCalledWith(
+      "replica-owner",
+      "terminal_destroy_request",
+      expect.objectContaining({ terminalId: "term-remote" }),
+    );
+    expect(mocks.terminalDirectoryRemove).not.toHaveBeenCalled();
+  });
+
+  it("drops the routing record when the owning replica never confirms a destroy", async () => {
+    vi.useFakeTimers();
+    try {
+      const relay = new TerminalRelay();
+      mocks.terminalDirectoryGet.mockResolvedValue({
+        terminalId: "term-remote",
+        frontendReplicaId: "replica-gone",
+      });
+
+      const destroyed = relay.destroyTerminalDistributed("term-remote");
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      await expect(destroyed).resolves.toBe(true);
+      expect(mocks.terminalDirectoryRemove).toHaveBeenCalledWith("term-remote");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("destroys a locally held terminal on behalf of another replica", async () => {
+    const relay = new TerminalRelay();
+    const terminalId = relay.createTerminal(
+      "session-1",
+      "group-1",
+      "org-1",
+      "bridge-1",
+      "user-1",
+      80,
+      24,
+      "/repo",
+    );
+    mocks.backplaneSend.mockClear();
+
+    mocks.backplaneHandlers.get("terminal_destroy_request")?.at(-1)?.({
+      sourceReplicaId: "replica-requester",
+      payload: { terminalId, requestId: "request-1" },
+    });
+
+    expect(mocks.send).toHaveBeenCalledWith(
+      "session-1",
+      expect.objectContaining({ type: "terminal_destroy", terminalId }),
+      expect.anything(),
+    );
+    expect(relay.getTerminalAuthContext(terminalId)).toBeNull();
+    expect(mocks.backplaneSend).toHaveBeenCalledWith(
+      "replica-requester",
+      "terminal_destroy_result",
+      { requestId: "request-1", destroyed: true },
+    );
   });
 
   it("revokes a remotely attached terminal for its authenticated user", () => {

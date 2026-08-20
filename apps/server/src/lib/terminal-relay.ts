@@ -69,6 +69,11 @@ export class TerminalRelay {
     string,
     { settle: (attached: boolean) => void; timer: ReturnType<typeof setTimeout> }
   >();
+  /** Cross-replica destroys awaiting confirmation from the owning replica. */
+  private pendingRemoteDestroys = new Map<
+    string,
+    { settle: (destroyed: boolean) => void; timer: ReturnType<typeof setTimeout> }
+  >();
   /**
    * How long to wait for the owning replica to confirm a cross-replica attach.
    * Without a confirmation a dead owner swallows the attach and the frontend
@@ -190,6 +195,23 @@ export class TerminalRelay {
         input.payload as Record<string, unknown>,
       );
     });
+    realtimeBackplane.on("terminal_destroy_request", (envelope) => {
+      const input = this.backplanePayload(envelope.payload);
+      if (!input || typeof input.terminalId !== "string" || typeof input.requestId !== "string") {
+        return;
+      }
+      const held = this.terminals.has(input.terminalId);
+      this.destroyTerminal(input.terminalId);
+      void realtimeBackplane.send(envelope.sourceReplicaId, "terminal_destroy_result", {
+        requestId: input.requestId,
+        destroyed: held,
+      });
+    });
+    realtimeBackplane.on("terminal_destroy_result", (envelope) => {
+      const input = this.backplanePayload(envelope.payload);
+      if (!input || typeof input.requestId !== "string") return;
+      this.settleRemoteDestroy(input.requestId, input.destroyed === true);
+    });
     realtimeBackplane.on("terminal_frontend_detach", (envelope) => {
       const input = this.backplanePayload(envelope.payload);
       if (!input || typeof input.terminalId !== "string" || typeof input.attachmentId !== "string")
@@ -257,6 +279,8 @@ export class TerminalRelay {
       ownerUserId,
       runtimeInstanceId,
       organizationId: organizationId ?? undefined,
+      cols,
+      rows,
     });
     const ids = this.sessionTerminals.get(sessionId) ?? new Set();
     ids.add(terminalId);
@@ -343,6 +367,8 @@ export class TerminalRelay {
       ownerUserId,
       runtimeInstanceId,
       organizationId,
+      cols,
+      rows,
     });
 
     const sessionIds = this.sessionTerminals.get(sessionId) ?? new Set();
@@ -1030,6 +1056,64 @@ export class TerminalRelay {
     });
 
     this.removeTerminal(terminalId);
+  }
+
+  /**
+   * Destroy a terminal wherever it lives. Terminals are held in memory by the
+   * replica that created them, so a destroy handled by any other replica has
+   * to be routed there — otherwise the PTY survives the close and the next
+   * list query hands the terminal back to the frontend.
+   */
+  async destroyTerminalDistributed(terminalId: string): Promise<boolean> {
+    if (this.terminals.has(terminalId)) {
+      this.destroyTerminal(terminalId);
+      return true;
+    }
+    const descriptor = await terminalDirectory.get(terminalId);
+    if (!descriptor) return false;
+    if (descriptor.frontendReplicaId === realtimeBackplane.replicaId) {
+      // A record for a terminal this replica no longer holds — the entry is
+      // already gone, only the routing record is stale.
+      terminalDirectory.remove(terminalId);
+      return true;
+    }
+
+    const requestId = randomUUID();
+    const confirmed = this.awaitRemoteDestroy(requestId);
+    try {
+      await realtimeBackplane.send(descriptor.frontendReplicaId, "terminal_destroy_request", {
+        terminalId,
+        requestId,
+      });
+    } catch (error) {
+      console.error("[terminal-relay] remote destroy send failed:", error);
+      this.settleRemoteDestroy(requestId, false);
+    }
+    if (await confirmed) return true;
+
+    // The owning replica is gone or no longer holds the terminal. Drop the
+    // routing record so it stops resurfacing in listings and attaches.
+    terminalDirectory.remove(terminalId);
+    return true;
+  }
+
+  private awaitRemoteDestroy(requestId: string): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      const timer = setTimeout(
+        () => this.settleRemoteDestroy(requestId, false),
+        TerminalRelay.REMOTE_ATTACH_TIMEOUT_MS,
+      );
+      timer.unref?.();
+      this.pendingRemoteDestroys.set(requestId, { settle: resolve, timer });
+    });
+  }
+
+  private settleRemoteDestroy(requestId: string, destroyed: boolean): void {
+    const pending = this.pendingRemoteDestroys.get(requestId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    this.pendingRemoteDestroys.delete(requestId);
+    pending.settle(destroyed);
   }
 
   /** Destroy all terminals for a session (called on session destroy/disconnect). */

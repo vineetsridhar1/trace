@@ -43,6 +43,8 @@ describe("TerminalPanel", () => {
       terminals: {},
       pinnedTerminalIds: {},
       terminalCreationIntents: {},
+      closedTerminalIds: {},
+      restoredScopeKeys: {},
     });
     useTerminalStore.getState().addTerminal("terminal-1", "session-1", "group-1", "active");
   });

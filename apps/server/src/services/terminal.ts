@@ -1,12 +1,23 @@
 import { prisma } from "../lib/db.js";
 import { AuthorizationError, NotFoundError, ValidationError } from "../lib/errors.js";
 import { sessionRouter } from "../lib/session-router.js";
+import { terminalDirectory } from "../lib/terminal-directory.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { canViewSessionGroup } from "./access.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { isFullyUnloadedSession } from "./session.js";
 import { eventService } from "./event.js";
 import type { ActorType } from "@trace/gql";
+
+type TerminalListEntry = {
+  id: string;
+  sessionId: string;
+  status: string;
+  cols: number;
+  rows: number;
+  connected: boolean;
+  closed: boolean;
+};
 
 const TERMINAL_NO_RUNTIME_ERROR =
   "Cannot open terminal: this session is not connected to a runtime";
@@ -343,12 +354,54 @@ class TerminalService {
     const runtimeInstanceId = await this.assertTerminalAccess(session, userId, "deny");
     if (!runtimeInstanceId) return [];
 
-    const terminalIds = session.sessionGroupId
+    const localTerminalIds = session.sessionGroupId
       ? terminalRelay.getTerminalsForSessionGroup(session.sessionGroupId)
       : terminalRelay.getTerminalsForSession(sessionId);
-    const terminalSessionIds = terminalIds
-      .map((id) => terminalRelay.getSessionId(id))
-      .filter((id): id is string => !!id);
+    const localTerminalIdSet = new Set(localTerminalIds);
+    // The relay's indexes only cover terminals this replica holds in memory.
+    // Listing from them alone makes the terminal tabs flicker with whichever
+    // replica served the request, and invites duplicate terminals.
+    const remoteDescriptors = (
+      session.sessionGroupId
+        ? await terminalDirectory.listForSessionGroup(session.sessionGroupId)
+        : await terminalDirectory.listForSession(sessionId)
+    ).filter((descriptor) => !localTerminalIdSet.has(descriptor.terminalId));
+
+    const candidates: Array<{
+      id: string;
+      ownerSessionId: string;
+      ownerUserId: string | null;
+      state: TerminalListEntry | null;
+    }> = [
+      ...localTerminalIds.map((id) => ({
+        id,
+        ownerSessionId: terminalRelay.getSessionId(id) ?? sessionId,
+        ownerUserId: terminalRelay.getTerminalAuthContext(id)?.ownerUserId ?? null,
+        state: terminalRelay.getTerminalState(id),
+      })),
+      ...remoteDescriptors.map((descriptor) => ({
+        id: descriptor.terminalId,
+        ownerSessionId: descriptor.sessionId,
+        ownerUserId: descriptor.ownerUserId,
+        state: {
+          id: descriptor.terminalId,
+          sessionId: descriptor.sessionId,
+          // A directory record only exists while the owning replica holds a
+          // live terminal, so a resolved descriptor is a running terminal.
+          status: "ready",
+          cols: descriptor.cols ?? 80,
+          rows: descriptor.rows ?? 24,
+          connected: sessionRouter.isRuntimeAvailable(
+            descriptor.runtimeInstanceId,
+            descriptor.organizationId,
+          ),
+          closed: false,
+        },
+      })),
+    ];
+    const terminalSessionIds = [
+      ...new Set(candidates.map((candidate) => candidate.ownerSessionId)),
+    ];
 
     const owningSessions =
       terminalSessionIds.length === 0
@@ -378,26 +431,15 @@ class TerminalService {
       owningSessions.map((item: OwningSession) => [item.id, item]),
     );
 
-    const results: Array<{
-      id: string;
-      sessionId: string;
-      status: string;
-      cols: number;
-      rows: number;
-      connected: boolean;
-      closed: boolean;
-    }> = [];
-    for (const id of terminalIds) {
-      const authContext = terminalRelay.getTerminalAuthContext(id);
-      if (!authContext || authContext.ownerUserId !== userId) continue;
-      const ownerSessionId = terminalRelay.getSessionId(id) ?? sessionId;
-      const ownerSession = owningSessionMap.get(ownerSessionId);
+    const results: TerminalListEntry[] = [];
+    for (const candidate of candidates) {
+      if (!candidate.state || candidate.ownerUserId !== userId) continue;
+      const ownerSession = owningSessionMap.get(candidate.ownerSessionId);
       if (!ownerSession) continue;
       try {
         const ownerRuntimeId = await this.assertTerminalAccess(ownerSession, userId, "deny");
         if (!ownerRuntimeId) continue;
-        const state = terminalRelay.getTerminalState(id);
-        if (state) results.push(state);
+        results.push(candidate.state);
       } catch {
         continue;
       }
@@ -483,7 +525,10 @@ class TerminalService {
   }): Promise<boolean> {
     if (agentSessionId)
       await this.assertTerminalOperation(terminalId, organizationId, userId, agentSessionId);
-    const authContext = terminalRelay.getTerminalAuthContext(terminalId);
+    // Resolve through the directory: the terminal may be held by another
+    // replica, and treating that as "already gone" leaves the PTY running and
+    // lets the next list query hand the terminal back to the frontend.
+    const authContext = await terminalRelay.getTerminalAuthContextDistributed(terminalId);
     if (!authContext) return true; // Already gone — no-op
     if (authContext.ownerUserId !== userId) throw new Error("Terminal not found");
 
@@ -503,7 +548,7 @@ class TerminalService {
         runtimeInstanceId: authContext.runtimeInstanceId,
         capability: "terminal",
       });
-      terminalRelay.destroyTerminal(terminalId);
+      await terminalRelay.destroyTerminalDistributed(terminalId);
       return true;
     }
 
@@ -521,7 +566,7 @@ class TerminalService {
     const runtimeInstanceId = await this.assertTerminalAccess(session, userId, "deny");
     if (!runtimeInstanceId) return true;
 
-    terminalRelay.destroyTerminal(terminalId);
+    await terminalRelay.destroyTerminalDistributed(terminalId);
     await eventService.create({
       organizationId,
       scopeType: "session",
@@ -540,7 +585,7 @@ class TerminalService {
     userId: string,
     agentSessionId?: string | null,
   ): Promise<void> {
-    const auth = terminalRelay.getTerminalAuthContext(terminalId);
+    const auth = await terminalRelay.getTerminalAuthContextDistributed(terminalId);
     if (!auth) throw new NotFoundError("Terminal", terminalId);
     if (auth.ownerUserId !== userId)
       throw new AuthorizationError("Not authorized for this terminal");

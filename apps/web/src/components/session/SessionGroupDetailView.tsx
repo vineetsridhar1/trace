@@ -11,7 +11,11 @@ import type { Terminal } from "@trace/gql";
 import { useDetailPanelStore } from "../../stores/detail-panel";
 import { useEntityField, useEntityStore } from "@trace/client-core";
 import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
-import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
+import {
+  terminalGroupScopeKey,
+  useSessionGroupTerminals,
+  useTerminalStore,
+} from "../../stores/terminal";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { useWorkspaceSidebarStore } from "../../stores/workspace-sidebar";
 import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-core";
@@ -249,6 +253,12 @@ export function SessionGroupDetailView({
   const openSessionTab = useUIStore(
     (s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab,
   );
+  const hideSessionTab = useUIStore(
+    (s: { hideSessionTab: UIState["hideSessionTab"] }) => s.hideSessionTab,
+  );
+  const restoreSessionTab = useUIStore(
+    (s: { restoreSessionTab: UIState["restoreSessionTab"] }) => s.restoreSessionTab,
+  );
   const initSessionTabs = useUIStore(
     (s: { initSessionTabs: (groupId: string, sessionIds: string[]) => void }) => s.initSessionTabs,
   );
@@ -327,6 +337,8 @@ export function SessionGroupDetailView({
   }, []);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
+  const markTerminalsRestored = useTerminalStore((s) => s.markTerminalsRestored);
+  const clearTerminalsRestored = useTerminalStore((s) => s.clearTerminalsRestored);
 
   const hiddenSessionIds = useMemo(
     () => new Set(Object.keys(hiddenSessionTabs)),
@@ -338,8 +350,10 @@ export function SessionGroupDetailView({
     () => groupSessions.filter((session) => hiddenSessionIds.has(session.id)),
     [groupSessions, hiddenSessionIds],
   );
+  const firstGroupSessionId = groupSessions[0]?.id ?? null;
 
   useEffect(() => {
+    const requestedAt = new Date().toISOString();
     void client
       .query(HIDDEN_SESSION_TABS_QUERY, { sessionGroupId }, { requestPolicy: "network-only" })
       .toPromise()
@@ -349,7 +363,7 @@ export function SessionGroupDetailView({
             | { hiddenSessionTabs?: Array<{ sessionId: string; hiddenAt: string }> }
             | undefined
         )?.hiddenSessionTabs;
-        if (tabs) setHiddenSessionTabs(sessionGroupId, tabs);
+        if (tabs) setHiddenSessionTabs(sessionGroupId, tabs, { keepHiddenSince: requestedAt });
       });
   }, [sessionGroupId, setHiddenSessionTabs]);
 
@@ -508,34 +522,47 @@ export function SessionGroupDetailView({
     setActiveTerminalId(null);
   }, [activeTerminalId, terminals, setActiveTerminalId]);
 
-  // Restore terminals which predate this view. Subsequent lifecycle changes
-  // arrive through the organization event stream.
+  // Restore terminals which predate this view, once per group. Subsequent
+  // lifecycle changes arrive through the organization event stream, so
+  // re-querying would only resurrect terminals the user has since closed.
   useEffect(() => {
-    let aborted = false;
-    const firstSessionId = groupSessions[0]?.id;
-    if (!firstSessionId) return;
+    if (!firstGroupSessionId) return;
 
-    const existingGroupTerminals = (
-      Object.values(useTerminalStore.getState().terminals) as Array<{ sessionGroupId: string }>
-    ).filter((t) => t.sessionGroupId === sessionGroupId);
-    if (existingGroupTerminals.length > 0) return;
+    const scopeKey = terminalGroupScopeKey(sessionGroupId);
+    if (useTerminalStore.getState().restoredScopeKeys[scopeKey]) return;
+    // Claim the scope before the query resolves so a re-render cannot fire a
+    // second one, and release it unless the terminals actually arrived — a
+    // claim that outlives a failed or abandoned query would hide the group's
+    // pre-existing terminals until a reload.
+    markTerminalsRestored(scopeKey);
+    let restored = false;
 
     void client
-      .query(SESSION_TERMINALS_QUERY, { sessionId: firstSessionId })
+      .query(SESSION_TERMINALS_QUERY, { sessionId: firstGroupSessionId })
       .toPromise()
-      .then((result: { data?: Record<string, unknown> }) => {
-        if (aborted) return;
+      .then((result: { data?: Record<string, unknown>; error?: unknown }) => {
+        if (result.error) return;
+        restored = true;
         const serverTerminals = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
         for (const terminal of serverTerminals) {
           if (!useTerminalStore.getState().terminals[terminal.id]) {
             addTerminal(terminal.id, terminal.sessionId, sessionGroupId, "active");
           }
         }
+      })
+      .finally(() => {
+        if (!restored) clearTerminalsRestored(scopeKey);
       });
     return () => {
-      aborted = true;
+      if (!restored) clearTerminalsRestored(scopeKey);
     };
-  }, [groupSessions, sessionGroupId, addTerminal]);
+  }, [
+    firstGroupSessionId,
+    sessionGroupId,
+    addTerminal,
+    clearTerminalsRestored,
+    markTerminalsRestored,
+  ]);
   const selectedSessionIsOptimistic = selectedSession?._optimistic === true;
   const isAppGroup = groupKind === "app";
   const selectedConnection = selectedSession?.connection as
@@ -787,6 +814,23 @@ export function SessionGroupDetailView({
 
   // Close whatever tab is currently shown. Files/terminals/traffic reveal the
   // session beneath them; closing the last session tab returns to the table.
+  const handleCloseSession = useCallback(
+    (sessionId: string) => {
+      // Close the tab now rather than waiting for session_tab_hidden to come
+      // back through the org event stream, and put it back if the mutation
+      // fails so the UI never disagrees with the server.
+      hideSessionTab(sessionGroupId, sessionId, new Date().toISOString());
+      void client
+        .mutation(HIDE_SESSION_TAB_MUTATION, { sessionId })
+        .toPromise()
+        .then((result: { error?: unknown }) => {
+          if (result.error) restoreSessionTab(sessionGroupId, sessionId);
+        })
+        .catch(() => restoreSessionTab(sessionGroupId, sessionId));
+    },
+    [hideSessionTab, restoreSessionTab, sessionGroupId],
+  );
+
   const handleCloseCurrentTab = useCallback(() => {
     if (activeArtifactId) {
       handleCloseArtifact(activeArtifactId);
@@ -805,7 +849,7 @@ export function SessionGroupDetailView({
       return;
     }
     if (activeSessionId) {
-      void client.mutation(HIDE_SESSION_TAB_MUTATION, { sessionId: activeSessionId }).toPromise();
+      handleCloseSession(activeSessionId);
       return;
     }
     setActiveSessionGroupId(null);
@@ -819,6 +863,7 @@ export function SessionGroupDetailView({
     handleCloseTrafficTab,
     handleCloseArtifact,
     handleCloseFile,
+    handleCloseSession,
     handleCloseTerminal,
     setActiveSessionGroupId,
   ]);
@@ -883,10 +928,6 @@ export function SessionGroupDetailView({
     },
     [setActiveArtifactId, setActiveSessionId, setActiveTerminalId, setActiveFilePath],
   );
-
-  const handleCloseSession = useCallback((sessionId: string) => {
-    void client.mutation(HIDE_SESSION_TAB_MUTATION, { sessionId }).toPromise();
-  }, []);
 
   const handleRestoreSession = useCallback(
     (sessionId: string) => {
