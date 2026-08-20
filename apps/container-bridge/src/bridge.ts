@@ -62,6 +62,7 @@ import { materializeDesignSystemPackage } from "./design-system-package.js";
 import { prepareReadOnlySourceCheckout } from "./design-system-source.js";
 import {
   cleanupPlaywrightInvocationSession,
+  capturePlaywrightLiveFrame,
   createPlaywrightInvocationSession,
   type PlaywrightInvocationSession,
 } from "./playwright-session.js";
@@ -965,6 +966,18 @@ export class ContainerBridge implements IBridgeClient {
           headers: cmd.headers,
           bodyBase64: cmd.bodyBase64,
         });
+        break;
+      }
+
+      case "browser_live_frame": {
+        const session = this.playwrightSessions.get(cmd.sessionId);
+        if (!session) {
+          this.send({ type: "browser_live_frame_result", requestId: cmd.requestId, error: "Browser is not active" });
+          break;
+        }
+        void capturePlaywrightLiveFrame(session)
+          .then((frame) => this.send({ type: "browser_live_frame_result", requestId: cmd.requestId, ...frame }))
+          .catch((error: unknown) => this.send({ type: "browser_live_frame_result", requestId: cmd.requestId, error: error instanceof Error ? error.message : "Live browser frame failed" }));
         break;
       }
 

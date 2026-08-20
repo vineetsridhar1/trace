@@ -56,6 +56,7 @@ import type { FileAttachment } from "./ImageAttachmentBar";
 import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
 import { findActiveQuestion, findReplacedQuestionIds } from "./questionHistory";
 import { cn } from "../../lib/utils";
+import { BrowserLiveView } from "./BrowserLiveView";
 
 const RUNTIME_BOOTING_STATES = new Set([
   "pending",
@@ -681,6 +682,7 @@ export function SessionDetailView({
           onFileDropped={addAttachments}
           disabled={!composerActive}
         >
+          <BrowserLiveView sessionId={sessionId} active={agentStatus === "active"} />
           <div className="flex flex-1 flex-col overflow-hidden">
             <div className="relative flex-1 overflow-hidden">
               {condensed && !showQuestion ? (

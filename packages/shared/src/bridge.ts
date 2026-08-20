@@ -485,6 +485,13 @@ export interface BridgeEndpointHttpRequestCommand {
   bodyBase64?: string;
 }
 
+/** Read-only capture of the isolated Playwright browser for a session viewer. */
+export interface BridgeBrowserLiveFrameCommand {
+  type: "browser_live_frame";
+  sessionId: string;
+  requestId: string;
+}
+
 export interface BridgeEndpointWebSocketOpenCommand {
   type: "endpoint_ws_open";
   requestId: string;
@@ -556,6 +563,7 @@ export type BridgeCommand =
   | BridgePdfExportCommand
   | BridgeAnimationExportCommand
   | BridgeDesignSystemExportCommand
+  | BridgeBrowserLiveFrameCommand
   | BridgeEndpointHttpRequestCommand
   | BridgeEndpointWebSocketOpenCommand
   | BridgeEndpointWebSocketDataCommand
@@ -993,6 +1001,14 @@ export interface BridgeEndpointHttpError {
   error: string;
 }
 
+export interface BridgeBrowserLiveFrameResult {
+  type: "browser_live_frame_result";
+  requestId: string;
+  imageBase64?: string;
+  capturedAt?: string;
+  error?: string;
+}
+
 export interface BridgeEndpointWebSocketOpened {
   type: "endpoint_ws_opened";
   requestId: string;
@@ -1055,6 +1071,7 @@ export type BridgeMessage =
   | BridgePdfExportResult
   | BridgeAnimationExportResult
   | BridgeDesignSystemExportResult
+  | BridgeBrowserLiveFrameResult
   | BridgeEndpointHttpResponse
   | BridgeEndpointHttpError
   | BridgeEndpointWebSocketOpened

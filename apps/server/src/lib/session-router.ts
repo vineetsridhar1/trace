@@ -540,6 +540,14 @@ export class SessionRouter {
       reject: (err: Error) => void;
     }
   >();
+  private pendingBrowserLiveFrameRequests = new Map<
+    string,
+    {
+      runtimeId: string;
+      resolve: (frame: { imageBase64: string; capturedAt: string }) => void;
+      reject: (err: Error) => void;
+    }
+  >();
 
   /** Heartbeat timeout in ms — if no heartbeat in this window, runtime is considered stale */
   static HEARTBEAT_TIMEOUT_MS = 30_000;
@@ -2182,6 +2190,38 @@ export class SessionRouter {
       pending.reject(new Error(error));
     } else {
       pending.resolve(branch ?? null);
+    }
+  }
+
+  captureBrowserLiveFrame(
+    runtimeId: string,
+    sessionId: string,
+    timeoutMs = 10_000,
+  ): Promise<{ imageBase64: string; capturedAt: string }> {
+    return this.requestRuntimeResponse(
+      runtimeId,
+      { type: "browser_live_frame", sessionId },
+      this.pendingBrowserLiveFrameRequests,
+      timeoutMs,
+      "Live browser frame request timed out",
+    );
+  }
+
+  resolveBrowserLiveFrameRequest(
+    requestId: string,
+    imageBase64?: string,
+    capturedAt?: string,
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
+    const pending = this.pendingBrowserLiveFrameRequests.get(requestId);
+    if (!pending) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
+    this.pendingBrowserLiveFrameRequests.delete(requestId);
+    if (error || !imageBase64 || !capturedAt) {
+      pending.reject(new Error(error ?? "Live browser frame is unavailable"));
+    } else {
+      pending.resolve({ imageBase64, capturedAt });
     }
   }
 

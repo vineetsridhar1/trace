@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
@@ -77,5 +77,25 @@ export async function cleanupPlaywrightInvocationSession(
     await remove(session.outputDir);
   } catch {
     // A failed temp-directory removal must not create an unhandled rejection on abort.
+  }
+}
+
+export async function capturePlaywrightLiveFrame(
+  session: PlaywrightInvocationSession,
+): Promise<{ imageBase64: string; capturedAt: string }> {
+  const filename = join(session.outputDir, `live-${randomBytes(12).toString("hex")}.png`);
+  try {
+    await execFileAsync("playwright-cli", ["screenshot", `--filename=${filename}`], {
+      env: { ...process.env, ...session.env },
+      timeout: 10_000,
+      maxBuffer: 1024 * 1024,
+    });
+    const image = await readFile(filename);
+    if (image.byteLength === 0 || image.byteLength > 4 * 1024 * 1024) {
+      throw new Error("Live browser frame is unavailable");
+    }
+    return { imageBase64: image.toString("base64"), capturedAt: new Date().toISOString() };
+  } finally {
+    await rm(filename, { force: true }).catch(() => {});
   }
 }

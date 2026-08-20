@@ -125,6 +125,14 @@ function dispatchRelayedCorrelatedResponse(msg: Record<string, unknown>, runtime
     );
   } else if (msg.type === "endpoint_ws_closed") {
     endpointProxyService.resolveWebSocketClosed(requestId);
+  } else if (msg.type === "browser_live_frame_result") {
+    sessionRouter.resolveBrowserLiveFrameRequest(
+      requestId,
+      typeof msg.imageBase64 === "string" ? msg.imageBase64 : undefined,
+      typeof msg.capturedAt === "string" ? msg.capturedAt : undefined,
+      error,
+      runtimeKey,
+    );
   } else if (msg.type === "linked_checkout_status_result") {
     sessionRouter.resolveLinkedCheckoutStatusRequest(
       requestId,

@@ -62,6 +62,7 @@ import { artifactMutations, artifactQueries, artifactTypeResolvers } from "./art
 import { restrictAgentRootResolvers } from "../lib/agent-authorization.js";
 import { appIntegrationMutations, appIntegrationQueries } from "./app-integrations.js";
 import { workspaceMutations } from "./workspace.js";
+import { browserLiveViewQueries } from "./browser-live-view.js";
 
 const queries = {
   ...organizationQueries,
@@ -77,6 +78,7 @@ const queries = {
   ...apiTokenQueries,
   ...codexCredentialQueries,
   ...terminalQueries,
+  ...browserLiveViewQueries,
   ...sessionApplicationQueries,
   ...connectionsQueries,
   ...chatQueries,

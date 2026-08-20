@@ -1979,6 +1979,7 @@ type Query {
   myCodexCredential: CodexCredentialStatus
   sessionTerminals(sessionId: ID!): [Terminal!]!
   terminalCapture(terminalId: ID!, maxBytes: Int, plainText: Boolean): TerminalCapture!
+  browserLiveFrame(sessionId: ID!): BrowserLiveFrame!
   channelTerminals(channelId: ID!, bridgeRuntimeId: ID!): [Terminal!]!
   sessionSetupScriptRuns(sessionGroupId: ID!): [SessionSetupScriptRun!]!
   sessionApplicationProcesses(sessionGroupId: ID!): [SessionApplicationProcess!]!
@@ -1997,6 +1998,11 @@ type Query {
   integrationConnections: [IntegrationConnection!]!
   appIntegrationBindings(sessionGroupId: ID!): [AppIntegrationBinding!]!
   searchUsers(query: String!): [User!]!
+}
+
+type BrowserLiveFrame {
+  imageBase64: String!
+  capturedAt: DateTime!
 }
 
 type Terminal {
