@@ -70,6 +70,29 @@ describe("artifact tabs", () => {
     });
   });
 
+  it("keeps a tab hidden when a server snapshot from before the close arrives", () => {
+    const state = useUIStore.getState();
+    const requestedAt = "2026-08-20T10:00:00.000Z";
+    state.hideSessionTab("group_1", "session_1", "2026-08-20T10:00:01.000Z");
+
+    state.setHiddenSessionTabs("group_1", [], { keepHiddenSince: requestedAt });
+
+    expect(useUIStore.getState().hiddenSessionTabsByGroup.group_1).toEqual({
+      session_1: "2026-08-20T10:00:01.000Z",
+    });
+  });
+
+  it("drops a locally hidden tab the server snapshot already covers", () => {
+    const state = useUIStore.getState();
+    state.hideSessionTab("group_1", "session_1", "2026-08-20T09:59:00.000Z");
+
+    state.setHiddenSessionTabs("group_1", [], {
+      keepHiddenSince: "2026-08-20T10:00:00.000Z",
+    });
+
+    expect(useUIStore.getState().hiddenSessionTabsByGroup.group_1).toEqual({});
+  });
+
   it("does not reopen a hidden session through implicit tab initialization", () => {
     useUIStore.setState({
       hiddenSessionTabsByGroup: { group_1: { session_2: "2026-08-17T00:00:00.000Z" } },

@@ -2,6 +2,7 @@ import { redis } from "./redis.js";
 import { realtimeBackplane } from "./realtime-backplane.js";
 
 const TERMINAL_PREFIX = "trace:terminal:v1";
+const TERMINAL_SCOPE_PREFIX = "trace:terminal-scope:v1";
 const TERMINAL_TTL_MS = 24 * 60 * 60 * 1000;
 
 export type TerminalDescriptor = {
@@ -15,6 +16,8 @@ export type TerminalDescriptor = {
   ownerUserId: string | null;
   runtimeInstanceId: string;
   organizationId?: string;
+  cols?: number;
+  rows?: number;
   expiresAt: number;
 };
 
@@ -32,6 +35,12 @@ export class TerminalDirectory {
       void redis
         .set(this.key(input.terminalId), JSON.stringify(descriptor), "PX", TERMINAL_TTL_MS)
         .catch((error) => console.error("[terminal-directory] register failed:", error));
+      for (const scopeKey of this.scopeKeys(descriptor)) {
+        void redis
+          .sadd(scopeKey, descriptor.terminalId)
+          .then(() => redis.pexpire(scopeKey, TERMINAL_TTL_MS))
+          .catch((error) => console.error("[terminal-directory] scope index failed:", error));
+      }
     }
   }
 
@@ -62,12 +71,69 @@ export class TerminalDirectory {
   }
 
   remove(terminalId: string): void {
+    const cached = this.descriptors.get(terminalId);
     this.descriptors.delete(terminalId);
     if (realtimeBackplane.enabled) {
       void redis
         .del(this.key(terminalId))
         .catch((error) => console.error("[terminal-directory] remove failed:", error));
+      // Scope members whose descriptor is gone are pruned lazily on read, so a
+      // removal without a cached descriptor is still safe.
+      for (const scopeKey of cached ? this.scopeKeys(cached) : []) {
+        void redis
+          .srem(scopeKey, terminalId)
+          .catch((error) => console.error("[terminal-directory] scope prune failed:", error));
+      }
     }
+  }
+
+  /**
+   * Live descriptors for every terminal in a session group, including the ones
+   * owned by other replicas. The relay's in-process indexes only see this
+   * replica's terminals, so a list built from them alone flickers between
+   * replicas and invites duplicate terminals.
+   */
+  async listForSessionGroup(sessionGroupId: string): Promise<TerminalDescriptor[]> {
+    return this.listForScope(this.scopeKey("group", sessionGroupId));
+  }
+
+  /** Live descriptors for every terminal owned by a single session. */
+  async listForSession(sessionId: string): Promise<TerminalDescriptor[]> {
+    return this.listForScope(this.scopeKey("session", sessionId));
+  }
+
+  private async listForScope(scopeKey: string): Promise<TerminalDescriptor[]> {
+    if (!realtimeBackplane.enabled) return [];
+    let terminalIds: string[];
+    try {
+      terminalIds = await redis.smembers(scopeKey);
+    } catch (error) {
+      console.error("[terminal-directory] scope read failed:", error);
+      return [];
+    }
+    const descriptors = await Promise.all(
+      terminalIds.map(async (terminalId) => {
+        const descriptor = await this.get(terminalId);
+        if (!descriptor) {
+          void redis.srem(scopeKey, terminalId).catch(() => undefined);
+          return undefined;
+        }
+        return descriptor;
+      }),
+    );
+    return descriptors.filter((descriptor): descriptor is TerminalDescriptor => !!descriptor);
+  }
+
+  private scopeKeys(descriptor: TerminalDescriptor): string[] {
+    const keys = [this.scopeKey("session", descriptor.sessionId)];
+    if (descriptor.sessionGroupId) {
+      keys.push(this.scopeKey("group", descriptor.sessionGroupId));
+    }
+    return keys;
+  }
+
+  private scopeKey(kind: "session" | "group", id: string): string {
+    return `${TERMINAL_SCOPE_PREFIX}:${kind}:${id}`;
   }
 
   private key(terminalId: string): string {

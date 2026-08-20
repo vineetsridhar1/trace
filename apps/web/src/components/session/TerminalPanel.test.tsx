@@ -43,6 +43,8 @@ describe("TerminalPanel", () => {
       terminals: {},
       pinnedTerminalIds: {},
       terminalCreationIntents: {},
+      closedTerminalIds: {},
+      restoredScopeKeys: {},
     });
     useTerminalStore
       .getState()
