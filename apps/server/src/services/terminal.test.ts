@@ -27,6 +27,7 @@ vi.mock("../lib/terminal-relay.js", () => ({
 vi.mock("../lib/terminal-directory.js", () => ({
   terminalDirectory: {
     listForScope: vi.fn().mockResolvedValue([]),
+    remove: vi.fn(),
   },
 }));
 
@@ -903,6 +904,39 @@ describe("TerminalService", () => {
       // record still have to go — otherwise the tab keeps coming back.
       expect(result).toBe(true);
       expect(terminalRelayMock.destroyTerminalDistributed).toHaveBeenCalledWith("term-1");
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: "terminal_destroyed" }),
+      );
+    });
+
+    it("removes the directory entry when the owning replica cannot be reached", async () => {
+      terminalRelayMock.getTerminalAuthContext.mockReturnValueOnce({
+        kind: "session",
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+        runtimeInstanceId: "runtime-1",
+        ownerUserId: "user-1",
+      });
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        connection: null,
+        sessionGroup: { connection: null },
+      });
+      terminalRelayMock.destroyTerminalDistributed.mockRejectedValueOnce(
+        new Error("Terminal owning replica unavailable"),
+      );
+
+      await expect(
+        terminalService.destroy({
+          terminalId: "term-1",
+          organizationId: "org-1",
+          userId: "user-1",
+        }),
+      ).resolves.toBe(true);
+
+      expect(terminalDirectoryMock.remove).toHaveBeenCalledWith("term-1");
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({ eventType: "terminal_destroyed" }),
       );
