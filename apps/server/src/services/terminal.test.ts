@@ -942,6 +942,33 @@ describe("TerminalService", () => {
       );
     });
 
+    it("converges a channel terminal close when the owning replica cannot be reached", async () => {
+      terminalRelayMock.getTerminalAuthContext.mockReturnValueOnce({
+        kind: "channel",
+        channelId: "channel-1",
+        organizationId: "org-1",
+        repoId: "repo-1",
+        runtimeInstanceId: "runtime-1",
+        ownerUserId: "user-1",
+      });
+      prismaMock.channel.findFirst.mockResolvedValueOnce({ organizationId: "org-1" });
+      terminalRelayMock.destroyTerminalDistributed.mockRejectedValueOnce(
+        new Error("Terminal owning replica unavailable"),
+      );
+
+      // Channel terminals close through the same path as session terminals, so
+      // an unreachable owner must not throw out of the mutation and leave the
+      // routing record behind.
+      await expect(
+        terminalService.destroy({
+          terminalId: "term-1",
+          organizationId: "org-1",
+          userId: "user-1",
+        }),
+      ).resolves.toBe(true);
+      expect(terminalDirectoryMock.remove).toHaveBeenCalledWith("term-1");
+    });
+
     it("refuses to destroy a terminal in a group the caller cannot view", async () => {
       terminalRelayMock.getTerminalAuthContext.mockReturnValueOnce({
         kind: "session",

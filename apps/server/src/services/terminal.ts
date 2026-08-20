@@ -597,7 +597,7 @@ class TerminalService {
         runtimeInstanceId: authContext.runtimeInstanceId,
         capability: "terminal",
       });
-      await terminalRelay.destroyTerminalDistributed(terminalId);
+      await this.convergeDestroy(terminalId);
       return true;
     }
 
@@ -615,10 +615,26 @@ class TerminalService {
     const access = await this.resolveTerminalAccess(session, userId);
     if (!access.ok && access.reason === "forbidden") throw new Error("Terminal not found");
 
-    // A close has to converge. A terminal nobody holds is already gone, and
-    // with no reachable runtime there is no PTY left to kill — in both cases
-    // the tab still has to go, or it keeps coming back in listings and the
-    // user cannot get rid of it.
+    await this.convergeDestroy(terminalId);
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: session.id,
+      eventType: "terminal_destroyed",
+      payload: { terminalId, sessionId: session.id, sessionGroupId: session.sessionGroupId },
+      actorType,
+      actorId: userId,
+    });
+    return true;
+  }
+
+  /**
+   * Destroy a terminal, converging whether or not the owning replica answers.
+   * A terminal nobody holds is already gone, and with no reachable runtime
+   * there is no PTY left to kill — in both cases the tab still has to go, or
+   * it keeps coming back in listings and the user cannot get rid of it.
+   */
+  private async convergeDestroy(terminalId: string): Promise<void> {
     try {
       await terminalRelay.destroyTerminalDistributed(terminalId);
     } catch (error: unknown) {
@@ -632,16 +648,6 @@ class TerminalService {
       // PTY that is still alive.
       terminalDirectory.remove(terminalId);
     }
-    await eventService.create({
-      organizationId,
-      scopeType: "session",
-      scopeId: session.id,
-      eventType: "terminal_destroyed",
-      payload: { terminalId, sessionId: session.id, sessionGroupId: session.sessionGroupId },
-      actorType,
-      actorId: userId,
-    });
-    return true;
   }
 
   private async assertTerminalOperation(
