@@ -20,6 +20,7 @@ import { useUIStore, type UIState } from "../../stores/ui";
 import { useWorkspaceSidebarStore } from "../../stores/workspace-sidebar";
 import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-core";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
+import { mutateOptimistically } from "../../lib/optimistic-mutation";
 import { GroupHeader } from "./GroupHeader";
 import { FileCommandPalette } from "./FileCommandPalette";
 import { ForkSessionDialog } from "./ForkSessionDialog";
@@ -33,6 +34,7 @@ import { SpatialNewTab, type SpatialNewChatInput } from "./SpatialNewTab";
 import { AppSessionPreviewPanel } from "./applications/AppSessionPreviewPanel";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useSessionGroupSessions } from "./useSessionGroupSessions";
+import { useSessionTabClose } from "./useSessionTabClose";
 import { useTerminalActions } from "./useTerminalActions";
 import { useFileActions } from "./useFileActions";
 import { useSessionGroupFiles } from "./useSessionGroupFiles";
@@ -67,21 +69,6 @@ const HIDDEN_SESSION_TABS_QUERY = gql`
       sessionId
       hiddenAt
     }
-  }
-`;
-
-const HIDE_SESSION_TAB_MUTATION = gql`
-  mutation HideSessionTab($sessionId: ID!) {
-    hideSessionTab(sessionId: $sessionId) {
-      sessionId
-      hiddenAt
-    }
-  }
-`;
-
-const RESTORE_SESSION_TAB_MUTATION = gql`
-  mutation RestoreSessionTab($sessionId: ID!) {
-    restoreSessionTab(sessionId: $sessionId)
   }
 `;
 
@@ -253,12 +240,6 @@ export function SessionGroupDetailView({
   const openSessionTab = useUIStore(
     (s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab,
   );
-  const hideSessionTab = useUIStore(
-    (s: { hideSessionTab: UIState["hideSessionTab"] }) => s.hideSessionTab,
-  );
-  const restoreSessionTab = useUIStore(
-    (s: { restoreSessionTab: UIState["restoreSessionTab"] }) => s.restoreSessionTab,
-  );
   const initSessionTabs = useUIStore(
     (s: { initSessionTabs: (groupId: string, sessionIds: string[]) => void }) => s.initSessionTabs,
   );
@@ -336,7 +317,8 @@ export function SessionGroupDetailView({
     setForkDialogOpen(true);
   }, []);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
-  const removeTerminal = useTerminalStore((s) => s.removeTerminal);
+  const closeTerminal = useTerminalStore((s) => s.closeTerminal);
+  const reopenTerminal = useTerminalStore((s) => s.reopenTerminal);
   const markTerminalsRestored = useTerminalStore((s) => s.markTerminalsRestored);
   const clearTerminalsRestored = useTerminalStore((s) => s.clearTerminalsRestored);
 
@@ -346,6 +328,7 @@ export function SessionGroupDetailView({
   );
   const { groupSessions, selectedSession, sessionTabs, sessionsByRecency } =
     useSessionGroupSessions(sessionGroupId, openTabIds, activeSessionId, hiddenSessionIds);
+  const { closeSession, restoreSession } = useSessionTabClose(sessionGroupId);
   const closedSessions = useMemo(
     () => groupSessions.filter((session) => hiddenSessionIds.has(session.id)),
     [groupSessions, hiddenSessionIds],
@@ -705,11 +688,19 @@ export function SessionGroupDetailView({
 
   const handleCloseTerminal = useCallback(
     (terminalId: string) => {
-      removeTerminal(terminalId);
-      if (activeTerminalId === terminalId) setActiveTerminalId(null);
-      void client.mutation(DESTROY_TERMINAL_MUTATION, { terminalId }).toPromise();
+      void mutateOptimistically({
+        apply: () => {
+          const closed = closeTerminal(terminalId);
+          if (!closed) return null;
+          if (activeTerminalId === terminalId) setActiveTerminalId(null);
+          return () => reopenTerminal(closed);
+        },
+        document: DESTROY_TERMINAL_MUTATION,
+        variables: { terminalId },
+        failureMessage: "Could not close that terminal",
+      });
     },
-    [activeTerminalId, removeTerminal, setActiveTerminalId],
+    [activeTerminalId, closeTerminal, reopenTerminal, setActiveTerminalId],
   );
 
   const handleToggleFilePalette = useCallback(() => {
@@ -816,19 +807,9 @@ export function SessionGroupDetailView({
   // session beneath them; closing the last session tab returns to the table.
   const handleCloseSession = useCallback(
     (sessionId: string) => {
-      // Close the tab now rather than waiting for session_tab_hidden to come
-      // back through the org event stream, and put it back if the mutation
-      // fails so the UI never disagrees with the server.
-      hideSessionTab(sessionGroupId, sessionId, new Date().toISOString());
-      void client
-        .mutation(HIDE_SESSION_TAB_MUTATION, { sessionId })
-        .toPromise()
-        .then((result: { error?: unknown }) => {
-          if (result.error) restoreSessionTab(sessionGroupId, sessionId);
-        })
-        .catch(() => restoreSessionTab(sessionGroupId, sessionId));
+      void closeSession(sessionId);
     },
-    [hideSessionTab, restoreSessionTab, sessionGroupId],
+    [closeSession],
   );
 
   const handleCloseCurrentTab = useCallback(() => {
@@ -931,13 +912,10 @@ export function SessionGroupDetailView({
 
   const handleRestoreSession = useCallback(
     (sessionId: string) => {
-      // The session_tab_restored event clears the hidden entry; without the
-      // mutation the tab would reappear locally and be hidden again on reload.
-      void client.mutation(RESTORE_SESSION_TAB_MUTATION, { sessionId }).toPromise();
-      openSessionTab(sessionGroupId, sessionId);
+      void restoreSession(sessionId);
       handleSelectSession(sessionId);
     },
-    [handleSelectSession, openSessionTab, sessionGroupId],
+    [handleSelectSession, restoreSession],
   );
 
   const handleOpenArtifact = useCallback(

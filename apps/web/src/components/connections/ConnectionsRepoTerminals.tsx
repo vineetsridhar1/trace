@@ -9,6 +9,7 @@ import type { Terminal } from "@trace/gql";
 import { Button } from "../ui/button";
 import { TerminalInstance } from "../session/TerminalInstance";
 import { client } from "../../lib/urql";
+import { mutateOptimistically } from "../../lib/optimistic-mutation";
 import { cn } from "../../lib/utils";
 import { parseRunScripts, type ConnectionRepoEntry } from "../../hooks/useConnections";
 import { useTerminalStore, type TerminalEntry } from "../../stores/terminal";
@@ -22,7 +23,8 @@ export function ConnectionsRepoTerminals({
   const scopeKey = `connection:${bridgeRuntimeId}:${entry.repo.id}`;
   const scripts = useMemo(() => parseRunScripts(entry.runScripts), [entry.runScripts]);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
-  const removeTerminal = useTerminalStore((s) => s.removeTerminal);
+  const closeTerminal = useTerminalStore((s) => s.closeTerminal);
+  const reopenTerminal = useTerminalStore((s) => s.reopenTerminal);
   const terminalTable = useTerminalStore((state) => state.terminals);
   const terminals = useMemo(
     () => Object.values(terminalTable).filter((terminal) => terminal.sessionGroupId === scopeKey),
@@ -59,12 +61,17 @@ export function ConnectionsRepoTerminals({
   );
   const destroyTerminal = useCallback(
     async (terminalId: string) => {
-      removeTerminal(terminalId);
-      const result = await client.mutation(DESTROY_TERMINAL_MUTATION, { terminalId }).toPromise();
-      if (result.error)
-        console.error("[connections] failed to destroy terminal", result.error.message);
+      await mutateOptimistically({
+        apply: () => {
+          const closed = closeTerminal(terminalId);
+          return closed ? () => reopenTerminal(closed) : null;
+        },
+        document: DESTROY_TERMINAL_MUTATION,
+        variables: { terminalId },
+        failureMessage: "Could not close that terminal",
+      });
     },
-    [removeTerminal],
+    [closeTerminal, reopenTerminal],
   );
   useEffect(() => {
     let cancelled = false;

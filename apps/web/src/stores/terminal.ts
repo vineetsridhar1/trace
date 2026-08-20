@@ -66,6 +66,15 @@ interface TerminalState {
   registerTerminalCreationIntent: (id: string, intent: TerminalCreationIntent) => void;
   cancelTerminalCreationIntent: (id: string) => void;
   consumeTerminalCreationIntent: (id: string, sessionId: string) => TerminalCreationIntent | null;
+  /**
+   * The user closed this terminal: drop it and remember the id so a list or
+   * event still in flight cannot re-add it. Returns what was removed so the
+   * close can be undone if the server refuses it.
+   */
+  closeTerminal: (id: string) => TerminalEntry | null;
+  /** Undo `closeTerminal`. */
+  reopenTerminal: (entry: TerminalEntry) => void;
+  /** The terminal is gone for good (the server said so). Not undoable. */
   removeTerminal: (id: string) => void;
 }
 
@@ -195,17 +204,38 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
     return consumed;
   },
 
-  removeTerminal: (id: string) =>
+  closeTerminal: (id: string) => {
+    let removed: TerminalEntry | null = null;
     set((state: TerminalState) => {
-      const { [id]: _, ...rest } = state.terminals;
-      const { [id]: _pinned, ...remainingPinnedIds } = state.pinnedTerminalIds;
+      const entry = state.terminals[id];
+      if (!entry) return {};
+      removed = entry;
+      return withTerminalRemoved(state, id);
+    });
+    return removed;
+  },
+
+  reopenTerminal: (entry: TerminalEntry) =>
+    set((state: TerminalState) => {
+      const { [entry.id]: _, ...closedTerminalIds } = state.closedTerminalIds;
       return {
-        terminals: rest,
-        pinnedTerminalIds: remainingPinnedIds,
-        closedTerminalIds: rememberClosedTerminalId(state.closedTerminalIds, id),
+        terminals: { ...state.terminals, [entry.id]: entry },
+        closedTerminalIds,
       };
     }),
+
+  removeTerminal: (id: string) => set((state: TerminalState) => withTerminalRemoved(state, id)),
 }));
+
+function withTerminalRemoved(state: TerminalState, id: string): Partial<TerminalState> {
+  const { [id]: _, ...terminals } = state.terminals;
+  const { [id]: _pinned, ...pinnedTerminalIds } = state.pinnedTerminalIds;
+  return {
+    terminals,
+    pinnedTerminalIds,
+    closedTerminalIds: rememberClosedTerminalId(state.closedTerminalIds, id),
+  };
+}
 
 function rememberClosedTerminalId(
   closedTerminalIds: Record<string, boolean>,
