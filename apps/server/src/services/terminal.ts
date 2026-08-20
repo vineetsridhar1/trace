@@ -626,6 +626,11 @@ class TerminalService {
         `[terminal] destroy did not reach ${terminalId}:`,
         error instanceof Error ? error.message : error,
       );
+      // The owning replica could not clean its own relay entry. Remove its
+      // directory descriptor here so a future listing cannot resurrect the
+      // terminal the user just closed. A reconnecting bridge re-registers any
+      // PTY that is still alive.
+      terminalDirectory.remove(terminalId);
     }
     await eventService.create({
       organizationId,
