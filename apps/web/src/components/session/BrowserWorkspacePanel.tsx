@@ -23,11 +23,13 @@ export function BrowserWorkspacePanel({
   sessionGroupId,
   browserId,
   initialUrl,
+  sessionHosting,
   onTitleChange,
 }: {
   sessionGroupId: string;
   browserId: string;
   initialUrl?: string;
+  sessionHosting?: string;
   onTitleChange?: (browserId: string, title: string) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -40,7 +42,8 @@ export function BrowserWorkspacePanel({
   const [error, setError] = useState<string | null>(null);
   const attachedCheckout = useAttachedCheckoutForGroup(sessionGroupId);
   const desktopBridgeInfo = useDesktopBridgeInfo();
-  const syncStatus = getBranchSyncStatus(
+  const syncIndicator = getBrowserSyncIndicator(
+    sessionHosting,
     attachedCheckout?.bridgeInstanceId ?? null,
     desktopBridgeInfo?.instanceId,
   );
@@ -168,8 +171,8 @@ export function BrowserWorkspacePanel({
         canGoForward={state.canGoForward}
         inputValue={inputValue}
         loading={state.loading}
-        syncStatusColor={branchSyncStatusColor(syncStatus)}
-        syncStatusLabel={branchSyncStatusLabel(syncStatus)}
+        syncStatusColor={syncIndicator.color}
+        syncStatusLabel={syncIndicator.label}
         onAddressFocus={() => {
           addressEditingRef.current = true;
         }}
@@ -201,6 +204,19 @@ export function BrowserWorkspacePanel({
 }
 
 type BranchSyncStatus = "checking" | "synced" | "behind" | "outOfSync";
+
+export function getBrowserSyncIndicator(
+  sessionHosting: string | undefined,
+  attachedBridgeInstanceId: string | null,
+  desktopBridgeInstanceId: string | null | undefined,
+) {
+  if (sessionHosting === "cloud") {
+    return { color: "bg-emerald-500", label: "Cloud sessions are always synced." };
+  }
+
+  const status = getBranchSyncStatus(attachedBridgeInstanceId, desktopBridgeInstanceId);
+  return { color: branchSyncStatusColor(status), label: branchSyncStatusLabel(status) };
+}
 
 export function getBranchSyncStatus(
   attachedBridgeInstanceId: string | null,
