@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   terminalDirectoryRegister: vi.fn(),
   terminalDirectoryRemove: vi.fn(),
   terminalDirectoryInvalidate: vi.fn(),
+  terminalDirectoryRefreshDimensions: vi.fn(),
   backplaneSend: vi.fn(() => Promise.resolve()),
   backplaneHandlers: new Map<
     string,
@@ -46,6 +47,7 @@ vi.mock("./terminal-directory.js", () => ({
     register: mocks.terminalDirectoryRegister,
     remove: mocks.terminalDirectoryRemove,
     invalidate: mocks.terminalDirectoryInvalidate,
+    refreshDimensions: mocks.terminalDirectoryRefreshDimensions,
   },
 }));
 
@@ -475,7 +477,46 @@ describe("TerminalRelay runtime identity", () => {
     }
   });
 
-  it("routes a destroy to the replica that owns the terminal", async () => {
+  it("forwards every operation for a terminal another replica owns", async () => {
+    const relay = new TerminalRelay();
+    mocks.terminalDirectoryGet.mockResolvedValue({
+      terminalId: "term-remote",
+      frontendReplicaId: "replica-owner",
+    });
+    const forwarded: Array<Record<string, unknown>> = [];
+    mocks.backplaneSend.mockImplementation(((
+      _target: string,
+      kind: string,
+      payload: Record<string, unknown>,
+    ) => {
+      if (kind === "terminal_operation_request") {
+        forwarded.push(payload);
+        mocks.backplaneHandlers.get("terminal_operation_response")?.at(-1)?.({
+          sourceReplicaId: "replica-owner",
+          payload: { requestId: payload.requestId, result: { output: "hello" } },
+        });
+      }
+      return Promise.resolve();
+    }) as never);
+
+    await expect(relay.captureTerminalDistributed("term-remote", 64)).resolves.toEqual({
+      output: "hello",
+    });
+    await relay.sendInputDistributed("term-remote", "ls\n");
+    await relay.resizeTerminalDistributed("term-remote", 120, 40);
+    await expect(relay.destroyTerminalDistributed("term-remote")).resolves.toBe("destroyed");
+
+    expect(forwarded.map((payload) => payload.action)).toEqual([
+      "capture",
+      "input",
+      "resize",
+      "destroy",
+    ]);
+    expect(forwarded[0]).toMatchObject({ terminalId: "term-remote", maxBytes: 64 });
+    expect(forwarded[2]).toMatchObject({ cols: 120, rows: 40 });
+  });
+
+  it("surfaces the owning replica's error instead of reporting success", async () => {
     const relay = new TerminalRelay();
     mocks.terminalDirectoryGet.mockResolvedValue({
       terminalId: "term-remote",
@@ -486,25 +527,21 @@ describe("TerminalRelay runtime identity", () => {
       kind: string,
       payload: { requestId?: string },
     ) => {
-      if (kind === "terminal_destroy_request") {
-        mocks.backplaneHandlers.get("terminal_destroy_result")?.at(-1)?.({
+      if (kind === "terminal_operation_request") {
+        mocks.backplaneHandlers.get("terminal_operation_response")?.at(-1)?.({
           sourceReplicaId: "replica-owner",
-          payload: { requestId: payload.requestId, destroyed: true },
+          payload: { requestId: payload.requestId, error: "closed" },
         });
       }
       return Promise.resolve();
     }) as never);
 
-    await expect(relay.destroyTerminalDistributed("term-remote")).resolves.toBe(true);
-    expect(mocks.backplaneSend).toHaveBeenCalledWith(
-      "replica-owner",
-      "terminal_destroy_request",
-      expect.objectContaining({ terminalId: "term-remote" }),
+    await expect(relay.sendInputDistributed("term-remote", "ls\n")).rejects.toThrow(
+      "Terminal is closed",
     );
-    expect(mocks.terminalDirectoryRemove).not.toHaveBeenCalled();
   });
 
-  it("drops the routing record when the owning replica never confirms a destroy", async () => {
+  it("drops the routing record when the owning replica never answers a destroy", async () => {
     vi.useFakeTimers();
     try {
       const relay = new TerminalRelay();
@@ -513,17 +550,25 @@ describe("TerminalRelay runtime identity", () => {
         frontendReplicaId: "replica-gone",
       });
 
-      const destroyed = relay.destroyTerminalDistributed("term-remote");
-      await vi.advanceTimersByTimeAsync(5_000);
+      const outcome = relay.destroyTerminalDistributed("term-remote");
+      await vi.advanceTimersByTimeAsync(10_000);
 
-      await expect(destroyed).resolves.toBe(true);
+      await expect(outcome).resolves.toBe("unreachable");
       expect(mocks.terminalDirectoryRemove).toHaveBeenCalledWith("term-remote");
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("destroys a locally held terminal on behalf of another replica", async () => {
+  it("reports a destroy for a terminal no replica holds as already gone", async () => {
+    const relay = new TerminalRelay();
+    mocks.terminalDirectoryGet.mockResolvedValue(undefined);
+
+    await expect(relay.destroyTerminalDistributed("term-gone")).resolves.toBe("not_found");
+    expect(mocks.backplaneSend).not.toHaveBeenCalled();
+  });
+
+  it("applies a forwarded operation to a locally held terminal", async () => {
     const relay = new TerminalRelay();
     const terminalId = relay.createTerminal(
       "session-1",
@@ -537,9 +582,9 @@ describe("TerminalRelay runtime identity", () => {
     );
     mocks.backplaneSend.mockClear();
 
-    mocks.backplaneHandlers.get("terminal_destroy_request")?.at(-1)?.({
+    await mocks.backplaneHandlers.get("terminal_operation_request")?.at(-1)?.({
       sourceReplicaId: "replica-requester",
-      payload: { terminalId, requestId: "request-1" },
+      payload: { terminalId, requestId: "request-1", action: "destroy" },
     });
 
     expect(mocks.send).toHaveBeenCalledWith(
@@ -550,9 +595,32 @@ describe("TerminalRelay runtime identity", () => {
     expect(relay.getTerminalAuthContext(terminalId)).toBeNull();
     expect(mocks.backplaneSend).toHaveBeenCalledWith(
       "replica-requester",
-      "terminal_destroy_result",
-      { requestId: "request-1", destroyed: true },
+      "terminal_operation_response",
+      { requestId: "request-1", result: true, error: undefined },
     );
+  });
+
+  it("ignores a forwarded operation it does not understand", async () => {
+    const relay = new TerminalRelay();
+    const terminalId = relay.createTerminal(
+      "session-1",
+      "group-1",
+      "org-1",
+      "bridge-1",
+      "user-1",
+      80,
+      24,
+      "/repo",
+    );
+    mocks.backplaneSend.mockClear();
+
+    await mocks.backplaneHandlers.get("terminal_operation_request")?.at(-1)?.({
+      sourceReplicaId: "replica-requester",
+      payload: { terminalId, requestId: "request-1", action: "self_destruct" },
+    });
+
+    expect(relay.getTerminalAuthContext(terminalId)).not.toBeNull();
+    expect(mocks.backplaneSend).not.toHaveBeenCalled();
   });
 
   it("revokes a remotely attached terminal for its authenticated user", () => {

@@ -4,6 +4,7 @@ import { prisma } from "./db.js";
 import { runtimeRouterKey, sessionRouter } from "./session-router.js";
 import { terminalDirectory } from "./terminal-directory.js";
 import { realtimeBackplane } from "./realtime-backplane.js";
+import { NotFoundError, ValidationError } from "./errors.js";
 
 interface TerminalEntry {
   sessionId: string;
@@ -46,6 +47,65 @@ interface TerminalEntry {
   onEnd?: (exitCode: number | null, error?: string) => void;
 }
 
+/** Scrollback capture returned by both the local and the forwarded path. */
+export interface TerminalCapture {
+  output: string;
+  byteCount: number;
+  truncated: boolean;
+  closed: boolean;
+  connected: boolean;
+}
+
+/**
+ * Every terminal operation that can target a terminal held by another replica.
+ * Adding one means adding a case to `applyLocalOperation` and a wrapper — the
+ * transport does not change.
+ */
+export type TerminalOperation =
+  | { action: "capture"; maxBytes: number }
+  | { action: "input"; data: string }
+  | { action: "resize"; cols: number; rows: number }
+  | { action: "destroy" };
+
+type TerminalOperationError = "closed" | "not_found";
+
+/** What a distributed destroy actually did. */
+export type TerminalDestroyOutcome = "destroyed" | "not_found" | "unreachable";
+
+/**
+ * The replica holding a terminal did not answer. Distinct from "not found" so
+ * callers can tell "already gone" from "we could not reach it".
+ */
+export class TerminalOwnerUnavailableError extends Error {
+  constructor(terminalId: string) {
+    super(`Terminal owning replica unavailable: ${terminalId}`);
+    this.name = "TerminalOwnerUnavailableError";
+  }
+}
+
+/**
+ * Narrow a forwarded payload to an operation. Unknown or malformed actions are
+ * dropped rather than guessed at, so a newer replica cannot make an older one
+ * do something it does not understand.
+ */
+function parseTerminalOperation(input: Record<string, unknown>): TerminalOperation | null {
+  if (input.action === "capture" && typeof input.maxBytes === "number") {
+    return { action: "capture", maxBytes: input.maxBytes };
+  }
+  if (input.action === "input" && typeof input.data === "string") {
+    return { action: "input", data: input.data };
+  }
+  if (
+    input.action === "resize" &&
+    typeof input.cols === "number" &&
+    typeof input.rows === "number"
+  ) {
+    return { action: "resize", cols: input.cols, rows: input.rows };
+  }
+  if (input.action === "destroy") return { action: "destroy" };
+  return null;
+}
+
 /**
  * Relays terminal I/O between frontend WebSocket clients and bridge runtimes.
  * No persistence — terminal data is ephemeral and never hits the event store.
@@ -69,11 +129,26 @@ export class TerminalRelay {
     string,
     { settle: (attached: boolean) => void; timer: ReturnType<typeof setTimeout> }
   >();
-  /** Cross-replica destroys awaiting confirmation from the owning replica. */
-  private pendingRemoteDestroys = new Map<
+  /**
+   * Cross-replica operations awaiting a response from the owning replica.
+   * Every terminal operation that can target a terminal this replica does not
+   * hold goes through this one channel — see `requestOperation`.
+   */
+  private pendingOperations = new Map<
     string,
-    { settle: (destroyed: boolean) => void; timer: ReturnType<typeof setTimeout> }
+    {
+      terminalId: string;
+      resolve: (value: unknown) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
   >();
+  /**
+   * How long to wait for the owning replica to answer a forwarded operation.
+   * Without an answer the caller cannot tell "done" from "the owner is gone",
+   * so operations reject rather than silently reporting success.
+   */
+  private static OPERATION_TIMEOUT_MS = 5_000;
   /**
    * How long to wait for the owning replica to confirm a cross-replica attach.
    * Without a confirmation a dead owner swallows the attach and the frontend
@@ -195,22 +270,36 @@ export class TerminalRelay {
         input.payload as Record<string, unknown>,
       );
     });
-    realtimeBackplane.on("terminal_destroy_request", (envelope) => {
+    realtimeBackplane.on("terminal_operation_request", async (envelope) => {
       const input = this.backplanePayload(envelope.payload);
-      if (!input || typeof input.terminalId !== "string" || typeof input.requestId !== "string") {
+      if (
+        !input ||
+        typeof input.requestId !== "string" ||
+        typeof input.terminalId !== "string" ||
+        typeof input.action !== "string"
+      ) {
         return;
       }
-      const held = this.terminals.has(input.terminalId);
-      this.destroyTerminal(input.terminalId);
-      void realtimeBackplane.send(envelope.sourceReplicaId, "terminal_destroy_result", {
+      const operation = parseTerminalOperation(input);
+      if (!operation) return;
+      const { result, error } = this.applyLocalOperation(input.terminalId, operation);
+      await realtimeBackplane.send(envelope.sourceReplicaId, "terminal_operation_response", {
         requestId: input.requestId,
-        destroyed: held,
+        result,
+        error,
       });
     });
-    realtimeBackplane.on("terminal_destroy_result", (envelope) => {
+    realtimeBackplane.on("terminal_operation_response", (envelope) => {
       const input = this.backplanePayload(envelope.payload);
       if (!input || typeof input.requestId !== "string") return;
-      this.settleRemoteDestroy(input.requestId, input.destroyed === true);
+      const pending = this.pendingOperations.get(input.requestId);
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      this.pendingOperations.delete(input.requestId);
+      if (input.error === "closed") pending.reject(new ValidationError("Terminal is closed"));
+      else if (input.error === "not_found")
+        pending.reject(new NotFoundError("Terminal", pending.terminalId));
+      else pending.resolve(input.result);
     });
     realtimeBackplane.on("terminal_frontend_detach", (envelope) => {
       const input = this.backplanePayload(envelope.payload);
@@ -839,16 +928,7 @@ export class TerminalRelay {
     };
   }
 
-  captureTerminal(
-    terminalId: string,
-    maxBytes: number,
-  ): {
-    output: string;
-    byteCount: number;
-    truncated: boolean;
-    closed: boolean;
-    connected: boolean;
-  } | null {
+  captureTerminal(terminalId: string, maxBytes: number): TerminalCapture | null {
     const entry = this.terminals.get(terminalId);
     if (!entry) return null;
     const source = Buffer.from(entry.scrollback.join(""), "utf8");
@@ -879,6 +959,7 @@ export class TerminalRelay {
     if (!entry || entry.terminated) return false;
     entry.cols = cols;
     entry.rows = rows;
+    terminalDirectory.refreshDimensions(terminalId, cols, rows);
     this.sendTerminalCommand(entry, { type: "terminal_resize", terminalId, cols, rows });
     return true;
   }
@@ -1059,61 +1140,122 @@ export class TerminalRelay {
   }
 
   /**
-   * Destroy a terminal wherever it lives. Terminals are held in memory by the
-   * replica that created them, so a destroy handled by any other replica has
-   * to be routed there — otherwise the PTY survives the close and the next
-   * list query hands the terminal back to the frontend.
+   * Apply an operation to a terminal this replica holds. Both the local call
+   * path and a request forwarded from another replica land here, so an
+   * operation cannot mean two different things depending on who asked.
    */
-  async destroyTerminalDistributed(terminalId: string): Promise<boolean> {
-    if (this.terminals.has(terminalId)) {
-      this.destroyTerminal(terminalId);
-      return true;
+  private applyLocalOperation(
+    terminalId: string,
+    operation: TerminalOperation,
+  ): { result: unknown; error?: TerminalOperationError } {
+    switch (operation.action) {
+      case "capture": {
+        const capture = this.captureTerminal(terminalId, operation.maxBytes);
+        return capture ? { result: capture } : { result: null, error: "not_found" };
+      }
+      case "input":
+        if (this.sendInput(terminalId, operation.data)) return { result: true };
+        return { result: false, error: this.operationFailureReason(terminalId) };
+      case "resize":
+        if (this.resizeTerminal(terminalId, operation.cols, operation.rows))
+          return { result: true };
+        return { result: false, error: this.operationFailureReason(terminalId) };
+      case "destroy":
+        if (!this.terminals.has(terminalId)) return { result: false, error: "not_found" };
+        this.destroyTerminal(terminalId);
+        return { result: true };
     }
-    const descriptor = await terminalDirectory.get(terminalId);
-    if (!descriptor) return false;
-    if (descriptor.frontendReplicaId === realtimeBackplane.replicaId) {
-      // A record for a terminal this replica no longer holds — the entry is
-      // already gone, only the routing record is stale.
-      terminalDirectory.remove(terminalId);
-      return true;
-    }
+  }
 
+  private operationFailureReason(terminalId: string): TerminalOperationError {
+    return this.terminals.has(terminalId) ? "closed" : "not_found";
+  }
+
+  /**
+   * Run an operation against a terminal wherever it lives. Terminals are held
+   * in memory by the replica that created them, so anything the local relay
+   * does not hold has to be forwarded — otherwise every operation silently
+   * no-ops for half the replicas behind the load balancer.
+   */
+  private async runOperation(terminalId: string, operation: TerminalOperation): Promise<unknown> {
+    if (this.terminals.has(terminalId)) {
+      const { result, error } = this.applyLocalOperation(terminalId, operation);
+      if (error === "closed") throw new ValidationError("Terminal is closed");
+      if (error === "not_found") throw new NotFoundError("Terminal", terminalId);
+      return result;
+    }
+    return this.requestOperation(terminalId, operation);
+  }
+
+  private async requestOperation(
+    terminalId: string,
+    operation: TerminalOperation,
+  ): Promise<unknown> {
+    const descriptor = await terminalDirectory.get(terminalId);
+    // A record pointing at this replica for a terminal we do not hold is
+    // stale; there is nowhere left to forward to.
+    if (!descriptor || descriptor.frontendReplicaId === realtimeBackplane.replicaId) {
+      throw new NotFoundError("Terminal", terminalId);
+    }
     const requestId = randomUUID();
-    const confirmed = this.awaitRemoteDestroy(requestId);
+    const response = new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingOperations.delete(requestId);
+        reject(new TerminalOwnerUnavailableError(terminalId));
+      }, TerminalRelay.OPERATION_TIMEOUT_MS);
+      timer.unref?.();
+      this.pendingOperations.set(requestId, { terminalId, resolve, reject, timer });
+    });
     try {
-      await realtimeBackplane.send(descriptor.frontendReplicaId, "terminal_destroy_request", {
-        terminalId,
+      await realtimeBackplane.send(descriptor.frontendReplicaId, "terminal_operation_request", {
         requestId,
+        terminalId,
+        ...operation,
       });
     } catch (error) {
-      console.error("[terminal-relay] remote destroy send failed:", error);
-      this.settleRemoteDestroy(requestId, false);
+      const pending = this.pendingOperations.get(requestId);
+      if (pending) {
+        clearTimeout(pending.timer);
+        this.pendingOperations.delete(requestId);
+      }
+      console.error("[terminal-relay] forwarding operation failed:", error);
+      throw new TerminalOwnerUnavailableError(terminalId);
     }
-    if (await confirmed) return true;
-
-    // The owning replica is gone or no longer holds the terminal. Drop the
-    // routing record so it stops resurfacing in listings and attaches.
-    terminalDirectory.remove(terminalId);
-    return true;
+    return response;
   }
 
-  private awaitRemoteDestroy(requestId: string): Promise<boolean> {
-    return new Promise<boolean>((resolve) => {
-      const timer = setTimeout(
-        () => this.settleRemoteDestroy(requestId, false),
-        TerminalRelay.REMOTE_ATTACH_TIMEOUT_MS,
-      );
-      timer.unref?.();
-      this.pendingRemoteDestroys.set(requestId, { settle: resolve, timer });
-    });
+  /** Capture scrollback from a terminal on any replica. */
+  async captureTerminalDistributed(terminalId: string, maxBytes: number): Promise<TerminalCapture> {
+    return (await this.runOperation(terminalId, {
+      action: "capture",
+      maxBytes,
+    })) as TerminalCapture;
   }
 
-  private settleRemoteDestroy(requestId: string, destroyed: boolean): void {
-    const pending = this.pendingRemoteDestroys.get(requestId);
-    if (!pending) return;
-    clearTimeout(pending.timer);
-    this.pendingRemoteDestroys.delete(requestId);
-    pending.settle(destroyed);
+  /** Write input to a terminal on any replica. */
+  async sendInputDistributed(terminalId: string, data: string): Promise<void> {
+    await this.runOperation(terminalId, { action: "input", data });
+  }
+
+  /** Resize a terminal on any replica. */
+  async resizeTerminalDistributed(terminalId: string, cols: number, rows: number): Promise<void> {
+    await this.runOperation(terminalId, { action: "resize", cols, rows });
+  }
+
+  /**
+   * Destroy a terminal on any replica. A close has to converge: when the
+   * owning replica cannot be reached the routing record is dropped so the
+   * terminal stops resurfacing in listings and attaches, and the caller is
+   * told what actually happened rather than an unconditional "done".
+   */
+  async destroyTerminalDistributed(terminalId: string): Promise<TerminalDestroyOutcome> {
+    try {
+      await this.runOperation(terminalId, { action: "destroy" });
+      return "destroyed";
+    } catch (error) {
+      terminalDirectory.remove(terminalId);
+      return error instanceof NotFoundError ? "not_found" : "unreachable";
+    }
   }
 
   /** Destroy all terminals for a session (called on session destroy/disconnect). */
