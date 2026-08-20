@@ -2554,6 +2554,7 @@ async function handleThreadMessage(input: {
     actorType: "user",
     actorId: traceUserId,
     clientSource: "slack",
+    restoreClosedTab: true,
   });
   if (files.warnings.length > 0) {
     await postSessionAccessRequestFeedback({

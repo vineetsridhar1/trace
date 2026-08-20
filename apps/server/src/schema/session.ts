@@ -620,6 +620,7 @@ export const sessionMutations = {
         interactionMode: args.interactionMode ?? undefined,
         clientMutationId: args.clientMutationId ?? undefined,
         clientSource: ctx.clientSource,
+        restoreClosedTab: true,
       });
     } catch (error) {
       throw toGraphQLError(error);
@@ -979,6 +980,7 @@ export const sessionMutations = {
       interactionMode: args.interactionMode ?? undefined,
       organizationId: orgId,
       clientSource: ctx.clientSource,
+      restoreClosedTab: true,
     });
   },
   removeQueuedMessage: async (_: unknown, args: { id: string }, ctx: Context) => {
