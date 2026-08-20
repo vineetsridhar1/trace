@@ -44,6 +44,31 @@ describe("terminal pinning", () => {
     expect(useTerminalStore.getState().terminals).toEqual({});
   });
 
+  it("returns the closed terminal so the close can be undone", () => {
+    const store = useTerminalStore.getState();
+    store.addTerminal("terminal-1", "session-1", "group-1", "active", {
+      customName: "build",
+    });
+
+    const closed = useTerminalStore.getState().closeTerminal("terminal-1");
+
+    expect(closed).toMatchObject({ id: "terminal-1", customName: "build" });
+    expect(useTerminalStore.getState().terminals).toEqual({});
+
+    // Reopening has to clear the closed-id guard as well, or the undo would be
+    // silently dropped by addTerminal.
+    useTerminalStore.getState().reopenTerminal(closed!);
+    expect(useTerminalStore.getState().terminals["terminal-1"]).toMatchObject({
+      id: "terminal-1",
+      customName: "build",
+    });
+    expect(useTerminalStore.getState().closedTerminalIds).toEqual({});
+  });
+
+  it("reports nothing to undo when the terminal was already gone", () => {
+    expect(useTerminalStore.getState().closeTerminal("terminal-missing")).toBeNull();
+  });
+
   it("consumes only the creation intent with the matching request and session", () => {
     const store = useTerminalStore.getState();
     store.registerTerminalCreationIntent("request-1", {
