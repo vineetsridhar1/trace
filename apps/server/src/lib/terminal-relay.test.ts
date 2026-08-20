@@ -13,7 +13,10 @@ const mocks = vi.hoisted(() => ({
   terminalDirectoryRegister: vi.fn(),
   terminalDirectoryRemove: vi.fn(),
   backplaneSend: vi.fn(() => Promise.resolve()),
-  backplaneHandlers: new Map<string, Array<(envelope: { sourceReplicaId: string; payload: unknown }) => void>>(),
+  backplaneHandlers: new Map<
+    string,
+    Array<(envelope: { sourceReplicaId: string; payload: unknown }) => void>
+  >(),
 }));
 
 vi.mock("./session-router.js", () => ({
@@ -39,6 +42,7 @@ vi.mock("./terminal-directory.js", () => ({
     get: mocks.terminalDirectoryGet,
     register: mocks.terminalDirectoryRegister,
     remove: mocks.terminalDirectoryRemove,
+    refreshDimensions: vi.fn(),
   },
 }));
 
@@ -46,12 +50,17 @@ vi.mock("./realtime-backplane.js", () => ({
   realtimeBackplane: {
     replicaId: "replica-local",
     send: mocks.backplaneSend,
-    on: vi.fn((kind: string, handler: (envelope: { sourceReplicaId: string; payload: unknown }) => void) => {
-      const handlers = mocks.backplaneHandlers.get(kind) ?? [];
-      handlers.push(handler);
-      mocks.backplaneHandlers.set(kind, handlers);
-      return () => undefined;
-    }),
+    on: vi.fn(
+      (
+        kind: string,
+        handler: (envelope: { sourceReplicaId: string; payload: unknown }) => void,
+      ) => {
+        const handlers = mocks.backplaneHandlers.get(kind) ?? [];
+        handlers.push(handler);
+        mocks.backplaneHandlers.set(kind, handlers);
+        return () => undefined;
+      },
+    ),
   },
 }));
 

@@ -18,13 +18,15 @@ vi.mock("../lib/terminal-relay.js", () => ({
     getTerminalState: vi.fn(),
     destroyTerminal: vi.fn(),
     destroyTerminalDistributed: vi.fn(),
+    captureTerminalDistributed: vi.fn(),
+    sendInputDistributed: vi.fn(),
+    resizeTerminalDistributed: vi.fn(),
   },
 }));
 
 vi.mock("../lib/terminal-directory.js", () => ({
   terminalDirectory: {
-    listForSession: vi.fn().mockResolvedValue([]),
-    listForSessionGroup: vi.fn().mockResolvedValue([]),
+    listForScope: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -104,8 +106,16 @@ describe("TerminalService", () => {
       id: terminalId,
       sessionId: terminalRelayMock.getSessionId(terminalId) ?? "session-1",
     }));
-    terminalDirectoryMock.listForSession.mockResolvedValue([]);
-    terminalDirectoryMock.listForSessionGroup.mockResolvedValue([]);
+    terminalRelayMock.captureTerminalDistributed.mockResolvedValue({
+      output: "hi",
+      byteCount: 2,
+      truncated: false,
+      closed: false,
+      connected: true,
+    });
+    terminalRelayMock.sendInputDistributed.mockResolvedValue(true);
+    terminalRelayMock.resizeTerminalDistributed.mockResolvedValue(true);
+    terminalDirectoryMock.listForScope.mockResolvedValue([]);
     terminalRelayMock.destroyTerminalDistributed.mockImplementation((terminalId: string) => {
       terminalRelayMock.destroyTerminal(terminalId);
       return Promise.resolve();
@@ -581,7 +591,7 @@ describe("TerminalService", () => {
         connection: { runtimeInstanceId: "runtime-1" },
       });
       terminalRelayMock.getTerminalsForSessionGroup.mockReturnValueOnce([]);
-      terminalDirectoryMock.listForSessionGroup.mockResolvedValueOnce([
+      terminalDirectoryMock.listForScope.mockResolvedValueOnce([
         {
           terminalId: "term-remote",
           frontendReplicaId: "replica-other",
@@ -867,7 +877,7 @@ describe("TerminalService", () => {
       ).rejects.toThrow("Terminal not found");
     });
 
-    it("no-ops fail-closed when no runtime resolves", async () => {
+    it("still converges the close when no runtime resolves", async () => {
       terminalRelayMock.getTerminalAuthContext.mockReturnValueOnce({
         kind: "session",
         sessionId: "session-1",
@@ -888,8 +898,40 @@ describe("TerminalService", () => {
         organizationId: "org-1",
         userId: "user-1",
       });
+
+      // There is no reachable PTY to kill, but the relay entry and the routing
+      // record still have to go — otherwise the tab keeps coming back.
       expect(result).toBe(true);
-      expect(terminalRelayMock.destroyTerminal).not.toHaveBeenCalled();
+      expect(terminalRelayMock.destroyTerminalDistributed).toHaveBeenCalledWith("term-1");
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: "terminal_destroyed" }),
+      );
+    });
+
+    it("refuses to destroy a terminal in a group the caller cannot view", async () => {
+      terminalRelayMock.getTerminalAuthContext.mockReturnValueOnce({
+        kind: "session",
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+        runtimeInstanceId: "runtime-1",
+        ownerUserId: "user-1",
+      });
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+        sessionGroup: { connection: null, visibility: "private", ownerUserId: "user-2" },
+      });
+
+      await expect(
+        terminalService.destroy({
+          terminalId: "term-1",
+          organizationId: "org-1",
+          userId: "user-1",
+        }),
+      ).rejects.toThrow("Terminal not found");
+      expect(terminalRelayMock.destroyTerminalDistributed).not.toHaveBeenCalled();
     });
 
     it("throws when local session accessed by wrong user", async () => {
@@ -934,6 +976,73 @@ describe("TerminalService", () => {
         }),
       ).rejects.toThrow("Terminal not found");
       expect(terminalRelayMock.destroyTerminal).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("terminal operations across replicas", () => {
+    const ownedTerminal = () => {
+      terminalRelayMock.getTerminalAuthContextDistributed.mockResolvedValueOnce({
+        kind: "session",
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+        runtimeInstanceId: "runtime-1",
+        ownerUserId: "user-1",
+      });
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+        sessionGroup: { connection: null },
+      });
+    };
+
+    it("captures, writes and resizes through the distributed path", async () => {
+      ownedTerminal();
+      await expect(
+        terminalService.capture({
+          terminalId: "term-1",
+          organizationId: "org-1",
+          userId: "user-1",
+        }),
+      ).resolves.toMatchObject({ output: "hi" });
+      expect(terminalRelayMock.captureTerminalDistributed).toHaveBeenCalledWith(
+        "term-1",
+        50 * 1024,
+      );
+
+      ownedTerminal();
+      await terminalService.sendInput({
+        terminalId: "term-1",
+        data: "ls",
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+      expect(terminalRelayMock.sendInputDistributed).toHaveBeenCalledWith("term-1", "ls");
+
+      ownedTerminal();
+      await terminalService.resize({
+        terminalId: "term-1",
+        cols: 120,
+        rows: 40,
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+      expect(terminalRelayMock.resizeTerminalDistributed).toHaveBeenCalledWith("term-1", 120, 40);
+    });
+
+    it("propagates a closed terminal instead of reporting success", async () => {
+      ownedTerminal();
+      terminalRelayMock.sendInputDistributed.mockRejectedValueOnce(new Error("Terminal is closed"));
+
+      await expect(
+        terminalService.sendInput({
+          terminalId: "term-1",
+          data: "ls",
+          organizationId: "org-1",
+          userId: "user-1",
+        }),
+      ).rejects.toThrow("Terminal is closed");
     });
   });
 
@@ -1153,6 +1262,57 @@ describe("TerminalService", () => {
         { id: "term-a", sessionId: "channel-1" },
         { id: "term-b", sessionId: "channel-1" },
       ]);
+    });
+
+    it("includes channel terminals held by another replica, pinned to the runtime", async () => {
+      prismaMock.channel.findFirst.mockResolvedValueOnce({ id: "channel-1", repoId: "repo-1" });
+      prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({ instanceId: "runtime-1" });
+      sessionRouterMock.getRuntime.mockReturnValue({
+        id: "runtime-1",
+        organizationId: "org-1",
+        hostingMode: "local",
+        registeredRepoIds: ["repo-1"],
+      });
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      terminalRelayMock.getTerminalsForChannel.mockReturnValueOnce([]);
+      terminalDirectoryMock.listForScope.mockResolvedValueOnce([
+        {
+          terminalId: "term-remote",
+          frontendReplicaId: "replica-other",
+          kind: "channel",
+          sessionId: "channel:channel-1",
+          sessionGroupId: null,
+          channelId: "channel-1",
+          ownerUserId: "user-1",
+          runtimeInstanceId: "runtime-1",
+          organizationId: "org-1",
+        },
+        {
+          // Same channel, different bridge — must not leak across runtimes.
+          terminalId: "term-other-runtime",
+          frontendReplicaId: "replica-other",
+          kind: "channel",
+          sessionId: "channel:channel-1",
+          sessionGroupId: null,
+          channelId: "channel-1",
+          ownerUserId: "user-1",
+          runtimeInstanceId: "runtime-2",
+          organizationId: "org-1",
+        },
+      ]);
+
+      const result = await terminalService.listForChannel({
+        channelId: "channel-1",
+        bridgeRuntimeId: "bridge-1",
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+
+      expect(result).toEqual([{ id: "term-remote", sessionId: "channel-1" }]);
+      expect(terminalDirectoryMock.listForScope).toHaveBeenCalledWith({
+        kind: "channel",
+        id: "channel-1",
+      });
     });
 
     it("returns empty array when no terminals exist for the channel", async () => {
