@@ -66,7 +66,11 @@ export class TerminalRelay {
   private remoteFrontendSockets = new Map<string, { ws: WebSocket; attachmentId: string }>();
   private pendingOperations = new Map<
     string,
-    { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
+    {
+      resolve: (value: unknown) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
   >();
   private static OPERATION_TIMEOUT_MS = 5_000;
 
@@ -84,21 +88,37 @@ export class TerminalRelay {
     });
     realtimeBackplane.on("terminal_operation_request", async (envelope) => {
       const input = this.backplanePayload(envelope.payload);
-      if (!input || typeof input.requestId !== "string" || typeof input.terminalId !== "string" || typeof input.action !== "string") return;
+      if (
+        !input ||
+        typeof input.requestId !== "string" ||
+        typeof input.terminalId !== "string" ||
+        typeof input.action !== "string"
+      )
+        return;
       let result: unknown = true;
       let error: "closed" | "not_found" | undefined;
       if (input.action === "capture" && typeof input.maxBytes === "number") {
         result = this.captureTerminal(input.terminalId, input.maxBytes);
         if (!result) error = "not_found";
       } else if (input.action === "input" && typeof input.data === "string") {
-        if (!this.sendInput(input.terminalId, input.data)) error = this.terminals.has(input.terminalId) ? "closed" : "not_found";
-      } else if (input.action === "resize" && typeof input.cols === "number" && typeof input.rows === "number") {
-        if (!this.resizeTerminal(input.terminalId, input.cols, input.rows)) error = this.terminals.has(input.terminalId) ? "closed" : "not_found";
+        if (!this.sendInput(input.terminalId, input.data))
+          error = this.terminals.has(input.terminalId) ? "closed" : "not_found";
+      } else if (
+        input.action === "resize" &&
+        typeof input.cols === "number" &&
+        typeof input.rows === "number"
+      ) {
+        if (!this.resizeTerminal(input.terminalId, input.cols, input.rows))
+          error = this.terminals.has(input.terminalId) ? "closed" : "not_found";
       } else if (input.action === "destroy") {
         if (!this.terminals.has(input.terminalId)) error = "not_found";
         else this.destroyTerminal(input.terminalId);
       } else return;
-      await realtimeBackplane.send(envelope.sourceReplicaId, "terminal_operation_response", { requestId: input.requestId, result, error });
+      await realtimeBackplane.send(envelope.sourceReplicaId, "terminal_operation_response", {
+        requestId: input.requestId,
+        result,
+        error,
+      });
     });
     realtimeBackplane.on("terminal_bridge_message", (envelope) => {
       const payload = envelope.payload;
@@ -152,9 +172,20 @@ export class TerminalRelay {
     });
     realtimeBackplane.on("terminal_frontend_messages", (envelope) => {
       const input = this.backplanePayload(envelope.payload);
-      if (!input || typeof input.terminalId !== "string" || typeof input.attachmentId !== "string" || !Array.isArray(input.messages)) return;
+      if (
+        !input ||
+        typeof input.terminalId !== "string" ||
+        typeof input.attachmentId !== "string" ||
+        !Array.isArray(input.messages)
+      )
+        return;
       const attachment = this.remoteFrontendSockets.get(input.terminalId);
-      if (!attachment || attachment.attachmentId !== input.attachmentId || attachment.ws.readyState !== attachment.ws.OPEN) return;
+      if (
+        !attachment ||
+        attachment.attachmentId !== input.attachmentId ||
+        attachment.ws.readyState !== attachment.ws.OPEN
+      )
+        return;
       for (const message of input.messages) {
         if (typeof message === "string") attachment.ws.send(message);
       }
@@ -187,7 +218,8 @@ export class TerminalRelay {
     });
     realtimeBackplane.on("terminal_frontend_detach", (envelope) => {
       const input = this.backplanePayload(envelope.payload);
-      if (!input || typeof input.terminalId !== "string" || typeof input.attachmentId !== "string") return;
+      if (!input || typeof input.terminalId !== "string" || typeof input.attachmentId !== "string")
+        return;
       const entry = this.terminals.get(input.terminalId);
       if (
         entry?.remoteFrontendReplicaId === envelope.sourceReplicaId &&
@@ -755,9 +787,17 @@ export class TerminalRelay {
     };
   }
 
-  getTerminalState(terminalId: string):
-    | { id: string; sessionId: string; status: string; cols: number; rows: number; connected: boolean; closed: boolean }
-    | null {
+  getTerminalState(
+    terminalId: string,
+  ): {
+    id: string;
+    sessionId: string;
+    status: string;
+    cols: number;
+    rows: number;
+    connected: boolean;
+    closed: boolean;
+  } | null {
     const entry = this.terminals.get(terminalId);
     if (!entry) return null;
     return {
@@ -766,19 +806,38 @@ export class TerminalRelay {
       status: entry.terminated ? "closed" : entry.ready ? "ready" : "connecting",
       cols: entry.cols,
       rows: entry.rows,
-      connected: !entry.terminated && sessionRouter.isRuntimeAvailable(entry.runtimeInstanceId, entry.organizationId),
+      connected:
+        !entry.terminated &&
+        sessionRouter.isRuntimeAvailable(entry.runtimeInstanceId, entry.organizationId),
       closed: entry.terminated,
     };
   }
 
-  captureTerminal(terminalId: string, maxBytes: number): { output: string; byteCount: number; truncated: boolean; closed: boolean; connected: boolean } | null {
+  captureTerminal(
+    terminalId: string,
+    maxBytes: number,
+  ): {
+    output: string;
+    byteCount: number;
+    truncated: boolean;
+    closed: boolean;
+    connected: boolean;
+  } | null {
     const entry = this.terminals.get(terminalId);
     if (!entry) return null;
     const source = entry.scrollback.join("");
     const bytes = Buffer.byteLength(source);
     const truncated = bytes > maxBytes;
     const output = truncated ? this.utf8Tail(source, maxBytes) : source;
-    return { output, byteCount: Buffer.byteLength(output), truncated, closed: entry.terminated, connected: !entry.terminated && sessionRouter.isRuntimeAvailable(entry.runtimeInstanceId, entry.organizationId) };
+    return {
+      output,
+      byteCount: Buffer.byteLength(output),
+      truncated,
+      closed: entry.terminated,
+      connected:
+        !entry.terminated &&
+        sessionRouter.isRuntimeAvailable(entry.runtimeInstanceId, entry.organizationId),
+    };
   }
 
   async captureTerminalDistributed(terminalId: string, maxBytes: number) {
@@ -805,11 +864,16 @@ export class TerminalRelay {
     if (!entry || entry.terminated) return false;
     entry.cols = cols;
     entry.rows = rows;
+    terminalDirectory.refreshDimensions(terminalId, cols, rows);
     this.sendTerminalCommand(entry, { type: "terminal_resize", terminalId, cols, rows });
     return true;
   }
 
-  async resizeTerminalDistributed(terminalId: string, cols: number, rows: number): Promise<boolean> {
+  async resizeTerminalDistributed(
+    terminalId: string,
+    cols: number,
+    rows: number,
+  ): Promise<boolean> {
     if (this.terminals.has(terminalId)) return this.resizeTerminal(terminalId, cols, rows);
     await this.requestOperation(terminalId, { action: "resize", cols, rows });
     return true;
@@ -1183,7 +1247,8 @@ export class TerminalRelay {
   ): Promise<unknown> {
     const descriptor = await terminalDirectory.get(terminalId);
     if (!descriptor) throw new Error("Terminal not found");
-    if (descriptor.frontendReplicaId === realtimeBackplane.replicaId) throw new Error("Terminal not found");
+    if (descriptor.frontendReplicaId === realtimeBackplane.replicaId)
+      throw new Error("Terminal not found");
     const requestId = randomUUID();
     const response = new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -1193,7 +1258,11 @@ export class TerminalRelay {
       this.pendingOperations.set(requestId, { resolve, reject, timer });
     });
     try {
-      await realtimeBackplane.send(descriptor.frontendReplicaId, "terminal_operation_request", { requestId, terminalId, ...input });
+      await realtimeBackplane.send(descriptor.frontendReplicaId, "terminal_operation_request", {
+        requestId,
+        terminalId,
+        ...input,
+      });
     } catch {
       const pending = this.pendingOperations.get(requestId);
       if (pending) {
