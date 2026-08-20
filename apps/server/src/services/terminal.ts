@@ -19,6 +19,30 @@ type TerminalListEntry = {
   closed: boolean;
 };
 
+type TerminalCandidate = {
+  id: string;
+  /** Session the terminal belongs to; null when the relay has no record of it. */
+  ownerSessionId: string | null;
+  ownerUserId: string | null;
+  state: TerminalListEntry | null;
+};
+
+/**
+ * A terminal listing scope. Mirrors the directory's index shape, plus the
+ * runtime a channel listing is pinned to.
+ */
+type TerminalScope =
+  | { kind: "session"; id: string }
+  | { kind: "group"; id: string }
+  | { kind: "channel"; id: string; runtimeInstanceId: string };
+
+const DEFAULT_TERMINAL_COLS = 80;
+const DEFAULT_TERMINAL_ROWS = 24;
+
+type TerminalAccess =
+  | { ok: true; runtimeInstanceId: string }
+  | { ok: false; reason: "forbidden" | "no_runtime" };
+
 const TERMINAL_NO_RUNTIME_ERROR =
   "Cannot open terminal: this session is not connected to a runtime";
 
@@ -77,14 +101,16 @@ class TerminalService {
 
   /**
    * Enforce bridge access for a terminal op and resolve the runtime the op
-   * should target.
-   *   - "throw":  no runtime resolves  → throw (create path — we need a bound runtime)
-   *   - "deny":   no runtime resolves  → return null (list/destroy — fail closed silently)
-   * Returns the resolved runtime id once access has been asserted. Callers
-   * MUST pin any downstream `sessionRouter.send` to this id so the command
-   * can't fall through to a different tenant's bridge.
+   * should target. Returns which of the two ways this can fail, because they
+   * call for opposite handling: "forbidden" must never be turned into a
+   * success, while "no_runtime" only means the PTY is unreachable — a close,
+   * for instance, should still converge.
+   *
+   * Callers MUST pin any downstream `sessionRouter.send` to the returned
+   * runtime id so the command can't fall through to a different tenant's
+   * bridge.
    */
-  private async assertTerminalAccess(
+  private async resolveTerminalAccess(
     session: {
       id: string;
       organizationId: string;
@@ -97,21 +123,12 @@ class TerminalService {
       } | null;
     },
     userId: string,
-    onMissingRuntime: "throw" | "deny",
-  ): Promise<string | null> {
+  ): Promise<TerminalAccess> {
     if (session.sessionGroup && !canViewSessionGroup(session.sessionGroup, userId)) {
-      if (onMissingRuntime === "throw") {
-        throw new AuthorizationError("Not authorized for this session");
-      }
-      return null;
+      return { ok: false, reason: "forbidden" };
     }
     const runtimeInstanceId = this.resolveSessionRuntimeInstanceId(session);
-    if (!runtimeInstanceId) {
-      if (onMissingRuntime === "throw") {
-        throw new AuthorizationError(TERMINAL_NO_RUNTIME_ERROR);
-      }
-      return null;
-    }
+    if (!runtimeInstanceId) return { ok: false, reason: "no_runtime" };
     await runtimeAccessService.assertAccess({
       userId,
       organizationId: session.organizationId,
@@ -119,7 +136,19 @@ class TerminalService {
       sessionGroupId: session.sessionGroupId,
       capability: "terminal",
     });
-    return runtimeInstanceId;
+    return { ok: true, runtimeInstanceId };
+  }
+
+  /** `resolveTerminalAccess`, for callers that cannot proceed without a runtime. */
+  private async assertTerminalAccess(
+    session: Parameters<TerminalService["resolveTerminalAccess"]>[0],
+    userId: string,
+  ): Promise<string> {
+    const access = await this.resolveTerminalAccess(session, userId);
+    if (access.ok) return access.runtimeInstanceId;
+    throw new AuthorizationError(
+      access.reason === "forbidden" ? "Not authorized for this session" : TERMINAL_NO_RUNTIME_ERROR,
+    );
   }
 
   private async resolveChannelTerminalTarget(input: {
@@ -265,11 +294,7 @@ class TerminalService {
     if (session.sessionGroup?.setupStatus === "running") {
       throw new Error("Cannot create terminal while the setup script is still running");
     }
-    const runtimeInstanceId = await this.assertTerminalAccess(session, userId, "throw");
-    if (!runtimeInstanceId) {
-      // assertTerminalAccess with "throw" either returns a runtime or throws.
-      throw new AuthorizationError(TERMINAL_NO_RUNTIME_ERROR);
-    }
+    const runtimeInstanceId = await this.assertTerminalAccess(session, userId);
 
     const terminalId = terminalRelay.createTerminal(
       sessionId,
@@ -351,56 +376,20 @@ class TerminalService {
       },
     });
     if (!session) throw new Error("Session not found");
-    const runtimeInstanceId = await this.assertTerminalAccess(session, userId, "deny");
-    if (!runtimeInstanceId) return [];
+    const access = await this.resolveTerminalAccess(session, userId);
+    if (!access.ok) return [];
 
-    const localTerminalIds = session.sessionGroupId
-      ? terminalRelay.getTerminalsForSessionGroup(session.sessionGroupId)
-      : terminalRelay.getTerminalsForSession(sessionId);
-    const localTerminalIdSet = new Set(localTerminalIds);
-    // The relay's indexes only cover terminals this replica holds in memory.
-    // Listing from them alone makes the terminal tabs flicker with whichever
-    // replica served the request, and invites duplicate terminals.
-    const remoteDescriptors = (
+    const candidates = await this.terminalsInScope(
       session.sessionGroupId
-        ? await terminalDirectory.listForSessionGroup(session.sessionGroupId)
-        : await terminalDirectory.listForSession(sessionId)
-    ).filter((descriptor) => !localTerminalIdSet.has(descriptor.terminalId));
-
-    const candidates: Array<{
-      id: string;
-      ownerSessionId: string;
-      ownerUserId: string | null;
-      state: TerminalListEntry | null;
-    }> = [
-      ...localTerminalIds.map((id) => ({
-        id,
-        ownerSessionId: terminalRelay.getSessionId(id) ?? sessionId,
-        ownerUserId: terminalRelay.getTerminalAuthContext(id)?.ownerUserId ?? null,
-        state: terminalRelay.getTerminalState(id),
-      })),
-      ...remoteDescriptors.map((descriptor) => ({
-        id: descriptor.terminalId,
-        ownerSessionId: descriptor.sessionId,
-        ownerUserId: descriptor.ownerUserId,
-        state: {
-          id: descriptor.terminalId,
-          sessionId: descriptor.sessionId,
-          // A directory record only exists while the owning replica holds a
-          // live terminal, so a resolved descriptor is a running terminal.
-          status: "ready",
-          cols: descriptor.cols ?? 80,
-          rows: descriptor.rows ?? 24,
-          connected: sessionRouter.isRuntimeAvailable(
-            descriptor.runtimeInstanceId,
-            descriptor.organizationId,
-          ),
-          closed: false,
-        },
-      })),
-    ];
+        ? { kind: "group", id: session.sessionGroupId }
+        : { kind: "session", id: sessionId },
+    );
     const terminalSessionIds = [
-      ...new Set(candidates.map((candidate) => candidate.ownerSessionId)),
+      ...new Set(
+        candidates
+          .map((candidate) => candidate.ownerSessionId)
+          .filter((id): id is string => id !== null),
+      ),
     ];
 
     const owningSessions =
@@ -433,12 +422,14 @@ class TerminalService {
 
     const results: TerminalListEntry[] = [];
     for (const candidate of candidates) {
-      if (!candidate.state || candidate.ownerUserId !== userId) continue;
+      if (!candidate.state || candidate.ownerUserId !== userId || !candidate.ownerSessionId) {
+        continue;
+      }
       const ownerSession = owningSessionMap.get(candidate.ownerSessionId);
       if (!ownerSession) continue;
       try {
-        const ownerRuntimeId = await this.assertTerminalAccess(ownerSession, userId, "deny");
-        if (!ownerRuntimeId) continue;
+        const ownerAccess = await this.resolveTerminalAccess(ownerSession, userId);
+        if (!ownerAccess.ok) continue;
         results.push(candidate.state);
       } catch {
         continue;
@@ -446,6 +437,60 @@ class TerminalService {
     }
 
     return results;
+  }
+
+  /**
+   * Every live terminal in a scope, from this replica's memory and from the
+   * directory. One merge for every listing: a caller that only asked the local
+   * relay would return a different answer on each replica behind the load
+   * balancer.
+   */
+  private async terminalsInScope(scope: TerminalScope): Promise<TerminalCandidate[]> {
+    const localIds =
+      scope.kind === "group"
+        ? terminalRelay.getTerminalsForSessionGroup(scope.id)
+        : scope.kind === "session"
+          ? terminalRelay.getTerminalsForSession(scope.id)
+          : terminalRelay.getTerminalsForChannel(scope.id, scope.runtimeInstanceId);
+    const held = new Set(localIds);
+    const remote = (
+      await terminalDirectory.listForScope({ kind: scope.kind, id: scope.id })
+    ).filter(
+      (descriptor) =>
+        !held.has(descriptor.terminalId) &&
+        // Channel terminals are indexed per channel but scoped per runtime: a
+        // repo linked on two bridges must not show one bridge's terminals on
+        // the other.
+        (scope.kind !== "channel" || descriptor.runtimeInstanceId === scope.runtimeInstanceId),
+    );
+
+    return [
+      ...localIds.map((id) => ({
+        id,
+        ownerSessionId: terminalRelay.getSessionId(id) ?? null,
+        ownerUserId: terminalRelay.getTerminalAuthContext(id)?.ownerUserId ?? null,
+        state: terminalRelay.getTerminalState(id),
+      })),
+      ...remote.map((descriptor) => ({
+        id: descriptor.terminalId,
+        ownerSessionId: descriptor.sessionId,
+        ownerUserId: descriptor.ownerUserId,
+        state: {
+          id: descriptor.terminalId,
+          sessionId: descriptor.sessionId,
+          // A directory record only exists while the owning replica holds a
+          // live terminal, so a resolved descriptor is a running terminal.
+          status: "ready",
+          cols: descriptor.cols ?? DEFAULT_TERMINAL_COLS,
+          rows: descriptor.rows ?? DEFAULT_TERMINAL_ROWS,
+          connected: sessionRouter.isRuntimeAvailable(
+            descriptor.runtimeInstanceId,
+            descriptor.organizationId,
+          ),
+          closed: false,
+        },
+      })),
+    ];
   }
 
   async createForChannel({
@@ -504,10 +549,17 @@ class TerminalService {
       requireRepoPath: false,
     });
 
-    return terminalRelay
-      .getTerminalsForChannel(target.channelId, target.runtimeInstanceId)
-      .filter((id: string) => terminalRelay.getTerminalAuthContext(id)?.ownerUserId === userId)
-      .map((id: string) => ({ id, sessionId: target.channelId }));
+    // Same merge as the session listing: channel terminals are held by
+    // whichever replica created them, so the local relay alone answers
+    // differently depending on who serves the request.
+    const candidates = await this.terminalsInScope({
+      kind: "channel",
+      id: target.channelId,
+      runtimeInstanceId: target.runtimeInstanceId,
+    });
+    return candidates
+      .filter((candidate) => candidate.ownerUserId === userId)
+      .map((candidate) => ({ id: candidate.id, sessionId: target.channelId }));
   }
 
   async destroy({
@@ -560,10 +612,21 @@ class TerminalService {
       },
     });
     if (!session) throw new Error("Terminal not found");
-    const runtimeInstanceId = await this.assertTerminalAccess(session, userId, "deny");
-    if (!runtimeInstanceId) return true;
+    const access = await this.resolveTerminalAccess(session, userId);
+    if (!access.ok && access.reason === "forbidden") throw new Error("Terminal not found");
 
-    await terminalRelay.destroyTerminalDistributed(terminalId);
+    // A close has to converge. A terminal nobody holds is already gone, and
+    // with no reachable runtime there is no PTY left to kill — in both cases
+    // the tab still has to go, or it keeps coming back in listings and the
+    // user cannot get rid of it.
+    try {
+      await terminalRelay.destroyTerminalDistributed(terminalId);
+    } catch (error: unknown) {
+      console.warn(
+        `[terminal] destroy did not reach ${terminalId}:`,
+        error instanceof Error ? error.message : error,
+      );
+    }
     await eventService.create({
       organizationId,
       scopeType: "session",
@@ -614,8 +677,13 @@ class TerminalService {
       )
         throw new AuthorizationError("Session credential cannot access this terminal");
     }
-    const runtimeInstanceId = await this.assertTerminalAccess(session, userId, "deny");
-    if (!runtimeInstanceId || runtimeInstanceId !== auth.runtimeInstanceId)
+    const access = await this.resolveTerminalAccess(session, userId);
+    if (!access.ok) {
+      throw new AuthorizationError(
+        access.reason === "forbidden" ? "Not authorized for this terminal" : "Runtime disconnected",
+      );
+    }
+    if (access.runtimeInstanceId !== auth.runtimeInstanceId)
       throw new AuthorizationError("Runtime disconnected");
   }
 

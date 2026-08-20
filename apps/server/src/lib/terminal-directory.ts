@@ -16,9 +16,22 @@ export type TerminalDescriptor = {
   ownerUserId: string | null;
   runtimeInstanceId: string;
   organizationId?: string;
+  /**
+   * Last known dimensions, cached here so a listing does not have to ask the
+   * owning replica per terminal. Refreshed by `refreshDimensions` on resize —
+   * the owning relay entry remains the source of truth.
+   */
   cols?: number;
   rows?: number;
   expiresAt: number;
+};
+
+type CachedDescriptor = TerminalDescriptor & { cachedAt: number };
+
+/** The scopes terminals are indexed under. One index shape for every listing. */
+export type TerminalDirectoryScope = {
+  kind: "session" | "group" | "channel";
+  id: string;
 };
 
 export class TerminalDirectory {
@@ -48,7 +61,11 @@ export class TerminalDirectory {
     const cached = this.descriptors.get(terminalId);
     if (cached && cached.expiresAt > Date.now()) return cached;
     if (!realtimeBackplane.enabled) return undefined;
-    const value = await redis.get(this.key(terminalId));
+    return this.accept(terminalId, await redis.get(this.key(terminalId)));
+  }
+
+  /** Validate and cache a stored descriptor. Shared by the single and batched reads. */
+  private accept(terminalId: string, value: string | null): TerminalDescriptor | undefined {
     if (!value) return undefined;
     try {
       const descriptor = JSON.parse(value) as TerminalDescriptor;
@@ -70,6 +87,20 @@ export class TerminalDirectory {
     }
   }
 
+  /** Keep the cached dimensions in step with the owning relay entry. */
+  refreshDimensions(terminalId: string, cols: number, rows: number): void {
+    const cached = this.descriptors.get(terminalId);
+    if (!cached || cached.frontendReplicaId !== realtimeBackplane.replicaId) return;
+    if (cached.cols === cols && cached.rows === rows) return;
+    const descriptor: TerminalDescriptor = { ...cached, cols, rows };
+    this.descriptors.set(terminalId, descriptor);
+    if (!realtimeBackplane.enabled) return;
+    const ttl = Math.max(descriptor.expiresAt - Date.now(), 1);
+    void redis
+      .set(this.key(terminalId), JSON.stringify(descriptor), "PX", ttl)
+      .catch((error) => console.error("[terminal-directory] dimension refresh failed:", error));
+  }
+
   remove(terminalId: string): void {
     const cached = this.descriptors.get(terminalId);
     this.descriptors.delete(terminalId);
@@ -88,22 +119,14 @@ export class TerminalDirectory {
   }
 
   /**
-   * Live descriptors for every terminal in a session group, including the ones
-   * owned by other replicas. The relay's in-process indexes only see this
-   * replica's terminals, so a list built from them alone flickers between
-   * replicas and invites duplicate terminals.
+   * Live descriptors for every terminal in a scope, including the ones owned by
+   * other replicas. The relay's in-process indexes only see this replica's
+   * terminals, so a list built from them alone flickers with whichever replica
+   * served the request and invites duplicate terminals.
    */
-  async listForSessionGroup(sessionGroupId: string): Promise<TerminalDescriptor[]> {
-    return this.listForScope(this.scopeKey("group", sessionGroupId));
-  }
-
-  /** Live descriptors for every terminal owned by a single session. */
-  async listForSession(sessionId: string): Promise<TerminalDescriptor[]> {
-    return this.listForScope(this.scopeKey("session", sessionId));
-  }
-
-  private async listForScope(scopeKey: string): Promise<TerminalDescriptor[]> {
+  async listForScope(scope: TerminalDirectoryScope): Promise<TerminalDescriptor[]> {
     if (!realtimeBackplane.enabled) return [];
+    const scopeKey = this.scopeKey(scope.kind, scope.id);
     let terminalIds: string[];
     try {
       terminalIds = await redis.smembers(scopeKey);
@@ -111,17 +134,31 @@ export class TerminalDirectory {
       console.error("[terminal-directory] scope read failed:", error);
       return [];
     }
-    const descriptors = await Promise.all(
-      terminalIds.map(async (terminalId) => {
-        const descriptor = await this.get(terminalId);
-        if (!descriptor) {
-          void redis.srem(scopeKey, terminalId).catch(() => undefined);
-          return undefined;
-        }
-        return descriptor;
-      }),
-    );
-    return descriptors.filter((descriptor): descriptor is TerminalDescriptor => !!descriptor);
+    if (terminalIds.length === 0) return [];
+
+    let values: Array<string | null>;
+    try {
+      values = await redis.mget(terminalIds.map((terminalId) => this.key(terminalId)));
+    } catch (error) {
+      console.error("[terminal-directory] scope descriptor read failed:", error);
+      return [];
+    }
+
+    const descriptors: TerminalDescriptor[] = [];
+    const expired: string[] = [];
+    terminalIds.forEach((terminalId, index) => {
+      const descriptor = this.accept(terminalId, values[index] ?? null);
+      if (descriptor) descriptors.push(descriptor);
+      else expired.push(terminalId);
+    });
+    // Members whose descriptor has expired or was removed by a replica that
+    // died mid-cleanup are pruned here, so the set self-heals on read.
+    if (expired.length > 0) {
+      void redis
+        .srem(scopeKey, ...expired)
+        .catch((error) => console.error("[terminal-directory] scope prune failed:", error));
+    }
+    return descriptors;
   }
 
   private scopeKeys(descriptor: TerminalDescriptor): string[] {
@@ -129,10 +166,13 @@ export class TerminalDirectory {
     if (descriptor.sessionGroupId) {
       keys.push(this.scopeKey("group", descriptor.sessionGroupId));
     }
+    if (descriptor.channelId) {
+      keys.push(this.scopeKey("channel", descriptor.channelId));
+    }
     return keys;
   }
 
-  private scopeKey(kind: "session" | "group", id: string): string {
+  private scopeKey(kind: TerminalDirectoryScope["kind"], id: string): string {
     return `${TERMINAL_SCOPE_PREFIX}:${kind}:${id}`;
   }
 
