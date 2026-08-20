@@ -5,6 +5,8 @@ import { sessionEventsCommand } from "./events.js";
 import { sessionGetCommand } from "./get.js";
 import { sessionListCommand } from "./list.js";
 import { sessionRunCommand } from "./run.js";
+import { sessionSetBranchCommand } from "./set-branch.js";
+import { sessionSetTitleCommand } from "./set-title.js";
 import { sessionSendCommand } from "./send.js";
 import { sessionStartCommand } from "./start.js";
 import { sessionConvertCommand } from "./convert.js";
@@ -20,5 +22,7 @@ export const sessionCommands: readonly CommandDefinition[] = [
   sessionStopCommand,
   sessionArchiveCommand,
   sessionLinkPrCommand,
+  sessionSetTitleCommand,
+  sessionSetBranchCommand,
   sessionEventsCommand,
 ];

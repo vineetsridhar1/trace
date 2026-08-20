@@ -524,6 +524,30 @@ export const sessionMutations = {
       throw toGraphQLError(error);
     }
   },
+  setSessionTitle: async (_: unknown, args: { sessionId: string; title: string }, ctx: Context) => {
+    const organizationId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, organizationId);
+    try {
+      await sessionService.setTitle(args.sessionId, args.title);
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
+    return sessionService.get(args.sessionId, organizationId, ctx.userId);
+  },
+  setSessionBranch: async (
+    _: unknown,
+    args: { sessionId: string; branch: string },
+    ctx: Context,
+  ) => {
+    const organizationId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, organizationId);
+    try {
+      await sessionService.setBranch(args.sessionId, args.branch);
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
+    return sessionService.get(args.sessionId, organizationId, ctx.userId);
+  },
   renameSessionGroup: (_: unknown, args: { id: string; name: string }, ctx: Context) => {
     return sessionService.renameGroup(
       args.id,

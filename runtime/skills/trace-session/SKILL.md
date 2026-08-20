@@ -144,6 +144,17 @@ Start a separate session only for independent or parallel work.
 
 Use `--self` instead of an ID to target the current session. Be careful: stopping or archiving `--self` can end your own ability to continue. If another session is actively running, queueing is normally the least disruptive way to add follow-up work.
 
+Name a session and report its branch with:
+
+```sh
+"$TRACE_CLI" session set-title "Fix the login redirect loop" --self --json
+"$TRACE_CLI" session set-branch trace-abc123-login-fix --self --json
+```
+
+Set the title once, at the start of the session, and do not retitle unless the user asks for a
+rename. Run `set-branch` after creating or renaming a branch, once it is checked out: Trace verifies
+the name against the session's live workspace and ignores a branch that is not actually there.
+
 When linking a pull request, Trace validates the session repository, channel repository, and GitHub
 remote before recording the PR. If an association is missing, inspect the relevant repo or channel,
 use `repo attach-remote` or `channel link-repo` with verified values, then retry `session link-pr`.

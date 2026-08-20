@@ -1140,6 +1140,16 @@ export type Mutation = {
   setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
+  /**
+   * Record the git branch the session is working on. Used by the agent after it
+   * creates or renames a branch, replacing the in-band `<trace-branch>` tag.
+   */
+  setSessionBranch: Session;
+  /**
+   * Set the session's title. Used by the agent to name a session from its own
+   * understanding of the work, replacing the in-band `<trace-title>` tag.
+   */
+  setSessionTitle: Session;
   startSession: Session;
   startSessionApplication: Array<SessionApplicationProcess>;
   startSessionProcess: SessionApplicationProcess;
@@ -1689,6 +1699,16 @@ export type MutationSetLinkedCheckoutAutoSyncArgs = {
 
 export type MutationSetOrgSecretArgs = {
   input: SetOrgSecretInput;
+};
+
+export type MutationSetSessionBranchArgs = {
+  branch: Scalars["String"]["input"];
+  sessionId: Scalars["ID"]["input"];
+};
+
+export type MutationSetSessionTitleArgs = {
+  sessionId: Scalars["ID"]["input"];
+  title: Scalars["String"]["input"];
 };
 
 export type MutationStartSessionArgs = {

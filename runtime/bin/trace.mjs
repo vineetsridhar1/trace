@@ -567,6 +567,26 @@ var traceCliOperations = {
       linkSessionPullRequest(sessionId: $sessionId, prUrl: $prUrl) { id name status prUrl }
     }`
   }),
+  setSessionTitle: operation({
+    name: "TraceCliSetSessionTitle",
+    type: "mutation",
+    rootField: "setSessionTitle",
+    capability: "session:set-title",
+    argumentPaths: ["sessionId", "title"],
+    document: `mutation TraceCliSetSessionTitle($sessionId: ID!, $title: String!) {
+      setSessionTitle(sessionId: $sessionId, title: $title) { ${SESSION_FIELDS} }
+    }`
+  }),
+  setSessionBranch: operation({
+    name: "TraceCliSetSessionBranch",
+    type: "mutation",
+    rootField: "setSessionBranch",
+    capability: "session:set-branch",
+    argumentPaths: ["sessionId", "branch"],
+    document: `mutation TraceCliSetSessionBranch($sessionId: ID!, $branch: String!) {
+      setSessionBranch(sessionId: $sessionId, branch: $branch) { ${SESSION_FIELDS} }
+    }`
+  }),
   sessionEvents: operation({
     name: "TraceCliSessionEvents",
     type: "query",
@@ -2636,6 +2656,68 @@ var sessionRunCommand = defineCommand({
   }
 });
 
+// src/commands/session/set-branch.ts
+var sessionSetBranchCommand = defineCommand({
+  path: ["session", "set-branch"],
+  description: "Record the git branch a session is working on",
+  examples: [
+    '"$TRACE_CLI" session set-branch trace-abc123-login-fix --self --json',
+    '"$TRACE_CLI" session set-branch <branch-name> <session-id> --json'
+  ],
+  effects: ["Points the session group at the branch and emits the branch event."],
+  output: "The session, with its recorded branch.",
+  nextSteps: ["Run this after creating or renaming a branch, once the branch is checked out."],
+  notes: [
+    "Trace verifies the name against the session's live workspace and ignores a branch that is not actually checked out."
+  ],
+  positionals: [{ name: "branch", required: true }, { name: "session-id" }],
+  options: [
+    {
+      name: "self",
+      flag: "--self",
+      kind: "boolean",
+      description: "Record the branch for the current session"
+    }
+  ],
+  async run(ctx, input) {
+    const branch = input.positionals[0]?.trim();
+    if (!branch) usage("A branch name is required");
+    const sessionId = optionBoolean(input, "self") ? resolveSessionId(ctx) : resolveSessionId(ctx, input.positionals[1]);
+    const result = await (await ctx.client()).graphql(traceCliOperations.setSessionBranch, { sessionId, branch });
+    ctx.output({ session: result.setSessionBranch }, `Recorded branch for ${sessionId}`);
+  }
+});
+
+// src/commands/session/set-title.ts
+var sessionSetTitleCommand = defineCommand({
+  path: ["session", "set-title"],
+  description: "Set the title of a session",
+  examples: [
+    '"$TRACE_CLI" session set-title "Fix the login redirect loop" --self --json',
+    '"$TRACE_CLI" session set-title "<title>" <session-id> --json'
+  ],
+  effects: ["Renames the session and emits the title event so open clients update."],
+  output: "The renamed session.",
+  nextSteps: [
+    "Name the session once, at the start. Do not retitle unless the user asks for a rename."
+  ],
+  notes: [
+    "Use a short title (5-8 words) describing the overall goal of the session.",
+    "Titles longer than 80 characters are truncated."
+  ],
+  positionals: [{ name: "title", required: true }, { name: "session-id" }],
+  options: [
+    { name: "self", flag: "--self", kind: "boolean", description: "Title the current session" }
+  ],
+  async run(ctx, input) {
+    const title = input.positionals[0]?.trim();
+    if (!title) usage("A session title is required");
+    const sessionId = optionBoolean(input, "self") ? resolveSessionId(ctx) : resolveSessionId(ctx, input.positionals[1]);
+    const result = await (await ctx.client()).graphql(traceCliOperations.setSessionTitle, { sessionId, title });
+    ctx.output({ session: result.setSessionTitle }, `Titled ${sessionId}`);
+  }
+});
+
 // src/commands/session/send.ts
 import { randomUUID as randomUUID3 } from "node:crypto";
 var sessionSendCommand = defineCommand({
@@ -3072,6 +3154,8 @@ var sessionCommands = [
   sessionStopCommand,
   sessionArchiveCommand,
   sessionLinkPrCommand,
+  sessionSetTitleCommand,
+  sessionSetBranchCommand,
   sessionEventsCommand
 ];
 

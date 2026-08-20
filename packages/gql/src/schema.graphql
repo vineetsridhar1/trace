@@ -2109,6 +2109,16 @@ type Mutation {
   deleteSession(id: ID!): Session!
   archiveSessionGroup(id: ID!): SessionGroup
   linkSessionPullRequest(sessionId: ID!, prUrl: String!): SessionGroup!
+  """
+  Set the session's title. Used by the agent to name a session from its own
+  understanding of the work, replacing the in-band `<trace-title>` tag.
+  """
+  setSessionTitle(sessionId: ID!, title: String!): Session!
+  """
+  Record the git branch the session is working on. Used by the agent after it
+  creates or renames a branch, replacing the in-band `<trace-branch>` tag.
+  """
+  setSessionBranch(sessionId: ID!, branch: String!): Session!
   renameSessionGroup(id: ID!, name: String!): SessionGroup!
   updateSessionGroupVisibility(id: ID!, visibility: SessionGroupVisibility!): SessionGroup!
   deleteSessionGroup(id: ID!): Boolean!

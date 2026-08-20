@@ -18,6 +18,8 @@ export const TRACE_CLI_CAPABILITIES = [
   "session:stop",
   "session:archive",
   "session:link-pr",
+  "session:set-title",
+  "session:set-branch",
   "terminal:control",
   "workspace:control",
 ] as const;
@@ -595,6 +597,26 @@ export const traceCliOperations = {
     argumentPaths: ["sessionId", "prUrl"],
     document: `mutation TraceCliLinkSessionPullRequest($sessionId: ID!, $prUrl: String!) {
       linkSessionPullRequest(sessionId: $sessionId, prUrl: $prUrl) { id name status prUrl }
+    }`,
+  }),
+  setSessionTitle: operation({
+    name: "TraceCliSetSessionTitle",
+    type: "mutation",
+    rootField: "setSessionTitle",
+    capability: "session:set-title",
+    argumentPaths: ["sessionId", "title"],
+    document: `mutation TraceCliSetSessionTitle($sessionId: ID!, $title: String!) {
+      setSessionTitle(sessionId: $sessionId, title: $title) { ${SESSION_FIELDS} }
+    }`,
+  }),
+  setSessionBranch: operation({
+    name: "TraceCliSetSessionBranch",
+    type: "mutation",
+    rootField: "setSessionBranch",
+    capability: "session:set-branch",
+    argumentPaths: ["sessionId", "branch"],
+    document: `mutation TraceCliSetSessionBranch($sessionId: ID!, $branch: String!) {
+      setSessionBranch(sessionId: $sessionId, branch: $branch) { ${SESSION_FIELDS} }
     }`,
   }),
   sessionEvents: operation({

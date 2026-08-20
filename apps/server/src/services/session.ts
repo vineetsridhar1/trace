@@ -1082,17 +1082,25 @@ type ConversationLineSource = {
   text: string;
 };
 
-/** Instruction appended to every session prompt so the AI can set or update the title at any time. */
+/**
+ * Instruction appended to the first prompt of a session so the AI names it.
+ *
+ * The exact command is inlined rather than discovered through `--help --json`:
+ * naming a session is a one-shot side task and should not cost a discovery
+ * round trip. Only sent on the first run — re-sending it every turn made the
+ * agent retitle mid-session despite the "once" wording.
+ */
 const TITLE_INSTRUCTION = `\n\n<system-instruction>
-You may set or update the session title by outputting a short title (5-8 words) wrapped in XML tags: <trace-title>Your title here</trace-title>.
-Do this ONCE at the start of your very first response to capture the overall goal of the session. After that, do NOT update the title unless the user explicitly asks you to rename/retitle it. Debugging, iterating, or continuing work on the same goal is not a reason to change the title. The tag will be stripped and not shown to the user.
+At the start of your first response, name this session by running exactly:
+\`"$TRACE_CLI" session set-title "<title>" --self --json\`
+Use a short title (5-8 words) capturing the overall goal of the session. Do this once. Do not set the title again unless the user explicitly asks you to rename or retitle the session — debugging, iterating, or continuing work on the same goal is not a reason to change it.
 </system-instruction>`;
 
 /** Instruction appended to repo-based sessions so the AI reports branch name changes. */
 const BRANCH_INSTRUCTION = `\n\n<system-instruction>
 On the first response in a repo-based session, if the current git branch is still the default trace-<slug> branch, rename it to trace-<slug>-<descriptive-name>. Keep the descriptive name short, lowercase, hyphenated, and slash-free. Do not use "/" in AI-generated branch names. If the branch is already descriptive or differs from trace-<slug>, do not rename it.
-When you create or rename a git branch, output the full branch name wrapped in XML tags: <trace-branch>branch-name</trace-branch>.
-This lets the system track which branch this session is working on. The tag will be stripped and not shown to the user.
+Whenever you create or rename a git branch, tell Trace which branch this session is on by running exactly:
+\`"$TRACE_CLI" session set-branch "<branch-name>" --self --json\`
 </system-instruction>`;
 
 /** Instruction appended to every session prompt so the AI waits for background work it started. */
@@ -1248,9 +1256,17 @@ function appendAutoSave(prompt: string, hasRepo: boolean): string {
 /** Append all system instructions (title, background work, branch, auto-save) to a prompt in the correct order. */
 function appendPromptInstructions(
   prompt: string,
-  { hasRepo, sessionGroupKind }: { hasRepo: boolean; sessionGroupKind?: SessionGroupKind | null },
+  {
+    hasRepo,
+    sessionGroupKind,
+    isFirstRun,
+  }: {
+    hasRepo: boolean;
+    sessionGroupKind?: SessionGroupKind | null;
+    isFirstRun: boolean;
+  },
 ): string {
-  let result = prompt + TITLE_INSTRUCTION;
+  let result = isFirstRun ? prompt + TITLE_INSTRUCTION : prompt;
   result += BACKGROUND_WORK_INSTRUCTION;
   result += REQUEST_USER_INPUT_SKILL_INSTRUCTION;
   result += TRACE_CLI_DISCOVERY_INSTRUCTION;
@@ -1301,11 +1317,17 @@ function shouldPreserveWorkspaceBranchName({
   return !channelBaseBranch || branch !== channelBaseBranch;
 }
 
-/** Regex to extract <trace-title>…</trace-title> from assistant output. */
-const TITLE_TAG_RE = /<trace-title>([\s\S]*?)<\/trace-title>/;
-
-/** Regex to extract <trace-branch>…</trace-branch> from assistant output. */
-const BRANCH_TAG_RE = /<trace-branch>([\s\S]*?)<\/trace-branch>/;
+/**
+ * Strips the retired in-band `<trace-title>` / `<trace-branch>` tags from assistant text.
+ *
+ * Titles and branches now come from `session set-title` / `session set-branch`, so these
+ * tags carry no meaning — this only stops them rendering. The closing tag is optional and
+ * its name is not checked on purpose: the model reliably closed `<trace-title>` with
+ * `</parameter>` (the shape it emits for real tool calls), and an unclosed or
+ * wrongly-closed tag is exactly the case that used to leak to the UI. Matching stops at a
+ * newline or `<` so a stray opening tag can never swallow the rest of the message.
+ */
+const LEGACY_TRACE_TAG_RE = /<trace-(?:title|branch)>[^\n<]*(?:<\/[a-zA-Z-]+>)?/g;
 
 /**
  * Build a conversation transcript from durable session messages.
@@ -5598,6 +5620,7 @@ export class SessionService {
       resolvedPrompt = appendPromptInstructions(resolvedPrompt, {
         hasRepo: !!session.repo,
         sessionGroupKind: session.sessionGroup?.kind,
+        isFirstRun,
       });
     }
 
@@ -6495,9 +6518,9 @@ export class SessionService {
   }
 
   async recordOutput(sessionId: string, data: Record<string, unknown>) {
-    // Extract and strip <trace-title> and <trace-branch> tags from assistant text before persisting
-    const extractedTitle = this.extractAndStripTitle(data);
-    const extractedBranch = this.extractAndStripBranch(data);
+    // Titles and branches arrive through the CLI now; only strip the retired tags
+    // so nothing leaks into the persisted text.
+    this.stripLegacyTraceTags(data);
     const pendingInfo = extractPendingInputInfo(data);
 
     const session = await prisma.session.findUnique({
@@ -6508,8 +6531,6 @@ export class SessionService {
         agentStatus: true,
         sessionStatus: true,
         sessionGroupId: true,
-        workdir: true,
-        connection: true,
       },
     });
     if (!session) return;
@@ -6545,17 +6566,6 @@ export class SessionService {
 
     if (data.usage) {
       await this.recordUsage(sessionId, session.organizationId, data);
-    }
-
-    // If we found a title tag, update the session name
-    if (extractedTitle) {
-      await this.updateName(sessionId, extractedTitle);
-    }
-
-    // Treat the assistant tag as a notification, not authority. Only the branch
-    // observed in the session's active workspace may update persisted state.
-    if (extractedBranch) {
-      await this.updateBranchFromWorkspace(sessionId, extractedBranch, session);
     }
 
     // If this output contains a QuestionBlock or PlanBlock, transition to needs_input immediately.
@@ -6719,59 +6729,49 @@ export class SessionService {
   }
 
   /**
-   * Look for <session-title>…</session-title> in assistant text blocks.
-   * If found, strip the tag from the text content (mutates data in place)
-   * and return the extracted title. Returns null if no tag found.
+   * Remove retired `<trace-title>` / `<trace-branch>` tags from assistant text
+   * (mutates data in place) so they never render. Every text block is scanned —
+   * the old code returned after the first block that matched, which left tags in
+   * later blocks of the same message intact.
    */
-  private extractAndStripTitle(data: Record<string, unknown>): string | null {
-    if (data.type !== "assistant") return null;
+  private stripLegacyTraceTags(data: Record<string, unknown>): void {
+    if (data.type !== "assistant") return;
 
     const message = data.message as Record<string, unknown> | undefined;
     const content = message?.content;
-    if (!Array.isArray(content)) return null;
+    if (!Array.isArray(content)) return;
 
     for (const block of content) {
       const b = block as Record<string, unknown>;
       if (b.type !== "text" || typeof b.text !== "string") continue;
-
-      const match = TITLE_TAG_RE.exec(b.text);
-      if (match) {
-        const title = match[1].trim().slice(0, MAX_SESSION_NAME_LENGTH);
-        // Strip all title tags from the text so none leak to the UI
-        b.text = b.text.replace(/<trace-title>[\s\S]*?<\/trace-title>/g, "").trimStart();
-        return title || null;
-      }
+      if (!b.text.includes("<trace-")) continue;
+      b.text = b.text.replace(LEGACY_TRACE_TAG_RE, "").trimStart();
     }
-
-    return null;
   }
 
   /**
-   * Look for <trace-branch>…</trace-branch> in assistant text blocks.
-   * If found, strip the tag from the text content (mutates data in place)
-   * and return the extracted branch name. Returns null if no tag found.
+   * Agent-facing entry point for `"$TRACE_CLI" session set-title`.
+   * Trims and clamps the title the same way the legacy tag path did.
    */
-  private extractAndStripBranch(data: Record<string, unknown>): string | null {
-    if (data.type !== "assistant") return null;
+  async setTitle(sessionId: string, title: string) {
+    const trimmed = title.trim().slice(0, MAX_SESSION_NAME_LENGTH);
+    if (!trimmed) throw new ValidationError("A session title is required");
+    await this.updateName(sessionId, trimmed);
+  }
 
-    const message = data.message as Record<string, unknown> | undefined;
-    const content = message?.content;
-    if (!Array.isArray(content)) return null;
-
-    for (const block of content) {
-      const b = block as Record<string, unknown>;
-      if (b.type !== "text" || typeof b.text !== "string") continue;
-
-      const match = BRANCH_TAG_RE.exec(b.text);
-      if (match) {
-        const branch = match[1].trim();
-        // Strip all branch tags from the text so none leak to the UI
-        b.text = b.text.replace(/<trace-branch>[\s\S]*?<\/trace-branch>/g, "").trimStart();
-        return branch || null;
-      }
-    }
-
-    return null;
+  /**
+   * Agent-facing entry point for `"$TRACE_CLI" session set-branch`.
+   * The reported name is still only a notification — updateBranchFromWorkspace
+   * verifies it against the session's live workspace before persisting anything.
+   */
+  async setBranch(sessionId: string, branch: string) {
+    const trimmed = branch.trim();
+    if (!trimmed) throw new ValidationError("A branch name is required");
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { organizationId: true, workdir: true, connection: true },
+    });
+    await this.updateBranchFromWorkspace(sessionId, trimmed, session);
   }
 
   private async updateBranch(sessionId: string, branch: string) {
@@ -7286,6 +7286,7 @@ export class SessionService {
     prompt = appendPromptInstructions(prompt, {
       hasRepo: !!session.repoId,
       sessionGroupKind: session.sessionGroup?.kind,
+      isFirstRun: !session.toolSessionId,
     });
     prompt = appendArtifactSkillInstruction(prompt, interactionMode);
 
@@ -8865,6 +8866,7 @@ export class SessionService {
     prompt = appendPromptInstructions(prompt, {
       hasRepo: !!session.repoId,
       sessionGroupKind: session.sessionGroup?.kind,
+      isFirstRun: false,
     });
     prompt = appendArtifactSkillInstruction(prompt, options.interactionMode);
 
@@ -12001,6 +12003,7 @@ export class SessionService {
       prompt = appendPromptInstructions(prompt, {
         hasRepo: !!session.repoId,
         sessionGroupKind: session.sessionGroup?.kind,
+        isFirstRun: !session.toolSessionId,
       });
       prompt = appendArtifactSkillInstruction(prompt, pending.interactionMode);
     }

@@ -4306,7 +4306,9 @@ describe("SessionService", () => {
         makeGitSyncStatus({ headCommitSha: "committed-head", hasUncommittedChanges: true }),
       );
 
-      await expect(resolver.resolveForkBaseCommitSha(sourceSession)).resolves.toBe("committed-head");
+      await expect(resolver.resolveForkBaseCommitSha(sourceSession)).resolves.toBe(
+        "committed-head",
+      );
     });
   });
 
@@ -5362,16 +5364,13 @@ describe("SessionService", () => {
       );
     });
 
-    it("preserves the full branch name when syncing a trace-branch tag", async () => {
-      const branch = `feature/${"x".repeat(140)}`;
+    it("strips retired trace tags from every text block without renaming the session", async () => {
       const data = {
         type: "assistant",
         message: {
           content: [
-            {
-              type: "text",
-              text: `<trace-branch>${branch}</trace-branch>\nCreated the branch.`,
-            },
+            { type: "text", text: "<trace-title>Some title</trace-title>\nFirst block." },
+            { type: "text", text: "<trace-title>Another title</trace-title>\nSecond block." },
           ],
         },
       };
@@ -5384,52 +5383,35 @@ describe("SessionService", () => {
         workdir: "/workspaces/session-1",
         connection: { runtimeInstanceId: "runtime-1" },
       });
-      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce({ key: "runtime-1" });
-      sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValueOnce(branch);
-      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
-        organizationId: "org-1",
-        sessionGroupId: "group-1",
-      });
-      prismaMock.sessionGroup.update.mockResolvedValueOnce(makeSessionGroup({ branch }));
-      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
-      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
-        ...makeSessionGroup({ branch }),
-        sessions: [{ agentStatus: "done", sessionStatus: "in_progress" }],
-      });
 
       await service.recordOutput("session-1", data as Record<string, unknown>);
 
-      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
-        where: { sessionGroupId: "group-1" },
-        data: { branch },
-      });
-      expect(eventServiceMock.create).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({
-          eventType: "session_output",
-          payload: expect.objectContaining({
-            type: "branch_renamed",
-            branch,
-          }),
-        }),
+      const blocks = (data.message as { content: Array<{ text?: string }> }).content;
+      expect(blocks[0].text).toBe("First block.");
+      // The old parser returned after the first matching block, leaving this one intact.
+      expect(blocks[1].text).toBe("Second block.");
+      // recordOutput still touches lastMessageAt; what must not happen is a rename.
+      expect(prismaMock.session.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ name: expect.anything() }) }),
       );
-      expect(
-        (data.message as { content: Array<{ text?: string }> }).content[0].text ?? "",
-      ).not.toContain("<trace-branch>");
     });
 
-    it("ignores a trace-branch tag that does not match the prepared workspace", async () => {
+    it("strips a trace tag closed with the wrong tag name", async () => {
+      // The model reliably closed <trace-title> with </parameter>, the shape it
+      // emits for real tool calls. The old regex required a matching closer, so
+      // the whole tag rendered to the user verbatim.
       const data = {
         type: "assistant",
         message: {
           content: [
             {
               type: "text",
-              text: "<trace-branch>branch-from-another-checkout</trace-branch>",
+              text: "<trace-title>Initial greeting</parameter>\n\nHey! What can I help with?",
             },
           ],
         },
       };
+
       prismaMock.session.findUnique.mockResolvedValueOnce({
         organizationId: "org-1",
         agentStatus: "done",
@@ -5438,17 +5420,36 @@ describe("SessionService", () => {
         workdir: "/workspaces/session-1",
         connection: { runtimeInstanceId: "runtime-1" },
       });
-      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce({ key: "runtime-1" });
-      sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValueOnce("actual-session-branch");
 
       await service.recordOutput("session-1", data as Record<string, unknown>);
 
-      expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith("runtime-1", {
-        sessionId: "session-1",
-        workdirHint: "/workspaces/session-1",
+      const text = (data.message as { content: Array<{ text?: string }> }).content[0].text ?? "";
+      expect(text).toBe("Hey! What can I help with?");
+      expect(text).not.toContain("trace-title");
+    });
+
+    it("strips an unclosed trace tag without swallowing the rest of the message", async () => {
+      const data = {
+        type: "assistant",
+        message: {
+          content: [{ type: "text", text: "<trace-title>Unclosed title\nThe real answer." }],
+        },
+      };
+
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        organizationId: "org-1",
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+        workdir: "/workspaces/session-1",
+        connection: { runtimeInstanceId: "runtime-1" },
       });
-      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
-      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+
+      await service.recordOutput("session-1", data as Record<string, unknown>);
+
+      expect((data.message as { content: Array<{ text?: string }> }).content[0].text).toBe(
+        "The real answer.",
+      );
     });
 
     it("records the first pending question for a tool_use id", async () => {
@@ -5681,6 +5682,100 @@ describe("SessionService", () => {
         }),
       );
       expect(inboxServiceMock.createItem).toHaveBeenCalled();
+    });
+  });
+
+  describe("setTitle", () => {
+    it("trims, clamps, and renames the session", async () => {
+      const longTitle = "y".repeat(200);
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        name: "old name",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        sessionGroup: { name: "other name" },
+      });
+      prismaMock.session.update.mockResolvedValueOnce({ organizationId: "org-1" });
+
+      await service.setTitle("session-1", `  ${longTitle}  `);
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: { name: "y".repeat(80) },
+        select: { organizationId: true },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({ type: "title_generated" }),
+        }),
+      );
+    });
+
+    it("rejects a blank title", async () => {
+      await expect(service.setTitle("session-1", "   ")).rejects.toThrow(
+        "A session title is required",
+      );
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("setBranch", () => {
+    it("records a branch that matches the live workspace", async () => {
+      const branch = `feature/${"x".repeat(140)}`;
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        organizationId: "org-1",
+        workdir: "/workspaces/session-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+      });
+      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce({ key: "runtime-1" });
+      sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValueOnce(branch);
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+      });
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(makeSessionGroup({ branch }));
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup({ branch }),
+        sessions: [{ agentStatus: "done", sessionStatus: "in_progress" }],
+      });
+
+      await service.setBranch("session-1", branch);
+
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { sessionGroupId: "group-1" },
+        data: { branch },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ type: "branch_renamed", branch }),
+        }),
+      );
+    });
+
+    it("ignores a branch that is not checked out in the workspace", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        organizationId: "org-1",
+        workdir: "/workspaces/session-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+      });
+      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce({ key: "runtime-1" });
+      sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValueOnce("actual-session-branch");
+
+      await service.setBranch("session-1", "branch-from-another-checkout");
+
+      expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith("runtime-1", {
+        sessionId: "session-1",
+        workdirHint: "/workspaces/session-1",
+      });
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects a blank branch name", async () => {
+      await expect(service.setBranch("session-1", "  ")).rejects.toThrow(
+        "A branch name is required",
+      );
     });
   });
 
