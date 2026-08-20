@@ -21,11 +21,13 @@ export function BrowserWorkspacePanel({
   sessionGroupId,
   browserId,
   initialUrl,
+  sessionHosting,
   onTitleChange,
 }: {
   sessionGroupId: string;
   browserId: string;
   initialUrl?: string;
+  sessionHosting?: string;
   onTitleChange?: (browserId: string, title: string) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -36,7 +38,8 @@ export function BrowserWorkspacePanel({
   const [error, setError] = useState<string | null>(null);
   const attachedCheckout = useAttachedCheckoutForGroup(sessionGroupId);
   const desktopBridgeInfo = useDesktopBridgeInfo();
-  const syncStatus = getBranchSyncStatus(
+  const syncIndicator = getBrowserSyncIndicator(
+    sessionHosting,
     attachedCheckout?.bridgeInstanceId ?? null,
     desktopBridgeInfo?.instanceId,
   );
@@ -213,10 +216,10 @@ export function BrowserWorkspacePanel({
         />
         <span
           className="app-region-no-drag flex h-7 items-center gap-1.5 px-1.5 text-xs text-muted-foreground"
-          title={branchSyncStatusLabel(syncStatus)}
-          aria-label={branchSyncStatusLabel(syncStatus)}
+          title={syncIndicator.label}
+          aria-label={syncIndicator.label}
         >
-          <span className={cn("h-2 w-2 rounded-full", branchSyncStatusColor(syncStatus))} />
+          <span className={cn("h-2 w-2 rounded-full", syncIndicator.color)} />
           Sync
         </span>
       </form>
@@ -231,6 +234,19 @@ export function BrowserWorkspacePanel({
 }
 
 type BranchSyncStatus = "checking" | "synced" | "behind" | "outOfSync";
+
+export function getBrowserSyncIndicator(
+  sessionHosting: string | undefined,
+  attachedBridgeInstanceId: string | null,
+  desktopBridgeInstanceId: string | null | undefined,
+) {
+  if (sessionHosting === "cloud") {
+    return { color: "bg-emerald-500", label: "Cloud sessions are always synced." };
+  }
+
+  const status = getBranchSyncStatus(attachedBridgeInstanceId, desktopBridgeInstanceId);
+  return { color: branchSyncStatusColor(status), label: branchSyncStatusLabel(status) };
+}
 
 export function getBranchSyncStatus(
   attachedBridgeInstanceId: string | null,

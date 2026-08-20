@@ -1,4 +1,5 @@
 import { Files, GitCompareArrows, Globe, PanelRightClose, TerminalSquare } from "lucide-react";
+import { useEntityField } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import { BranchChangesPanel } from "./BranchChangesPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
@@ -155,6 +156,9 @@ export function WorkspaceSurfaceContent({
   onBridgeAccessRequested,
 }: WorkspaceSurfaceContentProps) {
   const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess ?? null);
+  const sessionHosting = useEntityField("sessions", activeSessionId ?? "", "hosting") as
+    | string
+    | undefined;
 
   return (
     <section className="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-surface-deep">
@@ -171,6 +175,7 @@ export function WorkspaceSurfaceContent({
           sessionGroupId={sessionGroupId}
           browserId={browserId}
           initialUrl={browserInitialUrl}
+          sessionHosting={sessionHosting}
           onTitleChange={onBrowserTitleChange}
         />
       ) : surface === "terminal" ? (
