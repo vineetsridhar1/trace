@@ -1,10 +1,9 @@
-import { useState, useCallback, useEffect } from "react";
-import { Search, Code, MessageSquare, LogIn, LogOut, Lock } from "lucide-react";
-import type { ChannelType, ChannelVisibility } from "@trace/gql";
+import { useCallback, useEffect, useState } from "react";
+import { Code, Lock, LogIn, LogOut, MessageSquare, Search } from "lucide-react";
+import { gql } from "@urql/core";
 import { useAuthStore } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { features } from "../../lib/features";
-import { gql } from "@urql/core";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -12,8 +11,9 @@ import {
   ResponsiveDialogTitle as DialogTitle,
   ResponsiveDialogTrigger as DialogTrigger,
 } from "../ui/responsive-dialog";
-import { Input } from "../ui/input";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { updateBrowseChannelMembership, type BrowseChannel } from "./browse-channel-membership";
 
 const ALL_CHANNELS_QUERY = gql`
   query AllChannels($organizationId: ID!) {
@@ -44,25 +44,19 @@ const LEAVE_CHANNEL_MUTATION = gql`
   }
 `;
 
-interface BrowseChannel {
-  id: string;
-  name: string;
-  type: ChannelType;
-  visibility: ChannelVisibility;
-  memberCount: number;
-  viewerIsMember: boolean;
-}
-
-function ChannelTypeIcon({ type }: { type: ChannelType }) {
-  if (type === "text")
-    return <MessageSquare size={16} className="shrink-0 text-muted-foreground" />;
-  return <Code size={16} className="shrink-0 text-muted-foreground" />;
-}
-
 interface BrowseChannelsDialogProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   hideTrigger?: boolean;
+}
+
+function ChannelTypeIcon({ type }: { type: BrowseChannel["type"] }) {
+  const Icon = type === "text" ? MessageSquare : Code;
+  return <Icon size={17} className="shrink-0 text-muted-foreground" />;
+}
+
+function membershipLabel(channel: BrowseChannel) {
+  return `${channel.memberCount} ${channel.memberCount === 1 ? "member" : "members"}`;
 }
 
 export function BrowseChannelsDialog({
@@ -78,52 +72,62 @@ export function BrowseChannelsDialog({
   const [loading, setLoading] = useState(false);
   const [loadedOrgId, setLoadedOrgId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const [error, setError] = useState<string | null>(null);
+  const activeOrgId = useAuthStore((state: { activeOrgId: string | null }) => state.activeOrgId);
 
   const fetchChannels = useCallback(async () => {
     if (!activeOrgId) return;
     setLoading(true);
-    const result = await client
-      .query(ALL_CHANNELS_QUERY, { organizationId: activeOrgId })
-      .toPromise();
-    if (result.data?.channels) {
-      const all = result.data.channels as BrowseChannel[];
-      setChannels(features.messaging ? all : all.filter((c) => c.type !== "text"));
+    setError(null);
+    try {
+      const result = await client
+        .query(ALL_CHANNELS_QUERY, { organizationId: activeOrgId })
+        .toPromise();
+      if (result.error) throw result.error;
+      const all = (result.data?.channels ?? []) as BrowseChannel[];
+      setChannels(features.messaging ? all : all.filter((channel) => channel.type !== "text"));
       setLoadedOrgId(activeOrgId);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to load channels.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [activeOrgId]);
 
   useEffect(() => {
-    if (open && activeOrgId && loadedOrgId !== activeOrgId) {
-      fetchChannels();
-    }
-  }, [open, activeOrgId, loadedOrgId, fetchChannels]);
+    if (open && activeOrgId && loadedOrgId !== activeOrgId) void fetchChannels();
+  }, [activeOrgId, fetchChannels, loadedOrgId, open]);
 
   useEffect(() => {
-    if (activeOrgId === loadedOrgId) {
-      return;
-    }
+    if (activeOrgId === loadedOrgId) return;
     setChannels([]);
     setLoadedOrgId(null);
   }, [activeOrgId, loadedOrgId]);
 
-  const handleJoin = async (channelId: string) => {
-    setPendingAction(channelId);
-    await client.mutation(JOIN_CHANNEL_MUTATION, { channelId }).toPromise();
-    await fetchChannels();
-    setPendingAction(null);
-  };
+  const updateMembership = useCallback(
+    async (channelId: string, joining: boolean) => {
+      const previousChannels = channels;
+      setPendingAction(channelId);
+      setError(null);
+      setChannels((current) => updateBrowseChannelMembership(current, channelId, joining));
 
-  const handleLeave = async (channelId: string) => {
-    setPendingAction(channelId);
-    await client.mutation(LEAVE_CHANNEL_MUTATION, { channelId }).toPromise();
-    await fetchChannels();
-    setPendingAction(null);
-  };
+      try {
+        const result = await client
+          .mutation(joining ? JOIN_CHANNEL_MUTATION : LEAVE_CHANNEL_MUTATION, { channelId })
+          .toPromise();
+        if (result.error) throw result.error;
+      } catch (reason) {
+        setChannels(previousChannels);
+        setError(reason instanceof Error ? reason.message : "Unable to update channel membership.");
+      } finally {
+        setPendingAction(null);
+      }
+    },
+    [channels],
+  );
 
-  const filtered = channels.filter((ch: BrowseChannel) =>
-    ch.name.toLowerCase().includes(search.toLowerCase()),
+  const filteredChannels = channels.filter((channel) =>
+    channel.name.toLowerCase().includes(search.trim().toLowerCase()),
   );
 
   return (
@@ -136,76 +140,82 @@ export function BrowseChannelsDialog({
           <Search size={16} />
         </DialogTrigger>
       )}
-      <DialogContent className="max-h-[70vh]">
-        <DialogHeader>
-          <DialogTitle>Browse Channels</DialogTitle>
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-xl">
+        <DialogHeader className="border-b border-border px-6 py-5">
+          <DialogTitle>Browse channels</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Find projects to join, or manage the ones you already follow.
+          </p>
         </DialogHeader>
-        <div className="space-y-3">
-          <Input
-            value={search}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-            placeholder="Search channels..."
-            autoFocus
-            className="bg-surface-deep text-foreground"
-          />
-          <div className="max-h-[50vh] space-y-1 overflow-y-auto">
+        <div className="space-y-4 p-4 sm:p-6">
+          <div className="relative">
+            <Search
+              size={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search channels"
+              autoFocus
+              className="bg-surface-deep pl-9 text-foreground"
+            />
+          </div>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <div className="max-h-[50vh] overflow-y-auto pr-1">
             {loading && (
-              <p className="py-4 text-center text-sm text-muted-foreground">Loading...</p>
+              <p className="py-10 text-center text-sm text-muted-foreground">Loading channels…</p>
             )}
-            {!loading && filtered.length === 0 && (
-              <p className="py-4 text-center text-sm text-muted-foreground">
-                {search ? "No channels match your search" : "No channels yet"}
+            {!loading && filteredChannels.length === 0 && (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                {search ? "No channels match your search." : "No channels are available yet."}
               </p>
             )}
-            {!loading &&
-              filtered.map((ch: BrowseChannel) => {
-                const isPending = pendingAction === ch.id;
-                return (
-                  <div
-                    key={ch.id}
-                    className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-muted/50"
-                  >
-                    <ChannelTypeIcon type={ch.type} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{ch.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {ch.memberCount} {ch.memberCount === 1 ? "member" : "members"}
-                        {" · "}
-                        {ch.type === "text" ? "Text" : "Coding"}
-                        {ch.visibility === "private" && (
-                          <>
-                            {" · "}
-                            <Lock size={11} className="inline align-[-1px]" /> Private
-                          </>
-                        )}
-                      </p>
-                    </div>
-                    {ch.viewerIsMember ? (
+            {!loading && filteredChannels.length > 0 && (
+              <ul className="space-y-2" aria-label="Channels">
+                {filteredChannels.map((channel) => {
+                  const isPending = pendingAction === channel.id;
+                  return (
+                    <li
+                      key={channel.id}
+                      className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-3 transition-colors hover:bg-muted/50"
+                    >
+                      <div className="flex size-9 items-center justify-center rounded-md bg-muted">
+                        <ChannelTypeIcon type={channel.type} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {channel.name}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {membershipLabel(channel)} · {channel.type === "text" ? "Text" : "Coding"}
+                          {channel.visibility === "private" && (
+                            <>
+                              <span aria-hidden="true"> · </span>
+                              <Lock size={11} className="inline align-[-1px]" /> Private
+                            </>
+                          )}
+                        </p>
+                      </div>
                       <Button
-                        variant="ghost"
+                        variant={channel.viewerIsMember ? "ghost" : "outline"}
                         size="sm"
-                        onClick={() => handleLeave(ch.id)}
-                        disabled={isPending}
-                        className="shrink-0 text-muted-foreground"
-                      >
-                        <LogOut size={14} className="mr-1" />
-                        {isPending ? "..." : "Leave"}
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleJoin(ch.id)}
-                        disabled={isPending}
+                        disabled={pendingAction !== null}
+                        onClick={() => void updateMembership(channel.id, !channel.viewerIsMember)}
                         className="shrink-0"
                       >
-                        <LogIn size={14} className="mr-1" />
-                        {isPending ? "..." : "Join"}
+                        {channel.viewerIsMember ? <LogOut size={14} /> : <LogIn size={14} />}
+                        {isPending ? "Updating…" : channel.viewerIsMember ? "Leave" : "Join"}
                       </Button>
-                    )}
-                  </div>
-                );
-              })}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </div>
       </DialogContent>
