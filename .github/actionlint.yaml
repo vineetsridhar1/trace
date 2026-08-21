@@ -1,0 +1,11 @@
+# actionlint does not run in CI here; this exists so that running it locally gives a
+# clean result instead of one unknown-label note per job, which is how a real finding
+# gets missed.
+#
+# These are ARC scale sets in infra-managed-prod. The label is the scale set's helm
+# release name (addons/helm/gha-arc-scalesets/infra-managed-prod/<label>.yaml in
+# opendoor-labs/infra), so a new runner label has to be added here too.
+self-hosted-runner:
+  labels:
+    - arm-builder-lg
+    - runner-md-ng
