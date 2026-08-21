@@ -43,11 +43,11 @@ jobs:
     # builds arm64, and these pods carry no qemu for a cross-architecture build.
     runs-on: arm-builder-lg
     steps:
-      - uses: actions/checkout@v4
+      - uses: opendoor-labs/gha/checkout-with-retry@checkout-with-retry-1.1.0-action
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: ".nvmrc"
           cache: "pnpm"
