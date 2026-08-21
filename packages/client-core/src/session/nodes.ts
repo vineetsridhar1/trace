@@ -460,7 +460,8 @@ function extractQuestionLeadingText(blocks: unknown[]): string | undefined {
     if (parsed.type === "question") break;
     if (parsed.type !== "text" || typeof parsed.text !== "string") continue;
 
-    const requestInputIndex = parsed.text.search(/<trace:request-input\b/iu);
+    const unfencedText = parsed.text.replace(/```[\s\S]*?```/gu, (fence) => " ".repeat(fence.length));
+    const requestInputIndex = unfencedText.search(/<trace:request-input\b/iu);
     if (requestInputIndex >= 0 && parseTraceRequestInputs(parsed.text).length > 0) {
       textParts.push(parsed.text.slice(0, requestInputIndex));
       break;

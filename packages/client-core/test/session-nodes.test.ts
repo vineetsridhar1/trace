@@ -309,4 +309,29 @@ describe("buildSessionNodes", () => {
       leadingText: "This choice changes the implementation.",
     });
   });
+
+  it("keeps text before a trace question when a fenced example appears first", () => {
+    const event = makeEvent({
+      eventType: "session_output",
+      payload: {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "text",
+              text: `Here is an example:\n\n\`\`\`xml\n<trace:request-input><question>Example</question></trace:request-input>\n\`\`\`\n\nNow choose:\n<trace:request-input id="choice"><question>Which option?</question></trace:request-input>`,
+            },
+          ],
+        },
+      },
+    });
+
+    const result = buildSessionNodes([event.id], { [event.id]: event });
+
+    expect(result.nodes[0]).toMatchObject({
+      kind: "ask-user-question",
+      leadingText:
+        "Here is an example:\n\n```xml\n<trace:request-input><question>Example</question></trace:request-input>\n```\n\nNow choose:",
+    });
+  });
 });
