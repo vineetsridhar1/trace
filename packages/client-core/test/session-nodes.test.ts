@@ -272,6 +272,7 @@ describe("buildSessionNodes", () => {
         kind: "ask-user-question",
         id: event.id,
         timestamp: event.timestamp,
+        leadingText: "Before I continue:",
         questions: [
           expect.objectContaining({
             id: "surface",
@@ -282,5 +283,30 @@ describe("buildSessionNodes", () => {
         ],
       },
     ]);
+  });
+
+  it("keeps text blocks that precede a native question", () => {
+    const event = makeEvent({
+      eventType: "session_output",
+      payload: {
+        type: "assistant",
+        message: {
+          content: [
+            { type: "text", text: "This choice changes the implementation." },
+            {
+              type: "question",
+              questions: [{ id: "proceed", question: "Should I continue?", options: [] }],
+            },
+          ],
+        },
+      },
+    });
+
+    const result = buildSessionNodes([event.id], { [event.id]: event });
+
+    expect(result.nodes[0]).toMatchObject({
+      kind: "ask-user-question",
+      leadingText: "This choice changes the implementation.",
+    });
   });
 });
