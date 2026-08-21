@@ -79,7 +79,13 @@ export type SessionNode =
       planFilePath: string;
       timestamp: string;
     }
-  | { kind: "ask-user-question"; id: string; questions: Question[]; timestamp: string };
+  | {
+      kind: "ask-user-question";
+      id: string;
+      questions: Question[];
+      leadingText?: string;
+      timestamp: string;
+    };
 
 /** Extract tool name + file path from a session_output event payload, if it's a Read/Glob/Grep tool call */
 function extractReadGlobInfo(
@@ -441,6 +447,29 @@ function detectPlanReviewNodes(nodes: SessionNode[], events: Record<string, Even
   });
 }
 
+/** Extract text that precedes the first structured question in a message. */
+function extractQuestionLeadingText(blocks: unknown[]): string | undefined {
+  const textParts: string[] = [];
+
+  for (const block of blocks) {
+    const parsed = asJsonObject(block);
+    if (!parsed) continue;
+    if (parsed.type === "question") break;
+    if (parsed.type !== "text" || typeof parsed.text !== "string") continue;
+
+    const unfencedText = parsed.text.replace(/```[\s\S]*?```/gu, (fence) => " ".repeat(fence.length));
+    const requestInputIndex = unfencedText.search(/<trace:request-input\b/iu);
+    if (requestInputIndex >= 0 && parseTraceRequestInputs(parsed.text).length > 0) {
+      textParts.push(parsed.text.slice(0, requestInputIndex));
+      break;
+    }
+    textParts.push(parsed.text);
+  }
+
+  const leadingText = textParts.join("\n\n").trim();
+  return leadingText || undefined;
+}
+
 /** Detect QuestionBlock in assistant events and replace with ask-user-question nodes */
 function detectQuestionNodes(nodes: SessionNode[], events: Record<string, Event>): SessionNode[] {
   return nodes.map((node) => {
@@ -465,10 +494,12 @@ function detectQuestionNodes(nodes: SessionNode[], events: Record<string, Event>
     }
     if (questions.length === 0) return node;
 
+    const leadingText = extractQuestionLeadingText(blocks);
     return {
       kind: "ask-user-question" as const,
       id: node.id,
       questions,
+      ...(leadingText ? { leadingText } : {}),
       timestamp: event.timestamp,
     };
   });

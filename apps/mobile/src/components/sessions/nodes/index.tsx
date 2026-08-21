@@ -60,7 +60,7 @@ export function renderNode(props: RenderNodeProps): ReactNode {
     case "plan-review":
       return <PlanReviewCard planContent={node.planContent} planFilePath={node.planFilePath} />;
     case "ask-user-question":
-      return <AskUserQuestionCard questions={node.questions} />;
+      return <AskUserQuestionCard questions={node.questions} leadingText={node.leadingText} />;
     case "event":
       return <EventNode id={node.id} context={context} />;
   }
