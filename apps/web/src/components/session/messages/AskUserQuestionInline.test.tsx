@@ -32,4 +32,17 @@ describe("AskUserQuestionInline", () => {
     expect(markup).toContain("Which surface should be designed?");
     expect(markup).not.toContain("WHICH SURFACE SHOULD BE DESIGNED?");
   });
+
+  it("renders preceding context above the question card", () => {
+    const markup = renderToStaticMarkup(
+      <AskUserQuestionInline
+        leadingText="## Context\n\nThis choice affects the implementation."
+        questions={[]}
+        timestamp="2026-08-06T11:38:00Z"
+      />,
+    );
+
+    expect(markup).toContain("Context");
+    expect(markup).toContain("This choice affects the implementation.");
+  });
 });

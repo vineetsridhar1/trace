@@ -88,6 +88,7 @@ export const SessionNodeRenderer = memo(function SessionNodeRenderer({
     return (
       <AskUserQuestionInline
         questions={node.questions}
+        leadingText={node.leadingText}
         timestamp={node.timestamp}
         replaced={replacedQuestionIds?.has(node.id) ?? false}
       />
