@@ -327,12 +327,6 @@ packages/
 | Runtimes | Session router, bridge protocol, coding tool adapters, LLM adapters  |
 | Codegen  | GraphQL Code Generator, Prisma Client, TypeScript project references |
 
-Trace can use AG Grid Enterprise for data-dense tables. Local development works
-without a committed license key. Production builds should provide
-`VITE_AG_GRID_LICENSE_KEY` through CI or deployment secrets.
-
-<br/>
-
 ## Development
 
 ```bash
