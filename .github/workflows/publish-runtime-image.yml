@@ -79,7 +79,7 @@ jobs:
       # build-push reusable workflow, which owns the whole job and would leave
       # nowhere to produce them.
       - name: Build and push
-        uses: opendoor-labs/gha/build-push@build-push-1.5.0-action
+        uses: opendoor-labs/gha/build-push@build-push-1.7.0-action
         with:
           image_name: trace-container-bridge
           image_tag: sha-${{ steps.sha.outputs.short }}
