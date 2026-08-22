@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { validatePlanHtml } from "./plan-html.js";
 
@@ -65,15 +63,61 @@ describe("validatePlanHtml", () => {
     ).not.toThrow();
   });
 
-  // The starter is what every plan is copied from, so a template that fails these rules would
-  // break planning for every agent at once.
-  it("accepts the shipped starter template", () => {
-    const template = readFileSync(
-      fileURLToPath(
-        new URL("../../../../runtime/skills/visual-plan/template.html", import.meta.url),
-      ),
-      "utf8",
-    );
-    expect(() => validatePlanHtml(template)).not.toThrow();
+  // Plans are authored from a written brief rather than copied from a starter file, so this
+  // fixture stands in for the shipped starter: it exercises every construct the brief tells
+  // agents to reach for. A tightening of the rules above that breaks planning for every agent
+  // at once should fail here first.
+  it("accepts a document using the full authored-plan surface", () => {
+    const plan = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Plan</title>
+<style>
+  :root { --ink: #1c1a17; --accent: #4c3ad6; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #edebf2; } }
+  body { color: var(--ink); font: 16px/1.6 ui-sans-serif, system-ui, sans-serif; }
+  .hero { background: url("data:image/png;base64,iVBORw0KGgo="); }
+  .masked { mask: url(#cutout); }
+  .figure svg { width: 100%; height: auto; }
+</style>
+</head>
+<body>
+<!-- Authored, not copied: <script src="app.js"> and <img src="remote.png"> stay out. -->
+<h1>Replace the widget pipeline</h1>
+<p><a href="#risks">Jump to risks</a></p>
+
+<figure class="figure">
+  <svg viewBox="0 0 400 160" role="img" aria-labelledby="t d">
+    <title id="t">Request flow</title>
+    <desc id="d">A request passes a gate and is either published or returned.</desc>
+    <defs>
+      <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0,0 L9,4.5 L0,9 Z" fill="var(--accent)" />
+      </marker>
+      <clipPath id="cutout"><circle cx="40" cy="40" r="20" /></clipPath>
+    </defs>
+    <path d="M40 80 H160" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)" />
+    <rect x="180" y="52" width="120" height="56" rx="8" fill="none" stroke="var(--accent)" />
+    <text x="240" y="86" text-anchor="middle" style="font-size:13px">gate</text>
+  </svg>
+  <figcaption>Everything that crosses the boundary is drawn.</figcaption>
+</figure>
+
+<img src="data:image/png;base64,iVBORw0KGgo=" alt="" style="background:url('data:image/gif;base64,R0lGOD')" />
+
+<table>
+  <thead><tr><th>Path</th><th>Change</th></tr></thead>
+  <tbody><tr><td>src/widget.ts</td><td>Modify</td></tr></tbody>
+</table>
+
+<details id="risks">
+  <summary>The migration is reversible in one commit</summary>
+  <p>Supporting detail lives behind disclosure.</p>
+</details>
+</body>
+</html>`;
+    expect(() => validatePlanHtml(plan)).not.toThrow();
   });
 });
