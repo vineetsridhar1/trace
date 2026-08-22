@@ -87,7 +87,7 @@ describe("ensureTraceRuntime", () => {
       "utf8",
     );
     expect(visualPlanSkill).toContain('"$TRACE_CLI" artifact push visual-plan');
-    expect(visualPlanSkill).toContain("supplied canvas template");
+    expect(visualPlanSkill).toContain("Read the canvas brief");
     expect(visualPlanSkill).toContain("documentation directory");
     expect(visualPlanSkill).toContain("docs/session-artifact-upload-plan/");
     expect(visualPlanSkill).toContain("Upload the repository folder directly");
@@ -95,9 +95,9 @@ describe("ensureTraceRuntime", () => {
     expect(visualPlanSkill).toContain("Trace renders the uploaded artifact");
     expect(visualPlanSkill).toContain("Trace does not watch the repository");
     expect(visualPlanSkill).not.toContain("Agent-Native Plans");
-    expect(
-      await readFile(join(runtime.skillsDir, "visual-plan", "template.html"), "utf8"),
-    ).toContain("agent's authoring canvas");
+    expect(await readFile(join(runtime.skillsDir, "visual-plan", "template.md"), "utf8")).toContain(
+      "Every major section opens with a drawing",
+    );
     expect(
       await readFile(join(runtime.skillsDir, "request-user-input", "SKILL.md"), "utf8"),
     ).toContain("<trace:request-input");

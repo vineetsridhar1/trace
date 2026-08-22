@@ -1,6 +1,6 @@
 ---
 name: visual-plan
-description: Research a repository change and publish a source-backed, visually rich implementation scoping document as a single interactive HTML artifact for review and approval.
+description: Research a repository change and publish a source-backed, visually rich implementation scoping document as a single static HTML artifact for review and approval.
 ---
 
 # Visual plan
@@ -56,11 +56,22 @@ Choose the story and visuals from the shape of the change. Use:
 - an impact matrix for many files, consumers, or cases;
 - a decision table for meaningful alternatives.
 
-Use the smallest visual that makes the relationship obvious. Do not turn prose into decorative
-boxes or invent quantitative charts without real data. Label arrows with what moves or what causes
-the transition, show important unhappy paths, and distinguish existing, changed, and new nodes.
-Prefer editable HTML/CSS for simple diagrams and inline SVG for branches or connectors that would
-otherwise be ambiguous. Do not use ASCII diagrams or external diagram libraries.
+A visual plan is a drawn document, not a memo with borders around the paragraphs. Every major
+section opens with a figure, and the prose annotates the figure rather than the other way round. A
+plan with fewer than six drawn figures has failed regardless of how correct its content is.
+
+A figure is a drawing where position, size, shape, proportion, or connection carries meaning the
+text does not. A rounded rectangle with a label inside it is not a figure, and neither is a row of
+cards, a table, or a chain of labelled boxes with arrows between them — that last one is a list
+drawn sideways. Before defaulting to abstraction, ask what the subject actually looks like and draw
+that: the queue with items in it, the retry with its backoff gaps to scale, the blast radius as
+rings with the real callers placed in them.
+
+Draw to scale whenever a quantity is being compared, so the eye does the comparison instead of
+reading numerals. Label arrows with what moves or what causes the transition, show the unhappy
+paths, and distinguish existing, changed, new, and removed by both color and treatment. Hand-author
+everything as inline SVG or CSS shapes; do not use ASCII diagrams or external diagram libraries.
+The figure catalogue and SVG craft guidance live in the canvas brief.
 
 Cover, in whatever order best explains the change: objective and outcome, scope and explicit
 non-goals, current state grounded in real paths, the proposed behavior and boundaries, phased work,
@@ -79,29 +90,31 @@ convention when one exists. Otherwise create `docs/`. Put the plan in a change-s
 as `docs/session-artifact-upload-plan/`, not at the repository root. Everything created for the plan
 belongs in that folder so the folder itself is the artifact source.
 
-Start the named plan from the supplied canvas template, which carries the component vocabulary and
-visual system:
+Read the canvas brief before writing any markup:
 
 ```bash
 mkdir -p docs/session-artifact-upload-plan
-cp "$TRACE_SKILLS_DIR/visual-plan/template.html" \
-  docs/session-artifact-upload-plan/implementation-approach.html
+cat "$TRACE_SKILLS_DIR/visual-plan/template.md"
 ```
 
-The HTML filename is descriptive, not standardized. Treat the copied file as a component palette,
-not a form: delete sample sections, reorder the story, combine components, and add shapes when the
-change calls for them. The template demonstrates summaries and metrics, cards, flows, before/after
-views, a branching flowchart, an interaction sequence, phases, accordions, tables, tags, callouts,
-and small DOM-only interactions.
+The brief describes the story a plan tells, the standard its typography and color must hit, and the
+component vocabulary available to you. It is a brief, not a file to copy. There is no HTML template
+and no starter markup: write the document yourself, in your own markup and your own CSS, built
+roughly around the shape the brief describes and departing from it wherever this particular change
+is better served by a different shape.
 
-Use inline CSS, inline SVG, and concise inline JavaScript to make the explanation clear and
-interactive. Scripts may modify only their own document: do not access the network, storage,
-cookies, parent frame, navigation, popups, downloads, or external assets. Do not use `postMessage`.
-Trace runs the document in an opaque-origin sandbox and blocks those capabilities. Prefer semantic
-HTML and accessible controls; make the document understandable if an interaction is never used.
+Author the HTML directly at a descriptive path inside the plan folder, such as
+`docs/session-artifact-upload-plan/implementation-approach.html`. The filename is descriptive, not
+standardized.
 
-Use interaction to reveal relationships or detail—filtering an impact map, switching before/after,
-highlighting a flow—not as decoration. Keep scripts small and dependency-free.
+Design it properly, and draw it. Real typographic hierarchy, a palette chosen for this document,
+both color schemes supported, and a genuine drawing at the head of every section. Budget most of
+your effort for the figures — they are the plan, and they are the part that cannot be recovered by
+a reader who skims. Correct but visually flat is a failure.
+
+Use inline CSS and inline SVG to make the explanation clear. Do not include JavaScript. Trace
+renders plans as static documents with scripting disabled. Prefer semantic HTML, and use native
+elements such as `<details>` when supporting information needs progressive disclosure.
 
 Write about the change; do not write the change. Name the function and describe what it will do
 instead of pasting its body. A plan that contains the implementation is not reviewable.
@@ -109,7 +122,10 @@ instead of pasting its body. A plan that contains the implementation is not revi
 Before publishing, verify:
 
 - The visible layer stands alone as a 90-second decision brief.
+- The page has real typographic hierarchy: section headings are visibly larger than body text.
 - Expanded detail adds evidence rather than repeating the summary.
+- Every section opens with a drawn figure, and there are at least six in the document.
+- No figure is a labelled rectangle standing in for a picture that was not drawn.
 - Every visual answers a relationship, sequence, state, comparison, or impact question.
 - Every proposed boundary change names its affected files or symbols and its verification method.
 - Facts, assumptions, open decisions, and non-goals are distinguishable.
@@ -126,10 +142,8 @@ the plan elsewhere:
 
 The folder must contain exactly one HTML file, but that file may have any name and may sit anywhere
 inside the folder. Supporting notes or evidence may live beside it and are preserved in the artifact.
-The rendered HTML remains self-contained: no linked stylesheets, script sources, remote images,
-fonts, frames, or forms. Keep styles and scripts inline. Use inline SVG, `data:` URLs, or CSS shapes
-for visual assets. Trace allows scripts to modify the artifact DOM while isolating the document from
-the application and network.
+The rendered HTML remains self-contained: no scripts, linked stylesheets, remote images, fonts,
+frames, or forms. Use inline SVG, `data:` URLs, or CSS shapes for visual assets.
 
 Publish once, when the canvas is complete. Do not print the plan into chat and do not invoke a
 provider-native plan approval tool. Trace renders the uploaded artifact; after the upload succeeds,
