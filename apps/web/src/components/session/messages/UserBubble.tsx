@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "../../ui/dialog";
 import { Button } from "../../ui/button";
+import { ImageContextMenu } from "../../shared/ImageContextMenu";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 
@@ -47,9 +48,8 @@ function AttachmentChip({ imageKey, label }: { imageKey: string; label: string }
     }
   }, [imageKey, isImage, src]);
 
-  // Render uploaded images inline instead of as file chips. Besides making
-  // conversations easier to scan, this preserves the browser's native
-  // right-click actions, including "Copy image".
+  // Render uploaded images inline instead of as file chips so they can be
+  // scanned in-place and copied from their context menu.
   useEffect(() => {
     void loadImage();
   }, [loadImage]);
@@ -101,18 +101,20 @@ function AttachmentChip({ imageKey, label }: { imageKey: string; label: string }
   return (
     <>
       {isImage && src ? (
-        <button
-          type="button"
-          onClick={handleClick}
-          className="block cursor-zoom-in overflow-hidden rounded-md border border-white/20"
-          title="Open image"
-        >
-          <img
-            src={src}
-            alt={label}
-            className="max-h-56 max-w-80 object-contain"
-          />
-        </button>
+        <ImageContextMenu src={src}>
+          <button
+            type="button"
+            onClick={handleClick}
+            className="block cursor-zoom-in overflow-hidden rounded-md border border-white/20"
+            title="Open image"
+          >
+            <img
+              src={src}
+              alt={label}
+              className="max-h-56 max-w-80 object-contain"
+            />
+          </button>
+        </ImageContextMenu>
       ) : (
         <button
           type="button"
