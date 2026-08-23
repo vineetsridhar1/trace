@@ -43,6 +43,7 @@ interface GroupHeaderProps {
   canShowApplications: boolean;
   applicationPanelOpen: boolean;
   onApplicationPanelOpenChange: (open: boolean) => void;
+  onOpenEndpoint: (url: string) => void;
   onOpenTraffic: (endpointId: string) => void;
   closedSessions: SessionEntity[];
   onRestoreClosedSession: (sessionId: string) => void;
@@ -79,6 +80,7 @@ export function GroupHeader({
   canShowApplications,
   applicationPanelOpen,
   onApplicationPanelOpenChange,
+  onOpenEndpoint,
   onOpenTraffic,
   closedSessions,
   onRestoreClosedSession,
@@ -163,6 +165,7 @@ export function GroupHeader({
           sessionGroupId={sessionGroupId}
           open={applicationPanelOpen}
           onOpenChange={onApplicationPanelOpenChange}
+          onOpenEndpoint={onOpenEndpoint}
           onOpenTraffic={onOpenTraffic}
         />
       ) : null}

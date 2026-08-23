@@ -30,10 +30,12 @@ function resultError(result: unknown): Error | null {
 export function useSessionApplicationActions({
   groupKind,
   loadProcessLogs,
+  onOpenEndpoint,
   sessionGroupId,
 }: {
   groupKind: string | null | undefined;
   loadProcessLogs: (processId: string) => Promise<void>;
+  onOpenEndpoint: (url: string) => void;
   sessionGroupId: string;
 }) {
   const setActivePage = useUIStore((state) => state.setActivePage);
@@ -119,19 +121,10 @@ export function useSessionApplicationActions({
           .toPromise(),
       ),
     openEndpoint: async (endpoint: EndpointReference) => {
-      // Open the tab synchronously in the click handler so Safari keeps the
-      // user-gesture chain; resolving a private endpoint's URL is a mutation
-      // round-trip that would otherwise get the popup blocked.
-      const opened = window.open("about:blank", "_blank");
       try {
         const url = await resolveEndpointUrl(endpoint);
-        if (url && opened) {
-          opened.location.href = url;
-        } else {
-          opened?.close();
-        }
+        if (url) onOpenEndpoint(url);
       } catch (cause) {
-        opened?.close();
         reportError(cause);
       }
     },
