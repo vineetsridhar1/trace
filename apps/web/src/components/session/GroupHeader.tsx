@@ -14,7 +14,6 @@ import { AgentStatusIcon } from "./AgentStatusIcon";
 import { SessionGroupArtifactsDialog } from "../artifact/SessionGroupArtifactsDialog";
 import { useRunScripts } from "../../hooks/useRunScripts";
 import { useLinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
-import { LinkedCheckoutSubtitle } from "./LinkedCheckoutSubtitle";
 import { LinkedCheckoutActions } from "./LinkedCheckoutActions";
 import { SessionMoveButton } from "./SessionMoveButton";
 import { GitHubActions } from "./GitHubActions";
@@ -142,7 +141,6 @@ export function GroupHeader({
         <h2 className="truncate text-sm font-semibold text-foreground">
           {groupName ?? "Session Group"}
         </h2>
-        <LinkedCheckoutSubtitle state={linkedCheckout} />
       </div>
 
       <GroupUsageBadge sessionGroupId={sessionGroupId} />
