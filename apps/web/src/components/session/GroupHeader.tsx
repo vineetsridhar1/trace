@@ -14,7 +14,6 @@ import { AgentStatusIcon } from "./AgentStatusIcon";
 import { SessionGroupArtifactsDialog } from "../artifact/SessionGroupArtifactsDialog";
 import { useRunScripts } from "../../hooks/useRunScripts";
 import { useLinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
-import { LinkedCheckoutSubtitle } from "./LinkedCheckoutSubtitle";
 import { LinkedCheckoutActions } from "./LinkedCheckoutActions";
 import { SessionMoveButton } from "./SessionMoveButton";
 import { GitHubActions } from "./GitHubActions";
@@ -43,6 +42,7 @@ interface GroupHeaderProps {
   canShowApplications: boolean;
   applicationPanelOpen: boolean;
   onApplicationPanelOpenChange: (open: boolean) => void;
+  onOpenEndpoint: (url: string) => void;
   onOpenTraffic: (endpointId: string) => void;
   closedSessions: SessionEntity[];
   onRestoreClosedSession: (sessionId: string) => void;
@@ -79,6 +79,7 @@ export function GroupHeader({
   canShowApplications,
   applicationPanelOpen,
   onApplicationPanelOpenChange,
+  onOpenEndpoint,
   onOpenTraffic,
   closedSessions,
   onRestoreClosedSession,
@@ -140,7 +141,6 @@ export function GroupHeader({
         <h2 className="truncate text-sm font-semibold text-foreground">
           {groupName ?? "Session Group"}
         </h2>
-        <LinkedCheckoutSubtitle state={linkedCheckout} />
       </div>
 
       <GroupUsageBadge sessionGroupId={sessionGroupId} />
@@ -163,6 +163,7 @@ export function GroupHeader({
           sessionGroupId={sessionGroupId}
           open={applicationPanelOpen}
           onOpenChange={onApplicationPanelOpenChange}
+          onOpenEndpoint={onOpenEndpoint}
           onOpenTraffic={onOpenTraffic}
         />
       ) : null}

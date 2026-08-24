@@ -11,11 +11,13 @@ export function SessionApplicationsPopover({
   sessionGroupId,
   open,
   onOpenChange,
+  onOpenEndpoint,
   onOpenTraffic,
 }: {
   sessionGroupId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenEndpoint: (url: string) => void;
   onOpenTraffic: (endpointId: string) => void;
 }) {
   return (
@@ -37,6 +39,10 @@ export function SessionApplicationsPopover({
       <PopoverContent align="end" className="h-[min(36rem,calc(100dvh-5rem))] w-[24rem] overflow-hidden p-0">
         <SessionApplicationsPanel
           sessionGroupId={sessionGroupId}
+          onOpenEndpoint={(url) => {
+            onOpenEndpoint(url);
+            onOpenChange(false);
+          }}
           onOpenTraffic={(endpointId) => {
             onOpenTraffic(endpointId);
             onOpenChange(false);
