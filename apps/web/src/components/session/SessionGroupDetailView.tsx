@@ -443,6 +443,10 @@ export function SessionGroupDetailView({
             fetchedSessions.map((session) => ({
               ...(existingSessions[session.id] ?? {}),
               ...session,
+              // The workspace runtime is group-owned. Session rows retain
+              // lifecycle history on the server, but every tab in this view
+              // must render the group's current connection snapshot.
+              ...(fetchedGroup.connection ? { connection: fetchedGroup.connection } : {}),
             })) as Array<SessionEntity & { id: string }>,
           );
         }
