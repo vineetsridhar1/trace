@@ -2215,3 +2215,185 @@ describe("SessionRouter runtime adapter dispatch", () => {
     ]);
   });
 });
+
+describe("SessionRouter lapsed directory lease", () => {
+  const org = "org-lapsed";
+  const runtimeId = "runtime-lapsed";
+  const runtimeKey = runtimeRouterKey(runtimeId, org);
+  let restoreEnabled: (() => void) | null = null;
+
+  function forceBackplaneEnabled() {
+    const original = Object.getOwnPropertyDescriptor(realtimeBackplane, "enabled");
+    Object.defineProperty(realtimeBackplane, "enabled", { value: true, configurable: true });
+    restoreEnabled = () => {
+      if (original) Object.defineProperty(realtimeBackplane, "enabled", original);
+    };
+  }
+
+  async function registerOpenRuntime(router: SessionRouter, ws: WebSocket) {
+    await router.registerRuntime({
+      key: runtimeKey,
+      id: runtimeId,
+      organizationId: org,
+      label: runtimeId,
+      ws,
+      hostingMode: "cloud",
+      supportedTools: ["codex"],
+    });
+  }
+
+  /** Drop the directory entry the way an expired Redis lease would. */
+  async function lapseLease(router: SessionRouter) {
+    const generation = router.getRuntimeDescriptor(runtimeId, org)?.connectionGeneration;
+    if (generation) await runtimeDirectory.remove(runtimeKey, generation);
+    expect(runtimeDirectory.find(runtimeId, org)).toBeUndefined();
+  }
+
+  afterEach(async () => {
+    restoreEnabled?.();
+    restoreEnabled = null;
+    vi.restoreAllMocks();
+  });
+
+  it("keeps a runtime available when its lease lapsed but the socket is still open", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+    await registerOpenRuntime(router, ws);
+    await lapseLease(router);
+    forceBackplaneEnabled();
+    vi.spyOn(runtimeDirectory, "reclaim").mockResolvedValue(
+      router.getRuntimeMetadata(runtimeId, org) as never,
+    );
+
+    // Regression: this returned false, so the replica holding a healthy bridge
+    // reported it offline and the cloud retry path moved the session onto a
+    // fresh runtime — discarding the workspace.
+    expect(router.isRuntimeAvailable(runtimeId, org)).toBe(true);
+    expect(ws.close).not.toHaveBeenCalled();
+    router.dispose();
+  });
+
+  it("reclaims the lapsed lease instead of closing the live socket", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+    await registerOpenRuntime(router, ws);
+    await lapseLease(router);
+    forceBackplaneEnabled();
+    const reclaim = vi
+      .spyOn(runtimeDirectory, "reclaim")
+      .mockResolvedValue(router.getRuntimeMetadata(runtimeId, org) as never);
+
+    router.isRuntimeAvailable(runtimeId, org);
+    await vi.waitFor(() => expect(reclaim).toHaveBeenCalledTimes(1));
+
+    // Generation is preserved so bindings made on this socket stay valid.
+    expect(reclaim.mock.calls[0]?.[0]).toMatchObject({ key: runtimeKey, id: runtimeId });
+    expect(ws.close).not.toHaveBeenCalled();
+    router.dispose();
+  });
+
+  it("closes the socket when a peer replica genuinely holds the lease", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+    await registerOpenRuntime(router, ws);
+    await lapseLease(router);
+    forceBackplaneEnabled();
+    vi.spyOn(runtimeDirectory, "reclaim").mockResolvedValue(null);
+
+    router.isRuntimeAvailable(runtimeId, org);
+    await vi.waitFor(() =>
+      expect(ws.close).toHaveBeenCalledWith(1012, "Runtime ownership replaced"),
+    );
+    router.dispose();
+  });
+
+  it("gives the directory lease a wide margin over the heartbeat timeout", () => {
+    // One slow heartbeat must not be able to expire a live runtime's lease.
+    expect(SessionRouter.DIRECTORY_TTL_MS).toBeGreaterThanOrEqual(
+      SessionRouter.HEARTBEAT_TIMEOUT_MS * 3,
+    );
+  });
+});
+
+describe("SessionRouter peer-owned runtime missing from the local mirror", () => {
+  const org = "org-peer";
+  const runtimeId = "runtime-peer";
+  let restoreEnabled: (() => void) | null = null;
+
+  function forceBackplaneEnabled() {
+    const original = Object.getOwnPropertyDescriptor(realtimeBackplane, "enabled");
+    Object.defineProperty(realtimeBackplane, "enabled", { value: true, configurable: true });
+    restoreEnabled = () => {
+      if (original) Object.defineProperty(realtimeBackplane, "enabled", original);
+    };
+  }
+
+  /** A descriptor owned by another replica, as Redis would hold it. */
+  function peerDescriptor() {
+    const now = Date.now();
+    return {
+      key: runtimeRouterKey(runtimeId, org),
+      id: runtimeId,
+      organizationId: org,
+      ownerReplicaId: "some-other-replica",
+      connectionGeneration: "generation-peer",
+      ownershipEpoch: 7,
+      label: runtimeId,
+      hostingMode: "cloud" as const,
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+      linkedCheckoutStatuses: [],
+      linkedCheckoutStatusObservedAt: {},
+      lastHeartbeat: now,
+      expiresAt: now + 120_000,
+    };
+  }
+
+  afterEach(() => {
+    restoreEnabled?.();
+    restoreEnabled = null;
+    vi.restoreAllMocks();
+  });
+
+  it("reports unavailable from the mirror alone when a presence broadcast was missed", () => {
+    const router = new SessionRouter();
+    forceBackplaneEnabled();
+    // Nothing in the mirror and no local socket: the sync answer is "absent".
+    expect(router.isRuntimeAvailable(runtimeId, org)).toBe(false);
+    router.dispose();
+  });
+
+  it("confirms availability by reading through to Redis", async () => {
+    const router = new SessionRouter();
+    forceBackplaneEnabled();
+    const lookup = vi
+      .spyOn(runtimeDirectory, "lookup")
+      .mockResolvedValue(peerDescriptor() as never);
+
+    // Regression: the mirror-only answer sent the cloud retry path into
+    // moveSessionInPlace, discarding the workspace of a live peer-owned runtime.
+    await expect(router.isRuntimeAvailableConfirmed(runtimeId, org)).resolves.toBe(true);
+    expect(lookup).toHaveBeenCalledWith(runtimeId, org);
+    router.dispose();
+  });
+
+  it("stays unavailable when Redis has no entry either", async () => {
+    const router = new SessionRouter();
+    forceBackplaneEnabled();
+    vi.spyOn(runtimeDirectory, "lookup").mockResolvedValue(undefined);
+
+    await expect(router.isRuntimeAvailableConfirmed(runtimeId, org)).resolves.toBe(false);
+    router.dispose();
+  });
+
+  it("skips the Redis read when the mirror already knows the runtime", async () => {
+    const router = new SessionRouter();
+    forceBackplaneEnabled();
+    vi.spyOn(runtimeDirectory, "find").mockReturnValue(peerDescriptor() as never);
+    const lookup = vi.spyOn(runtimeDirectory, "lookup");
+
+    await expect(router.isRuntimeAvailableConfirmed(runtimeId, org)).resolves.toBe(true);
+    expect(lookup).not.toHaveBeenCalled();
+    router.dispose();
+  });
+});

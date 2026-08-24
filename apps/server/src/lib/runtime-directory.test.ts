@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { redis } from "./redis.js";
 import { realtimeBackplane } from "./realtime-backplane.js";
 import {
@@ -128,4 +128,99 @@ describe("RuntimeDirectory descriptor ordering", () => {
       }
     },
   );
+});
+
+describe("RuntimeDirectory read-through lookup", () => {
+  const directories: RuntimeDirectory[] = [];
+  let restoreEnabled: (() => void) | null = null;
+
+  function forceBackplaneEnabled() {
+    const original = Object.getOwnPropertyDescriptor(realtimeBackplane, "enabled");
+    Object.defineProperty(realtimeBackplane, "enabled", { value: true, configurable: true });
+    restoreEnabled = () => {
+      if (original) Object.defineProperty(realtimeBackplane, "enabled", original);
+    };
+  }
+
+  afterEach(() => {
+    for (const directory of directories) directory.stop();
+    directories.length = 0;
+    restoreEnabled?.();
+    restoreEnabled = null;
+    vi.restoreAllMocks();
+  });
+
+  it("recovers a peer-owned descriptor the mirror never received", async () => {
+    const directory = new RuntimeDirectory();
+    directories.push(directory);
+    const peer = descriptor({
+      key: "org-1:runtime-readthrough",
+      id: "runtime-readthrough",
+      ownerReplicaId: "peer-replica",
+      expiresAt: Date.now() + 120_000,
+    });
+    forceBackplaneEnabled();
+    // The presence broadcast never arrived, so the mirror is blind to it.
+    expect(directory.find("runtime-readthrough", "org-1")).toBeUndefined();
+    const get = vi.spyOn(redis, "get").mockResolvedValue(JSON.stringify(peer));
+
+    await expect(directory.lookup("runtime-readthrough", "org-1")).resolves.toMatchObject({
+      id: "runtime-readthrough",
+      ownerReplicaId: "peer-replica",
+    });
+    expect(get).toHaveBeenCalledTimes(1);
+    // Installed into the mirror, so later sync lookups no longer miss.
+    expect(directory.find("runtime-readthrough", "org-1")).toMatchObject({
+      ownerReplicaId: "peer-replica",
+    });
+  });
+
+  it("ignores an expired entry found in Redis", async () => {
+    const directory = new RuntimeDirectory();
+    directories.push(directory);
+    forceBackplaneEnabled();
+    vi.spyOn(redis, "get").mockResolvedValue(
+      JSON.stringify(
+        descriptor({
+          key: "org-1:runtime-expired",
+          id: "runtime-expired",
+          expiresAt: Date.now() - 1,
+        }),
+      ),
+    );
+
+    await expect(directory.lookup("runtime-expired", "org-1")).resolves.toBeUndefined();
+  });
+
+  it("does not hit Redis when the mirror already has the descriptor", async () => {
+    const directory = new RuntimeDirectory();
+    directories.push(directory);
+    // start() while the backplane is still disabled: subscribes to presence
+    // without the Redis hydration scan.
+    await directory.start();
+    const local = descriptor({ key: "org-1:runtime-cached", id: "runtime-cached" });
+    await realtimeBackplane.broadcast("runtime_presence_changed", {
+      action: "upsert",
+      descriptor: local,
+    });
+    forceBackplaneEnabled();
+    const get = vi.spyOn(redis, "get");
+
+    await expect(directory.lookup("runtime-cached", "org-1")).resolves.toMatchObject({
+      id: "runtime-cached",
+    });
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("degrades to the mirror when no organization scopes the key", async () => {
+    const directory = new RuntimeDirectory();
+    directories.push(directory);
+    forceBackplaneEnabled();
+    const get = vi.spyOn(redis, "get");
+
+    // Without an organizationId the Redis key cannot be derived; guessing would
+    // risk answering with another tenant's runtime.
+    await expect(directory.lookup("runtime-unscoped")).resolves.toBeUndefined();
+    expect(get).not.toHaveBeenCalled();
+  });
 });
