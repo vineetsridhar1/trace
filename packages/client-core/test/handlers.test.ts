@@ -873,6 +873,50 @@ describe("handleOrgEvent", () => {
     expect(useEntityStore.getState().sessions["session-1"].workdir).toBe("/tmp/work");
   });
 
+  it("applies a group connection recovery to every sibling session", () => {
+    useEntityStore.setState({
+      sessions: {
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          connection: { state: "disconnected", version: 4 },
+        } as never,
+        "session-2": {
+          id: "session-2",
+          sessionGroupId: "group-1",
+          connection: { state: "connected", version: 9 },
+        } as never,
+      },
+      sessionGroups: { "group-1": { id: "group-1" } as never },
+      _sessionIdsByGroup: { "group-1": ["session-1", "session-2"] },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_output",
+        scopeId: "session-1",
+        timestamp: "2026-08-24T17:03:27.300Z",
+        payload: {
+          type: "connection_restored",
+          connection: { state: "connected", version: 5 },
+          sessionGroup: {
+            id: "group-1",
+            connection: { state: "connected", version: 5, runtimeInstanceId: "runtime-1" },
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessions["session-1"].connection).toMatchObject({
+      state: "connected",
+      runtimeInstanceId: "runtime-1",
+    });
+    expect(useEntityStore.getState().sessions["session-2"].connection).toMatchObject({
+      state: "connected",
+      runtimeInstanceId: "runtime-1",
+    });
+  });
+
   it("routes session-scoped usage_updated into session totals", () => {
     useEntityStore.setState({
       sessions: { "session-1": { id: "session-1", sessionGroupId: "group-1" } as never },

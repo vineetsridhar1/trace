@@ -118,6 +118,19 @@ export function patchGroupSessionsBranch(
   }
 }
 
+function patchGroupSessionsConnection(
+  batch: StoreBatchWriter,
+  sessionGroupId: string,
+  connection: SessionEntity["connection"],
+): void {
+  const allSessions = batch.getAll("sessions");
+  for (const [sessionId, session] of Object.entries(allSessions)) {
+    if (session.sessionGroupId === sessionGroupId) {
+      batch.patch("sessions", sessionId, { connection });
+    }
+  }
+}
+
 /** Extract a human-readable preview from a normalized message payload */
 export function extractMessagePreview(eventType: EventType, payload: JsonObject): string | null {
   if (eventType === "message_sent") {
@@ -199,6 +212,21 @@ export function routeSessionOutput({ event, payload, batch, ui }: RouteSessionOu
       updatedAt: event.timestamp,
       ...(bumpSort ? { _sortTimestamp: event.timestamp } : {}),
     });
+  }
+
+  if (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type)) {
+    const sessionGroup = asJsonObject(payload.sessionGroup);
+    const groupConnection = asJsonObject(sessionGroup?.connection);
+    if (typeof sessionGroup?.id === "string" && groupConnection) {
+      // Runtime connectivity belongs to the shared workspace. A lifecycle
+      // event may be scoped to the session that triggered it, but sibling tabs
+      // must render the same authoritative group connection snapshot.
+      patchGroupSessionsConnection(
+        batch,
+        sessionGroup.id,
+        groupConnection as SessionEntity["connection"],
+      );
+    }
   }
 
   if (payload.type === "branch_renamed" && typeof payload.branch === "string") {
