@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { ImageContextMenu } from "../shared/ImageContextMenu";
 
 export function ImageLightbox({
   src,
@@ -43,11 +44,13 @@ export function ImageLightbox({
       >
         <X size={20} />
       </button>
-      <img
-        src={src}
-        alt={alt ?? "Image"}
-        className="relative z-10 max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
-      />
+      <ImageContextMenu src={src}>
+        <img
+          src={src}
+          alt={alt ?? "Image"}
+          className="relative z-10 max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+        />
+      </ImageContextMenu>
     </div>,
     document.body,
   );

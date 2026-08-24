@@ -13,6 +13,7 @@ export function SessionApplicationsPopover({
   sessionGroupId,
   open,
   onOpenChange,
+  onOpenEndpoint,
   onOpenTraffic,
   onOpenPreview,
   previewUrl,
@@ -21,6 +22,7 @@ export function SessionApplicationsPopover({
   sessionGroupId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenEndpoint: (url: string) => void;
   onOpenTraffic: (endpointId: string) => void;
   onOpenPreview: (url: string) => void;
   previewUrl: string | null;
@@ -63,6 +65,10 @@ export function SessionApplicationsPopover({
         <div className="min-h-0 flex-1">
           <SessionApplicationsPanel
             sessionGroupId={sessionGroupId}
+            onOpenEndpoint={(url) => {
+              onOpenEndpoint(url);
+              onOpenChange(false);
+            }}
             onOpenTraffic={(endpointId) => {
               onOpenTraffic(endpointId);
               onOpenChange(false);

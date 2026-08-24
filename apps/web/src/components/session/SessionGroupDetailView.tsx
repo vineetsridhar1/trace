@@ -1045,6 +1045,18 @@ export function SessionGroupDetailView({
     return id;
   }, []);
 
+  const handleOpenApplicationEndpoint = useCallback(
+    (url: string) => {
+      const id = `draft:${crypto.randomUUID()}`;
+      setDraftWorkspaceTabs((drafts) => [
+        ...drafts,
+        { id, surface: "browser", initialUrl: url },
+      ]);
+      setRequestedActiveWorkspaceTabId(id);
+    },
+    [setDraftWorkspaceTabs, setRequestedActiveWorkspaceTabId],
+  );
+
   const browserOverlayHidden = workspaceInteractionActive || modalOverlayVisible;
 
   useEffect(() => {
@@ -1276,6 +1288,7 @@ export function SessionGroupDetailView({
               canShowApplications={showApplicationsSidebarTab}
               applicationPanelOpen={applicationPanelOpen}
               onApplicationPanelOpenChange={setApplicationPanelOpen}
+              onOpenEndpoint={handleOpenApplicationEndpoint}
               onOpenTraffic={handleOpenTrafficTab}
               onOpenApplicationPreview={handleOpenApplicationPreview}
               applicationPreviewUrl={applicationPreviewUrl}

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { FileText, X } from "lucide-react";
 import { ImageLightbox } from "./ImageLightbox";
 import { TraceLoader } from "../ui/trace-loader";
+import { ImageContextMenu } from "../shared/ImageContextMenu";
 
 export interface FileAttachment {
   id: string;
@@ -32,12 +33,14 @@ export function ImageAttachmentBar({
           return (
             <div key={attachment.id} className="relative shrink-0 group">
               {isImage ? (
-                <img
-                  src={attachment.previewUrl}
-                  alt={attachment.file.name || "Attachment"}
-                  className="h-16 w-16 rounded-md object-cover cursor-pointer border border-border"
-                  onClick={() => setLightboxImage(attachment)}
-                />
+                <ImageContextMenu src={attachment.previewUrl}>
+                  <img
+                    src={attachment.previewUrl}
+                    alt={attachment.file.name || "Attachment"}
+                    className="h-16 w-16 rounded-md object-cover cursor-pointer border border-border"
+                    onClick={() => setLightboxImage(attachment)}
+                  />
+                </ImageContextMenu>
               ) : (
                 <button
                   type="button"

@@ -15,7 +15,6 @@ import { SessionHistory } from "./SessionHistory";
 import { AgentStatusIcon } from "./AgentStatusIcon";
 import { useRunScripts } from "../../hooks/useRunScripts";
 import { useLinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
-import { LinkedCheckoutSubtitle } from "./LinkedCheckoutSubtitle";
 import { LinkedCheckoutActions } from "./LinkedCheckoutActions";
 import { SessionMoveButton } from "./SessionMoveButton";
 import { GitHubActions } from "./GitHubActions";
@@ -45,6 +44,7 @@ interface GroupHeaderProps {
   canShowApplications: boolean;
   applicationPanelOpen: boolean;
   onApplicationPanelOpenChange: (open: boolean) => void;
+  onOpenEndpoint: (url: string) => void;
   onOpenTraffic: (endpointId: string) => void;
   onOpenApplicationPreview: (url: string) => void;
   applicationPreviewUrl: string | null;
@@ -84,6 +84,7 @@ export function GroupHeader({
   canShowApplications,
   applicationPanelOpen,
   onApplicationPanelOpenChange,
+  onOpenEndpoint,
   onOpenTraffic,
   onOpenApplicationPreview,
   applicationPreviewUrl,
@@ -173,7 +174,6 @@ export function GroupHeader({
         <h2 className="truncate text-sm font-semibold text-foreground">
           {groupName ?? "Session Group"}
         </h2>
-        <LinkedCheckoutSubtitle state={linkedCheckout} />
       </div>
 
       <GroupUsageBadge sessionGroupId={sessionGroupId} />
@@ -196,6 +196,7 @@ export function GroupHeader({
           sessionGroupId={sessionGroupId}
           open={applicationPanelOpen}
           onOpenChange={onApplicationPanelOpenChange}
+          onOpenEndpoint={onOpenEndpoint}
           onOpenTraffic={onOpenTraffic}
           onOpenPreview={onOpenApplicationPreview}
           previewUrl={applicationPreviewUrl}

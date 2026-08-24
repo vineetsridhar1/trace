@@ -7,14 +7,16 @@ import { useSessionApplicationsPanel } from "./useSessionApplicationsPanel";
 
 export function SessionApplicationsPanel({
   sessionGroupId,
+  onOpenEndpoint,
   onOpenTraffic,
   embedded = false,
 }: {
   sessionGroupId: string;
+  onOpenEndpoint: (url: string) => void;
   onOpenTraffic: (endpointId: string) => void;
   embedded?: boolean;
 }) {
-  const state = useSessionApplicationsPanel(sessionGroupId);
+  const state = useSessionApplicationsPanel(sessionGroupId, onOpenEndpoint);
   const config = state.config;
 
   if (!config || (config.setupScripts.length === 0 && config.applications.length === 0)) {
