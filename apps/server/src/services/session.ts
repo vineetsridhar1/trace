@@ -1976,8 +1976,11 @@ export class SessionService {
         readOnly: params.readOnly,
         adoptWorktreePath,
         expectedHomeRuntimeId: params.expectedHomeRuntimeId ?? undefined,
-        onLifecycle: (eventType, update) =>
-          this.recordRuntimeLifecycle(params.sessionId, eventType, update),
+        reserveRuntime: () =>
+          this.recordRuntimeLifecycle(params.sessionId, "session_runtime_start_requested"),
+        onLifecycle: async (eventType, update) => {
+          await this.recordRuntimeLifecycle(params.sessionId, eventType, update);
+        },
         onFailed: (error) => this.workspaceFailed(params.sessionId, error),
         onWorkspaceReady: (workdir) => this.workspaceReady(params.sessionId, workdir),
       });
@@ -2121,11 +2124,20 @@ export class SessionService {
     };
   }
 
+  /**
+   * Apply a runtime lifecycle transition and emit its event.
+   *
+   * Returns the runtime instance id the connection is bound to afterwards, or
+   * `null` when the transition was declined because a different runtime
+   * generation owns the connection. For `session_runtime_start_requested` the
+   * returned id IS the reservation: identity is minted by the write that claims
+   * it, so a caller that gets `null` never held a runtime to begin with.
+   */
   private async recordRuntimeLifecycle(
     sessionId: string,
     eventType: RuntimeLifecycleEventType,
     update: RuntimeLifecycleUpdate = {},
-  ): Promise<void> {
+  ): Promise<string | null> {
     // Pull the immutable session metadata once for the event payload. The
     // connection itself is read inside `updateConnectionConditional` so we
     // re-read on retry and the write sees a consistent baseline.
@@ -2142,14 +2154,23 @@ export class SessionService {
       if (eventType === "session_runtime_start_requested") {
         throw new Error(`Cannot reserve runtime ownership for missing session ${sessionId}`);
       }
-      return;
+      return null;
     }
 
     const isNewRuntimeRequest = eventType === "session_runtime_start_requested";
     const result = await this.updateConnectionConditional(
       sessionId,
       (conn) => {
-        if (update.runtimeInstanceId) {
+        // Reserve, then mint. A start request that arrives without an id gets
+        // one from inside the claim, so two concurrent provisions can never
+        // hold competing identities: the loser's mint never happens and it
+        // simply declines instead of failing a session the winner is serving.
+        const requestedRuntimeInstanceId =
+          isNewRuntimeRequest && !update.runtimeInstanceId
+            ? `runtime_${randomUUID()}`
+            : update.runtimeInstanceId;
+
+        if (requestedRuntimeInstanceId) {
           // A new launch may claim an unbound session, but every subsequent
           // lifecycle event must belong to the runtime generation that is
           // currently persisted. In particular, an old stop event must not
@@ -2168,7 +2189,7 @@ export class SessionService {
             (!conn.runtimeInstanceId ||
               isRuntimeTerminalState(conn.state) ||
               isRuntimeComputeGone(conn));
-          if (conn.runtimeInstanceId !== update.runtimeInstanceId && !canClaimStaleConnection) {
+          if (conn.runtimeInstanceId !== requestedRuntimeInstanceId && !canClaimStaleConnection) {
             return null;
           }
         }
@@ -2195,7 +2216,15 @@ export class SessionService {
           return null;
         }
 
-        return { ...conn, ...this.lifecycleConnectionPatch(eventType, conn, update, adapterType) };
+        return {
+          ...conn,
+          ...this.lifecycleConnectionPatch(
+            eventType,
+            conn,
+            { ...update, runtimeInstanceId: requestedRuntimeInstanceId },
+            adapterType,
+          ),
+        };
       },
       // A restart can intentionally create a fresh runtime without a new user
       // message. Refresh activity in the same optimistic write that claims the
@@ -2204,15 +2233,15 @@ export class SessionService {
       isNewRuntimeRequest ? { sessionData: { lastMessageAt: new Date() } } : undefined,
     );
 
-    if (!result) {
-      if (eventType === "session_runtime_start_requested") {
-        throw new Error(
-          `Cannot reserve runtime ${update.runtimeInstanceId ?? "unknown"} for session ${sessionId}`,
-        );
-      }
-      return;
-    }
+    // A declined start request means another provision already owns this
+    // session's live runtime. That is a normal outcome of two provisions
+    // racing, not a failure of the session, so report it and let the caller
+    // converge on the winner.
+    if (!result) return null;
 
+    const recordedRuntimeInstanceId = isNewRuntimeRequest
+      ? result.updated.runtimeInstanceId
+      : update.runtimeInstanceId;
     const adapterType = this.lifecycleAdapterType(result.updated, update);
     const lifecycleState = this.lifecycleConnectionState(eventType, adapterType);
     const sessionGroup = await this.loadSessionGroupSnapshot(result.sessionGroupId);
@@ -2229,7 +2258,7 @@ export class SessionService {
         connection: connJson(result.updated),
         agentStatus: result.session.agentStatus,
         sessionStatus: result.session.sessionStatus,
-        ...(update.runtimeInstanceId && { runtimeInstanceId: update.runtimeInstanceId }),
+        ...(recordedRuntimeInstanceId && { runtimeInstanceId: recordedRuntimeInstanceId }),
         ...(update.runtimeLabel && { runtimeLabel: update.runtimeLabel }),
         ...(update.providerRuntimeId && { providerRuntimeId: update.providerRuntimeId }),
         ...(update.providerRuntimeUrl && { providerRuntimeUrl: update.providerRuntimeUrl }),
@@ -2288,6 +2317,8 @@ export class SessionService {
         });
       }
     }
+
+    return result.updated.runtimeInstanceId ?? null;
   }
 
   /**
@@ -2503,8 +2534,12 @@ export class SessionService {
   private destroyRuntimeOptions(sessionId: string, reason: string) {
     return {
       reason,
-      onLifecycle: (eventType: RuntimeLifecycleEventType, update?: RuntimeLifecycleUpdate) =>
-        this.recordRuntimeLifecycle(sessionId, eventType, update),
+      onLifecycle: async (
+        eventType: RuntimeLifecycleEventType,
+        update?: RuntimeLifecycleUpdate,
+      ) => {
+        await this.recordRuntimeLifecycle(sessionId, eventType, update);
+      },
     };
   }
 
