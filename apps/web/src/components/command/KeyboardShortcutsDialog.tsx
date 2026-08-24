@@ -33,6 +33,7 @@ const SECTIONS: Array<{ heading: string; shortcuts: Shortcut[] }> = [
       { keys: [mod, "T"], label: "New tab" },
       { keys: [mod, "\\"], label: "Split active tab" },
       { keys: [mod, "⇧", "\\"], label: "Join active pane" },
+      { keys: [mod, "⇧", "Enter"], label: "Toggle pane spotlight" },
       { keys: [mod, "W"], label: "Close tab" },
       { keys: ["Ctrl", "Tab"], label: "Next tab" },
       { keys: ["Ctrl", "⇧", "Tab"], label: "Previous tab" },

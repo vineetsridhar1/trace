@@ -134,6 +134,7 @@ export function useSpatialWorkspaceController({
     );
   }, []);
   const handleTogglePanelFocus = useCallback((groupId: string) => {
+    activeGroupIdRef.current = groupId;
     setLayout((current) =>
       current.focusedGroupId ? balanceSpatialGroups(current) : focusSpatialGroup(current, groupId),
     );
@@ -159,6 +160,15 @@ export function useSpatialWorkspaceController({
     setLayout((current) => {
       const activeGroup = getActiveGroup(current, activeGroupIdRef.current);
       return activeGroup ? joinSpatialGroup(current, activeGroup.id) : current;
+    });
+  }, []);
+  const handleToggleActiveGroupFocus = useCallback(() => {
+    setLayout((current) => {
+      const activeGroup = getActiveGroup(current, activeGroupIdRef.current);
+      if (!activeGroup) return current;
+      return current.focusedGroupId
+        ? balanceSpatialGroups(current)
+        : focusSpatialGroup(current, activeGroup.id);
     });
   }, []);
   const handleFocusGroup = useCallback(
@@ -203,6 +213,11 @@ export function useSpatialWorkspaceController({
         handleJoin();
         return;
       }
+      if (mod && event.shiftKey && !event.altKey && event.key === "Enter") {
+        event.preventDefault();
+        handleToggleActiveGroupFocus();
+        return;
+      }
       if (mod && !event.shiftKey && !event.altKey && /^[1-4]$/.test(event.key)) {
         event.preventDefault();
         handleFocusGroup(Number(event.key) - 1);
@@ -215,7 +230,14 @@ export function useSpatialWorkspaceController({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleCycleTab, handleFocusGroup, handleJoin, handleNewTab, handleSplit]);
+  }, [
+    handleCycleTab,
+    handleFocusGroup,
+    handleJoin,
+    handleNewTab,
+    handleSplit,
+    handleToggleActiveGroupFocus,
+  ]);
 
   return {
     collisionDetection: drag.collisionDetection,
