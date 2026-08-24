@@ -119,6 +119,7 @@ vi.mock("./db.js", () => ({
 import { handleBridgeConnection } from "./bridge-handler.js";
 import { AuthorizationError } from "./errors.js";
 import { realtimeBackplane } from "./realtime-backplane.js";
+import { sessionService } from "../services/session.js";
 
 type Handler = (...payload: unknown[]) => void;
 
@@ -319,12 +320,62 @@ describe("bridge handler auth", () => {
       registeredRepoIds: [],
     });
     await vi.waitFor(() => expect(mocks.registerRuntime).toHaveBeenCalled());
+    // `isCurrentRuntimeSocket` is defined as this returning a generation, so
+    // the double has to move them together or it stops modelling production.
     mocks.isCurrentRuntimeSocket.mockReturnValue(false);
+    mocks.getCurrentRuntimeConnectionGeneration.mockReturnValue(undefined);
 
     ws.emitClose(1012, "Runtime ownership replaced");
     await Promise.resolve();
 
     expect(mocks.markRuntimeDisconnected).not.toHaveBeenCalled();
+  });
+
+  it("reports which connection died so a reconnect on any replica can invalidate it", async () => {
+    const ws = createMockWs();
+    mocks.registerLocalRuntimeConnection.mockResolvedValueOnce({
+      id: "bridge-runtime-1",
+      label: "Laptop",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+    });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "local",
+        instanceId: "bridge-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "bridge-owned",
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    await vi.waitFor(() => expect(mocks.registerRuntime).toHaveBeenCalled());
+    mocks.unregisterRuntime.mockReturnValue(["session-1"]);
+    // The reconnect landed on a peer replica, so this one still sees nothing.
+    mocks.getRuntimeForSession.mockReturnValue(undefined);
+
+    vi.useFakeTimers();
+    try {
+      ws.emitClose(1006, "");
+      await vi.advanceTimersByTimeAsync(10_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    await vi.waitFor(() => expect(vi.mocked(sessionService.markConnectionLost)).toHaveBeenCalled());
+
+    expect(vi.mocked(sessionService.markConnectionLost)).toHaveBeenCalledWith(
+      "session-1",
+      "runtime_disconnected",
+      "bridge-owned",
+      expect.any(String),
+      "generation-1",
+    );
   });
 
   it("drops a relayed response after its runtime generation is replaced", async () => {

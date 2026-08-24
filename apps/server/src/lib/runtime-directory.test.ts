@@ -9,6 +9,11 @@ import {
   type RuntimeDescriptor,
 } from "./runtime-directory.js";
 
+/** Mirrors `RuntimeDirectory.redisKey`, which is private. */
+function keyFor(runtimeKey: string): string {
+  return `trace:runtime:v1:${Buffer.from(runtimeKey).toString("base64url")}`;
+}
+
 function descriptor(overrides: Partial<RuntimeDescriptor> = {}): RuntimeDescriptor {
   const now = Date.now();
   return {
@@ -267,5 +272,45 @@ describe("RuntimeDirectory read-through lookup", () => {
     // risk answering with another tenant's runtime.
     await expect(directory.lookup("runtime-unscoped")).resolves.toBeUndefined();
     expect(get).not.toHaveBeenCalled();
+  });
+
+  it("recovers a cloud runtime, whose descriptor key is not organization-scoped", async () => {
+    const directory = new RuntimeDirectory();
+    directories.push(directory);
+    // `registerRuntime` passes no `key` for cloud bridges, so the descriptor is
+    // stored under the bare instance id while local bridges use `org:id`.
+    const peer = descriptor({
+      key: "runtime-cloud",
+      id: "runtime-cloud",
+      hostingMode: "cloud",
+      ownerReplicaId: "peer-replica",
+      expiresAt: Date.now() + 120_000,
+    });
+    forceBackplaneEnabled();
+    const stored = new Map([[keyFor("runtime-cloud"), JSON.stringify(peer)]]);
+    vi.spyOn(redis, "get").mockImplementation(async (key: string) => stored.get(key) ?? null);
+
+    await expect(directory.lookup("runtime-cloud", "org-1")).resolves.toMatchObject({
+      id: "runtime-cloud",
+      ownerReplicaId: "peer-replica",
+    });
+  });
+
+  it("refuses a bare-key descriptor belonging to another organization", async () => {
+    const directory = new RuntimeDirectory();
+    directories.push(directory);
+    const foreign = descriptor({
+      key: "runtime-foreign",
+      id: "runtime-foreign",
+      hostingMode: "cloud",
+      organizationId: "org-2",
+      expiresAt: Date.now() + 120_000,
+    });
+    forceBackplaneEnabled();
+    const stored = new Map([[keyFor("runtime-foreign"), JSON.stringify(foreign)]]);
+    vi.spyOn(redis, "get").mockImplementation(async (key: string) => stored.get(key) ?? null);
+
+    // The bare-id namespace is cross-tenant, so it must be checked before use.
+    await expect(directory.lookup("runtime-foreign", "org-1")).resolves.toBeUndefined();
   });
 });

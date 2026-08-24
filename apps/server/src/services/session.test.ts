@@ -7647,6 +7647,184 @@ describe("SessionService", () => {
   });
 
   describe("restoreSessionsForRuntime", () => {
+    it("stamps the live connection generation onto the runtime's sessions", async () => {
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        key: "runtime-cloud",
+        id: "runtime-cloud",
+        label: "runtime-cloud",
+        hostingMode: "cloud",
+        organizationId: "org-1",
+        connectionGeneration: "generation-2",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: [],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      // No session needs its state healed — the rows still read `connected`,
+      // which is exactly the case that used to write nothing at all and left
+      // the previous socket's grace timer unopposed.
+      prismaMock.session.findMany.mockResolvedValue([]);
+
+      await service.restoreSessionsForRuntime("runtime-cloud", "org-1");
+
+      const call = prismaMock.$executeRaw.mock.calls.at(-1);
+      expect(call).toBeDefined();
+      expect(call).toEqual(expect.arrayContaining(["runtime-cloud", "generation-2"]));
+      const sql = (call![0] as unknown as string[]).join("?");
+      expect(sql).toContain("{connectionGeneration}");
+      // Advances `version` so a concurrent updateConnectionConditional loses
+      // its compare-and-set instead of reverting the generation.
+      expect(sql).toContain("{version}");
+      // Idempotent: a repeat hello for the same connection touches no rows.
+      expect(sql).toContain("<>");
+    });
+
+    it("heals a done session left reading disconnected against a live runtime", async () => {
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        key: "runtime-cloud",
+        id: "runtime-cloud",
+        label: "runtime-cloud",
+        hostingMode: "cloud",
+        organizationId: "org-1",
+        connectionGeneration: "generation-2",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: [],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      // `done` is the state a session sits in between user messages — exactly
+      // what the incident session was — so skipping it left the stale
+      // `disconnected` in place for the next user action to act on.
+      prismaMock.session.findMany.mockResolvedValue([
+        {
+          id: "session-1",
+          agentStatus: "done",
+          connection: {
+            state: "disconnected",
+            runtimeInstanceId: "runtime-cloud",
+            disconnectedAt: new Date(Date.now() - 4_000).toISOString(),
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          organizationId: "org-1",
+          workdir: null,
+          readOnlyWorkspace: false,
+          sessionGroupId: "group-1",
+        },
+      ]);
+      prismaMock.session.findUnique.mockResolvedValue(
+        makeSession({
+          id: "session-1",
+          agentStatus: "done",
+          sessionStatus: "in_review",
+          connection: { state: "disconnected", runtimeInstanceId: "runtime-cloud" },
+        }),
+      );
+
+      await service.restoreSessionsForRuntime("runtime-cloud", "org-1");
+
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ type: "connection_restored" }),
+        }),
+      );
+    });
+
+    it("counts a disconnect the reconnect immediately reversed", async () => {
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        key: "runtime-cloud",
+        id: "runtime-cloud",
+        label: "runtime-cloud",
+        hostingMode: "cloud",
+        organizationId: "org-1",
+        connectionGeneration: "generation-2",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: [],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      prismaMock.session.findMany.mockResolvedValue([
+        {
+          id: "session-1",
+          agentStatus: "active",
+          connection: {
+            state: "disconnected",
+            runtimeInstanceId: "runtime-cloud",
+            disconnectedAt: new Date(Date.now() - 4_000).toISOString(),
+            lastError: "runtime_disconnected",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          organizationId: "org-1",
+          workdir: null,
+          readOnlyWorkspace: false,
+          sessionGroupId: "group-1",
+        },
+      ]);
+
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      try {
+        await service.restoreSessionsForRuntime("runtime-cloud", "org-1");
+
+        // The fence lost its race: the stamp landed after the grace period had
+        // already elapsed. Expected to be ~zero — anything else is residual.
+        expect(log).toHaveBeenCalledWith(
+          "[agent-environment] runtime.disconnect_reverted",
+          expect.stringContaining('"sessionId":"session-1"'),
+        );
+      } finally {
+        log.mockRestore();
+      }
+    });
+
+    it("does not count a long-standing disconnect as a reversal", async () => {
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        key: "runtime-cloud",
+        id: "runtime-cloud",
+        label: "runtime-cloud",
+        hostingMode: "cloud",
+        organizationId: "org-1",
+        connectionGeneration: "generation-2",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: [],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      prismaMock.session.findMany.mockResolvedValue([
+        {
+          id: "session-1",
+          agentStatus: "active",
+          connection: {
+            state: "disconnected",
+            runtimeInstanceId: "runtime-cloud",
+            // Hours ago — an ordinary resume, not a lost race.
+            disconnectedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          organizationId: "org-1",
+          workdir: null,
+          readOnlyWorkspace: false,
+          sessionGroupId: "group-1",
+        },
+      ]);
+
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      try {
+        await service.restoreSessionsForRuntime("runtime-cloud", "org-1");
+
+        expect(log).not.toHaveBeenCalledWith(
+          "[agent-environment] runtime.disconnect_reverted",
+          expect.anything(),
+        );
+      } finally {
+        log.mockRestore();
+      }
+    });
+
     it("rehydrates tracked workdirs back into a reconnected local bridge", async () => {
       sessionRouterMock.getRuntime.mockReturnValueOnce({
         key: "org-1:runtime-a",
@@ -9076,6 +9254,109 @@ describe("SessionService", () => {
       expect(eventServiceMock.create).not.toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "session_output",
+          payload: expect.objectContaining({ type: "connection_lost" }),
+        }),
+      );
+    });
+
+    it("declines when the reported connection has already been replaced", async () => {
+      // The bridge dropped, reconnected onto another replica, and that replica
+      // stamped its generation. The original replica's grace timer then fires
+      // against the same runtime id — which is why the id check above passes.
+      prismaMock.session.findUnique.mockResolvedValue(
+        makeSession({
+          id: "session-1",
+          hosting: "cloud",
+          agentStatus: "done",
+          sessionStatus: "in_review",
+          worktreeDeleted: false,
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            connectionGeneration: "generation-2",
+          },
+        }),
+      );
+
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      try {
+        await service.markConnectionLost(
+          "session-1",
+          "runtime_disconnected",
+          "runtime-1",
+          new Date().toISOString(),
+          "generation-1",
+        );
+
+        expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+        expect(eventServiceMock.create).not.toHaveBeenCalledWith(
+          expect.objectContaining({
+            payload: expect.objectContaining({ type: "connection_lost" }),
+          }),
+        );
+        // Counts saves. Non-zero in production means the fence is load-bearing.
+        expect(log).toHaveBeenCalledWith(
+          "[agent-environment] runtime.disconnect_fenced",
+          expect.stringContaining('"currentGeneration":"generation-2"'),
+        );
+      } finally {
+        log.mockRestore();
+      }
+    });
+
+    it("marks disconnected when the reported connection is still the current one", async () => {
+      prismaMock.session.findUnique.mockResolvedValue(
+        makeSession({
+          id: "session-1",
+          hosting: "cloud",
+          agentStatus: "done",
+          sessionStatus: "in_review",
+          worktreeDeleted: false,
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            connectionGeneration: "generation-1",
+          },
+        }),
+      );
+
+      await service.markConnectionLost(
+        "session-1",
+        "runtime_disconnected",
+        "runtime-1",
+        new Date().toISOString(),
+        "generation-1",
+      );
+
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ type: "connection_lost" }),
+        }),
+      );
+    });
+
+    it("still marks disconnected for a session bound before generations were recorded", async () => {
+      prismaMock.session.findUnique.mockResolvedValue(
+        makeSession({
+          id: "session-1",
+          hosting: "cloud",
+          agentStatus: "done",
+          sessionStatus: "in_review",
+          worktreeDeleted: false,
+          connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+        }),
+      );
+
+      await service.markConnectionLost(
+        "session-1",
+        "runtime_disconnected",
+        "runtime-1",
+        new Date().toISOString(),
+        "generation-1",
+      );
+
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
           payload: expect.objectContaining({ type: "connection_lost" }),
         }),
       );

@@ -403,7 +403,13 @@ export class RuntimeDirectory {
     const cached = this.find(runtimeInstanceId, organizationId);
     if (cached) return cached;
     if (!realtimeBackplane.enabled || !organizationId) return undefined;
-    const raw = await redis.get(this.redisKey(`${organizationId}:${runtimeInstanceId}`));
+    // Local bridges register under `org:id`; cloud bridges pass no key to
+    // `registerRuntime`, so theirs is stored under the bare instance id. Only
+    // probing the scoped key made this read-through a no-op for exactly the
+    // cloud runtimes it exists to recover.
+    const raw =
+      (await redis.get(this.redisKey(`${organizationId}:${runtimeInstanceId}`))) ??
+      (await redis.get(this.redisKey(runtimeInstanceId)));
     if (!raw) return undefined;
     let descriptor: RuntimeDescriptor | null;
     try {
@@ -412,6 +418,10 @@ export class RuntimeDirectory {
       return undefined;
     }
     if (!descriptor || descriptor.expiresAt <= Date.now()) return undefined;
+    // The bare-id namespace is cross-tenant, so confirm the tenant before
+    // installing it — the scoped key proves ownership by construction, this
+    // one does not.
+    if (descriptor.organizationId !== organizationId) return undefined;
     if (this.applyDescriptor(descriptor) === "installed") {
       this.emit({ action: "upsert", descriptor });
     }

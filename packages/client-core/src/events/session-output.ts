@@ -88,6 +88,24 @@ export function shouldBumpSortTimestampForOutput(payload: JsonObject): boolean {
   return payload.type === "question_pending" || payload.type === "plan_pending";
 }
 
+/**
+ * Connection lifecycle writes carry a monotonically increasing version. Events
+ * are appended after those writes, so two replicas can publish them in the
+ * opposite order from the database commits. Never let an older event replace a
+ * newer connection snapshot already in the entity store.
+ *
+ * Missing versions remain rollout-compatible with legacy events and sessions.
+ */
+export function isConnectionPatchCurrent(existing: unknown, incoming: unknown): boolean {
+  const existingVersion = asJsonObject(existing)?.version;
+  const incomingVersion = asJsonObject(incoming)?.version;
+  return (
+    typeof existingVersion !== "number" ||
+    typeof incomingVersion !== "number" ||
+    incomingVersion >= existingVersion
+  );
+}
+
 export function patchGroupSessionsBranch(
   batch: StoreBatchWriter,
   sessionGroupId: string,
@@ -170,6 +188,13 @@ export function routeSessionOutput({ event, payload, batch, ui }: RouteSessionOu
 
   const sessionPatch = sessionPatchFromOutput(payload);
   if (sessionPatch) {
+    const existingSession = batch.get("sessions", event.scopeId);
+    if (
+      sessionPatch.connection &&
+      !isConnectionPatchCurrent(existingSession?.connection, sessionPatch.connection)
+    ) {
+      delete sessionPatch.connection;
+    }
     batch.patch("sessions", event.scopeId, {
       ...sessionPatch,
       updatedAt: event.timestamp,

@@ -370,6 +370,8 @@ async function main() {
           sessionId,
           "runtime_heartbeat_timeout",
           stale.runtimeInstanceId,
+          undefined,
+          stale.connectionGeneration,
         );
       }
     }

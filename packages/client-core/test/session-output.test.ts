@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   extractMessagePreview,
+  isConnectionPatchCurrent,
   sessionPatchFromOutput,
   shouldBumpSortTimestampForOutput,
 } from "../src/events/session-output.js";
@@ -94,6 +95,22 @@ describe("sessionPatchFromOutput", () => {
 
   it("returns undefined for unknown subtypes", () => {
     expect(sessionPatchFromOutput({ type: "assistant" })).toBeUndefined();
+  });
+});
+
+describe("isConnectionPatchCurrent", () => {
+  it("rejects a stale disconnect published after a newer restore", () => {
+    expect(
+      isConnectionPatchCurrent(
+        { state: "connected", version: 12 },
+        { state: "disconnected", version: 11 },
+      ),
+    ).toBe(false);
+  });
+
+  it("accepts newer and rollout-era unversioned connection events", () => {
+    expect(isConnectionPatchCurrent({ version: 11 }, { version: 12 })).toBe(true);
+    expect(isConnectionPatchCurrent({ state: "connected" }, { state: "disconnected" })).toBe(true);
   });
 });
 
