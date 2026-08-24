@@ -892,6 +892,12 @@ export function SessionGroupDetailView({
     setActiveSessionGroupId,
   ]);
 
+  const handleOpenBrowserWorkspace = useCallback(() => {
+    const id = `draft:${crypto.randomUUID()}`;
+    setDraftWorkspaceTabs((drafts) => [...drafts, { id, surface: "browser" }]);
+    setRequestedActiveWorkspaceTabId(id);
+  }, [setDraftWorkspaceTabs, setRequestedActiveWorkspaceTabId]);
+
   const sessionCommands = useMemo<RegisteredCommand[]>(() => {
     const commands: RegisteredCommand[] = [
       {
@@ -909,6 +915,14 @@ export function SessionGroupDetailView({
         keywords: "open file search palette",
         run: handleToggleFilePalette,
         shortcut: { key: "p", mod: true },
+      },
+      {
+        id: "session.new-browser",
+        title: "New browser tab",
+        group: "Session",
+        keywords: "browser web page preview",
+        run: handleOpenBrowserWorkspace,
+        shortcut: { key: "b", mod: true, shift: true },
       },
     ];
     if (canNewChatCmd) {
@@ -935,6 +949,7 @@ export function SessionGroupDetailView({
     canNewChatCmd,
     canOpenTerminalCmd,
     handleCloseCurrentTab,
+    handleOpenBrowserWorkspace,
     handleToggleFilePalette,
     handleNewChat,
     handleOpenTerminalCmd,
@@ -1070,29 +1085,6 @@ export function SessionGroupDetailView({
     setDraftWorkspaceTabs((drafts) => [...drafts, { id, surface: null }]);
     return id;
   }, []);
-
-  const handleOpenBrowserWorkspace = useCallback(() => {
-    const id = `draft:${crypto.randomUUID()}`;
-    setDraftWorkspaceTabs((drafts) => [...drafts, { id, surface: "browser" }]);
-    setRequestedActiveWorkspaceTabId(id);
-  }, [setDraftWorkspaceTabs, setRequestedActiveWorkspaceTabId]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        !(event.metaKey || event.ctrlKey) ||
-        !event.shiftKey ||
-        event.altKey ||
-        event.key.toLowerCase() !== "b"
-      ) {
-        return;
-      }
-      event.preventDefault();
-      handleOpenBrowserWorkspace();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleOpenBrowserWorkspace]);
 
   const handleOpenApplicationEndpoint = useCallback(
     (url: string) => {

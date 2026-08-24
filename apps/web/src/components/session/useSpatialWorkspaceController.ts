@@ -17,6 +17,9 @@ import {
 } from "./spatial-workspace-layout";
 import type { SpatialWorkspaceTab } from "./spatial-workspace-types";
 import { useSpatialWorkspaceDrag } from "./useSpatialWorkspaceDrag";
+import { useRegisterCommands } from "../../hooks/useRegisterCommands";
+import type { RegisteredCommand } from "../../stores/command-registry";
+import { requestBrowserAddressFocus } from "./browser-address-focus";
 
 interface SpatialWorkspaceControllerOptions {
   persistenceKey: string;
@@ -171,6 +174,13 @@ export function useSpatialWorkspaceController({
         : focusSpatialGroup(current, activeGroup.id);
     });
   }, []);
+  const handleFocusActiveBrowserAddress = useCallback(() => {
+    const activeTabId = getActiveGroup(
+      layoutRef.current,
+      activeGroupIdRef.current,
+    )?.activeTabId;
+    if (activeTabId?.startsWith("draft:")) requestBrowserAddressFocus(activeTabId);
+  }, []);
   const handleFocusGroup = useCallback(
     (index: number) => {
       const group = getSpatialGroups(layoutRef.current.root)[index];
@@ -193,51 +203,79 @@ export function useSpatialWorkspaceController({
     [handleActivate],
   );
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const mod = event.metaKey || event.ctrlKey;
-      if (mod && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "t") {
-        event.preventDefault();
-        const activeGroup = getActiveGroup(layoutRef.current, activeGroupIdRef.current);
-        if (activeGroup) handleNewTab(activeGroup.id);
-        return;
-      }
-      if (mod && !event.shiftKey && !event.altKey && event.key === "\\") {
-        event.preventDefault();
-        handleSplit();
-        return;
-      }
-      if (mod && event.shiftKey && !event.altKey && event.key === "|") {
-        event.preventDefault();
-        handleJoin();
-        return;
-      }
-      if (mod && event.shiftKey && !event.altKey && event.key === "Enter") {
-        event.preventDefault();
-        handleToggleActiveGroupFocus();
-        return;
-      }
-      if (mod && !event.shiftKey && !event.altKey && /^[1-4]$/.test(event.key)) {
-        event.preventDefault();
-        handleFocusGroup(Number(event.key) - 1);
-        return;
-      }
-      if (event.ctrlKey && !event.metaKey && !event.altKey && event.key === "Tab") {
-        event.preventDefault();
-        handleCycleTab(event.shiftKey ? -1 : 1);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    handleCycleTab,
-    handleFocusGroup,
-    handleJoin,
-    handleNewTab,
-    handleSplit,
-    handleToggleActiveGroupFocus,
-  ]);
+  const workspaceCommands = useMemo<RegisteredCommand[]>(
+    () => [
+      {
+        id: "workspace.new-tab",
+        title: "New workspace tab",
+        group: "Workspace",
+        run: () => {
+          const activeGroup = getActiveGroup(layoutRef.current, activeGroupIdRef.current);
+          if (activeGroup) handleNewTab(activeGroup.id);
+        },
+        shortcut: { key: "t", mod: true },
+      },
+      {
+        id: "workspace.split-pane",
+        title: "Split active pane",
+        group: "Workspace",
+        run: handleSplit,
+        shortcut: { key: "\\", code: "Backslash", mod: true },
+      },
+      {
+        id: "workspace.join-pane",
+        title: "Join active pane",
+        group: "Workspace",
+        run: handleJoin,
+        shortcut: { key: "\\", code: "Backslash", mod: true, shift: true },
+      },
+      {
+        id: "workspace.toggle-spotlight",
+        title: "Toggle pane spotlight",
+        group: "Workspace",
+        run: handleToggleActiveGroupFocus,
+        shortcut: { key: "Enter", mod: true, shift: true },
+      },
+      {
+        id: "workspace.next-tab",
+        title: "Next workspace tab",
+        group: "Workspace",
+        run: () => handleCycleTab(1),
+        shortcut: { key: "Tab", ctrl: true },
+      },
+      {
+        id: "workspace.previous-tab",
+        title: "Previous workspace tab",
+        group: "Workspace",
+        run: () => handleCycleTab(-1),
+        shortcut: { key: "Tab", ctrl: true, shift: true },
+      },
+      ...[1, 2, 3, 4].map((groupNumber) => ({
+        id: `workspace.focus-group-${groupNumber}`,
+        title: `Focus tab group ${groupNumber}`,
+        group: "Workspace",
+        run: () => handleFocusGroup(groupNumber - 1),
+        shortcut: { key: String(groupNumber), mod: true },
+      })),
+      {
+        id: "workspace.focus-browser-address",
+        title: "Focus browser address",
+        group: "Workspace",
+        run: handleFocusActiveBrowserAddress,
+        shortcut: { key: "l", mod: true },
+      },
+    ],
+    [
+      handleCycleTab,
+      handleFocusActiveBrowserAddress,
+      handleFocusGroup,
+      handleJoin,
+      handleNewTab,
+      handleSplit,
+      handleToggleActiveGroupFocus,
+    ],
+  );
+  useRegisterCommands(workspaceCommands);
 
   return {
     collisionDetection: drag.collisionDetection,

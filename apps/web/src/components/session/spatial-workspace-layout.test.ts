@@ -46,6 +46,18 @@ describe("spatial workspace layout", () => {
     });
   });
 
+  it("joins a pane with its adjacent sibling instead of the first workspace pane", () => {
+    let layout = createSpatialLayout(["chat", "browser", "terminal"]);
+    layout = dockSpatialTab(layout, "browser", "right");
+    layout = dockSpatialTab(layout, "terminal", "right");
+    layout = joinSpatialGroup(layout, "region-3");
+
+    expect(getSpatialGroups(layout.root).map((group) => group.tabIds)).toEqual([
+      ["chat"],
+      ["browser", "terminal"],
+    ]);
+  });
+
   it("keeps one horizontal plane and limits it to four regions", () => {
     let layout = createSpatialLayout(["chat", "browser", "terminal", "changes", "files"]);
     layout = dockSpatialTab(layout, "browser", "right");

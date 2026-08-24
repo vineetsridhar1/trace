@@ -185,11 +185,12 @@ export function splitSpatialGroup(
   };
 }
 
-/** Merges a region back into the first other region, preserving all of its tabs. */
+/** Merges a region into its nearest sibling, preserving all of its tabs. */
 export function joinSpatialGroup(layout: SpatialLayout, groupId: string): SpatialLayout {
   const sourceGroup = findSpatialGroup(layout.root, groupId);
-  const groups = getSpatialGroups(layout.root);
-  const targetGroup = groups.find((group) => group.id !== groupId);
+  const sibling = findSpatialGroupSibling(layout.root, groupId);
+  const siblingGroups = sibling ? getSpatialGroups(sibling.node) : [];
+  const targetGroup = siblingGroups[sibling?.sourceBeforeSibling ? 0 : siblingGroups.length - 1];
   if (!sourceGroup || !targetGroup) return layout;
 
   const root = mapGroups(layout.root, (group) => {
@@ -575,6 +576,26 @@ function replaceSpatialGroup(
       replaceSpatialGroup(node.children[1], groupId, mapper),
     ],
   };
+}
+
+function findSpatialGroupSibling(
+  node: SpatialNode,
+  groupId: string,
+): { node: SpatialNode; sourceBeforeSibling: boolean } | null {
+  if (node.type === "group") return null;
+  if (findSpatialGroup(node.children[0], groupId)) {
+    if (node.children[0].type === "group" && node.children[0].id === groupId) {
+      return { node: node.children[1], sourceBeforeSibling: true };
+    }
+    return findSpatialGroupSibling(node.children[0], groupId);
+  }
+  if (findSpatialGroup(node.children[1], groupId)) {
+    if (node.children[1].type === "group" && node.children[1].id === groupId) {
+      return { node: node.children[0], sourceBeforeSibling: false };
+    }
+    return findSpatialGroupSibling(node.children[1], groupId);
+  }
+  return null;
 }
 
 function mapSpatialNodes(

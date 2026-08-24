@@ -6,6 +6,7 @@ import {
   rememberBrowserAddress,
   saveBrowserAddressHistory,
 } from "./browser-address-history";
+import { BROWSER_ADDRESS_FOCUS_EVENT } from "./browser-address-focus";
 
 const EMPTY_BROWSER_STATE: DesktopBrowserWorkspaceState = {
   sessionGroupId: "",
@@ -50,17 +51,14 @@ export function BrowserWorkspacePanel({
   );
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.key !== "l") {
-        return;
-      }
-      event.preventDefault();
+    const handleFocusAddress = (event: Event) => {
+      if (!(event instanceof CustomEvent) || event.detail !== browserId) return;
       addressInputRef.current?.focus();
       addressInputRef.current?.select();
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+    window.addEventListener(BROWSER_ADDRESS_FOCUS_EVENT, handleFocusAddress);
+    return () => window.removeEventListener(BROWSER_ADDRESS_FOCUS_EVENT, handleFocusAddress);
+  }, [browserId]);
 
   useEffect(() => {
     onTitleChange?.(browserId, state.title);

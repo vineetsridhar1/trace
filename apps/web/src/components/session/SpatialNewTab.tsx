@@ -52,14 +52,14 @@ const quickStarts: Array<{
     id: "browser",
     surface: "browser",
     label: "Open browser",
-    detail: "Preview a running app · ⌘⇧B",
+    detail: "Preview a running app · Ctrl/Cmd+Shift+B",
     icon: Globe,
   },
   {
     id: "terminal",
     surface: "terminal",
     label: "Open terminal",
-    detail: "Start a shell or task · ⌘J",
+    detail: "Start a shell or task · Ctrl/Cmd+J",
     icon: TerminalSquare,
   },
   {
