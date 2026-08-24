@@ -4,11 +4,14 @@ import {
   balanceSpatialGroups,
   createSpatialLayout,
   focusSpatialGroup,
+  getSpatialGroups,
   insertSpatialTab,
   isSpatialLayout,
+  joinSpatialGroup,
   normalizeSpatialLayout,
   replaceSpatialTab,
   setSpatialSplitRatio,
+  splitSpatialGroup,
   syncSpatialTabs,
   type SpatialLayout,
 } from "./spatial-workspace-layout";
@@ -48,6 +51,7 @@ export function useSpatialWorkspaceController({
     readLayout(persistenceKey, tabIds, preferredActiveTabId),
   );
   const layoutRef = useRef(layout);
+  const activeGroupIdRef = useRef<string | null>(null);
   const [resizingSplitId, setResizingSplitId] = useState<string | null>(null);
   const previousPreferredActiveTabIdRef = useRef(preferredActiveTabId);
   const previousForegroundTabIdRef = useRef<string | null>(null);
@@ -114,6 +118,7 @@ export function useSpatialWorkspaceController({
   const handleActivate = useCallback(
     (groupId: string, tabId: string) => {
       setLayout((current) => activateSpatialTab(current, groupId, tabId));
+      activeGroupIdRef.current = groupId;
       onActivateTab(tabId);
     },
     [onActivateTab],
@@ -123,6 +128,7 @@ export function useSpatialWorkspaceController({
     setLayout((current) => setSpatialSplitRatio(current, splitId, ratio));
   }, []);
   const handleFocusPanel = useCallback((groupId: string) => {
+    activeGroupIdRef.current = groupId;
     setLayout((current) =>
       current.focusedGroupId ? focusSpatialGroup(current, groupId) : current,
     );
@@ -136,9 +142,80 @@ export function useSpatialWorkspaceController({
     (groupId: string) => {
       const tabId = onNewTab(groupId);
       setLayout((current) => insertSpatialTab(current, tabId, groupId));
+      activeGroupIdRef.current = groupId;
     },
     [onNewTab],
   );
+  const handleSplit = useCallback(() => {
+    const activeGroup = getActiveGroup(layoutRef.current, activeGroupIdRef.current);
+    if (!activeGroup) return;
+    const tabId = onNewTab(activeGroup.id);
+    setLayout((current) => {
+      activeGroupIdRef.current = `region-${current.nextGroupNumber}`;
+      return splitSpatialGroup(current, activeGroup.id, tabId);
+    });
+  }, [onNewTab]);
+  const handleJoin = useCallback(() => {
+    setLayout((current) => {
+      const activeGroup = getActiveGroup(current, activeGroupIdRef.current);
+      return activeGroup ? joinSpatialGroup(current, activeGroup.id) : current;
+    });
+  }, []);
+  const handleFocusGroup = useCallback(
+    (index: number) => {
+      const group = getSpatialGroups(layoutRef.current.root)[index];
+      const tabId = group?.activeTabId;
+      if (!group || !tabId) return;
+      handleActivate(group.id, tabId);
+    },
+    [handleActivate],
+  );
+  const handleCycleTab = useCallback(
+    (direction: 1 | -1) => {
+      const groups = getSpatialGroups(layoutRef.current.root);
+      const tabIds = groups.flatMap((group) => group.tabIds);
+      const activeTabId = getActiveGroup(layoutRef.current, activeGroupIdRef.current)?.activeTabId;
+      const currentIndex = activeTabId ? tabIds.indexOf(activeTabId) : -1;
+      const tabId = tabIds[(currentIndex + direction + tabIds.length) % tabIds.length];
+      const group = groups.find((candidate) => candidate.tabIds.includes(tabId));
+      if (group && tabId) handleActivate(group.id, tabId);
+    },
+    [handleActivate],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const mod = event.metaKey || event.ctrlKey;
+      if (mod && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "t") {
+        event.preventDefault();
+        const activeGroup = getActiveGroup(layoutRef.current, activeGroupIdRef.current);
+        if (activeGroup) handleNewTab(activeGroup.id);
+        return;
+      }
+      if (mod && !event.shiftKey && !event.altKey && event.key === "\\") {
+        event.preventDefault();
+        handleSplit();
+        return;
+      }
+      if (mod && event.shiftKey && !event.altKey && event.key === "|") {
+        event.preventDefault();
+        handleJoin();
+        return;
+      }
+      if (mod && !event.shiftKey && !event.altKey && /^[1-4]$/.test(event.key)) {
+        event.preventDefault();
+        handleFocusGroup(Number(event.key) - 1);
+        return;
+      }
+      if (event.ctrlKey && !event.metaKey && !event.altKey && event.key === "Tab") {
+        event.preventDefault();
+        handleCycleTab(event.shiftKey ? -1 : 1);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleCycleTab, handleFocusGroup, handleJoin, handleNewTab, handleSplit]);
 
   return {
     collisionDetection: drag.collisionDetection,
@@ -153,6 +230,7 @@ export function useSpatialWorkspaceController({
     handleFocusPanel,
     handleNewTab,
     handleResizeSplit,
+    handleSplit,
     handleTogglePanelFocus,
     hasVerticalSplit: layout.root.type === "split" && layout.root.direction === "vertical",
     layout,
@@ -192,4 +270,9 @@ function countRegions(node: SpatialLayout["root"]): number {
   return node.type === "group"
     ? 1
     : countRegions(node.children[0]) + countRegions(node.children[1]);
+}
+
+function getActiveGroup(layout: SpatialLayout, activeGroupId: string | null) {
+  const groups = getSpatialGroups(layout.root);
+  return groups.find((group) => group.id === activeGroupId) ?? groups[0];
 }

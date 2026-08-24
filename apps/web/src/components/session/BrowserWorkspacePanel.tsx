@@ -33,6 +33,7 @@ export function BrowserWorkspacePanel({
   onTitleChange?: (browserId: string, title: string) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
+  const addressInputRef = useRef<HTMLInputElement>(null);
   const addressEditingRef = useRef(false);
   const [state, setState] = useState<DesktopBrowserWorkspaceState>(EMPTY_BROWSER_STATE);
   const [inputValue, setInputValue] = useState("about:blank");
@@ -47,6 +48,19 @@ export function BrowserWorkspacePanel({
     attachedCheckout?.bridgeInstanceId ?? null,
     desktopBridgeInfo?.instanceId,
   );
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.key !== "l") {
+        return;
+      }
+      event.preventDefault();
+      addressInputRef.current?.focus();
+      addressInputRef.current?.select();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   useEffect(() => {
     onTitleChange?.(browserId, state.title);
@@ -192,6 +206,7 @@ export function BrowserWorkspacePanel({
           );
         }}
         onReload={() => perform(() => window.trace!.reloadBrowser({ sessionGroupId, browserId }))}
+        inputRef={addressInputRef}
       />
       {error ? (
         <p className="shrink-0 border-b border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">

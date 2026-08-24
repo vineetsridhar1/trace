@@ -11,10 +11,12 @@ import {
   getSpatialGroups,
   getSpatialRowPositionForTab,
   insertSpatialTab,
+  joinSpatialGroup,
   moveSpatialTab,
   replaceSpatialTab,
   normalizeSpatialLayout,
   setSpatialSplitRatio,
+  splitSpatialGroup,
   syncSpatialTabs,
   type SpatialLayout,
 } from "./spatial-workspace-layout";
@@ -26,6 +28,22 @@ describe("spatial workspace layout", () => {
     expect(countSpatialRegions(layout.root)).toBe(2);
     expect(layout.root).toMatchObject({ type: "split", direction: "horizontal" });
     expect(getSpatialGroups(layout.root).map((group) => group.tabIds)).toEqual([["chat"], ["terminal"]]);
+  });
+
+  it("splits the active region with a newly created tab and joins it back", () => {
+    const split = splitSpatialGroup(createSpatialLayout(["chat"], "chat"), "region-1", "draft:new");
+
+    expect(getSpatialGroups(split.root).map((group) => group.tabIds)).toEqual([
+      ["chat"],
+      ["draft:new"],
+    ]);
+
+    const joined = joinSpatialGroup(split, "region-2");
+    expect(countSpatialRegions(joined.root)).toBe(1);
+    expect(getSpatialGroups(joined.root)[0]).toMatchObject({
+      tabIds: ["chat", "draft:new"],
+      activeTabId: "draft:new",
+    });
   });
 
   it("keeps one horizontal plane and limits it to four regions", () => {
