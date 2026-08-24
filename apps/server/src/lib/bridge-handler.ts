@@ -1334,7 +1334,13 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       graceMs: DISCONNECT_GRACE_MS,
     });
     const closedRuntimeId = bridgeAuth?.kind === "local" ? bridgeAuth.instanceId : runtimeId;
-    const wasCurrentOwner = registered && sessionRouter.isCurrentRuntimeSocket(runtimeKey, ws);
+    // Capture before unregistering — afterwards the router has no record of
+    // this socket, and the generation is what lets a reconnect (on any replica)
+    // invalidate the disconnect we are about to schedule.
+    const closedGeneration = registered
+      ? sessionRouter.getCurrentRuntimeConnectionGeneration(runtimeKey, ws)
+      : undefined;
+    const wasCurrentOwner = closedGeneration !== undefined;
     const affectedSessions = registered ? sessionRouter.unregisterRuntime(runtimeKey, ws) : [];
     runtimeDebug("bridge close affected sessions", {
       runtimeId: closedRuntimeId,
@@ -1356,6 +1362,11 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     // Wait a grace period before marking sessions disconnected — if the bridge
     // reconnects quickly (e.g. brief network blip), restoreSessionsForRuntime
     // will rebind sessions and we can skip the disconnect notification entirely.
+    //
+    // This is an optimisation, not the fence: it only sees rebinds that landed
+    // on *this* replica, and a reconnect is load-balanced across all of them.
+    // Correctness comes from `closedGeneration`, which `markConnectionLost`
+    // checks against the generation the reconnect persisted.
     setTimeout(() => {
       for (const sessionId of affectedSessions) {
         // Check if the runtime reconnected and reclaimed this session
@@ -1375,6 +1386,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             "runtime_disconnected",
             closedRuntimeId,
             disconnectedAt,
+            closedGeneration,
           );
         });
       }

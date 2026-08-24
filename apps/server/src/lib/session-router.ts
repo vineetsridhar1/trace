@@ -153,6 +153,8 @@ export interface StaleRuntimeSnapshot {
   sessionIds: string[];
   lastHeartbeat: number;
   connectedAt?: Date | null;
+  /** Fences the eviction against a reconnect that reused this runtime id. */
+  connectionGeneration: string;
 }
 
 export interface StaleRuntimeEvictionResult {
@@ -1258,6 +1260,7 @@ export class SessionRouter {
           sessionIds: [...runtime.boundSessions],
           lastHeartbeat: runtime.lastHeartbeat,
           connectedAt: runtime.connectedAt,
+          connectionGeneration: runtime.connectionGeneration,
         });
       }
     }
