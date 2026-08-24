@@ -37,7 +37,15 @@ const config: CodegenConfig = {
     // Client hooks and document nodes — used by @trace/web
     "src/generated/client/": {
       preset: "client",
-      documents: ["../../apps/web/src/**/*.tsx", "../../apps/web/src/**/*.ts"],
+      // Test files are excluded: they build placeholder documents to exercise
+      // generic mutation plumbing, and those fields do not exist in the schema,
+      // so codegen's document validation fails on them.
+      documents: [
+        "../../apps/web/src/**/*.tsx",
+        "../../apps/web/src/**/*.ts",
+        "!../../apps/web/src/**/*.test.ts",
+        "!../../apps/web/src/**/*.test.tsx",
+      ],
       config: {
         enumsAsTypes: true,
         scalars: clientScalars,
