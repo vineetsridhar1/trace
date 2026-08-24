@@ -543,7 +543,16 @@ export class SessionRouter {
 
   /** Heartbeat timeout in ms — if no heartbeat in this window, runtime is considered stale */
   static HEARTBEAT_TIMEOUT_MS = 30_000;
-  static DIRECTORY_TTL_MS = 45_000;
+  /**
+   * Directory lease duration. Kept well above HEARTBEAT_TIMEOUT_MS so a single
+   * slow or dropped heartbeat cannot expire the lease of a live runtime — at
+   * 45_000 the margin was 1.5x and one late beat was enough to make a healthy
+   * bridge look offline. Stale *local* sockets are still evicted on the
+   * HEARTBEAT_TIMEOUT_MS cadence by checkStaleRuntimes.
+   */
+  static DIRECTORY_TTL_MS = 120_000;
+  /** Minimum gap between reclaim attempts for one runtime key. */
+  static DIRECTORY_RECLAIM_COOLDOWN_MS = 5_000;
   static LINKED_CHECKOUT_SNAPSHOT_REFRESH_MS = 30_000;
   static LINKED_CHECKOUT_SNAPSHOT_TTL_MS = 120_000;
 
@@ -663,9 +672,12 @@ export class SessionRouter {
     void runtimeDirectory
       .renew(runtime.key, runtime.connectionGeneration, SessionRouter.DIRECTORY_TTL_MS)
       .then((renewed) => {
-        if (!renewed && runtime.ws.readyState === runtime.ws.OPEN) {
-          runtime.ws.close(1012, "Runtime ownership replaced");
-        }
+        if (renewed || runtime.ws.readyState !== runtime.ws.OPEN) return;
+        // renew() fails both when a peer took the lease and when the lease
+        // simply expired. Try to reclaim before killing a live bridge —
+        // reclaimDirectoryEntry closes the socket itself if a peer really owns
+        // the key now.
+        this.reclaimDirectoryEntry(runtime);
       })
       .catch((error) => console.error("[runtime-directory] heartbeat renewal failed:", error));
     this.refreshLinkedCheckoutSnapshots(runtime);
@@ -673,6 +685,7 @@ export class SessionRouter {
   }
 
   private linkedCheckoutRefreshAfter = new Map<string, number>();
+  private directoryReclaimAfter = new Map<string, number>();
 
   private refreshLinkedCheckoutSnapshots(runtime: RuntimeInstance): void {
     if (runtime.hostingMode !== "local" || runtime.registeredRepoIds.length === 0) return;
@@ -808,6 +821,7 @@ export class SessionRouter {
     }
     this.runtimes.delete(runtimeId);
     this.linkedCheckoutRefreshAfter.delete(runtime.key);
+    this.directoryReclaimAfter.delete(runtime.key);
     void runtimeDirectory
       .remove(runtime.key, runtime.connectionGeneration)
       .catch((error) => console.error("[runtime-directory] failed to unregister runtime:", error));
@@ -939,11 +953,77 @@ export class SessionRouter {
     runtime: RuntimeInstance,
     descriptor = runtimeDirectory.find(runtime.id, runtime.organizationId),
   ): boolean {
-    if (!descriptor) return !realtimeBackplane.enabled;
+    if (!descriptor) {
+      // An absent directory entry means the lease lapsed, not that someone else
+      // owns the runtime: a peer taking over writes its own descriptor rather
+      // than deleting ours. So "absent" is "unknown", and while our socket is
+      // open we are still the owner. Disowning here let the replica holding a
+      // healthy bridge report it offline — which on the cloud retry path moved
+      // the session onto a fresh runtime and discarded its workspace.
+      if (runtime.ws.readyState === runtime.ws.OPEN) {
+        this.reclaimDirectoryEntry(runtime);
+        return true;
+      }
+      return !realtimeBackplane.enabled;
+    }
     return (
       descriptor.ownerReplicaId === realtimeBackplane.replicaId &&
       descriptor.connectionGeneration === runtime.connectionGeneration
     );
+  }
+
+  /**
+   * Rebuild this runtime's directory descriptor from live socket state,
+   * preserving `connectionGeneration` so existing bindings stay valid.
+   */
+  private descriptorFor(runtime: RuntimeInstance): RuntimeDescriptor {
+    return {
+      ...runtimeDirectory.createDescriptor(
+        {
+          key: runtime.key,
+          id: runtime.id,
+          organizationId: runtime.organizationId,
+          label: runtime.label,
+          hostingMode: runtime.hostingMode,
+          ownerUserId: runtime.ownerUserId,
+          bridgeRuntimeId: runtime.bridgeRuntimeId,
+          supportedTools: runtime.supportedTools,
+          protocolVersion: runtime.protocolVersion,
+          registeredRepoIds: runtime.registeredRepoIds,
+          linkedCheckoutStatuses: [...runtime.linkedCheckouts.values()].map(linkedCheckoutSnapshot),
+          linkedCheckoutStatusObservedAt: Object.fromEntries(runtime.linkedCheckoutObservedAt),
+        },
+        SessionRouter.DIRECTORY_TTL_MS,
+      ),
+      connectionGeneration: runtime.connectionGeneration,
+    };
+  }
+
+  /**
+   * Heal a lapsed directory lease for a socket we still hold. Rate-limited so a
+   * burst of lookups cannot stampede Redis. If a peer has genuinely taken the
+   * lease, close our socket so the bridge reconnects to the real owner instead
+   * of serving state from a replica that no longer owns it.
+   */
+  private reclaimDirectoryEntry(runtime: RuntimeInstance): void {
+    const now = Date.now();
+    if ((this.directoryReclaimAfter.get(runtime.key) ?? 0) > now) return;
+    this.directoryReclaimAfter.set(runtime.key, now + SessionRouter.DIRECTORY_RECLAIM_COOLDOWN_MS);
+    void runtimeDirectory
+      .reclaim(this.descriptorFor(runtime), SessionRouter.DIRECTORY_TTL_MS)
+      .then((reclaimed) => {
+        if (reclaimed) {
+          runtimeDebug("reclaimed lapsed runtime directory lease", {
+            runtimeId: runtime.id,
+            connectionGeneration: runtime.connectionGeneration,
+          });
+          return;
+        }
+        if (runtime.ws.readyState === runtime.ws.OPEN) {
+          runtime.ws.close(1012, "Runtime ownership replaced");
+        }
+      })
+      .catch((error) => console.error("[runtime-directory] lapsed lease reclaim failed:", error));
   }
 
   private async confirmCurrentLocalOwner(runtime: RuntimeInstance): Promise<boolean> {
@@ -979,6 +1059,24 @@ export class SessionRouter {
       return runtime.ws.readyState === runtime.ws.OPEN;
     }
     return descriptor !== undefined;
+  }
+
+  /**
+   * Availability confirmed against Redis rather than the local mirror.
+   *
+   * `isRuntimeAvailable` answers from the mirror, which is correct for hot paths
+   * but reports a peer-owned runtime as absent whenever this replica missed its
+   * presence broadcast — and nothing resyncs the mirror afterwards. Callers that
+   * would otherwise take an irreversible action on a false negative (moving a
+   * session onto a fresh runtime, telling the user its bridge is offline) must
+   * use this instead.
+   */
+  async isRuntimeAvailableConfirmed(
+    runtimeId: string,
+    organizationId?: string | null,
+  ): Promise<boolean> {
+    if (this.isRuntimeAvailable(runtimeId, organizationId)) return true;
+    return (await runtimeDirectory.lookup(runtimeId, organizationId)) !== undefined;
   }
 
   getRuntimeDescriptor(
@@ -1079,7 +1177,12 @@ export class SessionRouter {
 
     const localResult = this.send(sessionId, command, options);
     if (localResult === "delivered" || !options?.expectedHomeRuntimeId) return localResult;
-    const descriptor = runtimeDirectory.find(options.expectedHomeRuntimeId, options.organizationId);
+    // Read through to Redis: a mirror miss here means giving up on a runtime
+    // that is alive on a peer replica, which surfaces as "bridge offline".
+    const descriptor = await runtimeDirectory.lookup(
+      options.expectedHomeRuntimeId,
+      options.organizationId,
+    );
     if (!descriptor || descriptor.ownerReplicaId === realtimeBackplane.replicaId) {
       return localResult;
     }
