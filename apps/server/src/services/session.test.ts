@@ -328,6 +328,22 @@ function makeAgentEnvironment(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * Reserve a session's next runtime generation, the way `provisionRuntime` does.
+ * Resolves to the reserved runtime instance id, or `null` when a live runtime
+ * already owns the session.
+ */
+function reserveRuntime(service: SessionService, sessionId: string): Promise<string | null> {
+  return (
+    service as unknown as {
+      recordRuntimeLifecycle: (
+        sessionId: string,
+        eventType: "session_runtime_start_requested",
+      ) => Promise<string | null>;
+    }
+  ).recordRuntimeLifecycle(sessionId, "session_runtime_start_requested");
+}
+
 describe("SessionService", () => {
   let service: SessionService;
 
@@ -6357,6 +6373,10 @@ describe("SessionService", () => {
           },
         });
 
+      // A provision that arrives carrying its own runtime id is still fenced
+      // out — but it is declined, not thrown. Throwing is what flipped a
+      // session to `failed` while its winning runtime was connected and
+      // healthy.
       await expect(
         (
           service as unknown as {
@@ -6364,15 +6384,60 @@ describe("SessionService", () => {
               sessionId: string,
               eventType: "session_runtime_start_requested",
               update: { runtimeInstanceId: string },
-            ) => Promise<void>;
+            ) => Promise<string | null>;
           }
         ).recordRuntimeLifecycle("session-1", "session_runtime_start_requested", {
           runtimeInstanceId: "runtime-new",
         }),
-      ).rejects.toThrow("Cannot reserve runtime runtime-new for session session-1");
+      ).resolves.toBeNull();
 
       expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
       expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+
+    it("hands two concurrent provisions one runtime instead of failing the loser", async () => {
+      prismaMock.session.findUnique.mockReset();
+      prismaMock.session.updateMany.mockReset();
+      // One mutable row, so both provisions contend on the same optimistic
+      // version the way they do in Postgres.
+      let connection: Record<string, unknown> = { state: "unknown", version: 0 };
+      prismaMock.session.findUnique.mockImplementation(async (args: unknown) => {
+        const select = (args as { select?: Record<string, boolean> }).select ?? {};
+        if (select.connection) return { sessionGroupId: null, connection };
+        return {
+          organizationId: "org-1",
+          sessionGroupId: null,
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+        };
+      });
+      prismaMock.session.updateMany.mockImplementation(async (args: unknown) => {
+        const { where, data } = args as {
+          where: { connection: { equals: number } };
+          data: { connection: Record<string, unknown> };
+        };
+        if (where.connection.equals !== connection.version) return { count: 0 };
+        connection = data.connection;
+        return { count: 1 };
+      });
+
+      const reservations = await Promise.all([
+        reserveRuntime(service, "session-1"),
+        reserveRuntime(service, "session-1"),
+      ]);
+
+      // Exactly one identity exists, it is the one that was persisted, and the
+      // provision that lost simply converges on it.
+      const reserved = reservations.filter((id): id is string => id !== null);
+      expect(reserved).toHaveLength(1);
+      expect(reserved[0]).toMatch(/^runtime_/);
+      expect(connection.runtimeInstanceId).toBe(reserved[0]);
+      expect(
+        eventServiceMock.create.mock.calls.filter(
+          ([input]: [{ eventType: string }]) =>
+            input.eventType === "session_runtime_start_requested",
+        ),
+      ).toHaveLength(1);
     });
   });
 

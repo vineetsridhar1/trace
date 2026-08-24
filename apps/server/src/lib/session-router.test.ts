@@ -653,6 +653,15 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
   });
 });
 
+/**
+ * Stands in for the service-layer reservation. A provisioned runtime's id is
+ * minted by the claim that reserves it, so the router receives it rather than
+ * generating one.
+ */
+function stubReserveRuntime(runtimeInstanceId = "runtime_test-1") {
+  return async () => runtimeInstanceId;
+}
+
 describe("SessionRouter runtime adapter dispatch", () => {
   it("routes lifecycle commands to the persisted runtime across replicas", async () => {
     const router = new SessionRouter();
@@ -854,6 +863,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       sessionGroupKind: "general",
       hosting: "cloud",
       adapterType: "provisioned",
+      reserveRuntime: stubReserveRuntime(),
       tool: "codex",
       repo: {
         id: "repo-1",
@@ -1054,6 +1064,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       sessionId: "session-1",
       hosting: "cloud",
       adapterType: "provisioned",
+      reserveRuntime: stubReserveRuntime(),
       tool: "codex",
       model: "gpt-test",
       repo: null,
@@ -1125,6 +1136,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       sessionId: "session-1",
       hosting: "cloud",
       adapterType: "provisioned",
+      reserveRuntime: stubReserveRuntime(),
       tool: "codex",
       repo: null,
       createdById: "user-1",
@@ -1192,6 +1204,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       sessionId: "session-1",
       hosting: "cloud",
       adapterType: "provisioned",
+      reserveRuntime: stubReserveRuntime(),
       tool: "claude_code",
       repo: null,
       createdById: "user-1",
@@ -1329,6 +1342,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       sessionId: "session-1",
       hosting: "cloud",
       adapterType: "provisioned",
+      reserveRuntime: stubReserveRuntime(),
       tool: "codex",
       repo: null,
       createdById: "user-1",
@@ -1399,6 +1413,10 @@ describe("SessionRouter runtime adapter dispatch", () => {
       sessionId: "session-1",
       hosting: "cloud",
       adapterType: "provisioned",
+      reserveRuntime: async () => {
+        callOrder.push("reserve");
+        return "runtime_test-1";
+      },
       environment: {
         id: "env-1",
         name: "Provisioned",
@@ -1418,15 +1436,15 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
     await vi.waitFor(() => {
       expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
-        "session_runtime_start_requested",
         "session_runtime_provisioning",
       ]);
     });
-    expect(callOrder.slice(0, 2)).toEqual(["session_runtime_start_requested", "adapter_start"]);
+    // The reservation is what mints the runtime id, so nothing reaches the
+    // adapter before it has been claimed.
+    expect(callOrder.slice(0, 2)).toEqual(["reserve", "adapter_start"]);
     const runtimeInstanceId = lifecycleEvents[0]?.runtimeInstanceId;
+    expect(runtimeInstanceId).toBe("runtime_test-1");
     if (!runtimeInstanceId) throw new Error("Expected runtime instance ID");
-    expect(runtimeInstanceId).toMatch(/^runtime_/);
-    expect(lifecycleEvents[1]?.runtimeInstanceId).toBe(runtimeInstanceId);
     expect(router.getRuntimeForSession("session-1")).toBeUndefined();
 
     router.registerRuntime({
@@ -1440,11 +1458,88 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
     await vi.waitFor(() => {
       expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
-        "session_runtime_start_requested",
         "session_runtime_provisioning",
         "session_runtime_connected",
       ]);
     });
+  });
+
+  it("abandons a provision whose reservation was lost to a live runtime", async () => {
+    const provisionedStart = vi.fn().mockResolvedValue({ status: "provisioning" });
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      startSession: provisionedStart,
+      async stopSession() {
+        return { ok: true, status: "stopping" };
+      },
+      async getStatus() {
+        return { status: "provisioning" };
+      },
+    };
+    const router = new SessionRouter(new RuntimeAdapterRegistry([provisionedAdapter]));
+    const onLifecycle = vi.fn();
+    const onFailed = vi.fn();
+
+    router.createRuntime({
+      sessionId: "session-1",
+      hosting: "cloud",
+      adapterType: "provisioned",
+      // The concurrent provision that reserved first already owns this session.
+      reserveRuntime: async () => null,
+      tool: "codex",
+      repo: null,
+      createdById: "user-1",
+      organizationId: "org-1",
+      onLifecycle,
+      onFailed,
+    });
+
+    await flushPromises();
+
+    expect(provisionedStart).not.toHaveBeenCalled();
+    // Critically, the session that the winning runtime is serving is left alone.
+    expect(onFailed).not.toHaveBeenCalled();
+    expect(onLifecycle).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when provisioned runtime creation has no reservation callback", async () => {
+    const provisionedStart = vi.fn().mockResolvedValue({ status: "provisioning" });
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      startSession: provisionedStart,
+      async stopSession() {
+        return { ok: true, status: "stopping" };
+      },
+      async getStatus() {
+        return { status: "provisioning" };
+      },
+    };
+    const router = new SessionRouter(new RuntimeAdapterRegistry([provisionedAdapter]));
+    const onFailed = vi.fn();
+
+    router.createRuntime({
+      sessionId: "session-1",
+      hosting: "cloud",
+      adapterType: "provisioned",
+      tool: "claude_code",
+      createdById: "user-1",
+      organizationId: "org-1",
+      onFailed,
+    });
+
+    await vi.waitFor(() => expect(onFailed).toHaveBeenCalledTimes(1));
+    expect(provisionedStart).not.toHaveBeenCalled();
+    expect(onFailed).toHaveBeenCalledWith(
+      "provisioned runtime failed: Provisioned runtime creation requires a reservation callback",
+    );
   });
 
   it("runs a provisioned launcher start, bridge delivery, and stop with stable idempotency", async () => {
@@ -1503,6 +1598,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       sessionGroupId: "group-1",
       hosting: "cloud",
       adapterType: "provisioned",
+      reserveRuntime: stubReserveRuntime(),
       environment,
       tool: "codex",
       model: "gpt-test",
@@ -1551,7 +1647,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
     expect(onFailed).not.toHaveBeenCalled();
     expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
-      "session_runtime_start_requested",
       "session_runtime_provisioning",
       "session_runtime_connected",
     ]);
@@ -1645,6 +1740,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       sessionId: "session-1",
       hosting: "cloud",
       adapterType: "provisioned",
+      reserveRuntime: stubReserveRuntime(),
       environment: {
         id: "env-1",
         name: "Provisioned",
@@ -1667,7 +1763,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
     await flushPromises();
     expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
-      "session_runtime_start_requested",
       "session_runtime_provisioning",
     ]);
 
@@ -1678,13 +1773,12 @@ describe("SessionRouter runtime adapter dispatch", () => {
     await flushPromises();
 
     expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
-      "session_runtime_start_requested",
       "session_runtime_provisioning",
       "session_runtime_start_timed_out",
       "session_runtime_stopping",
     ]);
-    expect(lifecycleEvents[2]?.runtimeInstanceId).toBe(lifecycleEvents[0]?.runtimeInstanceId);
-    expect(lifecycleEvents[2]?.error).toContain("1000ms");
+    expect(lifecycleEvents[1]?.runtimeInstanceId).toBe(lifecycleEvents[0]?.runtimeInstanceId);
+    expect(lifecycleEvents[1]?.error).toContain("1000ms");
     expect(provisionedStop).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: "session-1",
