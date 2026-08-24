@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { redis } from "./redis.js";
 import { realtimeBackplane } from "./realtime-backplane.js";
 import {
+  RUNTIME_DIRECTORY_RECLAIM_SCRIPT,
   RUNTIME_DIRECTORY_REGISTER_SCRIPT,
   RuntimeDirectory,
   type RuntimeDescriptor,
@@ -63,6 +64,16 @@ describe("RuntimeDirectory descriptor ordering", () => {
       "__TRACE_RUNTIME_DIRECTORY_OWNERSHIP_EPOCH__",
     );
     expect(RUNTIME_DIRECTORY_REGISTER_SCRIPT).toContain("replacements ~= 1");
+  });
+
+  it("only reclaims an absent, expired, or same-generation lease", () => {
+    expect(RUNTIME_DIRECTORY_RECLAIM_SCRIPT).toContain(
+      "current.expiresAt > tonumber(ARGV[3])",
+    );
+    expect(RUNTIME_DIRECTORY_RECLAIM_SCRIPT).toContain(
+      "current.connectionGeneration ~= ARGV[1]",
+    );
+    expect(RUNTIME_DIRECTORY_RECLAIM_SCRIPT).toContain("return false");
   });
 
   it("preserves descriptor array fields across local descriptor mutations", async () => {
@@ -128,6 +139,44 @@ describe("RuntimeDirectory descriptor ordering", () => {
       }
     },
   );
+
+  redisIntegrationIt("does not overwrite a live peer lease while reclaiming", async () => {
+    const id = randomUUID();
+    const descriptorKey = `trace:test-runtime-directory:${id}:descriptor`;
+    const epochKey = `trace:test-runtime-directory:${id}:epoch`;
+    const now = Date.now();
+    const peer = descriptor({
+      key: `org-1:${id}`,
+      connectionGeneration: "peer-generation",
+      expiresAt: now + 120_000,
+    });
+    const stale = { ...peer, connectionGeneration: "stale-generation" };
+    try {
+      await redis.set(descriptorKey, JSON.stringify(peer), "PX", "120000");
+
+      const result = await redis.eval(
+        RUNTIME_DIRECTORY_RECLAIM_SCRIPT,
+        2,
+        descriptorKey,
+        epochKey,
+        stale.connectionGeneration,
+        JSON.stringify({
+          ...stale,
+          ownershipEpoch: "__TRACE_RUNTIME_DIRECTORY_OWNERSHIP_EPOCH__",
+          lastHeartbeat: now,
+          expiresAt: now + 30_000,
+        }),
+        String(now),
+        "30000",
+      );
+
+      expect(result).toBeNull();
+      expect(JSON.parse((await redis.get(descriptorKey)) ?? "{}")).toMatchObject(peer);
+      expect(await redis.get(epochKey)).toBeNull();
+    } finally {
+      await redis.del(descriptorKey, epochKey);
+    }
+  });
 });
 
 describe("RuntimeDirectory read-through lookup", () => {
