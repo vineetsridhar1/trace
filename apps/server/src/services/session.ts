@@ -11465,8 +11465,39 @@ export class SessionService {
     return true;
   }
 
-  /** Compute the branch diff for a session group from GitHub (changed files vs default branch). */
+  /**
+   * Compute a session group's branch diff against its channel base branch.
+   * Prefer the session's live bridge so unpushed local commits are visible, but
+   * retain GitHub as a fallback when the bridge cannot fulfill the request.
+   */
   async branchDiff(sessionGroupId: string, organizationId: string, userId: string) {
+    try {
+      const runtime = await this.resolveAccessibleSessionGroupRuntime(
+        sessionGroupId,
+        organizationId,
+        userId,
+      );
+      const group = await prisma.sessionGroup.findFirst({
+        where: { id: sessionGroupId, organizationId },
+        select: {
+          channel: { select: { baseBranch: true } },
+          repo: { select: { defaultBranch: true } },
+        },
+      });
+      const baseBranch = this.toGitHubRef(
+        group?.channel?.baseBranch ?? group?.repo?.defaultBranch ?? "main",
+      );
+      return await sessionRouter.branchDiff(
+        runtime.runtimeId,
+        runtime.sessionId,
+        `origin/${baseBranch}`,
+        runtime.workdirHint,
+      );
+    } catch {
+      // GitHub remains available when the bridge is disconnected, fails, or
+      // cannot resolve the local worktree.
+    }
+
     const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
       organizationId,
@@ -11523,6 +11554,7 @@ export class SessionService {
         workdir: true,
         visibility: true,
         ownerUserId: true,
+        channel: { select: { baseBranch: true } },
         repo: { select: { provider: true, remoteUrl: true, defaultBranch: true } },
       },
     });
@@ -11555,7 +11587,9 @@ export class SessionService {
       );
     }
 
-    const defaultBranch = this.toGitHubRef(group.repo.defaultBranch || "main");
+    const defaultBranch = this.toGitHubRef(
+      group.channel?.baseBranch || group.repo.defaultBranch || "main",
+    );
     const branch = this.toGitHubRef(group.branch || defaultBranch);
 
     return {

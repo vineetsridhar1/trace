@@ -62,6 +62,7 @@ vi.mock("../lib/session-router.js", () => ({
     commitFileChanges: vi.fn().mockResolvedValue("commit123"),
     listWorktreeChanges: vi.fn().mockResolvedValue({ files: [], totalCount: 0, truncated: false }),
     revertWorktreeFile: vi.fn().mockResolvedValue(undefined),
+    branchDiff: vi.fn().mockResolvedValue([]),
     getLinkedCheckoutStatus: vi.fn().mockResolvedValue(null),
     linkLinkedCheckoutRepo: vi.fn().mockResolvedValue(null),
     syncLinkedCheckout: vi.fn().mockResolvedValue(null),
@@ -4518,8 +4519,8 @@ describe("SessionService", () => {
       );
     });
 
-    it("computes branch diffs through GitHub", async () => {
-      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+    it("falls back to GitHub when no bridge is available", async () => {
+      const group = {
         id: "group-1",
         branch: "trace/test",
         workdir: "/tmp/trace",
@@ -4530,7 +4531,8 @@ describe("SessionService", () => {
           remoteUrl: "git@github.com:trace/trace.git",
           defaultBranch: "main",
         },
-      });
+      };
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(group).mockResolvedValueOnce(group);
       githubRepoServiceMock.branchDiff.mockResolvedValueOnce([
         { path: "src/app.ts", status: "M", additions: 2, deletions: 1 },
       ]);
@@ -4545,6 +4547,95 @@ describe("SessionService", () => {
         "gh-token",
       );
       expect(sessionRouterMock.inspectSessionGitSyncStatus).not.toHaveBeenCalled();
+    });
+
+    it("computes branch diffs through the bridge against the channel base branch", async () => {
+      const group = {
+        id: "group-1",
+        kind: "coding",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+        channel: { baseBranch: "develop" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
+      };
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce(group)
+        .mockResolvedValueOnce({ channel: group.channel, repo: group.repo });
+      prismaMock.session.findMany.mockResolvedValue([
+        { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
+      ]);
+      sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+        id: "runtime-1",
+        key: "runtime-1",
+        hostingMode: "local",
+      } as never);
+      sessionRouterMock.branchDiff.mockResolvedValueOnce([
+        { path: "src/app.ts", status: "M", additions: 2, deletions: 1 },
+      ]);
+
+      await expect(service.branchDiff("group-1", "org-1", "user-1")).resolves.toEqual([
+        { path: "src/app.ts", status: "M", additions: 2, deletions: 1 },
+      ]);
+      expect(sessionRouterMock.branchDiff).toHaveBeenCalledWith(
+        "runtime-1",
+        "session-1",
+        "origin/develop",
+        "/tmp/trace",
+      );
+      expect(githubRepoServiceMock.branchDiff).not.toHaveBeenCalled();
+    });
+
+    it("falls back to GitHub when the bridge diff request fails", async () => {
+      const group = {
+        id: "group-1",
+        kind: "coding",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+        channel: { baseBranch: "develop" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
+      };
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce(group)
+        .mockResolvedValueOnce({ channel: group.channel, repo: group.repo })
+        .mockResolvedValueOnce(group);
+      prismaMock.session.findMany.mockResolvedValue([
+        { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
+      ]);
+      sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+        id: "runtime-1",
+        key: "runtime-1",
+        hostingMode: "local",
+      } as never);
+      sessionRouterMock.branchDiff.mockRejectedValueOnce(new Error("Bridge timed out"));
+      githubRepoServiceMock.branchDiff.mockResolvedValueOnce([
+        { path: "src/app.ts", status: "M", additions: 2, deletions: 1 },
+      ]);
+
+      await expect(service.branchDiff("group-1", "org-1", "user-1")).resolves.toEqual([
+        { path: "src/app.ts", status: "M", additions: 2, deletions: 1 },
+      ]);
+      expect(githubRepoServiceMock.branchDiff).toHaveBeenCalledWith(
+        { owner: "trace", repo: "trace" },
+        "develop",
+        "trace/test",
+        "gh-token",
+      );
     });
 
     it("reads files at refs through GitHub", async () => {
