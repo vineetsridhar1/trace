@@ -8258,10 +8258,13 @@ export class SessionService {
         sessionGroupId: session.sessionGroupId,
       });
     }
-    if (
-      session.hosting === "cloud" &&
-      (!homeRuntimeId || !sessionRouter.isRuntimeAvailable(homeRuntimeId, organizationId))
-    ) {
+    // Confirmed against Redis, not the local directory mirror: a false negative
+    // here provisions a fresh runtime and rebuilds the workspace from origin,
+    // discarding uncommitted work on a container that never died.
+    const homeRuntimeAvailable = homeRuntimeId
+      ? await sessionRouter.isRuntimeAvailableConfirmed(homeRuntimeId, organizationId)
+      : false;
+    if (session.hosting === "cloud" && !homeRuntimeAvailable) {
       return this.moveSessionInPlace({
         session,
         targetHosting: "cloud",
@@ -8275,7 +8278,7 @@ export class SessionService {
     }
 
     const runtime = homeRuntimeId
-      ? sessionRouter.isRuntimeAvailable(homeRuntimeId, organizationId)
+      ? homeRuntimeAvailable
         ? runtimeMetadata(homeRuntimeId, organizationId)
         : undefined
       : session.hosting === "local"

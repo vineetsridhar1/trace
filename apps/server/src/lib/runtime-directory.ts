@@ -29,6 +29,7 @@ export type RuntimeDescriptor = {
 };
 
 export const RUNTIME_DIRECTORY_REGISTER_SCRIPT = `local epoch=redis.call('incr',KEYS[2]); local encoded,replacements=string.gsub(ARGV[1],'"${OWNERSHIP_EPOCH_PLACEHOLDER}"',tostring(epoch)); if replacements ~= 1 then return redis.error_reply('invalid ownership epoch placeholder') end; redis.call('set',KEYS[1],encoded,'PX',ARGV[2]); return encoded`;
+export const RUNTIME_DIRECTORY_RECLAIM_SCRIPT = `local value=redis.call('get',KEYS[1]); if value then local ok,current=pcall(cjson.decode,value); if ok and type(current.expiresAt)=='number' and type(current.connectionGeneration)=='string' and current.expiresAt > tonumber(ARGV[3]) and current.connectionGeneration ~= ARGV[1] then return false end end; local epoch=redis.call('incr',KEYS[2]); local encoded,replacements=string.gsub(ARGV[2],'"${OWNERSHIP_EPOCH_PLACEHOLDER}"',tostring(epoch)); if replacements ~= 1 then return redis.error_reply('invalid ownership epoch placeholder') end; redis.call('set',KEYS[1],encoded,'PX',ARGV[4]); return encoded`;
 const RUNTIME_DIRECTORY_REPLACE_IF_OWNER_SCRIPT =
   "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; redis.call('set',KEYS[1],ARGV[2],'PX',ARGV[3]); return ARGV[2]";
 
@@ -234,6 +235,52 @@ export class RuntimeDirectory {
     return claimed;
   }
 
+  /**
+   * Re-claim a lapsed directory lease for a socket this replica still holds.
+   *
+   * Only an owner ever writes its own key, so an absent entry means the lease
+   * expired — never that a peer took over. The read and replacement are one
+   * Redis operation, so a peer cannot claim the lease between them.
+   * Reclaiming preserves `connectionGeneration` so session bindings established
+   * on this socket stay valid. If a peer genuinely owns the key now its
+   * descriptor is live under a different generation, and we return null rather
+   * than steal it.
+   */
+  async reclaim(descriptor: RuntimeDescriptor, ttlMs: number): Promise<RuntimeDescriptor | null> {
+    return this.withMutationQueue(descriptor.key, async () => {
+      if (!realtimeBackplane.enabled) return this.registerLocal(descriptor);
+      const now = Date.now();
+      const reclaimed = { ...descriptor, lastHeartbeat: now, expiresAt: now + ttlMs };
+      const result = await redis.eval(
+        RUNTIME_DIRECTORY_RECLAIM_SCRIPT,
+        2,
+        this.redisKey(descriptor.key),
+        DIRECTORY_EPOCH_KEY,
+        descriptor.connectionGeneration,
+        descriptorJsonWithEpochPlaceholder(reclaimed),
+        String(now),
+        String(ttlMs),
+      );
+      if (typeof result !== "string") return null;
+      const stored = descriptorFrom(JSON.parse(result));
+      if (!stored) throw new Error("Redis returned an invalid runtime ownership descriptor");
+      if (this.applyDescriptor(stored) !== "stale") {
+        try {
+          await realtimeBackplane.broadcast(PRESENCE_CHANGED, {
+            action: "upsert",
+            descriptor: stored,
+          });
+        } catch (error) {
+          console.error(
+            "[runtime-directory] reclaimed ownership presence broadcast failed:",
+            error,
+          );
+        }
+      }
+      return stored;
+    });
+  }
+
   async renew(runtimeKey: string, connectionGeneration: string, ttlMs: number): Promise<boolean> {
     return this.mutateCurrentDescriptor(
       runtimeKey,
@@ -333,6 +380,42 @@ export class RuntimeDirectory {
         (organizationId == null || descriptor.organizationId === organizationId),
     );
     return matches.length === 1 ? matches[0] : undefined;
+  }
+
+  /**
+   * Read-through lookup: consult the local mirror, then fall back to Redis.
+   *
+   * The mirror is hydrated once at start() and thereafter only by fire-and-forget
+   * presence broadcasts, so a dropped envelope leaves a replica permanently
+   * blind to a peer-owned runtime with nothing to repair it. `find()` cannot fix
+   * that — it is synchronous by necessity for hot paths — so any caller about to
+   * make an irreversible decision (declaring a home runtime offline, moving a
+   * session onto fresh infrastructure, giving up on a cross-replica relay) must
+   * confirm through here first. Mirrors `terminalDirectory.get()`.
+   *
+   * Requires `organizationId` to derive the Redis key; without it this degrades
+   * to the mirror-only lookup rather than guessing.
+   */
+  async lookup(
+    runtimeInstanceId: string,
+    organizationId?: string | null,
+  ): Promise<RuntimeDescriptor | undefined> {
+    const cached = this.find(runtimeInstanceId, organizationId);
+    if (cached) return cached;
+    if (!realtimeBackplane.enabled || !organizationId) return undefined;
+    const raw = await redis.get(this.redisKey(`${organizationId}:${runtimeInstanceId}`));
+    if (!raw) return undefined;
+    let descriptor: RuntimeDescriptor | null;
+    try {
+      descriptor = descriptorFrom(JSON.parse(raw));
+    } catch {
+      return undefined;
+    }
+    if (!descriptor || descriptor.expiresAt <= Date.now()) return undefined;
+    if (this.applyDescriptor(descriptor) === "installed") {
+      this.emit({ action: "upsert", descriptor });
+    }
+    return this.find(runtimeInstanceId, organizationId);
   }
 
   list(filter?: { hostingMode?: string }): RuntimeDescriptor[] {

@@ -54,6 +54,7 @@ vi.mock("../lib/session-router.js", () => ({
     getRuntimeForSession: vi.fn().mockReturnValue(null),
     getBoundSessionIds: vi.fn().mockReturnValue([]),
     isRuntimeAvailable: vi.fn().mockReturnValue(true),
+    isRuntimeAvailableConfirmed: vi.fn().mockResolvedValue(true),
     getRuntimeDiagnostics: vi.fn().mockReturnValue({}),
     listRuntimes: vi.fn().mockReturnValue([]),
     listRuntimeMetadata: vi.fn().mockReturnValue([]),
@@ -373,6 +374,12 @@ describe("SessionService", () => {
       sessionRouterMock.listRuntimes(...args),
     );
     sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+    // Mirrors production: the confirmed check only reads through to Redis when
+    // the sync answer is negative, so tests that stub isRuntimeAvailable keep
+    // describing both paths.
+    sessionRouterMock.isRuntimeAvailableConfirmed.mockImplementation(async (...args) =>
+      sessionRouterMock.isRuntimeAvailable(...args),
+    );
     sessionRouterMock.destroyRuntime.mockResolvedValue(undefined);
     sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValue(null);
     sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValue(makeGitSyncStatus());
