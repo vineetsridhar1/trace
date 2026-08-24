@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Orchestrate sessions — human-guided ticket DAGs</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --page: #f3f0e9;
+      --surface: #fffdf8;
+      --surface-2: #ebe6db;
+      --surface-3: #ddd6c8;
+      --ink: #17211f;
+      --ink-2: #40504c;
+      --ink-3: #697670;
+      --line: #c7c0b4;
+      --line-strong: #8e9a94;
+      --teal: #087f73;
+      --teal-soft: #c8ebe4;
+      --violet: #6251a6;
+      --violet-soft: #ddd7f4;
+      --amber: #bd6417;
+      --amber-soft: #f5d7b7;
+      --red: #b33a43;
+      --red-soft: #f5ccd0;
+      --green: #34754f;
+      --green-soft: #cfe9d8;
+      --blue: #386a9c;
+      --blue-soft: #d5e3f0;
+      --shadow: 0 18px 50px rgba(37, 42, 37, .09);
+      --radius: 22px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page: #111715;
+        --surface: #18211e;
+        --surface-2: #202b27;
+        --surface-3: #2d3935;
+        --ink: #edf4ef;
+        --ink-2: #bdcbc5;
+        --ink-3: #8fa099;
+        --line: #34423d;
+        --line-strong: #66766f;
+        --teal: #52c8b6;
+        --teal-soft: #173f39;
+        --violet: #b6a7ef;
+        --violet-soft: #342d55;
+        --amber: #f2aa61;
+        --amber-soft: #56371d;
+        --red: #f28a91;
+        --red-soft: #55272b;
+        --green: #83d39f;
+        --green-soft: #214531;
+        --blue: #83b8e7;
+        --blue-soft: #253d54;
+        --shadow: 0 20px 60px rgba(0, 0, 0, .24);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 8% 4%, color-mix(in srgb, var(--teal-soft) 66%, transparent) 0 12rem, transparent 29rem),
+        radial-gradient(circle at 94% 13%, color-mix(in srgb, var(--violet-soft) 60%, transparent) 0 10rem, transparent 28rem),
+        var(--page);
+      color: var(--ink);
+      font-family: var(--sans);
+      line-height: 1.6;
+    }
+    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 68px 0 120px; }
+    header, section { margin: 0 0 96px; }
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--teal);
+      font-size: .75rem;
+      font-weight: 800;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 920px;
+      margin: 0;
+      font-size: clamp(2.9rem, 7.4vw, 6.7rem);
+      line-height: .94;
+      letter-spacing: -.065em;
+      font-weight: 820;
+    }
+    h2 {
+      max-width: 900px;
+      margin: 0 0 20px;
+      font-size: clamp(2rem, 4.6vw, 4rem);
+      line-height: 1.03;
+      letter-spacing: -.045em;
+    }
+    h3 { margin: 0 0 8px; font-size: 1.06rem; line-height: 1.3; }
+    p { max-width: 760px; margin: 0 0 18px; color: var(--ink-2); }
+    strong { color: var(--ink); }
+    code, .path { font-family: var(--mono); font-size: .88em; color: var(--violet); }
+    a { color: var(--teal); }
+    .lede { margin: 28px 0 34px; font-size: clamp(1.08rem, 2vw, 1.35rem); line-height: 1.55; }
+    .decision {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 28px;
+      margin: 34px 0 28px;
+      padding: 20px 22px;
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--teal);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--surface) 88%, transparent);
+      box-shadow: var(--shadow);
+    }
+    .decision p { margin: 0; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      white-space: nowrap;
+      border: 1px solid color-mix(in srgb, var(--teal) 46%, var(--line));
+      border-radius: 999px;
+      padding: 7px 11px;
+      color: var(--teal);
+      background: var(--teal-soft);
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .04em;
+    }
+    .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    figure {
+      margin: 28px 0 24px;
+      padding: 18px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--surface) 92%, transparent);
+      box-shadow: var(--shadow);
+    }
+    figure svg { display: block; width: 100%; height: auto; }
+    figcaption { max-width: 900px; padding: 14px 8px 2px; color: var(--ink-2); font-size: .93rem; }
+    figcaption b { color: var(--ink); }
+    svg text { font-family: var(--sans); fill: var(--ink); }
+    svg .small { font-size: 13px; fill: var(--ink-2); }
+    svg .micro { font-size: 11px; fill: var(--ink-3); }
+    svg .label { font-size: 15px; font-weight: 750; }
+    svg .title { font-size: 20px; font-weight: 800; }
+    svg .mono { font-family: var(--mono); font-size: 11px; fill: var(--violet); }
+    svg .line { fill: none; stroke: var(--line-strong); stroke-width: 2; }
+    svg .hair { fill: none; stroke: var(--line); stroke-width: 1.2; }
+    svg .dash { stroke-dasharray: 8 7; }
+    svg .teal-stroke { stroke: var(--teal); }
+    svg .violet-stroke { stroke: var(--violet); }
+    svg .amber-stroke { stroke: var(--amber); }
+    svg .red-stroke { stroke: var(--red); }
+    svg .green-stroke { stroke: var(--green); }
+    svg .blue-stroke { stroke: var(--blue); }
+    svg .teal-fill { fill: var(--teal-soft); }
+    svg .violet-fill { fill: var(--violet-soft); }
+    svg .amber-fill { fill: var(--amber-soft); }
+    svg .red-fill { fill: var(--red-soft); }
+    svg .green-fill { fill: var(--green-soft); }
+    svg .blue-fill { fill: var(--blue-soft); }
+    svg .surface-fill { fill: var(--surface); }
+    svg .surface-2-fill { fill: var(--surface-2); }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 24px 0; }
+    .note {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+    }
+    .note p { margin: 0; font-size: .94rem; }
+    .note.open { border-color: color-mix(in srgb, var(--amber) 55%, var(--line)); background: var(--amber-soft); }
+    .note.fact { border-color: color-mix(in srgb, var(--teal) 45%, var(--line)); }
+    .note.risk { border-color: color-mix(in srgb, var(--red) 45%, var(--line)); }
+    .tag {
+      display: inline-block;
+      margin-bottom: 8px;
+      color: var(--ink-3);
+      font-size: .68rem;
+      font-weight: 850;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 18px 0 28px; font-size: .93rem; }
+    th, td { padding: 13px 12px; border-bottom: 1px solid var(--line); vertical-align: top; text-align: left; }
+    th { color: var(--ink-3); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; }
+    td:first-child { width: 30%; color: var(--ink); font-weight: 700; }
+    details { margin: 12px 0; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+    summary { cursor: pointer; padding: 16px 18px; color: var(--ink); font-weight: 750; }
+    details > div { padding: 0 18px 18px; }
+    details p:last-child { margin-bottom: 0; }
+    ul { max-width: 820px; margin: 12px 0 22px; padding-left: 22px; color: var(--ink-2); }
+    li { margin: 7px 0; }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0 0; color: var(--ink-3); font-size: .82rem; }
+    .legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .legend i { display: inline-block; width: 16px; height: 8px; border-radius: 4px; background: var(--line-strong); }
+    .legend .new { background: var(--teal); }
+    .legend .existing { background: var(--violet); }
+    .legend .gate { background: var(--amber); }
+    .legend .risk-color { background: var(--red); }
+    .footer { padding-top: 32px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: .86rem; }
+    @media (max-width: 760px) {
+      main { width: min(100% - 20px, 1180px); padding-top: 38px; }
+      header, section { margin-bottom: 70px; }
+      figure { padding: 8px; border-radius: 16px; }
+      .decision, .grid-2 { grid-template-columns: 1fr; }
+      .decision { align-items: start; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Product &amp; architecture plan · 23 August 2026</p>
+    <h1>Make the coding session a human-guided DAG.</h1>
+    <p class="lede">Add <strong>Orchestrate</strong> as a first-class, repository-backed session type. One controller scopes the work with the user, proposes a ticket DAG, and coordinates ordinary coding sessions. Humans approve the plan, consequential decisions, requested recordings, and final completion.</p>
+    <div class="decision">
+      <p><strong>Decision requested:</strong> approve the session boundary, durable orchestration model, human-gate policy, and one-ticket/one-commit integration contract described below.</p>
+      <span class="pill">Recommended architecture</span>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 1100 560" role="img" aria-labelledby="hero-title hero-desc">
+        <title id="hero-title">A human-guided ticket DAG becomes a linear integration branch</title>
+        <desc id="hero-desc">A human and orchestrator sit at the center of a branching ticket graph. Approved nodes flow into a single branch with one commit per ticket, while decision and video gates route back to the human.</desc>
+        <defs>
+          <marker id="hero-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--line-strong)"/></marker>
+          <marker id="hero-arrow-teal" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--teal)"/></marker>
+        </defs>
+        <path d="M210 272 C305 135 415 130 517 214" class="line teal-stroke" marker-end="url(#hero-arrow-teal)"/>
+        <path d="M210 292 C310 405 414 418 517 340" class="line teal-stroke" marker-end="url(#hero-arrow-teal)"/>
+        <path d="M624 214 C722 132 805 140 886 214" class="line" marker-end="url(#hero-arrow)"/>
+        <path d="M624 340 C724 417 808 404 886 332" class="line" marker-end="url(#hero-arrow)"/>
+        <path d="M936 250 C970 268 982 285 985 307" class="line teal-stroke" marker-end="url(#hero-arrow-teal)"/>
+
+        <circle cx="174" cy="282" r="105" class="surface-fill" stroke="var(--teal)" stroke-width="4"/>
+        <circle cx="174" cy="242" r="27" class="teal-fill" stroke="var(--teal)" stroke-width="2"/>
+        <path d="M118 327 Q174 270 230 327 L230 349 L118 349 Z" class="teal-fill" stroke="var(--teal)" stroke-width="2"/>
+        <text x="174" y="390" text-anchor="middle" class="title">Human</text>
+        <text x="174" y="412" text-anchor="middle" class="small">scope · decide · approve</text>
+
+        <path d="M450 205 Q550 148 650 205 L635 355 Q550 414 465 355 Z" class="violet-fill" stroke="var(--violet)" stroke-width="3"/>
+        <circle cx="550" cy="259" r="48" class="surface-fill" stroke="var(--violet)" stroke-width="3"/>
+        <path d="M521 260 L542 281 L581 234" fill="none" stroke="var(--violet)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="550" y="330" text-anchor="middle" class="title">Orchestrator</text>
+        <text x="550" y="352" text-anchor="middle" class="small">read-only controller</text>
+
+        <g transform="translate(840 115)">
+          <path d="M0 110 C44 18 148 18 194 110" class="hair dash"/>
+          <path d="M0 110 C42 198 150 202 194 110" class="hair dash"/>
+          <circle cx="0" cy="110" r="33" class="green-fill" stroke="var(--green)" stroke-width="3"/>
+          <circle cx="96" cy="28" r="33" class="blue-fill" stroke="var(--blue)" stroke-width="3"/>
+          <circle cx="96" cy="192" r="33" class="amber-fill" stroke="var(--amber)" stroke-width="3"/>
+          <circle cx="194" cy="110" r="36" class="violet-fill" stroke="var(--violet)" stroke-width="3"/>
+          <text x="0" y="115" text-anchor="middle" class="label">A</text>
+          <text x="96" y="33" text-anchor="middle" class="label">B</text>
+          <text x="96" y="197" text-anchor="middle" class="label">C</text>
+          <text x="194" y="115" text-anchor="middle" class="label">D</text>
+          <path d="M34 94 L65 55" class="line" marker-end="url(#hero-arrow)"/>
+          <path d="M34 126 L65 165" class="line" marker-end="url(#hero-arrow)"/>
+          <path d="M129 45 L165 89" class="line" marker-end="url(#hero-arrow)"/>
+          <path d="M129 175 L165 131" class="line" marker-end="url(#hero-arrow)"/>
+          <path d="M83 163 L83 142" class="amber-stroke" stroke-width="4"/>
+          <path d="M83 135 A13 13 0 0 1 109 135 L109 154 L83 154 Z" class="amber-fill" stroke="var(--amber)" stroke-width="2"/>
+          <text x="97" y="229" text-anchor="middle" class="small">ticket DAG</text>
+        </g>
+
+        <path d="M705 505 H1025" class="line teal-stroke" stroke-width="5"/>
+        <circle cx="760" cy="505" r="15" class="green-fill" stroke="var(--green)" stroke-width="4"/>
+        <circle cx="845" cy="505" r="15" class="blue-fill" stroke="var(--blue)" stroke-width="4"/>
+        <circle cx="930" cy="505" r="15" class="amber-fill" stroke="var(--amber)" stroke-width="4"/>
+        <circle cx="1015" cy="505" r="15" class="violet-fill" stroke="var(--violet)" stroke-width="4"/>
+        <text x="705" y="475" class="label">final branch</text>
+        <text x="760" y="539" text-anchor="middle" class="micro">ticket A</text>
+        <text x="845" y="539" text-anchor="middle" class="micro">ticket B</text>
+        <text x="930" y="539" text-anchor="middle" class="micro">ticket C</text>
+        <text x="1015" y="539" text-anchor="middle" class="micro">ticket D</text>
+      </svg>
+      <figcaption><b>The product promise in one picture.</b> The DAG is the execution model, but the human remains the authority. Agents may move inside an approved plan; scope changes, significant decisions, requested recordings, integration conflicts, and final completion stop at a human gate.</figcaption>
+    </figure>
+  </header>
+
+  <section>
+    <p class="eyebrow">01 · Product boundary</p>
+    <h2>One Orchestrate session; many isolated coding sessions.</h2>
+    <figure>
+      <svg viewBox="0 0 1100 610" role="img" aria-labelledby="boundary-title boundary-desc">
+        <title id="boundary-title">Orchestrate session boundary and worker isolation</title>
+        <desc id="boundary-desc">The Orchestrate session contains a read-only controller and service-owned integration branch. Ticket workers run in isolated normal coding session groups. All mutations pass through services and emit events.</desc>
+        <defs><marker id="boundary-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--line-strong)"/></marker></defs>
+        <rect x="34" y="40" width="1032" height="480" rx="34" class="surface-2-fill" stroke="var(--teal)" stroke-width="3"/>
+        <text x="66" y="82" class="title">SessionGroup.kind = orchestrate</text>
+        <text x="66" y="106" class="small">repository-backed · one visible workspace · one final branch</text>
+
+        <path d="M120 196 Q183 130 246 196 L232 336 Q183 371 134 336 Z" class="violet-fill" stroke="var(--violet)" stroke-width="3"/>
+        <circle cx="183" cy="233" r="36" class="surface-fill" stroke="var(--violet)" stroke-width="3"/>
+        <path d="M163 233 L178 248 L205 216" fill="none" stroke="var(--violet)" stroke-width="6" stroke-linecap="round"/>
+        <text x="183" y="301" text-anchor="middle" class="label">controller</text>
+        <text x="183" y="323" text-anchor="middle" class="small">read-only repo access</text>
+
+        <rect x="365" y="155" width="360" height="235" rx="28" class="surface-fill" stroke="var(--teal)" stroke-width="3"/>
+        <text x="545" y="194" text-anchor="middle" class="title">Service layer</text>
+        <path d="M398 246 C466 207 624 207 692 246" class="hair"/>
+        <path d="M398 296 C466 335 624 335 692 296" class="hair"/>
+        <circle cx="430" cy="270" r="34" class="teal-fill" stroke="var(--teal)" stroke-width="2"/>
+        <circle cx="545" cy="270" r="34" class="amber-fill" stroke="var(--amber)" stroke-width="2"/>
+        <circle cx="660" cy="270" r="34" class="green-fill" stroke="var(--green)" stroke-width="2"/>
+        <text x="430" y="266" text-anchor="middle" class="small">plan &amp;</text><text x="430" y="282" text-anchor="middle" class="small">schedule</text>
+        <text x="545" y="266" text-anchor="middle" class="small">human</text><text x="545" y="282" text-anchor="middle" class="small">gates</text>
+        <text x="660" y="266" text-anchor="middle" class="small">git</text><text x="660" y="282" text-anchor="middle" class="small">integrate</text>
+        <text x="545" y="358" text-anchor="middle" class="small">validates · authorizes · persists · emits events</text>
+
+        <path d="M246 270 H352" class="line" marker-end="url(#boundary-arrow)"/>
+        <text x="298" y="252" text-anchor="middle" class="micro">typed CLI actions</text>
+        <path d="M545 390 V458" class="line teal-stroke" marker-end="url(#boundary-arrow)"/>
+        <path d="M545 458 C545 480 750 482 750 430" class="line teal-stroke"/>
+
+        <rect x="790" y="145" width="226" height="256" rx="24" class="surface-fill" stroke="var(--line-strong)" stroke-width="2" stroke-dasharray="9 7"/>
+        <text x="903" y="180" text-anchor="middle" class="label">integration worktree</text>
+        <path d="M846 224 H960" class="line teal-stroke" stroke-width="5"/>
+        <circle cx="866" cy="224" r="11" class="green-fill" stroke="var(--green)" stroke-width="3"/>
+        <circle cx="918" cy="224" r="11" class="blue-fill" stroke="var(--blue)" stroke-width="3"/>
+        <text x="903" y="257" text-anchor="middle" class="small">service writes</text>
+        <text x="903" y="278" text-anchor="middle" class="small">controller observes</text>
+        <path d="M820 316 H985" class="hair dash"/>
+        <text x="903" y="343" text-anchor="middle" class="small">never shared with workers</text>
+
+        <g transform="translate(66 545)">
+          <rect x="0" y="0" width="270" height="54" rx="16" class="green-fill" stroke="var(--green)" stroke-width="2"/>
+          <rect x="328" y="0" width="270" height="54" rx="16" class="blue-fill" stroke="var(--blue)" stroke-width="2"/>
+          <rect x="656" y="0" width="270" height="54" rx="16" class="violet-fill" stroke="var(--violet)" stroke-width="2"/>
+          <text x="135" y="22" text-anchor="middle" class="label">ticket A coding group</text><text x="135" y="41" text-anchor="middle" class="micro">own worktree + branch</text>
+          <text x="463" y="22" text-anchor="middle" class="label">ticket B coding group</text><text x="463" y="41" text-anchor="middle" class="micro">own worktree + branch</text>
+          <text x="791" y="22" text-anchor="middle" class="label">ticket C coding group</text><text x="791" y="41" text-anchor="middle" class="micro">own worktree + branch</text>
+        </g>
+        <path d="M430 390 C382 464 220 476 200 534" class="line" marker-end="url(#boundary-arrow)"/>
+        <path d="M545 390 V534" class="line" marker-end="url(#boundary-arrow)"/>
+        <path d="M660 390 C706 464 836 475 850 534" class="line" marker-end="url(#boundary-arrow)"/>
+      </svg>
+      <figcaption><b>The session type is real; the workers remain ordinary.</b> The Orchestrate group is the durable parent and owns the integration branch. Its controller can read the repository and call capability-restricted actions, but ticket workers never share its worktree. They are normal coding groups, which preserves existing adapters, terminals, timelines, and tool choice.</figcaption>
+    </figure>
+    <div class="grid-2">
+      <div class="note fact"><span class="tag">Recommendation</span><h3>Session kind plus durable run</h3><p>Add <code>orchestrate</code> to <code>SessionGroupKind</code>, then link the group one-to-one with an <code>OrchestrationRun</code>. The session remains the visible product object; the run holds DAG state that does not belong in session JSON.</p></div>
+      <div class="note risk"><span class="tag">Rejected boundary</span><h3>Sibling workers in one group</h3><p>Sessions inside one existing group share its branch and workdir. Parallel ticket workers there would race on the same files and make one-commit-per-ticket integration impossible to guarantee.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">02 · Lifecycle</p>
+    <h2>The human approves the corridor before agents move through it.</h2>
+    <figure>
+      <svg viewBox="0 0 1100 565" role="img" aria-labelledby="lifecycle-title lifecycle-desc">
+        <title id="lifecycle-title">Orchestration lifecycle with approval and feedback loops</title>
+        <desc id="lifecycle-desc">The run moves from scoping to plan review to execution. Questions, decisions, recordings, conflicts, and final review loop to the human. Feedback produces a revision or new attempt.</desc>
+        <defs><marker id="life-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--line-strong)"/></marker><marker id="life-arrow-amber" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--amber)"/></marker></defs>
+        <path d="M110 295 H968" class="hair"/>
+        <path d="M207 295 H294 M422 295 H510 M640 295 H728 M858 295 H965" class="line teal-stroke" marker-end="url(#life-arrow)"/>
+        <g>
+          <path d="M69 249 Q136 203 203 249 L192 341 Q136 382 80 341 Z" class="teal-fill" stroke="var(--teal)" stroke-width="3"/>
+          <text x="136" y="280" text-anchor="middle" class="label">Scope</text><text x="136" y="304" text-anchor="middle" class="small">interview</text><text x="136" y="326" text-anchor="middle" class="small">summarize</text>
+          <path d="M286 242 H428 L446 295 L428 348 H286 L268 295 Z" class="amber-fill" stroke="var(--amber)" stroke-width="3"/>
+          <text x="357" y="281" text-anchor="middle" class="label">Plan review</text><text x="357" y="305" text-anchor="middle" class="small">tickets + edges</text><text x="357" y="327" text-anchor="middle" class="small">explicit approval</text>
+          <path d="M509 249 Q575 204 641 249 L630 341 Q575 379 520 341 Z" class="violet-fill" stroke="var(--violet)" stroke-width="3"/>
+          <text x="575" y="280" text-anchor="middle" class="label">Execute</text><text x="575" y="304" text-anchor="middle" class="small">ready nodes</text><text x="575" y="326" text-anchor="middle" class="small">isolated workers</text>
+          <path d="M728 242 H866 L886 295 L866 348 H728 L708 295 Z" class="amber-fill" stroke="var(--amber)" stroke-width="3"/>
+          <text x="797" y="281" text-anchor="middle" class="label">Node gates</text><text x="797" y="305" text-anchor="middle" class="small">decision · review</text><text x="797" y="327" text-anchor="middle" class="small">recording · conflict</text>
+          <circle cx="988" cy="295" r="58" class="green-fill" stroke="var(--green)" stroke-width="4"/>
+          <text x="988" y="282" text-anchor="middle" class="label">Final</text><text x="988" y="305" text-anchor="middle" class="small">human review</text><text x="988" y="327" text-anchor="middle" class="small">complete</text>
+        </g>
+
+        <path d="M357 236 C357 102 136 105 136 236" class="line amber-stroke" marker-end="url(#life-arrow-amber)"/>
+        <rect x="196" y="74" width="160" height="48" rx="24" class="amber-fill" stroke="var(--amber)" stroke-width="2"/>
+        <text x="276" y="103" text-anchor="middle" class="small">feedback → revision</text>
+        <path d="M797 354 C797 479 575 479 575 354" class="line amber-stroke" marker-end="url(#life-arrow-amber)"/>
+        <rect x="615" y="449" width="164" height="48" rx="24" class="amber-fill" stroke="var(--amber)" stroke-width="2"/>
+        <text x="697" y="478" text-anchor="middle" class="small">feedback → attempt n+1</text>
+        <path d="M988 354 C988 532 357 536 357 354" class="line red-stroke dash" marker-end="url(#life-arrow)"/>
+        <text x="686" y="548" text-anchor="middle" class="small">scope change → new plan revision; integrated commits remain immutable</text>
+
+        <circle cx="136" cy="187" r="17" class="amber-fill" stroke="var(--amber)" stroke-width="3"/>
+        <text x="136" y="192" text-anchor="middle" class="label">?</text>
+        <text x="136" y="155" text-anchor="middle" class="micro">question gate</text>
+      </svg>
+      <figcaption><b>Human-in-the-loop is a state machine, not a prompt preference.</b> Plan rejection creates a new immutable revision. Ticket feedback creates a new execution attempt. A late scope change may add or supersede unstarted work, but never silently rewrites already integrated commits.</figcaption>
+    </figure>
+    <p>The approved plan is the autonomy boundary. Inside that corridor, the scheduler may launch ready nodes. Outside it, the service pauses the run and asks. Users may also pause the run or message any active worker at any point.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">03 · Planning contract</p>
+    <h2>A high-level plan sets direction; each ticket is independently executable.</h2>
+    <figure>
+      <svg viewBox="0 0 1100 620" role="img" aria-labelledby="ticket-title ticket-desc">
+        <title id="ticket-title">Anatomy of the plan and ticket brief</title>
+        <desc id="ticket-desc">A plan document defines outcome, constraints, architecture boundaries, and review policy. A ticket document contains instructions, fit, completion requirements, dependencies, and evidence policy without prescribing implementation details.</desc>
+        <path d="M118 75 H550 Q582 75 582 107 V508 Q582 540 550 540 H118 Q86 540 86 508 V107 Q86 75 118 75 Z" class="surface-fill" stroke="var(--teal)" stroke-width="3"/>
+        <path d="M118 75 H550 Q582 75 582 107 V151 H86 V107 Q86 75 118 75 Z" class="teal-fill"/>
+        <text x="122" y="119" class="title">High-level plan</text>
+        <text x="122" y="182" class="label">Outcome</text><path d="M122 197 H514" class="hair"/><path d="M122 214 H422" class="hair"/>
+        <text x="122" y="258" class="label">Boundaries &amp; non-goals</text><path d="M122 273 H501" class="hair"/><path d="M122 290 H461" class="hair"/>
+        <text x="122" y="334" class="label">Architecture direction</text><path d="M122 349 H522" class="hair"/><path d="M122 366 H396" class="hair"/>
+        <text x="122" y="410" class="label">Risks &amp; review policy</text><path d="M122 425 H502" class="hair"/><path d="M122 442 H445" class="hair"/>
+        <rect x="118" y="477" width="228" height="36" rx="18" class="teal-fill" stroke="var(--teal)" stroke-width="2"/><text x="232" y="500" text-anchor="middle" class="small">enough context to coordinate</text>
+
+        <path d="M670 56 H1011 Q1035 56 1035 80 V540 Q1035 564 1011 564 H670 Q646 564 646 540 V80 Q646 56 670 56 Z" class="surface-fill" stroke="var(--violet)" stroke-width="3"/>
+        <path d="M646 80 Q646 56 670 56 H1011 Q1035 56 1035 80 V126 H646 Z" class="violet-fill"/>
+        <text x="681" y="99" class="title">Ticket B · worker brief</text>
+        <circle cx="690" cy="172" r="18" class="teal-fill" stroke="var(--teal)" stroke-width="2"/><text x="690" y="178" text-anchor="middle" class="label">1</text>
+        <text x="730" y="169" class="label">Instructions</text><text x="730" y="190" class="small">what outcome this node must produce</text>
+        <circle cx="690" cy="240" r="18" class="blue-fill" stroke="var(--blue)" stroke-width="2"/><text x="690" y="246" text-anchor="middle" class="label">2</text>
+        <text x="730" y="237" class="label">Fit in the plan</text><text x="730" y="258" class="small">why it exists; what consumes it</text>
+        <circle cx="690" cy="308" r="18" class="green-fill" stroke="var(--green)" stroke-width="2"/><text x="690" y="314" text-anchor="middle" class="label">3</text>
+        <text x="730" y="305" class="label">Completion requirements</text><text x="730" y="326" class="small">acceptance criteria + verification plan</text>
+        <circle cx="690" cy="376" r="18" class="amber-fill" stroke="var(--amber)" stroke-width="2"/><text x="690" y="382" text-anchor="middle" class="label">4</text>
+        <text x="730" y="373" class="label">Dependencies</text><text x="730" y="394" class="small">integrated prerequisite tickets</text>
+        <circle cx="690" cy="444" r="18" class="red-fill" stroke="var(--red)" stroke-width="2"/><text x="690" y="450" text-anchor="middle" class="label">5</text>
+        <text x="730" y="441" class="label">Review policy</text><text x="730" y="462" class="small">auto · summary · recording</text>
+        <rect x="682" y="501" width="299" height="36" rx="18" class="violet-fill" stroke="var(--violet)" stroke-width="2"/><text x="831" y="524" text-anchor="middle" class="small">freedom to choose the implementation</text>
+
+        <path d="M582 284 C611 284 619 284 646 284" class="line"/>
+        <circle cx="614" cy="284" r="10" class="amber-fill" stroke="var(--amber)" stroke-width="2"/>
+        <text x="614" y="259" text-anchor="middle" class="micro">context packet</text>
+      </svg>
+      <figcaption><b>The plan coordinates; the ticket delegates.</b> Workers receive the project outcome, relevant boundaries, their ticket, prerequisite summaries, and the completion contract—not the entire planning transcript and not an implementation recipe.</figcaption>
+    </figure>
+    <table>
+      <thead><tr><th>Durable field</th><th>Meaning</th><th>Why it must be structured</th></tr></thead>
+      <tbody>
+        <tr><td><code>Ticket.description</code></td><td>Instructions and expected outcome.</td><td>Readable everywhere a normal ticket appears.</td></tr>
+        <tr><td><code>Ticket.planContext</code></td><td>How the ticket fits the approved plan and which later work consumes it.</td><td>Prevents isolated workers from optimizing against the wrong objective.</td></tr>
+        <tr><td><code>Ticket.acceptanceCriteria</code></td><td>Observable completion requirements.</td><td>The service and reviewer can evaluate the same contract.</td></tr>
+        <tr><td><code>Ticket.verificationPlan</code></td><td>Tests, checks, or visible proof expected from the worker.</td><td>Evidence is planned before implementation begins.</td></tr>
+        <tr><td><code>OrchestrationNode.reviewPolicy</code></td><td><code>auto</code>, <code>summary</code>, or <code>recording</code>.</td><td>Review policy belongs to this run, not every future use of the ticket.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <p class="eyebrow">04 · Durable model</p>
+    <h2>Sessions carry conversations; orchestration records carry truth.</h2>
+    <figure>
+      <svg viewBox="0 0 1100 670" role="img" aria-labelledby="model-title model-desc">
+        <title id="model-title">Relational model for orchestrated sessions</title>
+        <desc id="model-desc">The Orchestrate SessionGroup links one OrchestrationRun. A run links plan revisions and orchestration nodes. Each node links a normal Ticket, dependencies, execution attempts, decisions, gates, sessions, and artifacts.</desc>
+        <defs><marker id="model-arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="var(--line-strong)"/></marker></defs>
+        <ellipse cx="550" cy="337" rx="510" ry="300" fill="none" stroke="var(--line)" stroke-width="2" stroke-dasharray="11 8"/>
+        <text x="92" y="86" class="small">organization boundary</text>
+
+        <circle cx="550" cy="337" r="110" class="teal-fill" stroke="var(--teal)" stroke-width="4"/>
+        <text x="550" y="319" text-anchor="middle" class="title">OrchestrationRun</text>
+        <text x="550" y="344" text-anchor="middle" class="small">status · goal · policy</text>
+        <text x="550" y="367" text-anchor="middle" class="small">integration head</text>
+
+        <g>
+          <rect x="80" y="110" width="236" height="92" rx="24" class="violet-fill" stroke="var(--violet)" stroke-width="3"/>
+          <text x="198" y="148" text-anchor="middle" class="label">SessionGroup</text><text x="198" y="174" text-anchor="middle" class="mono">kind: orchestrate</text>
+          <rect x="774" y="105" width="246" height="100" rx="24" class="surface-fill" stroke="var(--teal)" stroke-width="3"/>
+          <text x="897" y="144" text-anchor="middle" class="label">PlanRevision</text><text x="897" y="170" text-anchor="middle" class="small">proposal · approval · version</text>
+          <rect x="70" y="470" width="242" height="110" rx="24" class="green-fill" stroke="var(--green)" stroke-width="3"/>
+          <text x="191" y="508" text-anchor="middle" class="label">Ticket</text><text x="191" y="533" text-anchor="middle" class="small">brief + acceptance</text><text x="191" y="555" text-anchor="middle" class="small">normal Trace entity</text>
+          <rect x="757" y="468" width="275" height="114" rx="24" class="blue-fill" stroke="var(--blue)" stroke-width="3"/>
+          <text x="894" y="505" text-anchor="middle" class="label">TicketExecution</text><text x="894" y="530" text-anchor="middle" class="small">attempt · worker session</text><text x="894" y="552" text-anchor="middle" class="small">base/head/integration SHA</text>
+          <path d="M455 245 Q550 177 645 245 L632 430 Q550 482 468 430 Z" class="amber-fill" stroke="var(--amber)" stroke-width="3"/>
+          <text x="550" y="467" text-anchor="middle" class="label">OrchestrationNode</text>
+        </g>
+
+        <path d="M316 170 C402 190 438 238 466 273" class="line" marker-end="url(#model-arrow)"/><text x="386" y="190" class="micro">1 : 1 run</text>
+        <path d="M658 270 C704 224 744 190 774 169" class="line" marker-end="url(#model-arrow)"/><text x="711" y="213" class="micro">versioned proposals</text>
+        <path d="M466 411 C399 446 344 486 312 506" class="line" marker-end="url(#model-arrow)"/><text x="365" y="457" class="micro">links ticket</text>
+        <path d="M640 410 C705 450 735 488 757 510" class="line" marker-end="url(#model-arrow)"/><text x="690" y="456" class="micro">attempts</text>
+
+        <circle cx="397" cy="596" r="48" class="surface-fill" stroke="var(--line-strong)" stroke-width="2"/>
+        <text x="397" y="590" text-anchor="middle" class="small">Ticket</text><text x="397" y="608" text-anchor="middle" class="small">Dependency</text>
+        <circle cx="588" cy="594" r="48" class="red-fill" stroke="var(--red)" stroke-width="2"/>
+        <text x="588" y="590" text-anchor="middle" class="small">Decision</text><text x="588" y="608" text-anchor="middle" class="small">record</text>
+        <circle cx="737" cy="620" r="44" class="amber-fill" stroke="var(--amber)" stroke-width="2"/>
+        <text x="737" y="615" text-anchor="middle" class="small">Human</text><text x="737" y="633" text-anchor="middle" class="small">Gate</text>
+        <circle cx="997" cy="344" r="49" class="violet-fill" stroke="var(--violet)" stroke-width="2"/>
+        <text x="997" y="338" text-anchor="middle" class="small">Session</text><text x="997" y="356" text-anchor="middle" class="small">Group</text>
+        <circle cx="101" cy="344" r="47" class="surface-fill" stroke="var(--violet)" stroke-width="2"/>
+        <text x="101" y="339" text-anchor="middle" class="small">Artifact</text><text x="101" y="357" text-anchor="middle" class="small">video</text>
+        <path d="M351 563 C318 546 288 538 266 535" class="hair"/>
+        <path d="M624 560 C684 536 733 527 757 527" class="hair"/>
+        <path d="M632 580 C677 592 700 605 694 608" class="hair"/>
+        <path d="M943 370 C928 417 915 445 902 468" class="hair"/>
+        <path d="M145 371 C184 419 226 454 265 480" class="hair"/>
+      </svg>
+      <figcaption><b>The session is the front door, not the database schema for the DAG.</b> A dedicated run makes status reconstructable after refresh and lets services enforce cycles, readiness, approvals, attempts, and commit identity without parsing transcripts.</figcaption>
+    </figure>
+    <details>
+      <summary>Recommended minimal models and invariants</summary>
+      <div>
+        <ul>
+          <li><code>OrchestrationRun</code> is unique by <code>sessionGroupId</code> and stores run status, goal, concurrency, integration branch, and current head SHA.</li>
+          <li><code>OrchestrationPlanRevision</code> stores a validated proposal and approval audit. Approval atomically materializes or updates unstarted tickets and edges.</li>
+          <li><code>OrchestrationNode</code> links a run to a normal ticket and stores execution/review state.</li>
+          <li><code>TicketDependency</code> is a general ticket edge. Services reject self-edges, cross-organization edges, and cycles before write.</li>
+          <li><code>TicketExecution</code> is an immutable attempt with worker session/group, base SHA, submitted head SHA, evidence, and optional integration SHA.</li>
+          <li><code>OrchestrationDecision</code> records the worker's choice, alternatives, consequence, and whether it is important.</li>
+          <li><code>OrchestrationGate</code> is the source of truth for plan, question, decision, summary, recording, conflict, and final gates. Inbox items are only user-facing projections.</li>
+        </ul>
+      </div>
+    </details>
+  </section>
+
+  <section>
+    <p class="eyebrow">05 · Scheduler semantics</p>
+    <h2>“Ready” means every dependency is integrated—not merely finished.</h2>
+    <figure>
+      <svg viewBox="0 0 1100 600" role="img" aria-labelledby="dag-title dag-desc">
+        <title id="dag-title">Ticket DAG readiness and scheduling</title>
+        <desc id="dag-desc">Two independent nodes run in parallel. A join node remains blocked until both predecessors are integrated. A later node stops at a recording gate before integration. The scheduler keeps a bounded concurrency window.</desc>
+        <defs><marker id="dag-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--line-strong)"/></marker></defs>
+        <path d="M145 298 C245 205 300 180 389 173" class="line" marker-end="url(#dag-arrow)"/>
+        <path d="M145 316 C245 405 300 426 389 425" class="line" marker-end="url(#dag-arrow)"/>
+        <path d="M499 173 C610 174 641 229 698 275" class="line" marker-end="url(#dag-arrow)"/>
+        <path d="M499 425 C610 422 641 365 698 322" class="line" marker-end="url(#dag-arrow)"/>
+        <path d="M807 298 H924" class="line" marker-end="url(#dag-arrow)"/>
+
+        <circle cx="105" cy="307" r="62" class="green-fill" stroke="var(--green)" stroke-width="4"/>
+        <text x="105" y="299" text-anchor="middle" class="label">A</text><text x="105" y="322" text-anchor="middle" class="small">integrated</text>
+
+        <circle cx="444" cy="172" r="58" class="blue-fill" stroke="var(--blue)" stroke-width="4"/>
+        <path d="M421 172 A23 23 0 1 1 467 172" fill="none" stroke="var(--blue)" stroke-width="6" stroke-linecap="round"/>
+        <text x="444" y="177" text-anchor="middle" class="label">B</text>
+        <text x="444" y="248" text-anchor="middle" class="small">running</text>
+
+        <circle cx="444" cy="426" r="58" class="violet-fill" stroke="var(--violet)" stroke-width="4"/>
+        <path d="M421 426 A23 23 0 1 1 467 426" fill="none" stroke="var(--violet)" stroke-width="6" stroke-linecap="round"/>
+        <text x="444" y="431" text-anchor="middle" class="label">C</text>
+        <text x="444" y="502" text-anchor="middle" class="small">running</text>
+
+        <circle cx="752" cy="298" r="62" class="surface-fill" stroke="var(--line-strong)" stroke-width="4" stroke-dasharray="9 7"/>
+        <path d="M728 294 H776 M752 270 V318" class="line"/>
+        <text x="752" y="386" text-anchor="middle" class="label">D · blocked</text>
+        <text x="752" y="408" text-anchor="middle" class="small">waits for B + C integration</text>
+
+        <circle cx="980" cy="298" r="59" class="amber-fill" stroke="var(--amber)" stroke-width="4"/>
+        <path d="M958 304 V285 A22 22 0 0 1 1002 285 V304" fill="none" stroke="var(--amber)" stroke-width="6"/>
+        <rect x="952" y="302" width="56" height="40" rx="9" class="surface-fill" stroke="var(--amber)" stroke-width="3"/>
+        <text x="980" y="385" text-anchor="middle" class="label">E · gate</text>
+        <text x="980" y="407" text-anchor="middle" class="small">recording approval</text>
+
+        <rect x="286" y="47" width="316" height="48" rx="24" class="surface-fill" stroke="var(--line)" stroke-width="2"/>
+        <rect x="294" y="55" width="145" height="32" rx="16" class="teal-fill"/>
+        <text x="444" y="78" text-anchor="middle" class="small">2 / 2 worker slots active</text>
+        <text x="610" y="80" class="micro">bounded concurrency</text>
+
+        <path d="M145 548 H1010" class="hair"/>
+        <path d="M145 548 H444" class="line teal-stroke" stroke-width="7"/>
+        <text x="145" y="578" class="small">approved plan corridor</text>
+        <text x="1010" y="578" text-anchor="end" class="small">scheduler stops at every unresolved gate</text>
+      </svg>
+      <figcaption><b>Completion does not release descendants; integration does.</b> This guarantees that a dependent worker starts from an integration head containing every prerequisite. Independent nodes may run in parallel, but integration is serialized.</figcaption>
+    </figure>
+    <p>The scheduler is deterministic service logic, not an LLM polling loop. It selects nodes whose dependencies are integrated, whose gates are clear, and whose plan revision is approved. A reconciler reclaims queued/stuck work under distributed and database locks so a dropped process or duplicate event cannot launch duplicate workers.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">06 · Human gates</p>
+    <h2>Important decisions interrupt the run; feedback creates another attempt.</h2>
+    <figure>
+      <svg viewBox="0 0 1100 675" role="img" aria-labelledby="gate-title gate-desc">
+        <title id="gate-title">Worker completion report and human gate sequence</title>
+        <desc id="gate-desc">A worker submits structured evidence, decisions, commit SHA, and optional recording. The service evaluates policy. Important decisions or requested review create an inbox gate. Approval integrates; feedback starts a new attempt.</desc>
+        <defs><marker id="gate-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--line-strong)"/></marker><marker id="gate-arrow-teal" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--teal)"/></marker></defs>
+        <text x="125" y="55" text-anchor="middle" class="label">Worker session</text>
+        <text x="394" y="55" text-anchor="middle" class="label">Orchestration service</text>
+        <text x="706" y="55" text-anchor="middle" class="label">Human</text>
+        <text x="968" y="55" text-anchor="middle" class="label">Integration branch</text>
+        <path d="M125 78 V620 M394 78 V620 M706 78 V620 M968 78 V620" class="hair dash"/>
+
+        <path d="M125 125 H381" class="line" marker-end="url(#gate-arrow)"/>
+        <text x="253" y="108" text-anchor="middle" class="micro">worker report</text>
+        <g transform="translate(164 140)">
+          <path d="M0 0 H188 L212 24 V145 H0 Z" class="surface-fill" stroke="var(--violet)" stroke-width="2"/>
+          <path d="M188 0 V24 H212" class="violet-fill" stroke="var(--violet)" stroke-width="2"/>
+          <text x="18" y="35" class="small">✓ acceptance evidence</text>
+          <text x="18" y="61" class="small">◆ decisions[]</text>
+          <text x="18" y="87" class="small">▶ recordingArtifactId?</text>
+          <text x="18" y="113" class="small">● headCommitSha</text>
+          <text x="18" y="137" class="micro">submitted via typed CLI action</text>
+        </g>
+
+        <path d="M394 205 C516 205 575 205 693 205" class="line amber-stroke" marker-end="url(#gate-arrow)"/>
+        <text x="550" y="187" text-anchor="middle" class="small">important decision or review policy → gate</text>
+        <rect x="610" y="225" width="192" height="100" rx="22" class="amber-fill" stroke="var(--amber)" stroke-width="3"/>
+        <text x="706" y="258" text-anchor="middle" class="label">Needs you</text>
+        <text x="706" y="282" text-anchor="middle" class="small">decision · summary</text>
+        <text x="706" y="304" text-anchor="middle" class="small">recording · conflict</text>
+
+        <path d="M706 337 C706 390 536 390 410 390" class="line red-stroke" marker-end="url(#gate-arrow)"/>
+        <text x="566" y="374" text-anchor="middle" class="small">feedback</text>
+        <path d="M394 410 C304 456 204 460 137 430" class="line red-stroke" marker-end="url(#gate-arrow)"/>
+        <text x="258" y="457" text-anchor="middle" class="small">create attempt n+1 with feedback packet</text>
+
+        <path d="M706 337 C706 484 843 485 951 485" class="line teal-stroke" marker-end="url(#gate-arrow-teal)"/>
+        <text x="841" y="467" text-anchor="middle" class="small">approve</text>
+        <circle cx="968" cy="485" r="25" class="green-fill" stroke="var(--green)" stroke-width="4"/>
+        <path d="M956 485 L966 495 L982 475" fill="none" stroke="var(--green)" stroke-width="5" stroke-linecap="round"/>
+        <path d="M968 518 V596" class="line teal-stroke" marker-end="url(#gate-arrow-teal)"/>
+        <text x="946" y="558" text-anchor="end" class="small">one ticket commit</text>
+
+        <rect x="252" y="524" width="286" height="84" rx="22" class="surface-fill" stroke="var(--line-strong)" stroke-width="2"/>
+        <text x="395" y="556" text-anchor="middle" class="label">No natural-language inference</text>
+        <text x="395" y="579" text-anchor="middle" class="small">the report and resolution are typed service actions</text>
+      </svg>
+      <figcaption><b>A worker cannot declare itself integrated.</b> It submits a structured completion report. The service verifies the linked session, ticket, commit, and required artifact, persists decisions, creates gates, and only integrates after every blocking gate resolves.</figcaption>
+    </figure>
+    <table>
+      <thead><tr><th>Gate</th><th>When it opens</th><th>Resolution</th></tr></thead>
+      <tbody>
+        <tr><td>Question</td><td>Scoping or execution cannot continue without a human choice.</td><td>Answer is stored with the run and the controller resumes.</td></tr>
+        <tr><td>Plan</td><td>A new or revised DAG is ready.</td><td>Approve materializes the revision; feedback creates the next revision.</td></tr>
+        <tr><td>Decision</td><td>A worker flags a consequential product, architecture, security, data, or scope choice.</td><td>Approve the choice or return guidance for a new attempt.</td></tr>
+        <tr><td>Summary</td><td>The node policy requires a human completion review.</td><td>Approve or request another attempt.</td></tr>
+        <tr><td>Recording</td><td>The node policy requires visible video evidence.</td><td>Watch the linked video artifact, then approve or give feedback.</td></tr>
+        <tr><td>Conflict</td><td>Service-owned integration cannot apply the ticket cleanly.</td><td>Choose a repair attempt, replan, or skip/cancel.</td></tr>
+        <tr><td>Final</td><td>Every non-skipped node is integrated and final checks pass.</td><td>Mark complete; opening/merging a PR remains an explicit action.</td></tr>
+      </tbody>
+    </table>
+    <div class="note open"><span class="tag">Recording rule</span><p><strong>Recording is evidence, not theater.</strong> Workers use the existing browser-video skill only when its safety and browser-fit gates pass. A server-only or native ticket should use alternate proof; if the human explicitly requires video where no safe recording exists, the node stays blocked and asks.</p></div>
+  </section>
+
+  <section>
+    <p class="eyebrow">07 · Git contract</p>
+    <h2>Workers may make many commits; the final branch gets exactly one per ticket.</h2>
+    <figure>
+      <svg viewBox="0 0 1100 590" role="img" aria-labelledby="git-title git-desc">
+        <title id="git-title">Parallel ticket branches squash into one linear integration branch</title>
+        <desc id="git-desc">Two independent worker branches fork from the integration head and may contain multiple internal commits. The service serially applies each approved diff as one commit. A dependent ticket starts only after both integrations. Conflicts route to a gate.</desc>
+        <defs><marker id="git-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--line-strong)"/></marker></defs>
+        <path d="M94 310 H1020" class="line teal-stroke" stroke-width="7"/>
+        <circle cx="140" cy="310" r="17" class="surface-fill" stroke="var(--teal)" stroke-width="4"/>
+        <text x="140" y="351" text-anchor="middle" class="small">base H</text>
+
+        <path d="M140 300 C235 135 330 122 438 176" class="line green-stroke" stroke-width="4"/>
+        <circle cx="270" cy="168" r="13" class="green-fill" stroke="var(--green)" stroke-width="3"/>
+        <circle cx="342" cy="145" r="13" class="green-fill" stroke="var(--green)" stroke-width="3"/>
+        <circle cx="430" cy="176" r="13" class="green-fill" stroke="var(--green)" stroke-width="3"/>
+        <text x="330" y="103" text-anchor="middle" class="label">ticket A worker branch</text>
+        <text x="330" y="124" text-anchor="middle" class="small">3 internal commits</text>
+        <path d="M438 185 C458 239 456 267 474 297" class="line green-stroke" marker-end="url(#git-arrow)"/>
+        <circle cx="492" cy="310" r="19" class="green-fill" stroke="var(--green)" stroke-width="4"/>
+        <text x="492" y="351" text-anchor="middle" class="label">A</text>
+        <text x="492" y="372" text-anchor="middle" class="micro">one squash commit</text>
+
+        <path d="M140 320 C238 468 358 483 540 430" class="line violet-stroke" stroke-width="4"/>
+        <circle cx="280" cy="437" r="13" class="violet-fill" stroke="var(--violet)" stroke-width="3"/>
+        <circle cx="385" cy="459" r="13" class="violet-fill" stroke="var(--violet)" stroke-width="3"/>
+        <circle cx="525" cy="434" r="13" class="violet-fill" stroke="var(--violet)" stroke-width="3"/>
+        <text x="368" y="517" text-anchor="middle" class="label">ticket B worker branch</text>
+        <text x="368" y="539" text-anchor="middle" class="small">3 internal commits · same base H</text>
+        <path d="M540 425 C572 388 596 357 621 324" class="line violet-stroke" marker-end="url(#git-arrow)"/>
+        <circle cx="642" cy="310" r="19" class="violet-fill" stroke="var(--violet)" stroke-width="4"/>
+        <text x="642" y="351" text-anchor="middle" class="label">B</text>
+        <text x="642" y="372" text-anchor="middle" class="micro">one squash commit</text>
+
+        <path d="M642 299 C713 205 760 202 833 251" class="line blue-stroke" stroke-width="4"/>
+        <circle cx="747" cy="223" r="13" class="blue-fill" stroke="var(--blue)" stroke-width="3"/>
+        <circle cx="829" cy="251" r="13" class="blue-fill" stroke="var(--blue)" stroke-width="3"/>
+        <text x="749" y="178" text-anchor="middle" class="label">ticket C</text>
+        <text x="749" y="199" text-anchor="middle" class="small">starts from head containing A + B</text>
+        <path d="M839 260 C862 276 872 287 885 300" class="line blue-stroke" marker-end="url(#git-arrow)"/>
+        <circle cx="910" cy="310" r="19" class="blue-fill" stroke="var(--blue)" stroke-width="4"/>
+        <text x="910" y="351" text-anchor="middle" class="label">C</text>
+
+        <path d="M642 328 C678 403 718 410 764 395" class="line red-stroke dash"/>
+        <path d="M764 395 l28 -18 l-3 34 z" class="red-fill" stroke="var(--red)" stroke-width="3"/>
+        <text x="785" y="445" text-anchor="middle" class="small">conflict → human gate</text>
+
+        <rect x="750" y="36" width="300" height="70" rx="22" class="surface-fill" stroke="var(--teal)" stroke-width="2"/>
+        <text x="900" y="66" text-anchor="middle" class="label">Serialized integration lock</text>
+        <text x="900" y="90" text-anchor="middle" class="small">verify base/head · apply diff · test · commit</text>
+      </svg>
+      <figcaption><b>One ticket commit is an integration property, not a worker behavior.</b> Workers keep normal iterative histories on their branches. The service computes the approved ticket diff, applies it to the current integration head under a lock, verifies it, and creates a canonical commit carrying the ticket and execution IDs.</figcaption>
+    </figure>
+    <ul>
+      <li>The orchestrator controller cannot commit implementation changes.</li>
+      <li>Each attempt records <code>baseCommitSha</code> and submitted <code>headCommitSha</code>.</li>
+      <li>Integration records <code>integrationCommitSha</code>; events never infer success from branch names.</li>
+      <li>Descendants become ready only after prerequisite integration commits exist.</li>
+      <li>Integrated history is append-only. Later feedback becomes a new ticket or compensating commit, never a history rewrite.</li>
+    </ul>
+  </section>
+
+  <section>
+    <p class="eyebrow">08 · Orchestrate workspace</p>
+    <h2>The graph is the home; chat, workers, decisions, and videos are one click away.</h2>
+    <figure>
+      <svg viewBox="0 0 1100 690" role="img" aria-labelledby="ux-title ux-desc">
+        <title id="ux-title">Wireframe of the Orchestrate session workspace</title>
+        <desc id="ux-desc">A session header shows progress and pause controls. The main canvas contains the DAG. A left rail holds controller chat and plan revisions. Selecting a node opens a right inspector with status, worker, decisions, evidence, and feedback controls.</desc>
+        <rect x="28" y="28" width="1044" height="622" rx="28" class="surface-fill" stroke="var(--line-strong)" stroke-width="2"/>
+        <rect x="28" y="28" width="1044" height="72" rx="28" class="surface-2-fill"/>
+        <path d="M28 100 H1072" class="hair"/>
+        <circle cx="67" cy="64" r="14" class="teal-fill" stroke="var(--teal)" stroke-width="3"/>
+        <text x="96" y="61" class="label">Ship organization roles</text>
+        <text x="96" y="82" class="small">Orchestrate · running · 4 of 9 integrated</text>
+        <rect x="786" y="47" width="108" height="34" rx="17" class="amber-fill" stroke="var(--amber)"/>
+        <text x="840" y="69" text-anchor="middle" class="small">2 need you</text>
+        <rect x="910" y="47" width="68" height="34" rx="17" class="surface-fill" stroke="var(--line)"/>
+        <text x="944" y="69" text-anchor="middle" class="small">Pause</text>
+        <rect x="990" y="47" width="60" height="34" rx="17" class="surface-fill" stroke="var(--line)"/>
+        <text x="1020" y="69" text-anchor="middle" class="small">•••</text>
+
+        <rect x="28" y="100" width="240" height="550" class="surface-2-fill"/>
+        <path d="M268 100 V650" class="hair"/>
+        <text x="55" y="139" class="label">Controller</text>
+        <rect x="48" y="164" width="200" height="74" rx="18" class="teal-fill" stroke="var(--teal)"/>
+        <text x="64" y="190" class="small">Plan revision 2 approved</text>
+        <text x="64" y="214" class="micro">9 tickets · 11 edges</text>
+        <rect x="48" y="255" width="175" height="86" rx="18" class="surface-fill" stroke="var(--line)"/>
+        <text x="64" y="282" class="small">I started two ready</text><text x="64" y="303" class="small">tickets. Auth roles is</text><text x="64" y="324" class="small">waiting on a decision.</text>
+        <rect x="71" y="360" width="177" height="70" rx="18" class="violet-fill" stroke="var(--violet)"/>
+        <text x="87" y="388" class="small">Keep the first release</text><text x="87" y="409" class="small">admin-only.</text>
+        <rect x="48" y="577" width="200" height="46" rx="20" class="surface-fill" stroke="var(--line-strong)"/>
+        <text x="64" y="605" class="small">Ask or change the plan…</text>
+
+        <rect x="268" y="100" width="542" height="550" class="surface-fill"/>
+        <text x="296" y="139" class="label">Plan graph</text>
+        <text x="730" y="139" text-anchor="end" class="small">Fit · − 100% +</text>
+        <path d="M368 280 C431 222 474 215 533 228" class="line"/>
+        <path d="M368 300 C431 364 474 376 533 361" class="line"/>
+        <path d="M626 228 C670 237 690 263 715 296" class="line"/>
+        <path d="M626 361 C670 353 690 329 715 306" class="line"/>
+        <g>
+          <rect x="306" y="255" width="130" height="70" rx="18" class="green-fill" stroke="var(--green)" stroke-width="2"/><text x="371" y="282" text-anchor="middle" class="label">Schema</text><text x="371" y="305" text-anchor="middle" class="small">integrated</text>
+          <rect x="520" y="190" width="126" height="76" rx="18" class="blue-fill" stroke="var(--blue)" stroke-width="2"/><text x="583" y="220" text-anchor="middle" class="label">API</text><text x="583" y="243" text-anchor="middle" class="small">running</text>
+          <rect x="520" y="325" width="126" height="76" rx="18" class="amber-fill" stroke="var(--amber)" stroke-width="3"/><text x="583" y="355" text-anchor="middle" class="label">Roles UI</text><text x="583" y="378" text-anchor="middle" class="small">decision</text>
+          <rect x="700" y="263" width="84" height="76" rx="18" class="surface-fill" stroke="var(--line-strong)" stroke-width="2" stroke-dasharray="7 6"/><text x="742" y="294" text-anchor="middle" class="label">QA</text><text x="742" y="317" text-anchor="middle" class="small">blocked</text>
+        </g>
+        <rect x="297" y="542" width="486" height="76" rx="18" class="surface-2-fill" stroke="var(--line)"/>
+        <text x="319" y="571" class="small">Legend</text>
+        <circle cx="380" cy="582" r="8" class="green-fill" stroke="var(--green)"/><text x="396" y="587" class="micro">integrated</text>
+        <circle cx="478" cy="582" r="8" class="blue-fill" stroke="var(--blue)"/><text x="494" y="587" class="micro">running</text>
+        <circle cx="573" cy="582" r="8" class="amber-fill" stroke="var(--amber)"/><text x="589" y="587" class="micro">needs you</text>
+        <circle cx="683" cy="582" r="8" class="surface-fill" stroke="var(--line-strong)"/><text x="699" y="587" class="micro">blocked</text>
+
+        <rect x="810" y="100" width="262" height="550" class="surface-2-fill"/>
+        <path d="M810 100 V650" class="hair"/>
+        <text x="837" y="139" class="label">Roles UI</text>
+        <rect x="837" y="161" width="102" height="28" rx="14" class="amber-fill" stroke="var(--amber)"/><text x="888" y="180" text-anchor="middle" class="micro">Needs decision</text>
+        <text x="837" y="226" class="tag">Agent</text>
+        <rect x="837" y="240" width="206" height="54" rx="16" class="surface-fill" stroke="var(--line)"/><circle cx="864" cy="267" r="13" class="violet-fill" stroke="var(--violet)"/><text x="887" y="264" class="small">Codex · working</text><text x="887" y="281" class="micro">Open session ↗</text>
+        <text x="837" y="331" class="tag">Decision</text>
+        <text x="837" y="354" class="small">Should viewers see the</text><text x="837" y="375" class="small">role editor in v1?</text>
+        <rect x="837" y="398" width="206" height="58" rx="15" class="amber-fill" stroke="var(--amber)"/><text x="852" y="422" class="micro">Agent recommends</text><text x="852" y="442" class="small">Admin-only</text>
+        <text x="837" y="494" class="tag">Evidence</text>
+        <rect x="837" y="508" width="206" height="54" rx="15" class="surface-fill" stroke="var(--line)"/><text x="852" y="533" class="small">▶ UI walkthrough · 0:42</text><text x="852" y="551" class="micro">optional recording</text>
+        <rect x="837" y="584" width="92" height="38" rx="19" class="teal-fill" stroke="var(--teal)"/><text x="883" y="608" text-anchor="middle" class="small">Approve</text>
+        <rect x="941" y="584" width="102" height="38" rx="19" class="surface-fill" stroke="var(--line-strong)"/><text x="992" y="608" text-anchor="middle" class="small">Feedback</text>
+      </svg>
+      <figcaption><b>The DAG stays visible while the details move around it.</b> Selecting a node opens its ticket, active attempt, worker session link, decisions, and artifacts. “Open session” uses the existing session experience; the orchestration canvas does not reimplement terminals or chat.</figcaption>
+    </figure>
+    <p>Web ships the full graph first. Mobile can render the same normalized data as a topologically ordered, virtualized node list with “Needs you” filters before receiving a pan-and-zoom graph.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">09 · Delivery slices</p>
+    <h2>Ship the human loop before the parallel loop.</h2>
+    <figure>
+      <svg viewBox="0 0 1100 560" role="img" aria-labelledby="phase-title phase-desc">
+        <title id="phase-title">Five independently verifiable delivery phases</title>
+        <desc id="phase-desc">Foundation and planning occupy the first two slices, sequential execution and gates the third, one-commit integration the fourth, and parallel scheduling plus polish the fifth. Each phase ends with a usable product proof.</desc>
+        <path d="M82 253 H1022" class="hair"/>
+        <g>
+          <rect x="82" y="218" width="178" height="70" rx="18" class="teal-fill" stroke="var(--teal)" stroke-width="2"/>
+          <rect x="274" y="201" width="210" height="104" rx="18" class="violet-fill" stroke="var(--violet)" stroke-width="2"/>
+          <rect x="498" y="183" width="222" height="140" rx="18" class="amber-fill" stroke="var(--amber)" stroke-width="2"/>
+          <rect x="734" y="192" width="174" height="122" rx="18" class="green-fill" stroke="var(--green)" stroke-width="2"/>
+          <rect x="922" y="210" width="100" height="86" rx="18" class="blue-fill" stroke="var(--blue)" stroke-width="2"/>
+          <text x="171" y="247" text-anchor="middle" class="label">0 · Foundation</text><text x="171" y="270" text-anchor="middle" class="micro">kind + run + skill</text>
+          <text x="379" y="241" text-anchor="middle" class="label">1 · Plan</text><text x="379" y="264" text-anchor="middle" class="micro">scope + approve</text><text x="379" y="283" text-anchor="middle" class="micro">tickets + DAG</text>
+          <text x="609" y="231" text-anchor="middle" class="label">2 · Sequential</text><text x="609" y="254" text-anchor="middle" class="micro">one worker at a time</text><text x="609" y="273" text-anchor="middle" class="micro">decisions + reviews</text><text x="609" y="292" text-anchor="middle" class="micro">recording gate</text>
+          <text x="821" y="234" text-anchor="middle" class="label">3 · Integrate</text><text x="821" y="257" text-anchor="middle" class="micro">one ticket commit</text><text x="821" y="276" text-anchor="middle" class="micro">conflict + final gate</text>
+          <text x="972" y="241" text-anchor="middle" class="label">4</text><text x="972" y="263" text-anchor="middle" class="micro">parallel</text><text x="972" y="281" text-anchor="middle" class="micro">polish</text>
+        </g>
+        <path d="M171 305 V390 M379 322 V390 M609 340 V390 M821 331 V390 M972 313 V390" class="hair dash"/>
+        <circle cx="171" cy="406" r="14" class="teal-fill" stroke="var(--teal)" stroke-width="3"/>
+        <circle cx="379" cy="406" r="14" class="violet-fill" stroke="var(--violet)" stroke-width="3"/>
+        <circle cx="609" cy="406" r="14" class="amber-fill" stroke="var(--amber)" stroke-width="3"/>
+        <circle cx="821" cy="406" r="14" class="green-fill" stroke="var(--green)" stroke-width="3"/>
+        <circle cx="972" cy="406" r="14" class="blue-fill" stroke="var(--blue)" stroke-width="3"/>
+        <text x="171" y="447" text-anchor="middle" class="small">create + reload</text><text x="171" y="467" text-anchor="middle" class="small">an Orchestrate session</text>
+        <text x="379" y="447" text-anchor="middle" class="small">approve a plan</text><text x="379" y="467" text-anchor="middle" class="small">and see its DAG</text>
+        <text x="609" y="447" text-anchor="middle" class="small">run, review, revise</text><text x="609" y="467" text-anchor="middle" class="small">one real ticket</text>
+        <text x="821" y="447" text-anchor="middle" class="small">produce a branch with</text><text x="821" y="467" text-anchor="middle" class="small">one commit per ticket</text>
+        <text x="972" y="447" text-anchor="middle" class="small">run a fork/join</text><text x="972" y="467" text-anchor="middle" class="small">without duplicates</text>
+        <text x="82" y="95" class="title">Effort shape</text>
+        <text x="82" y="124" class="small">Block height encodes relative implementation/risk, not calendar time.</text>
+      </svg>
+      <figcaption><b>The DAG model exists from phase 1; concurrency waits until phase 4.</b> This lets the team prove scoping, human gates, attempts, and integration on a sequential scheduler before adding races. Each slice has a user-visible stopping point.</figcaption>
+    </figure>
+    <table>
+      <thead><tr><th>Slice</th><th>Ships</th><th>Independent proof</th></tr></thead>
+      <tbody>
+        <tr><td>0 · Foundation</td><td><code>orchestrate</code> kind, run record, read-only controller prompt/skills, create/load/event hydration.</td><td>Start from Home, refresh, and recover the same run with no transcript parsing.</td></tr>
+        <tr><td>1 · Scoping &amp; plan</td><td>Structured questions, immutable plan revisions, ticket materialization, cycle-safe dependencies, read-only DAG canvas.</td><td>Reject revision 1, approve revision 2, and see normal Trace tickets plus the approved graph.</td></tr>
+        <tr><td>2 · Sequential execution</td><td>Worker context packet, ticket-linked coding group, completion report, decisions, recording/summary gates, feedback attempts.</td><td>Run one ticket through approval, feedback, second attempt, and approval.</td></tr>
+        <tr><td>3 · Integration &amp; finish</td><td>Serialized squash integration, conflict gate, descendant readiness, final verification and human gate.</td><td>Final branch is base + exactly N canonical commits for N integrated tickets.</td></tr>
+        <tr><td>4 · Parallel &amp; polish</td><td>Bounded ready-node scheduling, durable reconciler, pause/resume, large-DAG UX, mobile list.</td><td>A fork/join DAG survives server restart, duplicate events, and one failed worker without double-launching.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <p class="eyebrow">10 · Repository impact</p>
+    <h2>The change crosses every seam, but each seam already has a sibling pattern.</h2>
+    <figure>
+      <svg viewBox="0 0 1100 650" role="img" aria-labelledby="impact-title impact-desc">
+        <title id="impact-title">Blast radius across repository layers</title>
+        <desc id="impact-desc">Concentric rings place the core orchestration services in the center, schema and session/ticket/git services in the next ring, runtime CLI and events in the third, and web/mobile surfaces at the outer edge.</desc>
+        <circle cx="550" cy="330" r="294" fill="none" stroke="var(--line)" stroke-width="2"/>
+        <circle cx="550" cy="330" r="220" fill="none" stroke="var(--line)" stroke-width="2"/>
+        <circle cx="550" cy="330" r="145" fill="none" stroke="var(--line)" stroke-width="2"/>
+        <circle cx="550" cy="330" r="72" class="teal-fill" stroke="var(--teal)" stroke-width="4"/>
+        <text x="550" y="322" text-anchor="middle" class="label">new core</text><text x="550" y="345" text-anchor="middle" class="small">orchestration services</text>
+
+        <g>
+          <circle cx="550" cy="184" r="45" class="violet-fill" stroke="var(--violet)" stroke-width="2"/><text x="550" y="181" text-anchor="middle" class="small">GraphQL</text><text x="550" y="199" text-anchor="middle" class="small">schema</text>
+          <circle cx="684" cy="285" r="45" class="green-fill" stroke="var(--green)" stroke-width="2"/><text x="684" y="282" text-anchor="middle" class="small">ticket</text><text x="684" y="300" text-anchor="middle" class="small">service</text>
+          <circle cx="634" cy="448" r="45" class="amber-fill" stroke="var(--amber)" stroke-width="2"/><text x="634" y="445" text-anchor="middle" class="small">managed</text><text x="634" y="463" text-anchor="middle" class="small">git</text>
+          <circle cx="416" cy="405" r="45" class="blue-fill" stroke="var(--blue)" stroke-width="2"/><text x="416" y="402" text-anchor="middle" class="small">session</text><text x="416" y="420" text-anchor="middle" class="small">service</text>
+          <circle cx="421" cy="246" r="45" class="surface-fill" stroke="var(--line-strong)" stroke-width="2"/><text x="421" y="243" text-anchor="middle" class="small">Prisma</text><text x="421" y="261" text-anchor="middle" class="small">migration</text>
+        </g>
+
+        <g>
+          <circle cx="550" cy="109" r="39" class="surface-fill" stroke="var(--violet)" stroke-width="2"/><text x="550" y="106" text-anchor="middle" class="small">runtime</text><text x="550" y="124" text-anchor="middle" class="small">skills</text>
+          <circle cx="772" cy="216" r="39" class="surface-fill" stroke="var(--violet)" stroke-width="2"/><text x="772" y="213" text-anchor="middle" class="small">Trace CLI</text><text x="772" y="231" text-anchor="middle" class="small">contract</text>
+          <circle cx="753" cy="461" r="39" class="surface-fill" stroke="var(--teal)" stroke-width="2"/><text x="753" y="458" text-anchor="middle" class="small">event</text><text x="753" y="476" text-anchor="middle" class="small">payloads</text>
+          <circle cx="550" cy="549" r="39" class="surface-fill" stroke="var(--amber)" stroke-width="2"/><text x="550" y="546" text-anchor="middle" class="small">inbox +</text><text x="550" y="564" text-anchor="middle" class="small">artifacts</text>
+          <circle cx="333" cy="461" r="39" class="surface-fill" stroke="var(--teal)" stroke-width="2"/><text x="333" y="458" text-anchor="middle" class="small">Zustand</text><text x="333" y="476" text-anchor="middle" class="small">handlers</text>
+          <circle cx="325" cy="216" r="39" class="surface-fill" stroke="var(--amber)" stroke-width="2"/><text x="325" y="213" text-anchor="middle" class="small">durable</text><text x="325" y="231" text-anchor="middle" class="small">reconciler</text>
+        </g>
+
+        <g>
+          <rect x="84" y="94" width="180" height="58" rx="18" class="teal-fill" stroke="var(--teal)" stroke-width="2"/><text x="174" y="119" text-anchor="middle" class="label">Home + navigation</text><text x="174" y="139" text-anchor="middle" class="micro">new session type</text>
+          <rect x="836" y="94" width="180" height="58" rx="18" class="violet-fill" stroke="var(--violet)" stroke-width="2"/><text x="926" y="119" text-anchor="middle" class="label">DAG canvas</text><text x="926" y="139" text-anchor="middle" class="micro">new workspace</text>
+          <rect x="848" y="506" width="174" height="58" rx="18" class="amber-fill" stroke="var(--amber)" stroke-width="2"/><text x="935" y="531" text-anchor="middle" class="label">Gate inspector</text><text x="935" y="551" text-anchor="middle" class="micro">reuse video viewer</text>
+          <rect x="80" y="508" width="180" height="58" rx="18" class="blue-fill" stroke="var(--blue)" stroke-width="2"/><text x="170" y="533" text-anchor="middle" class="label">Mobile list</text><text x="170" y="553" text-anchor="middle" class="micro">phase 4 fallback</text>
+        </g>
+      </svg>
+      <figcaption><b>The center is new; the edges extend existing seams.</b> Session creation already branches by kind, artifacts already render video, inbox items already surface “needs input,” events already hydrate Zustand, and app deployment already demonstrates durable queued work with reconciliation.</figcaption>
+    </figure>
+    <table>
+      <thead><tr><th>Paths</th><th>Planned change</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/gql/src/schema.graphql</code><br><code>apps/server/prisma/schema.prisma</code></td><td>Add <code>orchestrate</code>, orchestration types/inputs/events, ticket planning fields, dependency/run/node/execution/decision/gate models, and migration.</td></tr>
+        <tr><td><code>apps/server/src/services/orchestration*.ts</code></td><td>New service-owned lifecycle, plan materialization, scheduler, gate resolution, worker reports, readiness, and reconciliation.</td></tr>
+        <tr><td><code>apps/server/src/services/session.ts</code><br><code>ticket.ts</code><br><code>managed-git.ts</code></td><td>Controller instruction/read-only rule; consume the existing <code>ticketId</code> input; extend tickets; create isolated worker groups; verify and squash approved diffs.</td></tr>
+        <tr><td><code>apps/server/src/services/inbox.ts</code><br><code>artifact.ts</code><br><code>index.ts</code></td><td>Project gate notifications from durable gates, link video evidence without overloading visual-plan approval, and run a distributed reconciler.</td></tr>
+        <tr><td><code>apps/server/src/schema/orchestration.ts</code><br><code>schema/resolvers.ts</code></td><td>Thin query/mutation wrappers over the services.</td></tr>
+        <tr><td><code>runtime/skills/orchestrate-*/</code><br><code>runtime/manifest.json</code></td><td>Ship controller and worker starter files: scoping protocol, ticket context contract, decision threshold, worker report, and gate behavior; regenerate the runtime bundle.</td></tr>
+        <tr><td><code>packages/cli-contract/src/index.ts</code><br><code>packages/cli/src/commands/orchestrate/</code></td><td>Add capability-restricted controller actions and a worker-report action scoped to the active run/execution; regenerate <code>runtime/bin</code>.</td></tr>
+        <tr><td><code>packages/client-core/src/stores/entity.ts</code><br><code>events/handlers.ts</code></td><td>Add normalized orchestration entities and full-snapshot event upserts.</td></tr>
+        <tr><td><code>apps/web/src/components/home/</code><br><code>session/</code><br><code>orchestrate/</code><br><code>inbox/</code></td><td>Create/select Orchestrate, route the group to a graph-first workspace, inspect nodes/workers/gates, and resolve feedback/approval actions.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <p class="eyebrow">11 · Verification</p>
+    <h2>Prove the state machine, the event stream, and the Git history separately.</h2>
+    <figure>
+      <svg viewBox="0 0 1100 560" role="img" aria-labelledby="verify-title verify-desc">
+        <title id="verify-title">Four verification tracks converge on one end-to-end proof</title>
+        <desc id="verify-desc">Contract, service, client, and git verification tracks run independently, then converge on an end-to-end fork/join orchestration scenario with plan rejection, feedback, a recording gate, restart recovery, and final branch inspection.</desc>
+        <defs><marker id="verify-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--line-strong)"/></marker></defs>
+        <path d="M110 113 C420 113 560 255 813 278" class="line violet-stroke" marker-end="url(#verify-arrow)"/>
+        <path d="M110 225 C420 225 560 274 813 289" class="line teal-stroke" marker-end="url(#verify-arrow)"/>
+        <path d="M110 337 C420 337 560 303 813 300" class="line blue-stroke" marker-end="url(#verify-arrow)"/>
+        <path d="M110 449 C420 449 560 329 813 311" class="line green-stroke" marker-end="url(#verify-arrow)"/>
+        <g>
+          <circle cx="110" cy="113" r="58" class="violet-fill" stroke="var(--violet)" stroke-width="3"/><text x="110" y="106" text-anchor="middle" class="label">Contracts</text><text x="110" y="130" text-anchor="middle" class="small">schema · CLI</text>
+          <circle cx="110" cy="225" r="58" class="teal-fill" stroke="var(--teal)" stroke-width="3"/><text x="110" y="218" text-anchor="middle" class="label">Services</text><text x="110" y="242" text-anchor="middle" class="small">state · events</text>
+          <circle cx="110" cy="337" r="58" class="blue-fill" stroke="var(--blue)" stroke-width="3"/><text x="110" y="330" text-anchor="middle" class="label">Clients</text><text x="110" y="354" text-anchor="middle" class="small">hydrate · render</text>
+          <circle cx="110" cy="449" r="58" class="green-fill" stroke="var(--green)" stroke-width="3"/><text x="110" y="442" text-anchor="middle" class="label">Git</text><text x="110" y="466" text-anchor="middle" class="small">apply · inspect</text>
+        </g>
+        <path d="M816 236 Q922 181 1028 236 L1014 380 Q922 436 830 380 Z" class="amber-fill" stroke="var(--amber)" stroke-width="4"/>
+        <text x="922" y="278" text-anchor="middle" class="title">E2E scenario</text>
+        <text x="922" y="309" text-anchor="middle" class="small">reject plan 1 · approve plan 2</text>
+        <text x="922" y="333" text-anchor="middle" class="small">fork/join · feedback attempt</text>
+        <text x="922" y="357" text-anchor="middle" class="small">video gate · restart · final review</text>
+
+        <rect x="280" y="72" width="316" height="72" rx="20" class="surface-fill" stroke="var(--line)"/><text x="438" y="100" text-anchor="middle" class="small">codegen + runtime bundle checks</text><text x="438" y="123" text-anchor="middle" class="micro">no duplicated enum/type definitions</text>
+        <rect x="280" y="184" width="316" height="72" rx="20" class="surface-fill" stroke="var(--line)"/><text x="438" y="212" text-anchor="middle" class="small">cycle, readiness, idempotency, auth</text><text x="438" y="235" text-anchor="middle" class="micro">every mutation asserts full event snapshot</text>
+        <rect x="280" y="296" width="316" height="72" rx="20" class="surface-fill" stroke="var(--line)"/><text x="438" y="324" text-anchor="middle" class="small">refresh, selectors, graph, gate actions</text><text x="438" y="347" text-anchor="middle" class="micro">no mutation-result store writes</text>
+        <rect x="280" y="408" width="316" height="72" rx="20" class="surface-fill" stroke="var(--line)"/><text x="438" y="436" text-anchor="middle" class="small">parallel base, conflict, squash identity</text><text x="438" y="459" text-anchor="middle" class="micro">base + N ticket commits exactly</text>
+      </svg>
+      <figcaption><b>No single “happy path” test can prove this feature.</b> Schema/action authorization, lifecycle transitions, event hydration, and Git identity each get focused tests. The end-to-end scenario then proves that those tracks stay connected across human feedback and process restart.</figcaption>
+    </figure>
+    <details>
+      <summary>Service and scheduler cases that must be explicit</summary>
+      <div><ul>
+        <li>Plan approval is idempotent; an older revision cannot overwrite a newer approved revision.</li>
+        <li>Self, cross-organization, and cyclic dependencies fail before any edge event publishes.</li>
+        <li>Duplicate completion reports and duplicate worker-terminated events do not create duplicate gates or attempts.</li>
+        <li>An execution without a valid ticket link, clean/known head SHA, or required video artifact cannot enter review.</li>
+        <li>Decision gates always override <code>reviewPolicy: auto</code>.</li>
+        <li>Feedback resolves the old gate and creates exactly one new attempt; the prior attempt remains queryable.</li>
+        <li>Concurrent scheduler replicas claim a ready node once under advisory/distributed locks.</li>
+        <li>Conflict leaves the integration branch unchanged and creates a visible gate.</li>
+        <li>Final completion is impossible with open gates, running attempts, or nonterminal required nodes.</li>
+      </ul></div>
+    </details>
+  </section>
+
+  <section>
+    <p class="eyebrow">12 · Risks, assumptions &amp; non-goals</p>
+    <h2>The largest risk is pretending a prompt is a control plane.</h2>
+    <figure>
+      <svg viewBox="0 0 1100 600" role="img" aria-labelledby="risk-title risk-desc">
+        <title id="risk-title">Risk balance between autonomy and human control</title>
+        <desc id="risk-desc">A balance scale shows the approved plan and durable service rules counterweighting agent autonomy. Risks that escape prompts—silent decisions, duplicate scheduling, branch conflict, and missing evidence—are caught by gates, locks, commit verification, and structured reports.</desc>
+        <path d="M550 117 V440" class="line" stroke-width="8"/>
+        <path d="M390 467 H710" class="line" stroke-width="12" stroke-linecap="round"/>
+        <circle cx="550" cy="118" r="26" class="amber-fill" stroke="var(--amber)" stroke-width="4"/>
+        <path d="M185 197 H915" class="line" stroke-width="7"/>
+        <path d="M270 197 L192 402 H348 Z" class="teal-fill" stroke="var(--teal)" stroke-width="3"/>
+        <path d="M830 197 L752 402 H908 Z" class="violet-fill" stroke="var(--violet)" stroke-width="3"/>
+        <path d="M270 197 V374 M830 197 V374" class="hair"/>
+        <text x="270" y="439" text-anchor="middle" class="title">Human authority</text>
+        <text x="270" y="466" text-anchor="middle" class="small">approved plan · gates · pause · final review</text>
+        <text x="830" y="439" text-anchor="middle" class="title">Agent autonomy</text>
+        <text x="830" y="466" text-anchor="middle" class="small">scope · implement · verify · recommend</text>
+
+        <g transform="translate(120 64)">
+          <circle cx="0" cy="0" r="36" class="red-fill" stroke="var(--red)" stroke-width="2"/><text x="0" y="5" text-anchor="middle" class="label">!</text><text x="0" y="55" text-anchor="middle" class="micro">silent decision</text>
+        </g>
+        <g transform="translate(344 70)">
+          <circle cx="0" cy="0" r="36" class="red-fill" stroke="var(--red)" stroke-width="2"/><text x="0" y="5" text-anchor="middle" class="label">×2</text><text x="0" y="55" text-anchor="middle" class="micro">duplicate launch</text>
+        </g>
+        <g transform="translate(756 70)">
+          <circle cx="0" cy="0" r="36" class="red-fill" stroke="var(--red)" stroke-width="2"/><text x="0" y="5" text-anchor="middle" class="label">≠</text><text x="0" y="55" text-anchor="middle" class="micro">branch conflict</text>
+        </g>
+        <g transform="translate(980 64)">
+          <circle cx="0" cy="0" r="36" class="red-fill" stroke="var(--red)" stroke-width="2"/><text x="0" y="5" text-anchor="middle" class="label">∅</text><text x="0" y="55" text-anchor="middle" class="micro">missing proof</text>
+        </g>
+
+        <rect x="80" y="510" width="214" height="55" rx="18" class="amber-fill" stroke="var(--amber)"/><text x="187" y="543" text-anchor="middle" class="small">durable gates</text>
+        <rect x="323" y="510" width="214" height="55" rx="18" class="surface-fill" stroke="var(--line-strong)"/><text x="430" y="543" text-anchor="middle" class="small">claims + reconciler</text>
+        <rect x="566" y="510" width="214" height="55" rx="18" class="green-fill" stroke="var(--green)"/><text x="673" y="543" text-anchor="middle" class="small">verified squash apply</text>
+        <rect x="809" y="510" width="214" height="55" rx="18" class="violet-fill" stroke="var(--violet)"/><text x="916" y="543" text-anchor="middle" class="small">structured report</text>
+      </svg>
+      <figcaption><b>Prompts define behavior; services enforce permission and state.</b> The controller and worker starter files are essential, but correctness lives in typed actions, durable records, locks, events, and verified Git operations.</figcaption>
+    </figure>
+
+    <div class="grid-2">
+      <div class="note fact"><span class="tag">Assumption</span><h3>One repository per run in v1</h3><p>The Orchestrate group is linked to one channel repository and produces one integration branch. If multi-repo delivery is required immediately, the run/branch model and final-review experience both need another level.</p></div>
+      <div class="note fact"><span class="tag">Assumption</span><h3>The controller is read-only</h3><p>All implementation happens in ticket workers; only the integration service writes the final worktree. If the controller may edit, one-ticket/one-commit provenance becomes porous.</p></div>
+      <div class="note open"><span class="tag">Open product choice</span><h3>Default review policy</h3><p>Recommendation: <code>summary</code> for user-facing tickets, <code>auto</code> for bounded internal tickets, and <code>recording</code> only when the planner can name a safe visible scenario. Important decisions block in every mode.</p></div>
+      <div class="note open"><span class="tag">Open product choice</span><h3>Graph interaction in v1</h3><p>Recommendation: deterministic topological layout with selection, pan, zoom, and status filtering; no manual node dragging. The repository has no DAG renderer today, so avoid making layout editing part of the first release.</p></div>
+    </div>
+
+    <h3>Explicit non-goals for the first release</h3>
+    <ul>
+      <li>Cross-repository ticket DAGs or a final branch spanning multiple repositories.</li>
+      <li>Automatically merging the final branch or pull request into its base.</li>
+      <li>Rewriting an integrated ticket commit after later feedback.</li>
+      <li>Letting agents create events directly, bypass service authorization, or infer approval from chat text.</li>
+      <li>Running ticket workers in the Orchestrate group's shared worktree.</li>
+      <li>Requiring video for work that cannot be safely and meaningfully demonstrated in a browser.</li>
+      <li>A full pan-and-zoom mobile graph in the first web release.</li>
+    </ul>
+
+    <details>
+      <summary>Repository facts that shaped this recommendation</summary>
+      <div>
+        <ul>
+          <li><code>SessionGroupKind</code> currently includes general, coding, design, design system, app, PDF, and animation—but not orchestrate.</li>
+          <li><code>SessionGroup</code> owns one branch/workdir shared by sessions in the group, so it is the wrong isolation boundary for parallel workers.</li>
+          <li><code>StartSessionInput.ticketId</code> exists in GraphQL and the managed CLI, but <code>SessionService.start</code> does not currently consume it.</li>
+          <li>Tickets currently have title, description, status, priority, labels, projects, assignees, and generic links; they lack acceptance criteria and dependency edges.</li>
+          <li>Inbox items currently support plan and question types. Video artifacts render today, but artifact approval is intentionally limited to visual plans.</li>
+          <li>The entity store has no orchestration tables, and the web package has no DAG-rendering dependency.</li>
+          <li><code>AppDeploymentService</code> already demonstrates the durable queued-state plus reconciler pattern needed for reliable scheduler claims.</li>
+        </ul>
+      </div>
+    </details>
+  </section>
+
+  <footer class="footer">
+    <p><strong>Recommended decision:</strong> build Orchestrate as a first-class session group kind backed by durable run/node/execution/gate records; keep controllers read-only, workers isolated, human gates explicit, and integration service-owned. Start with scoping and sequential execution, then enable parallel scheduling after the state and Git contracts are proven.</p>
+    <div class="legend"><span><i class="new"></i>new orchestration surface</span><span><i class="existing"></i>existing Trace primitive</span><span><i class="gate"></i>human gate</span><span><i class="risk-color"></i>blocked or risky path</span></div>
+  </footer>
+</main>
+</body>
+</html>
