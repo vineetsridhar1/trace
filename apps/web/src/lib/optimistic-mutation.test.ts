@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { gql } from "@urql/core";
+import { parse } from "graphql";
 
 const mutation = vi.fn();
 const toastError = vi.fn();
@@ -13,11 +13,7 @@ vi.mock("sonner", () => ({
 
 import { mutateOptimistically } from "./optimistic-mutation";
 
-const DOCUMENT = gql`
-  mutation Noop($id: ID!) {
-    noop(id: $id)
-  }
-`;
+const DOCUMENT = parse("mutation Noop($id: ID!) { noop(id: $id) }");
 
 function change() {
   const applied: string[] = [];
