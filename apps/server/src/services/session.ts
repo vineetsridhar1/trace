@@ -4968,8 +4968,10 @@ export class SessionService {
 
     assertCloudRepoRemoteAvailable(hosting, resolvedRepo);
 
-    // Ask-mode sessions skip worktree creation (read-only against repo root).
-    const readOnlyWorkspace = input.interactionMode === "ask" && !adoptWorktreePath;
+    // General sessions receive their linked repository as read-only context.
+    // Ask-mode sessions use the same repo-root preparation behavior.
+    const readOnlyWorkspace =
+      (resolvedKind === "general" || input.interactionMode === "ask") && !adoptWorktreePath;
 
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId &&
@@ -5637,7 +5639,13 @@ export class SessionService {
 
     // If session has a read-only workspace and the mode explicitly switched away from ask,
     // upgrade to a full worktree before running
-    if (session.readOnlyWorkspace && interactionMode && interactionMode !== "ask" && session.repo) {
+    if (
+      session.readOnlyWorkspace &&
+      session.sessionGroup?.kind !== "general" &&
+      interactionMode &&
+      interactionMode !== "ask" &&
+      session.repo
+    ) {
       const pendingCommand: PendingSessionCommand = {
         type: "run",
         prompt: prompt ?? null,
@@ -7374,7 +7382,13 @@ export class SessionService {
 
     // If session has a read-only workspace and user explicitly switched away from ask mode,
     // trigger a workspace upgrade to create a real worktree
-    if (session.readOnlyWorkspace && interactionMode && interactionMode !== "ask" && session.repo) {
+    if (
+      session.readOnlyWorkspace &&
+      session.sessionGroup?.kind !== "general" &&
+      interactionMode &&
+      interactionMode !== "ask" &&
+      session.repo
+    ) {
       const resumedSessionStatus = getRunningSessionStatus(session.sessionStatus);
       const pendingCommand: PendingSessionCommand = {
         type: "send",
@@ -9520,7 +9534,7 @@ export class SessionService {
             )
           : undefined;
       const retryPreparation =
-        session.sessionGroup?.kind === "general"
+        session.sessionGroup?.kind === "general" && !session.repo
           ? {
               type: "prepare_general" as const,
               sessionId,

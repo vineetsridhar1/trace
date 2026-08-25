@@ -2504,10 +2504,10 @@ export class SessionRouter {
           return;
         }
 
-        // A linked repository is context for a general session, not permission
-        // to place the agent in a writable checkout. General sessions always
-        // start in their disposable scratch directory and convert before coding.
-        if (options.sessionGroupKind === "general") {
+        // General sessions without a linked repository use disposable scratch
+        // space. When a repository is linked, the regular prepare path below
+        // provides it as read-only context.
+        if (options.sessionGroupKind === "general" && !options.repo) {
           const localRuntime = expectedHomeRuntimeId
             ? this.getRuntime(expectedHomeRuntimeId, options.organizationId)
             : this.getRuntimeForSession(options.sessionId);
@@ -2556,7 +2556,7 @@ export class SessionRouter {
               defaultBranch: options.repo.defaultBranch,
               branch: options.branch,
               baseCommitSha: options.baseCommitSha,
-              readOnly: options.readOnly,
+              readOnly: options.sessionGroupKind === "general" || options.readOnly,
               adoptWorktreePath: options.adoptWorktreePath,
             },
             {

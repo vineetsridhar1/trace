@@ -812,7 +812,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
   });
 
-  it("prepares a repo-linked general session in scratch space instead of its repo", async () => {
+  it("prepares a repo-linked general session as read-only context", async () => {
     const router = new SessionRouter();
     const ws = makeWs();
     router.registerRuntime({
@@ -849,13 +849,15 @@ describe("SessionRouter runtime adapter dispatch", () => {
     expect(failures).toEqual([]);
     const send = ws.send as unknown as ReturnType<typeof vi.fn>;
     expect(JSON.parse(send.mock.calls[0]?.[0] as string)).toMatchObject({
-      type: "prepare_general",
+      type: "prepare",
       sessionId: "session-1",
       sessionGroupId: "group-1",
+      repoId: "repo-1",
+      readOnly: true,
     });
   });
 
-  it("prepares a provisioned general session in cloud scratch space", async () => {
+  it("prepares a provisioned general session with read-only repo context", async () => {
     const provisionedAdapter: RuntimeAdapter = {
       type: "provisioned",
       async validateConfig() {},
@@ -909,9 +911,11 @@ describe("SessionRouter runtime adapter dispatch", () => {
     expect(
       JSON.parse((ws.send as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]),
     ).toMatchObject({
-      type: "prepare_general",
+      type: "prepare",
       sessionId: "session-1",
       sessionGroupId: "group-1",
+      repoId: "repo-1",
+      readOnly: true,
     });
   });
 
@@ -1004,7 +1008,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
       expect(remoteDelivery).toHaveBeenCalledWith(
         runtimeId,
-        expect.objectContaining({ type: "prepare_general", sessionId: "session-1" }),
+        expect.objectContaining({ type: "prepare", sessionId: "session-1", readOnly: true }),
         organizationId,
       );
     } finally {
