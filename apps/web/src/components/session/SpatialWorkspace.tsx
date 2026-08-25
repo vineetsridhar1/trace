@@ -44,6 +44,7 @@ export function SpatialWorkspace({
     tabReplacements,
     onTabReplacementsApplied,
     onActivateTab,
+    onCloseTab,
     onNewTab,
     onOverlayVisibilityChange,
   });

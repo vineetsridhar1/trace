@@ -6,6 +6,7 @@ import { useAuthStore } from "@trace/client-core";
 import { SpatialWorkspace } from "./SpatialWorkspace";
 import { createSpatialLayout, dockSpatialTab } from "./spatial-workspace-layout";
 import { useWorkspaceTabRequests } from "./useWorkspaceTabRequests";
+import { useCommandRegistryStore } from "../../stores/command-registry";
 import {
   reconcileWorkspaceRequestEvent,
   useWorkspaceRequestStore,
@@ -100,6 +101,7 @@ describe("SpatialWorkspace", () => {
 
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    useCommandRegistryStore.setState({ commandsByToken: {} });
   });
 
   afterEach(async () => {
@@ -159,6 +161,35 @@ describe("SpatialWorkspace", () => {
     });
 
     expect(renderer.root.findByProps({ "data-rendered-tab": "browser" })).toBeDefined();
+  });
+
+  it("closes the focused workspace tab with Cmd+W", async () => {
+    const onCloseTab = vi.fn();
+    await act(async () => {
+      renderer = create(
+        <SpatialWorkspace
+          persistenceKey="spatial-workspace-close-tab-test"
+          tabs={[
+            { id: "chat", label: "Chat", icon: null },
+            { id: "draft:browser", label: "Browser", icon: null },
+          ]}
+          preferredActiveTabId="chat"
+          foregroundTabId="draft:browser"
+          onActivateTab={() => undefined}
+          onCloseTab={onCloseTab}
+          onNewTab={() => "draft:new"}
+          renderTab={(tabId) => <div data-rendered-tab={tabId} />}
+        />,
+      );
+    });
+
+    const closeCommand = Object.values(useCommandRegistryStore.getState().commandsByToken)
+      .flat()
+      .find((command) => command.id === "session.close-tab");
+    expect(closeCommand?.shortcut).toEqual({ key: "w", mod: true });
+
+    await act(async () => closeCommand?.run());
+    expect(onCloseTab).toHaveBeenCalledWith("draft:browser");
   });
 
   it("foregrounds a browser tab created from a workspace request event", async () => {
