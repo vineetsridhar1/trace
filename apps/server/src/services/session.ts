@@ -1977,9 +1977,9 @@ export class SessionService {
         adoptWorktreePath,
         expectedHomeRuntimeId: params.expectedHomeRuntimeId ?? undefined,
         reserveRuntime: () =>
-          this.recordRuntimeLifecycle(params.sessionId, "session_runtime_start_requested"),
+          this.reserveRuntimeForSessionGroup(params.sessionId, params.sessionGroupId ?? null),
         onLifecycle: async (eventType, update) => {
-          await this.recordRuntimeLifecycle(params.sessionId, eventType, update);
+          await this.recordSessionGroupRuntimeLifecycle(params.sessionId, eventType, update);
         },
         onFailed: (error) => this.workspaceFailed(params.sessionId, error),
         onWorkspaceReady: (workdir) => this.workspaceReady(params.sessionId, workdir),
@@ -1988,6 +1988,95 @@ export class SessionService {
       const message = error instanceof Error ? error.message : String(error);
       void this.workspaceFailed(params.sessionId, message);
     });
+  }
+
+  private async reserveRuntimeForSessionGroup(
+    sessionId: string,
+    sessionGroupId: string | null,
+  ): Promise<string | null> {
+    const runtimeInstanceId = await this.recordRuntimeLifecycle(
+      sessionId,
+      "session_runtime_start_requested",
+    );
+    if (!runtimeInstanceId || !sessionGroupId) return runtimeInstanceId;
+
+    await this.adoptPendingGroupRuntime(sessionId, sessionGroupId, runtimeInstanceId);
+    return runtimeInstanceId;
+  }
+
+  private async adoptPendingGroupRuntime(
+    sessionId: string,
+    sessionGroupId: string,
+    runtimeInstanceId: string,
+  ): Promise<void> {
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      select: { connection: true },
+    });
+    const groupConnection = this.parseConnection(group?.connection);
+    if (
+      groupConnection.state !== "requested" ||
+      groupConnection.runtimeInstanceId ||
+      !groupConnection.requestedAt
+    ) {
+      return;
+    }
+    const requestedAt = groupConnection.requestedAt;
+
+    const siblings = await prisma.session.findMany({
+      where: { sessionGroupId, id: { not: sessionId } },
+      select: { id: true },
+    });
+    await Promise.all(
+      siblings.map((sibling) =>
+        this.recordRuntimeLifecycle(
+          sibling.id,
+          "session_runtime_start_requested",
+          { runtimeInstanceId },
+          {
+            expectedGroupRequest: {
+              sessionGroupId,
+              requestedAt,
+            },
+          },
+        ),
+      ),
+    );
+  }
+
+  private async recordSessionGroupRuntimeLifecycle(
+    sessionId: string,
+    eventType: RuntimeLifecycleEventType,
+    update: RuntimeLifecycleUpdate = {},
+  ): Promise<void> {
+    const runtimeInstanceId = await this.recordRuntimeLifecycle(sessionId, eventType, update);
+    if (!runtimeInstanceId) return;
+
+    const primary = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { sessionGroupId: true },
+    });
+    if (!primary?.sessionGroupId) return;
+
+    await this.adoptPendingGroupRuntime(sessionId, primary.sessionGroupId, runtimeInstanceId);
+
+    const siblings = await prisma.session.findMany({
+      where: { sessionGroupId: primary.sessionGroupId, id: { not: sessionId } },
+      select: { id: true, connection: true },
+    });
+    await Promise.all(
+      siblings
+        .filter(
+          (sibling) =>
+            this.getConnectionRuntimeInstanceId(sibling.connection) === runtimeInstanceId,
+        )
+        .map((sibling) =>
+          this.recordRuntimeLifecycle(sibling.id, eventType, {
+            ...update,
+            runtimeInstanceId,
+          }),
+        ),
+    );
   }
 
   private async loadRuntimeWorkspaceSlugs(params: {
@@ -2137,6 +2226,9 @@ export class SessionService {
     sessionId: string,
     eventType: RuntimeLifecycleEventType,
     update: RuntimeLifecycleUpdate = {},
+    options?: {
+      expectedGroupRequest?: { sessionGroupId: string; requestedAt: string };
+    },
   ): Promise<string | null> {
     // Pull the immutable session metadata once for the event payload. The
     // connection itself is read inside `updateConnectionConditional` so we
@@ -2156,11 +2248,25 @@ export class SessionService {
       }
       return null;
     }
+    if (
+      options?.expectedGroupRequest &&
+      session.sessionGroupId !== options.expectedGroupRequest.sessionGroupId
+    ) {
+      return null;
+    }
 
     const isNewRuntimeRequest = eventType === "session_runtime_start_requested";
     const result = await this.updateConnectionConditional(
       sessionId,
       (conn) => {
+        if (
+          options?.expectedGroupRequest &&
+          (conn.state !== "requested" ||
+            conn.runtimeInstanceId ||
+            conn.requestedAt !== options.expectedGroupRequest.requestedAt)
+        ) {
+          return null;
+        }
         // Reserve, then mint. A start request that arrives without an id gets
         // one from inside the claim, so two concurrent provisions can never
         // hold competing identities: the loser's mint never happens and it
@@ -8401,6 +8507,42 @@ export class SessionService {
           session.organizationId,
           replayResult,
           "workspace_replay",
+        );
+      }
+    }
+    if (session.sessionGroupId && workdirRuntimeInstanceId) {
+      await this.replayGroupPendingCommands(
+        session.id,
+        session.sessionGroupId,
+        workdirRuntimeInstanceId,
+      );
+    }
+  }
+
+  private async replayGroupPendingCommands(
+    readySessionId: string,
+    sessionGroupId: string,
+    runtimeInstanceId: string,
+  ): Promise<void> {
+    const siblings = await prisma.session.findMany({
+      where: { sessionGroupId, id: { not: readySessionId } },
+      select: { id: true, organizationId: true, connection: true, pendingRun: true },
+    });
+
+    for (const sibling of siblings) {
+      if (
+        this.getConnectionRuntimeInstanceId(sibling.connection) !== runtimeInstanceId ||
+        this.parsePendingCommands(sibling.pendingRun).length === 0
+      ) {
+        continue;
+      }
+      const replayResult = await this.deliverPendingCommand(sibling.id, sibling.pendingRun);
+      if (replayResult && replayResult !== "delivered") {
+        await this.persistConnectionFailure(
+          sibling.id,
+          sibling.organizationId,
+          replayResult,
+          "group_workspace_replay",
         );
       }
     }
