@@ -76,6 +76,35 @@ const HIDDEN_SESSION_TABS_QUERY = gql`
   }
 `;
 
+const SESSION_GROUP_ARTIFACTS_QUERY = gql`
+  query SessionGroupArtifactsForWorkspace($sessionGroupId: ID!) {
+    artifacts(sessionGroupId: $sessionGroupId) {
+      id
+      organizationId
+      sessionId
+      type
+      key
+      bundleDigest
+      byteSize
+      createdAt
+      manifest {
+        schemaVersion
+        files {
+          path
+          mediaType
+          size
+          digest
+        }
+      }
+      session {
+        id
+        name
+        sessionGroupId
+      }
+    }
+  }
+`;
+
 const SESSION_GROUP_DETAIL_QUERY = gql`
   query SessionGroupDetail($id: ID!) {
     sessionGroup(id: $id) {
@@ -978,12 +1007,33 @@ export function SessionGroupDetailView({
 
   const handleOpenArtifact = useCallback(
     (artifactId: string) => {
-      openArtifactTab(sessionGroupId, artifactId);
-      setActiveWorkflowTab("session");
-      setActiveTerminalId(null);
-      setActiveFilePath(null);
+      const open = () => {
+        openArtifactTab(sessionGroupId, artifactId);
+        setActiveWorkflowTab("session");
+        setActiveTerminalId(null);
+        setActiveFilePath(null);
+      };
+
+      if (useEntityStore.getState().artifacts[artifactId]) {
+        open();
+        return;
+      }
+
+      void client
+        .query(
+          SESSION_GROUP_ARTIFACTS_QUERY,
+          { sessionGroupId },
+          { requestPolicy: "network-only" },
+        )
+        .toPromise()
+        .then((result) => {
+          const artifacts = result.data?.artifacts ?? [];
+          if (result.error || !artifacts.some((artifact) => artifact.id === artifactId)) return;
+          upsertMany("artifacts", artifacts);
+          open();
+        });
     },
-    [openArtifactTab, sessionGroupId, setActiveFilePath, setActiveTerminalId],
+    [openArtifactTab, sessionGroupId, setActiveFilePath, setActiveTerminalId, upsertMany],
   );
 
   const handleSelectArtifact = useCallback(
