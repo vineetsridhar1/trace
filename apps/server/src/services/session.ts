@@ -11016,7 +11016,10 @@ export class SessionService {
     return result.content;
   }
 
-  /** Read a file's content and report whether it came from the requested branch or default branch. */
+  /**
+   * Read a file from the live workspace when available, falling back to the
+   * session's GitHub branch when the bridge cannot fulfill the request.
+   */
   async readFileWithSource(
     sessionGroupId: string,
     filePath: string,
@@ -11024,6 +11027,28 @@ export class SessionService {
     userId: string,
   ): Promise<SessionGroupFileContentResult> {
     const normalizedPath = this.normalizeFilePath(filePath);
+    try {
+      const runtime = await this.resolveAccessibleSessionGroupRuntime(
+        sessionGroupId,
+        organizationId,
+        userId,
+      );
+      return {
+        content: await sessionRouter.readFile(
+          runtime.runtimeId,
+          runtime.sessionId,
+          normalizedPath,
+          runtime.workdirHint,
+        ),
+        ref: "workspace",
+        requestedRef: "workspace",
+        usedFallback: false,
+      };
+    } catch {
+      // A deep link may point at an uncommitted or generated workspace file.
+      // Use GitHub only when no live bridge can read it.
+    }
+
     const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
       organizationId,
