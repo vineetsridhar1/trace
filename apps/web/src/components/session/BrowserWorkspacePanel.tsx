@@ -6,6 +6,7 @@ import {
   rememberBrowserAddress,
   saveBrowserAddressHistory,
 } from "./browser-address-history";
+import { BROWSER_ADDRESS_FOCUS_EVENT } from "./browser-address-focus";
 
 const EMPTY_BROWSER_STATE: DesktopBrowserWorkspaceState = {
   sessionGroupId: "",
@@ -33,6 +34,7 @@ export function BrowserWorkspacePanel({
   onTitleChange?: (browserId: string, title: string) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
+  const addressInputRef = useRef<HTMLInputElement>(null);
   const addressEditingRef = useRef(false);
   const [state, setState] = useState<DesktopBrowserWorkspaceState>(EMPTY_BROWSER_STATE);
   const [inputValue, setInputValue] = useState("about:blank");
@@ -47,6 +49,16 @@ export function BrowserWorkspacePanel({
     attachedCheckout?.bridgeInstanceId ?? null,
     desktopBridgeInfo?.instanceId,
   );
+
+  useEffect(() => {
+    const handleFocusAddress = (event: Event) => {
+      if (!(event instanceof CustomEvent) || event.detail !== browserId) return;
+      addressInputRef.current?.focus();
+      addressInputRef.current?.select();
+    };
+    window.addEventListener(BROWSER_ADDRESS_FOCUS_EVENT, handleFocusAddress);
+    return () => window.removeEventListener(BROWSER_ADDRESS_FOCUS_EVENT, handleFocusAddress);
+  }, [browserId]);
 
   useEffect(() => {
     onTitleChange?.(browserId, state.title);
@@ -192,6 +204,7 @@ export function BrowserWorkspacePanel({
           );
         }}
         onReload={() => perform(() => window.trace!.reloadBrowser({ sessionGroupId, browserId }))}
+        inputRef={addressInputRef}
       />
       {error ? (
         <p className="shrink-0 border-b border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">

@@ -2,7 +2,9 @@ import { create } from "zustand";
 
 export interface CommandShortcut {
   key: string;
+  code?: string;
   mod?: boolean;
+  ctrl?: boolean;
   shift?: boolean;
   alt?: boolean;
 }
@@ -48,6 +50,7 @@ export function formatShortcut(shortcut: CommandShortcut): string[] {
   const isMac = isMacPlatform();
   const keys: string[] = [];
   if (shortcut.mod) keys.push(isMac ? "⌘" : "Ctrl");
+  if (shortcut.ctrl) keys.push("Ctrl");
   if (shortcut.shift) keys.push("⇧");
   if (shortcut.alt) keys.push(isMac ? "⌥" : "Alt");
   keys.push(formatKey(shortcut.key));
@@ -63,9 +66,15 @@ function formatKey(key: string): string {
 export function matchesShortcut(event: KeyboardEvent, shortcut: CommandShortcut): boolean {
   // `mod` matches the platform command key on either OS: Cmd on macOS, Ctrl
   // elsewhere. We accept both so chords work cross-platform without per-OS defs.
-  const mod = event.metaKey || event.ctrlKey;
-  if (!!shortcut.mod !== mod) return false;
+  if (shortcut.ctrl) {
+    if (!event.ctrlKey || event.metaKey) return false;
+  } else {
+    const mod = event.metaKey || event.ctrlKey;
+    if (!!shortcut.mod !== mod) return false;
+  }
   if (!!shortcut.shift !== event.shiftKey) return false;
   if (!!shortcut.alt !== event.altKey) return false;
-  return event.key.toLowerCase() === shortcut.key.toLowerCase();
+  return shortcut.code
+    ? event.code === shortcut.code
+    : event.key.toLowerCase() === shortcut.key.toLowerCase();
 }

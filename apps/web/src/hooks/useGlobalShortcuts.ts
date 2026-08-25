@@ -52,7 +52,7 @@ export function useGlobalShortcuts() {
         for (const command of commands) {
           if (!command.shortcut) continue;
           // Plain (modifier-less) chords are suppressed while typing.
-          if (!command.shortcut.mod && editable) continue;
+          if (!command.shortcut.mod && !command.shortcut.ctrl && editable) continue;
           if (matchesShortcut(event, command.shortcut)) {
             event.preventDefault();
             command.run();

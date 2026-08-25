@@ -164,6 +164,51 @@ export function insertSpatialTab(
   };
 }
 
+/** Creates a neighboring region containing a newly created tab. */
+export function splitSpatialGroup(
+  layout: SpatialLayout,
+  sourceGroupId: string,
+  tabId: string,
+): SpatialLayout {
+  const sourceGroup = findSpatialGroup(layout.root, sourceGroupId);
+  if (!sourceGroup || sourceGroup.tabIds.includes(tabId)) return layout;
+
+  const newGroup = createSpatialGroup(layout.nextGroupNumber, tabId);
+  const root = replaceSpatialGroup(layout.root, sourceGroupId, (group) =>
+    createSplit(layout.nextSplitNumber, "horizontal", group, newGroup),
+  );
+  return {
+    ...layout,
+    root,
+    nextGroupNumber: layout.nextGroupNumber + 1,
+    nextSplitNumber: layout.nextSplitNumber + 1,
+  };
+}
+
+/** Merges a region into its nearest sibling, preserving all of its tabs. */
+export function joinSpatialGroup(layout: SpatialLayout, groupId: string): SpatialLayout {
+  const sourceGroup = findSpatialGroup(layout.root, groupId);
+  const sibling = findSpatialGroupSibling(layout.root, groupId);
+  const siblingGroups = sibling ? getSpatialGroups(sibling.node) : [];
+  const targetGroup = siblingGroups[sibling?.sourceBeforeSibling ? 0 : siblingGroups.length - 1];
+  if (!sourceGroup || !targetGroup) return layout;
+
+  const root = mapGroups(layout.root, (group) => {
+    if (group.id !== targetGroup.id) return group;
+    const tabIds = [...group.tabIds, ...sourceGroup.tabIds];
+    return {
+      ...group,
+      tabIds,
+      activeTabId: sourceGroup.activeTabId ?? group.activeTabId,
+    };
+  });
+  const withoutSource = mapGroups(root, (group) =>
+    group.id === groupId ? { ...group, tabIds: [], activeTabId: null } : group,
+  );
+  const collapsed = collapseEmptyGroups(withoutSource);
+  return collapsed ? { ...layout, root: collapsed, focusedGroupId: null } : layout;
+}
+
 export function replaceSpatialTab(
   layout: SpatialLayout,
   sourceTabId: string,
@@ -516,6 +561,41 @@ function mapGroups(node: SpatialNode, mapper: (group: SpatialTabGroup) => Spatia
     ...node,
     children: [mapGroups(node.children[0], mapper), mapGroups(node.children[1], mapper)],
   };
+}
+
+function replaceSpatialGroup(
+  node: SpatialNode,
+  groupId: string,
+  mapper: (group: SpatialTabGroup) => SpatialNode,
+): SpatialNode {
+  if (node.type === "group") return node.id === groupId ? mapper(node) : node;
+  return {
+    ...node,
+    children: [
+      replaceSpatialGroup(node.children[0], groupId, mapper),
+      replaceSpatialGroup(node.children[1], groupId, mapper),
+    ],
+  };
+}
+
+function findSpatialGroupSibling(
+  node: SpatialNode,
+  groupId: string,
+): { node: SpatialNode; sourceBeforeSibling: boolean } | null {
+  if (node.type === "group") return null;
+  if (findSpatialGroup(node.children[0], groupId)) {
+    if (node.children[0].type === "group" && node.children[0].id === groupId) {
+      return { node: node.children[1], sourceBeforeSibling: true };
+    }
+    return findSpatialGroupSibling(node.children[0], groupId);
+  }
+  if (findSpatialGroup(node.children[1], groupId)) {
+    if (node.children[1].type === "group" && node.children[1].id === groupId) {
+      return { node: node.children[0], sourceBeforeSibling: false };
+    }
+    return findSpatialGroupSibling(node.children[1], groupId);
+  }
+  return null;
 }
 
 function mapSpatialNodes(

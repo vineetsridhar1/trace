@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type RefObject } from "react";
 import { ChevronLeft, ChevronRight, LoaderCircle, RefreshCw } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
@@ -19,6 +19,7 @@ export function BrowserAddressBar({
   onInputChange,
   onNavigate,
   onReload,
+  inputRef,
 }: {
   addressHistory: string[];
   canGoBack: boolean;
@@ -34,6 +35,7 @@ export function BrowserAddressBar({
   onInputChange: (value: string) => void;
   onNavigate: () => void;
   onReload: () => void;
+  inputRef?: RefObject<HTMLInputElement | null>;
 }) {
   const historyListId = useId();
 
@@ -78,6 +80,7 @@ export function BrowserAddressBar({
         {loading ? <LoaderCircle className="animate-spin" size={15} /> : <RefreshCw size={15} />}
       </Button>
       <Input
+        ref={inputRef}
         value={inputValue}
         list={historyListId}
         onChange={(event) => onInputChange(event.target.value)}
