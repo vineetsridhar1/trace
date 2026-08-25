@@ -72,14 +72,22 @@ export function useGlobalShortcuts() {
     const trace = window.trace;
     if (!trace?.onMenuCommand) return;
     return trace.onMenuCommand((command) => {
-      if (command !== "close-tab") return;
+      const commandId =
+        command === "close-tab"
+          ? "session.close-tab"
+          : command === "next-tab"
+            ? "workspace.next-tab"
+            : command === "previous-tab"
+              ? "workspace.previous-tab"
+              : null;
+      if (!commandId) return;
       const commands = Object.values(
         useCommandRegistryStore.getState().commandsByToken,
       ).flat();
-      const closeTab = commands.find((c) => c.id === "session.close-tab");
-      if (closeTab) {
-        closeTab.run();
-      } else {
+      const registeredCommand = commands.find((candidate) => candidate.id === commandId);
+      if (registeredCommand) {
+        registeredCommand.run();
+      } else if (command === "close-tab") {
         // No in-app tab to close (e.g. the sessions table) — close the window.
         trace.send("close-window", null);
       }

@@ -302,6 +302,11 @@ export class BrowserWorkspaceManager {
     const view = new WebContentsView({
       webPreferences: browserWebPreferences(),
     });
+    view.webContents.on("before-input-event", (event, input) => {
+      if (input.type !== "keyDown" || !input.control || input.key !== "Tab") return;
+      event.preventDefault();
+      this.window?.webContents.send("menu-command", input.shift ? "previous-tab" : "next-tab");
+    });
     const workspace: BrowserWorkspace = {
       key,
       view,
