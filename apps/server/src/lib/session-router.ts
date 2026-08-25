@@ -2488,9 +2488,17 @@ export class SessionRouter {
         // to place the agent in a writable checkout. General sessions always
         // start in their disposable scratch directory and convert before coding.
         if (options.sessionGroupKind === "general") {
-          const runtime = expectedHomeRuntimeId
+          const localRuntime = expectedHomeRuntimeId
             ? this.getRuntime(expectedHomeRuntimeId, options.organizationId)
             : this.getRuntimeForSession(options.sessionId);
+          // The bridge can be owned by another server replica. Read through to
+          // the shared directory before treating an absent local runtime as an
+          // older bridge, otherwise a current desktop runtime is misclassified.
+          const runtime =
+            localRuntime ??
+            (expectedHomeRuntimeId
+              ? await runtimeDirectory.lookup(expectedHomeRuntimeId, options.organizationId)
+              : undefined);
           if ((runtime?.protocolVersion ?? 1) < GENERAL_WORKSPACE_PROTOCOL_VERSION) {
             options.onFailed(
               "This Trace runtime is too old to create an isolated workspace. Upgrade it before retrying this session.",

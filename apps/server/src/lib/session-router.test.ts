@@ -965,6 +965,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         label: "Remote laptop",
         hostingMode: "local",
         supportedTools: ["codex"],
+        protocolVersion: 5,
         registeredRepoIds: ["repo-1"],
         linkedCheckoutStatuses: [],
         linkedCheckoutStatusObservedAt: {},
@@ -977,6 +978,8 @@ describe("SessionRouter runtime adapter dispatch", () => {
     try {
       router.createRuntime({
         sessionId: "session-1",
+        sessionGroupId: "group-1",
+        sessionGroupKind: "general",
         hosting: "local",
         adapterType: "local",
         expectedHomeRuntimeId: runtimeId,
@@ -996,7 +999,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
       expect(remoteDelivery).toHaveBeenCalledWith(
         runtimeId,
-        expect.objectContaining({ type: "prepare", sessionId: "session-1" }),
+        expect.objectContaining({ type: "prepare_general", sessionId: "session-1" }),
         organizationId,
       );
     } finally {
