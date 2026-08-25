@@ -9,6 +9,7 @@ import type { AgentStatus, SessionStatus, CodingTool, SessionGroupKind } from "@
 import type { EventType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
+import path from "path";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
@@ -9178,6 +9179,31 @@ export class SessionService {
 
     if (needsWorkspacePreparation) {
       const isGeneratedProject = isGeneratedProjectKind(session.sessionGroup?.kind);
+      // A legacy session can have a Trace-managed worktree on its home bridge
+      // without a persisted group slug (for example, when its original bridge
+      // disconnected before `workspace_ready` was recorded). Reusing that
+      // checkout is essential: creating a new worktree for the same branch is
+      // rejected by Git. Only recover an unambiguous, Trace-managed match.
+      const recoveredWorkspaceSlug =
+        session.hosting === "local" &&
+        session.repo &&
+        session.branch &&
+        !session.sessionGroup?.slug
+          ? await sessionRouter
+              .listRepoWorktrees(runtime.key, session.repo.id)
+              .then((worktrees) => {
+                const matches = worktrees.filter(
+                  (worktree) =>
+                    worktree.isTraceManaged &&
+                    !worktree.isMain &&
+                    worktree.branch === session.branch,
+                );
+                if (matches.length !== 1) return undefined;
+                const slug = path.basename(matches[0]!.path);
+                return slug && slug !== "." ? slug : undefined;
+              })
+              .catch(() => undefined)
+          : undefined;
 
       // Managed-git credentials are bound to a connected runtime. A retry used
       // to send a regular `prepare` command with the unauthenticated remote,
@@ -9227,7 +9253,7 @@ export class SessionService {
                   type: "prepare" as const,
                   sessionId,
                   sessionGroupId: session.sessionGroupId ?? undefined,
-                  slug: session.sessionGroup?.slug ?? undefined,
+                  slug: recoveredWorkspaceSlug ?? session.sessionGroup?.slug ?? undefined,
                   preserveBranchName: shouldPreserveWorkspaceBranchName({
                     slug: session.sessionGroup?.slug,
                     branch: session.branch,

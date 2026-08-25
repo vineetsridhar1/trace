@@ -7961,6 +7961,49 @@ describe("SessionService", () => {
       );
     });
 
+    it("reuses an unrecorded managed worktree when retrying a local session", async () => {
+      const recoveredSession = makeSession({
+        hosting: "local",
+        branch: "trace-marten-artifact-open",
+        sessionGroup: makeSessionGroup({ slug: null }),
+        connection: {
+          state: "disconnected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(recoveredSession);
+      prismaMock.session.findUnique.mockResolvedValue(recoveredSession);
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(recoveredSession);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-a",
+        key: "org-1:runtime-a",
+        label: "Laptop A",
+        hostingMode: "local",
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      sessionRouterMock.listRepoWorktrees.mockResolvedValueOnce([
+        {
+          path: "/Users/vineet/trace/sessions/repo-1/marten",
+          branch: "trace-marten-artifact-open",
+          isMain: false,
+          isTraceManaged: true,
+          head: "abc123",
+        },
+      ]);
+
+      await service.retryConnection("session-1", "org-1", "user", "user-1");
+
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({ type: "prepare", slug: "marten" }),
+        { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
+      );
+    });
+
     it("refreshes managed-git credentials before re-preparing a retried app session", async () => {
       const appRepo = {
         id: "repo-1",
