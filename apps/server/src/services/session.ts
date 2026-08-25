@@ -4036,14 +4036,9 @@ export class SessionService {
 
     eventService.publishCreated(result.event);
 
-    // Replace the disposable general scratch directory with the repository
-    // worktree the converted session now claims to work in — otherwise the
-    // session would keep running outside a checkout while carrying
-    // repo-backed coding instructions. An agent-initiated conversion is a
-    // handoff rather than the end of the user's request, so it also resumes
-    // the same tool conversation there: workspaceReady atomically consumes
-    // that pending run, and the bridge aborts the old general-workspace
-    // process before starting it in the new cwd.
+    // Conversion upgrades the same session from its read-only repository or
+    // runtime home to a writable worktree. An agent-initiated conversion also
+    // resumes the current tool conversation in that worktree.
     const isAgentHandoff = input.actorType === "agent";
     await this.triggerWorkspaceUpgrade(
       result.session.id,
@@ -8269,7 +8264,7 @@ export class SessionService {
     sourceCommitSha?: string,
   ) {
     // Read and clear pendingRun atomically in a transaction to prevent double-delivery
-    const [session, pendingRun, pendingCleanupRuntimeId] = await prisma.$transaction(
+    const [session, pendingRun] = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
         const prev = await tx.session.findUniqueOrThrow({
           where: { id: sessionId },
@@ -8280,7 +8275,6 @@ export class SessionService {
             readOnlyWorkspace: true,
             workdir: true,
             connection: true,
-            pendingGeneralWorkspaceCleanupRuntimeId: true,
           },
         });
         const pendingCommand = this.parsePendingCommands(prev.pendingRun)[0] ?? null;
@@ -8320,7 +8314,7 @@ export class SessionService {
           include: SESSION_INCLUDE,
         });
 
-        return [updated, prev.pendingRun, prev.pendingGeneralWorkspaceCleanupRuntimeId] as const;
+        return [updated, prev.pendingRun] as const;
       },
     );
     const setupScript = await this.getChannelSetupScript(session.channelId);
@@ -8369,14 +8363,6 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
-    if (pendingCleanupRuntimeId) {
-      await this.deliverGeneralWorkspaceCleanup({
-        sessionId,
-        sessionGroupId: session.sessionGroupId,
-        organizationId: session.organizationId,
-        runtimeInstanceId: pendingCleanupRuntimeId,
-      });
-    }
     if (
       sourceCommitSha &&
       session.sessionGroup?.kind === "design_system" &&
@@ -9069,65 +9055,6 @@ export class SessionService {
       }
     }
 
-    const pendingCleanups = await prisma.session.findMany({
-      where: {
-        ...(organizationId ? { organizationId } : {}),
-        pendingGeneralWorkspaceCleanupRuntimeId: runtimeId,
-      },
-      select: { id: true, sessionGroupId: true, organizationId: true },
-    });
-    for (const cleanup of pendingCleanups) {
-      await this.deliverGeneralWorkspaceCleanup({
-        sessionId: cleanup.id,
-        sessionGroupId: cleanup.sessionGroupId,
-        organizationId: cleanup.organizationId,
-        runtimeInstanceId: runtimeId,
-      });
-    }
-  }
-
-  private async deliverGeneralWorkspaceCleanup(input: {
-    sessionId: string;
-    sessionGroupId: string | null;
-    organizationId: string;
-    runtimeInstanceId: string;
-  }): Promise<void> {
-    const cleanupResult = await sendRuntimeCommand(
-      input.runtimeInstanceId,
-      {
-        type: "cleanup_general_workspace",
-        sessionId: input.sessionId,
-        sessionGroupId: input.sessionGroupId ?? undefined,
-      },
-      input.organizationId,
-    );
-    if (cleanupResult === "delivered") return;
-    console.warn(
-      `[session] failed to clean up the general workspace for ${input.sessionId}: ${cleanupResult}`,
-    );
-  }
-
-  async generalWorkspaceCleanupCompleted(input: {
-    sessionId: string;
-    organizationId: string;
-    runtimeInstanceId: string;
-    success: boolean;
-    error?: string;
-  }): Promise<void> {
-    if (!input.success) {
-      console.warn(
-        `[session] source runtime ${input.runtimeInstanceId} failed to clean up the general workspace for ${input.sessionId}: ${input.error ?? "unknown error"}`,
-      );
-      return;
-    }
-    await prisma.session.updateMany({
-      where: {
-        id: input.sessionId,
-        organizationId: input.organizationId,
-        pendingGeneralWorkspaceCleanupRuntimeId: input.runtimeInstanceId,
-      },
-      data: { pendingGeneralWorkspaceCleanupRuntimeId: null },
-    });
   }
 
   async storeToolSessionId(sessionId: string, toolSessionId: string) {
@@ -9534,13 +9461,7 @@ export class SessionService {
             )
           : undefined;
       const retryPreparation =
-        session.sessionGroup?.kind === "general" && !session.repo
-          ? {
-              type: "prepare_general" as const,
-              sessionId,
-              sessionGroupId: session.sessionGroupId ?? undefined,
-            }
-          : isGeneratedProject && session.repo
+        isGeneratedProject && session.repo
             ? {
                 type: "prepare_app" as const,
                 sessionId,
@@ -9985,8 +9906,6 @@ export class SessionService {
         : null;
     const sourceBranch = conversion?.branch ?? sourceGitStatus?.branch ?? session.branch ?? null;
     const sourceConnection = this.parseConnection(session.connection);
-    const shouldCleanupGeneralWorkspace =
-      session.hosting === "local" && currentSessionGroup?.kind === "general";
     // Mark a cloud replacement as starting before any post-move events or
     // adapter work. `provisionRuntime` will reserve the concrete runtime id
     // shortly afterward, but idle cleanup can run in between; persisting the
@@ -10166,9 +10085,6 @@ export class SessionService {
                   prompt: bootstrapPrompt,
                   interactionMode: null,
                 } satisfies PendingSessionCommand,
-                pendingGeneralWorkspaceCleanupRuntimeId: shouldCleanupGeneralWorkspace
-                  ? sourceRuntimeId
-                  : null,
               }),
               toolSessionId: null,
               connection: connJson({
@@ -12120,8 +12036,8 @@ export class SessionService {
 
   /**
    * Sessions with managed workspace semantics may only dispatch an agent after
-   * workspace_ready. Local sessions without a repo retain their historical,
-   * explicit home-directory mode; everything else must have a prepared path.
+   * workspace_ready. Sessions without a repository use explicit home-directory
+   * mode; everything else must have a prepared path.
    */
   private requiresPreparedWorkspace(session: {
     hosting: string;
@@ -12129,10 +12045,7 @@ export class SessionService {
     sessionGroup?: { kind?: SessionGroupKind | null } | null;
   }): boolean {
     return (
-      Boolean(session.repoId) ||
-      session.hosting === "cloud" ||
-      session.sessionGroup?.kind === "general" ||
-      session.sessionGroup?.kind === "app"
+      Boolean(session.repoId) || session.sessionGroup?.kind === "app"
     );
   }
 

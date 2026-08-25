@@ -919,12 +919,12 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
   });
 
-  it("refuses to run a general session from home on an older local bridge", async () => {
+  it("starts an unlinked general session in the runtime home", async () => {
     const router = new SessionRouter();
     const ws = makeWs();
     router.registerRuntime({
       id: "runtime-1",
-      label: "Older laptop",
+      label: "Laptop",
       ws,
       hostingMode: "local",
       supportedTools: ["codex"],
@@ -948,12 +948,8 @@ describe("SessionRouter runtime adapter dispatch", () => {
       onFailed,
     });
 
-    await vi.waitFor(() =>
-      expect(onFailed).toHaveBeenCalledWith(
-        "This Trace runtime is too old to create an isolated workspace. Upgrade it before retrying this session.",
-      ),
-    );
-    expect(onWorkspaceReady).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(onWorkspaceReady).toHaveBeenCalledWith("/home/coder"));
+    expect(onFailed).not.toHaveBeenCalled();
     expect(ws.send).not.toHaveBeenCalled();
   });
 
