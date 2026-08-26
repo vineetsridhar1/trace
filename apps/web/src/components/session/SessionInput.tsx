@@ -49,6 +49,7 @@ export function SessionInput({
   onAccessRequested,
   condensed = false,
   centered = false,
+  captureTyping = false,
 }: {
   sessionId: string;
   onStop: () => void;
@@ -57,6 +58,7 @@ export function SessionInput({
   onAccessRequested?: () => void | Promise<void>;
   condensed?: boolean;
   centered?: boolean;
+  captureTyping?: boolean;
 }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
@@ -144,6 +146,51 @@ export function SessionInput({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [canSend, isSending]);
+
+  // Let the selected agent tab behave like a chat surface without forcing focus
+  // when the tab opens. Other workspace surfaces can stay active in split panes.
+  useEffect(() => {
+    if (!captureTyping || !canSend || isSending) return;
+
+    const focusAndInsert = (text: string): boolean => {
+      const editor = editorRef.current;
+      if (!editor || !text) return false;
+      editor.focus();
+      editor.insertText(text);
+      return true;
+    };
+    const isEditableTarget = (target: EventTarget | null): boolean =>
+      target instanceof HTMLElement &&
+      (target.isContentEditable ||
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT");
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.key.length !== 1 ||
+        isEditableTarget(event.target)
+      ) {
+        return;
+      }
+      if (focusAndInsert(event.key)) event.preventDefault();
+    };
+    const onPaste = (event: ClipboardEvent) => {
+      if (event.defaultPrevented || isEditableTarget(event.target)) return;
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (focusAndInsert(text)) event.preventDefault();
+    };
+
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    window.addEventListener("paste", onPaste, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, { capture: true });
+      window.removeEventListener("paste", onPaste, { capture: true });
+    };
+  }, [canSend, captureTyping, isSending]);
 
   // Apply a starter prompt requested from elsewhere (e.g. the empty-state chips).
   // Do the work synchronously, then consume: `submit()` reads the text we just set

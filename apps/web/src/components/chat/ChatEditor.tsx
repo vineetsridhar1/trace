@@ -49,6 +49,7 @@ export interface SlashCommandItem {
 
 export interface ChatEditorHandle {
   focus: () => void;
+  insertText: (text: string) => void;
   submit: (options?: ChatEditorSubmitOptions) => Promise<boolean>;
   getText: () => string;
   setText: (text: string) => void;
@@ -186,6 +187,14 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     const nextHtml = editor.root.innerHTML;
     setValue(nextHtml);
     onChangeRef.current?.(editor.getText().replace(/\n$/, ""), nextHtml);
+  }, []);
+
+  const insertText = useCallback((text: string) => {
+    const editor = quillRef.current?.getEditor();
+    if (!editor || !text) return;
+    const selection = editor.getSelection(true) ?? { index: editor.getLength() - 1, length: 0 };
+    editor.insertText(selection.index, text, "user");
+    editor.setSelection(selection.index + text.length, 0, "silent");
   }, []);
 
   const isMentionMenuOpen = useCallback(() => {
@@ -354,11 +363,12 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
         return editor?.getText().trim() ?? "";
       },
       setText: replaceEditorText,
+      insertText,
       clear: () => {
         clearEditor();
       },
     }),
-    [clearEditor, replaceEditorText, submit],
+    [clearEditor, insertText, replaceEditorText, submit],
   );
 
   const handleKeyDown = useCallback(

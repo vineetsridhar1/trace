@@ -17,6 +17,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 export function useGlobalShortcuts() {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented) return;
       const key = event.key.toLowerCase();
       if ((event.metaKey || event.ctrlKey) && key === "k") {
         event.preventDefault();
