@@ -38,6 +38,7 @@ import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useB
 import { getSessionEmptyStateContent, kindSupportsDesignImplementation } from "./sessionEmptyState";
 import { DesignPickerDialog } from "./DesignPickerDialog";
 import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
+import { pastedComposerText, shouldCaptureComposerKey } from "./session-composer-capture";
 
 const EMPTY_ATTACHMENTS: FileAttachment[] = [];
 
@@ -159,29 +160,17 @@ export function SessionInput({
       editor.insertText(text);
       return true;
     };
-    const isEditableTarget = (target: EventTarget | null): boolean =>
-      target instanceof HTMLElement &&
-      (target.isContentEditable ||
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.tagName === "SELECT");
     const onKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        event.key.length !== 1 ||
-        isEditableTarget(event.target)
-      ) {
-        return;
-      }
+      if (!shouldCaptureComposerKey(event)) return;
       if (focusAndInsert(event.key)) event.preventDefault();
     };
     const onPaste = (event: ClipboardEvent) => {
-      if (event.defaultPrevented || isEditableTarget(event.target)) return;
-      const text = event.clipboardData?.getData("text/plain") ?? "";
-      if (focusAndInsert(text)) event.preventDefault();
+      const text = pastedComposerText(event);
+      if (!text) return;
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.focus();
+      if (editor.pasteText(text)) event.preventDefault();
     };
 
     window.addEventListener("keydown", onKeyDown, { capture: true });
