@@ -102,7 +102,6 @@ export function SessionInput({
   const [isSending, setIsSending] = useState(false);
   const [showDesignPicker, setShowDesignPicker] = useState(false);
   const isSendingRef = useRef(false);
-  const hasAutoFocusedRef = useRef(false);
   const editorRef = useRef<ChatEditorHandle>(null);
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
@@ -132,17 +131,6 @@ export function SessionInput({
   const lastUserMessageAt = isActive ? (rawLastUserMessageAt ?? undefined) : undefined;
 
   const slashCommands = useSlashCommands(sessionId);
-
-  useEffect(() => {
-    hasAutoFocusedRef.current = false;
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (hasAutoFocusedRef.current || !canSend || isSending) return;
-    hasAutoFocusedRef.current = true;
-    const frame = requestAnimationFrame(() => editorRef.current?.focus());
-    return () => cancelAnimationFrame(frame);
-  }, [canSend, isSending, sessionId]);
 
   // Cmd/Ctrl+L focuses the composer from anywhere in the session view.
   useEffect(() => {

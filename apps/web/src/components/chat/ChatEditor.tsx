@@ -363,10 +363,6 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey) {
-        e.stopPropagation();
-      }
-
       if (e.key === "Enter" && !e.shiftKey) {
         if (isMentionMenuOpen()) {
           return;
