@@ -22,11 +22,11 @@ export const artifactCommand = defineCommand({
   ],
   output: "The artifact ID, type, key, and idempotency key for a safe retry.",
   nextSteps: [
-    "Use the artifact type's required skill before preparing or revising its source files.",
+    "Use a stable type name for artifacts that should be grouped together.",
     "Keep the returned idempotency key when retrying a failed upload.",
   ],
   notes: [
-    "Video artifacts must be one validated video file; other artifact types may use a file or directory.",
+    "Any non-empty artifact type is accepted; video artifacts must be one validated video file.",
     "The compressed upload must not exceed 64 MiB.",
   ],
   positionals: [

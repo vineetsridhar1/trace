@@ -3906,21 +3906,6 @@ export type HiddenSessionTabsQuery = {
   }>;
 };
 
-export type HideSessionTabMutationVariables = Exact<{
-  sessionId: Scalars["ID"]["input"];
-}>;
-
-export type HideSessionTabMutation = {
-  __typename?: "Mutation";
-  hideSessionTab: { __typename?: "HiddenSessionTab"; sessionId: string; hiddenAt: string };
-};
-
-export type RestoreSessionTabMutationVariables = Exact<{
-  sessionId: Scalars["ID"]["input"];
-}>;
-
-export type RestoreSessionTabMutation = { __typename?: "Mutation"; restoreSessionTab: boolean };
-
 export type SessionGroupDetailQueryVariables = Exact<{
   id: Scalars["ID"]["input"];
 }>;
@@ -4532,6 +4517,21 @@ export type SessionGroupFilesQueryVariables = Exact<{
 }>;
 
 export type SessionGroupFilesQuery = { __typename?: "Query"; sessionGroupFiles: Array<string> };
+
+export type HideSessionTabMutationVariables = Exact<{
+  sessionId: Scalars["ID"]["input"];
+}>;
+
+export type HideSessionTabMutation = {
+  __typename?: "Mutation";
+  hideSessionTab: { __typename?: "HiddenSessionTab"; sessionId: string; hiddenAt: string };
+};
+
+export type RestoreSessionTabMutationVariables = Exact<{
+  sessionId: Scalars["ID"]["input"];
+}>;
+
+export type RestoreSessionTabMutation = { __typename?: "Mutation"; restoreSessionTab: boolean };
 
 export type MyApiTokensQueryVariables = Exact<{ [key: string]: never }>;
 
@@ -8277,85 +8277,6 @@ export const HiddenSessionTabsDocument = {
     },
   ],
 } as unknown as DocumentNode<HiddenSessionTabsQuery, HiddenSessionTabsQueryVariables>;
-export const HideSessionTabDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "HideSessionTab" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "hideSessionTab" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sessionId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "sessionId" } },
-                { kind: "Field", name: { kind: "Name", value: "hiddenAt" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<HideSessionTabMutation, HideSessionTabMutationVariables>;
-export const RestoreSessionTabDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "RestoreSessionTab" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "restoreSessionTab" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sessionId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
-              },
-            ],
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<RestoreSessionTabMutation, RestoreSessionTabMutationVariables>;
 export const SessionGroupDetailDocument = {
   kind: "Document",
   definitions: [
@@ -10257,6 +10178,85 @@ export const SessionGroupFilesDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupFilesQuery, SessionGroupFilesQueryVariables>;
+export const HideSessionTabDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "HideSessionTab" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "hideSessionTab" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                { kind: "Field", name: { kind: "Name", value: "hiddenAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<HideSessionTabMutation, HideSessionTabMutationVariables>;
+export const RestoreSessionTabDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "RestoreSessionTab" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "restoreSessionTab" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<RestoreSessionTabMutation, RestoreSessionTabMutationVariables>;
 export const MyApiTokensDocument = {
   kind: "Document",
   definitions: [
