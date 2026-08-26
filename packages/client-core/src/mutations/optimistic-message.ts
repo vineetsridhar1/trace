@@ -1,4 +1,4 @@
-import type { Event, Message } from "@trace/gql";
+import type { Artifact, Event, Message } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
 import type { JsonObject } from "@trace/shared";
 import {
@@ -11,6 +11,7 @@ import { useAuthStore } from "../stores/auth.js";
 import { generateUUID } from "../utils/uuid.js";
 
 type EntityStoreState = {
+  artifacts: Record<string, Artifact>;
   messages: Record<string, Message>;
   eventsByScope: Record<string, Record<string, Event>>;
   _eventIdsByScope: Record<string, string[]>;
@@ -178,12 +179,6 @@ export function takePendingOptimisticChat(
   );
 }
 
-function upsertSessionEvents(scopeKey: string, events: Array<Event & { id: string }>): void {
-  useEntityStore.setState((state: EntityStoreState) => {
-    return updateScopedEventCache(state, scopeKey, events);
-  });
-}
-
 export interface OptimisticSessionIds {
   eventId: string;
   clientMutationId: string;
@@ -292,18 +287,27 @@ export function upsertFetchedSessionEventsWithOptimisticResolution(
     (entry) => !!entry.expectedRealEventId && eventIds.has(entry.expectedRealEventId),
   );
 
-  if (matched.length === 0) {
-    upsertSessionEvents(scopeKey, events);
-    return;
-  }
-
   useEntityStore.setState((state: EntityStoreState) => {
-    return updateScopedEventCache(
+    const eventCache = updateScopedEventCache(
       state,
       scopeKey,
       events,
       matched.map((entry) => entry.tempEventId),
     );
+    let artifacts = state.artifacts;
+
+    for (const event of events) {
+      if (event.eventType !== "artifact_created" && event.eventType !== "artifact_approved") {
+        continue;
+      }
+      const payload = asJsonObject(event.payload);
+      const artifact = asJsonObject(payload?.artifact);
+      if (!artifact || typeof artifact.id !== "string") continue;
+      if (artifacts === state.artifacts) artifacts = { ...artifacts };
+      artifacts[artifact.id] = artifact as unknown as Artifact;
+    }
+
+    return artifacts === state.artifacts ? eventCache : { ...eventCache, artifacts };
   });
 }
 
