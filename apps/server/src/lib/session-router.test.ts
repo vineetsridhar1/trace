@@ -687,6 +687,10 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
   });
 });
 
+function stubReserveRuntime(runtimeInstanceId = "runtime_test-1") {
+  return async () => runtimeInstanceId;
+}
+
 describe("SessionRouter runtime adapter dispatch", () => {
   it("routes lifecycle commands to the persisted runtime across replicas", async () => {
     const router = new SessionRouter();
@@ -888,6 +892,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       sessionGroupKind: "general",
       hosting: "cloud",
       adapterType: "provisioned",
+      reserveRuntime: stubReserveRuntime("runtime-cloud"),
       tool: "codex",
       repo: {
         id: "repo-1",
@@ -1101,6 +1106,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       sessionId: "session-1",
       hosting: "cloud",
       adapterType: "provisioned",
+      reserveRuntime: stubReserveRuntime(),
       tool: "codex",
       model: "gpt-test",
       repo: null,
@@ -1178,6 +1184,10 @@ describe("SessionRouter runtime adapter dispatch", () => {
       sessionId: "session-1",
       hosting: "cloud",
       adapterType: "provisioned",
+      reserveRuntime: async () => {
+        callOrder.push("reserve");
+        return "runtime_test-1";
+      },
       environment: {
         id: "env-1",
         name: "Provisioned",
@@ -1197,15 +1207,13 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
     await vi.waitFor(() => {
       expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
-        "session_runtime_start_requested",
         "session_runtime_provisioning",
       ]);
     });
-    expect(callOrder.slice(0, 2)).toEqual(["session_runtime_start_requested", "adapter_start"]);
+    expect(callOrder.slice(0, 2)).toEqual(["reserve", "adapter_start"]);
     const runtimeInstanceId = lifecycleEvents[0]?.runtimeInstanceId;
     if (!runtimeInstanceId) throw new Error("Expected runtime instance ID");
-    expect(runtimeInstanceId).toMatch(/^runtime_/);
-    expect(lifecycleEvents[1]?.runtimeInstanceId).toBe(runtimeInstanceId);
+    expect(runtimeInstanceId).toBe("runtime_test-1");
     expect(router.getRuntimeForSession("session-1")).toBeUndefined();
 
     router.registerRuntime({
@@ -1219,7 +1227,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
     await vi.waitFor(() => {
       expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
-        "session_runtime_start_requested",
         "session_runtime_provisioning",
         "session_runtime_connected",
       ]);
@@ -1282,6 +1289,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       sessionGroupId: "group-1",
       hosting: "cloud",
       adapterType: "provisioned",
+      reserveRuntime: stubReserveRuntime(),
       environment,
       tool: "codex",
       model: "gpt-test",
@@ -1330,7 +1338,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
     expect(onFailed).not.toHaveBeenCalled();
     expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
-      "session_runtime_start_requested",
       "session_runtime_provisioning",
       "session_runtime_connected",
     ]);
@@ -1424,6 +1431,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       sessionId: "session-1",
       hosting: "cloud",
       adapterType: "provisioned",
+      reserveRuntime: stubReserveRuntime(),
       environment: {
         id: "env-1",
         name: "Provisioned",
@@ -1446,7 +1454,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
     await flushPromises();
     expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
-      "session_runtime_start_requested",
       "session_runtime_provisioning",
     ]);
 
@@ -1457,13 +1464,12 @@ describe("SessionRouter runtime adapter dispatch", () => {
     await flushPromises();
 
     expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
-      "session_runtime_start_requested",
       "session_runtime_provisioning",
       "session_runtime_start_timed_out",
       "session_runtime_stopping",
     ]);
-    expect(lifecycleEvents[2]?.runtimeInstanceId).toBe(lifecycleEvents[0]?.runtimeInstanceId);
-    expect(lifecycleEvents[2]?.error).toContain("1000ms");
+    expect(lifecycleEvents[1]?.runtimeInstanceId).toBe(lifecycleEvents[0]?.runtimeInstanceId);
+    expect(lifecycleEvents[1]?.error).toContain("1000ms");
     expect(provisionedStop).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: "session-1",

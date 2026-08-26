@@ -9246,6 +9246,30 @@ describe("SessionService", () => {
       prismaMock.session.findUnique.mockReset();
     });
 
+    it("stamps the live connection generation before restoring sessions", async () => {
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        key: "runtime-cloud",
+        id: "runtime-cloud",
+        label: "Cloud runtime",
+        hostingMode: "cloud",
+        organizationId: "org-1",
+        connectionGeneration: "generation-2",
+        supportedTools: ["codex"],
+        registeredRepoIds: [],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      prismaMock.session.findMany.mockResolvedValue([]);
+
+      await service.restoreSessionsForRuntime("runtime-cloud", "org-1");
+
+      const call = prismaMock.$executeRaw.mock.calls.at(-1);
+      expect(call).toEqual(expect.arrayContaining(["runtime-cloud", "generation-2"]));
+      const sql = (call?.[0] as unknown as string[]).join("?");
+      expect(sql).toContain("{connectionGeneration}");
+      expect(sql).toContain("{version}");
+    });
+
     it("rehydrates tracked workdirs back into a reconnected local bridge", async () => {
       sessionRouterMock.getRuntime.mockReturnValueOnce({
         key: "org-1:runtime-a",
@@ -10717,6 +10741,36 @@ describe("SessionService", () => {
   describe("markConnectionLost", () => {
     afterEach(() => {
       prismaMock.session.findUnique.mockReset();
+    });
+
+    it("declines a close callback from a superseded connection generation", async () => {
+      prismaMock.session.findUnique.mockResolvedValue(
+        makeSession({
+          id: "session-1",
+          hosting: "cloud",
+          agentStatus: "done",
+          sessionStatus: "in_review",
+          worktreeDeleted: false,
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            connectionGeneration: "generation-2",
+          },
+        }),
+      );
+
+      await service.markConnectionLost(
+        "session-1",
+        "runtime_disconnected",
+        "runtime-1",
+        new Date().toISOString(),
+        "generation-1",
+      );
+
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({ payload: expect.objectContaining({ type: "connection_lost" }) }),
+      );
     });
 
     it("fails an active agent and publishes the terminal status", async () => {
