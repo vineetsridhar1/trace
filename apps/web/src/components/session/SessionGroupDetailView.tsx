@@ -410,7 +410,7 @@ export function SessionGroupDetailView({
     handleDiffFileClick,
     handleSelectFile,
     handleCloseFile,
-  } = useFileActions();
+  } = useFileActions(sessionGroupId);
 
   useEffect(() => {
     if (!sidebarFileOpenRequest || sidebarFileOpenRequest.sessionGroupId !== sessionGroupId) return;

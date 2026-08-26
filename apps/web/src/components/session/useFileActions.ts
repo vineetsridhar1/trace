@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
 import { useUIStore } from "../../stores/ui";
 import type { OpenFileTab } from "./openFileTab";
 import type { FileOpenRequest } from "./FileOpenContext";
@@ -8,12 +8,23 @@ import type {
   UploadedAttachmentOpenRequest,
 } from "./AttachmentOpenContext";
 
-export function useFileActions() {
+const EMPTY_OPEN_FILES: OpenFileTab[] = [];
+
+export function useFileActions(sessionGroupId: string) {
   const setActiveTerminalId = useUIStore(
     (s: { setActiveTerminalId: (id: string | null) => void }) => s.setActiveTerminalId,
   );
-  const [openFiles, setOpenFiles] = useState<OpenFileTab[]>([]);
-  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const openFiles = useUIStore(
+    (s) => s.openFileTabsByGroup[sessionGroupId] ?? EMPTY_OPEN_FILES,
+  );
+  const activeFilePath = useUIStore((s) => s.activeFilePathsByGroup[sessionGroupId] ?? null);
+  const openFileTab = useUIStore((s) => s.openFileTab);
+  const closeFileTab = useUIStore((s) => s.closeFileTab);
+  const setGroupActiveFilePath = useUIStore((s) => s.setActiveFilePath);
+  const setActiveFilePath = useCallback(
+    (filePath: string | null) => setGroupActiveFilePath(sessionGroupId, filePath),
+    [sessionGroupId, setGroupActiveFilePath],
+  );
   const fileBuffersRef = useRef(new Map<string, FileEditorBuffer>());
 
   const getFileBuffer = useCallback((filePath: string) => {
@@ -28,78 +39,52 @@ export function useFileActions() {
     (request: string | FileOpenRequest) => {
       const filePath = typeof request === "string" ? request : request.filePath;
       const lineNumber = typeof request === "string" ? undefined : request.lineNumber;
-      setOpenFiles((prev: OpenFileTab[]) => {
-        if (prev.some((f: OpenFileTab) => f.filePath === filePath)) {
-          return prev.map((file) =>
-            file.filePath === filePath && lineNumber ? { ...file, lineNumber } : file,
-          );
-        }
-        const fileName = filePath.split("/").pop() ?? filePath;
-        const nextFile: OpenFileTab = { filePath, fileName };
-        if (lineNumber) nextFile.lineNumber = lineNumber;
-        return [...prev, nextFile];
-      });
-      setActiveFilePath(filePath);
+      const fileName = filePath.split("/").pop() ?? filePath;
+      const file: OpenFileTab = { filePath, fileName };
+      if (lineNumber) file.lineNumber = lineNumber;
+      openFileTab(sessionGroupId, file);
       setActiveTerminalId(null);
     },
-    [setActiveTerminalId],
+    [openFileTab, sessionGroupId, setActiveTerminalId],
   );
 
   const handleDraftAttachmentClick = useCallback(
     ({ sessionId, attachmentId, fileName }: DraftAttachmentOpenRequest) => {
       const filePath = `attachment:${sessionId}:${attachmentId}`;
-      setOpenFiles((prev: OpenFileTab[]) => {
-        if (prev.some((f: OpenFileTab) => f.filePath === filePath)) return prev;
-        return [
-          ...prev,
-          {
-            filePath,
-            fileName: fileName || "Attachment",
-            isDraftAttachment: true,
-            attachmentSessionId: sessionId,
-            attachmentId,
-          },
-        ];
+      openFileTab(sessionGroupId, {
+        filePath,
+        fileName: fileName || "Attachment",
+        isDraftAttachment: true,
+        attachmentSessionId: sessionId,
+        attachmentId,
       });
-      setActiveFilePath(filePath);
       setActiveTerminalId(null);
     },
-    [setActiveTerminalId],
+    [openFileTab, sessionGroupId, setActiveTerminalId],
   );
 
   const handleUploadedAttachmentClick = useCallback(
     ({ attachmentKey, label }: UploadedAttachmentOpenRequest) => {
       const filePath = `uploaded-attachment:${attachmentKey}`;
-      setOpenFiles((prev: OpenFileTab[]) => {
-        if (prev.some((f: OpenFileTab) => f.filePath === filePath)) return prev;
-        return [
-          ...prev,
-          {
-            filePath,
-            fileName: label || "Attachment",
-            isUploadedAttachment: true,
-            attachmentKey,
-          },
-        ];
+      openFileTab(sessionGroupId, {
+        filePath,
+        fileName: label || "Attachment",
+        isUploadedAttachment: true,
+        attachmentKey,
       });
-      setActiveFilePath(filePath);
       setActiveTerminalId(null);
     },
-    [setActiveTerminalId],
+    [openFileTab, sessionGroupId, setActiveTerminalId],
   );
 
   const handleDiffFileClick = useCallback(
     (filePath: string, status: string) => {
       const diffKey = `diff:${filePath}`;
-      setOpenFiles((prev: OpenFileTab[]) => {
-        if (prev.some((f: OpenFileTab) => f.filePath === diffKey)) return prev;
-        const fileName = filePath.split("/").pop() ?? filePath;
-        return [...prev, { filePath: diffKey, fileName, isDiff: true, diffStatus: status }];
-      });
-      setActiveFilePath(diffKey);
+      const fileName = filePath.split("/").pop() ?? filePath;
+      openFileTab(sessionGroupId, { filePath: diffKey, fileName, isDiff: true, diffStatus: status });
       setActiveTerminalId(null);
     },
-    [setActiveTerminalId],
+    [openFileTab, sessionGroupId, setActiveTerminalId],
   );
 
   const handleSelectFile = useCallback(
@@ -112,9 +97,8 @@ export function useFileActions() {
 
   const handleCloseFile = useCallback((filePath: string) => {
     fileBuffersRef.current.delete(filePath);
-    setOpenFiles((prev: OpenFileTab[]) => prev.filter((f: OpenFileTab) => f.filePath !== filePath));
-    setActiveFilePath((prev: string | null) => (prev === filePath ? null : prev));
-  }, []);
+    closeFileTab(sessionGroupId, filePath);
+  }, [closeFileTab, sessionGroupId]);
 
   return {
     openFiles,
