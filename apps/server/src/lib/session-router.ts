@@ -153,6 +153,8 @@ export interface StaleRuntimeSnapshot {
   sessionIds: string[];
   lastHeartbeat: number;
   connectedAt?: Date | null;
+  /** Fences the eviction against a reconnect that reused this runtime id. */
+  connectionGeneration: string;
 }
 
 export interface StaleRuntimeEvictionResult {
@@ -1258,6 +1260,7 @@ export class SessionRouter {
           sessionIds: [...runtime.boundSessions],
           lastHeartbeat: runtime.lastHeartbeat,
           connectedAt: runtime.connectedAt,
+          connectionGeneration: runtime.connectionGeneration,
         });
       }
     }
@@ -2337,6 +2340,14 @@ export class SessionRouter {
       hosting: string;
       onFailed: (error: string) => void;
       onWorkspaceReady?: (workdir: string) => void;
+      /**
+       * Claim this session's next runtime generation and return the runtime
+       * instance id the claim created. `null` means a live runtime already owns
+       * the session — a concurrent provision won the race, so this one must
+       * stop rather than start competing compute. Required for provisioned
+       * adapters; local adapters select an already-registered bridge instead.
+       */
+      reserveRuntime?: () => Promise<string | null>;
       onLifecycle?: (
         eventType: RuntimeLifecycleEventType,
         update?: RuntimeLifecycleUpdate,
@@ -2349,13 +2360,22 @@ export class SessionRouter {
 
     void (async () => {
       try {
-        const provisionedRuntimeInstanceId =
-          adapterType === "provisioned" ? `runtime_${randomUUID()}` : undefined;
-
+        // Reserving is what mints the identity, so a second provision for this
+        // session cannot invent a competing runtime id and then fail a session
+        // the winner is already serving. Losing the claim means the session
+        // already has a live runtime: converge on it and start nothing.
+        let provisionedRuntimeInstanceId: string | undefined;
         if (adapterType === "provisioned") {
-          await options.onLifecycle?.("session_runtime_start_requested", {
-            runtimeInstanceId: provisionedRuntimeInstanceId,
-          });
+          if (!options.reserveRuntime) {
+            throw new Error("Provisioned runtime creation requires a reservation callback");
+          }
+          provisionedRuntimeInstanceId = (await options.reserveRuntime()) ?? undefined;
+          if (!provisionedRuntimeInstanceId) {
+            console.warn(
+              `[runtime-adapter] skipping provisioned start for ${options.sessionId}: another runtime already owns this session`,
+            );
+            return;
+          }
         }
 
         const startResult = await adapter.startSession({

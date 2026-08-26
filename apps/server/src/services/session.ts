@@ -331,6 +331,18 @@ export type SessionConnectionData = {
   adapterType?: "local" | "provisioned";
   toolSource?: "default" | "explicit";
   runtimeInstanceId?: string;
+  /**
+   * Which *connection* of `runtimeInstanceId` this session is bound to.
+   *
+   * A runtime instance id is stable across reconnects, so on its own it cannot
+   * tell a dead socket's close callback apart from the live one that replaced
+   * it. The bridge already mints a fresh `connectionGeneration` per socket and
+   * fences every directory write with it; persisting it here extends that fence
+   * to the database, which is the only state both replicas share. A close
+   * callback carrying a superseded generation can then be declined outright
+   * rather than relying on a grace timer to out-race the reconnect.
+   */
+  connectionGeneration?: string;
   runtimeLabel?: string;
   providerRuntimeId?: string;
   providerRuntimeUrl?: string;
@@ -1964,8 +1976,11 @@ export class SessionService {
         readOnly: params.readOnly,
         adoptWorktreePath,
         expectedHomeRuntimeId: params.expectedHomeRuntimeId ?? undefined,
-        onLifecycle: (eventType, update) =>
-          this.recordRuntimeLifecycle(params.sessionId, eventType, update),
+        reserveRuntime: () =>
+          this.reserveRuntimeForSessionGroup(params.sessionId, params.sessionGroupId ?? null),
+        onLifecycle: async (eventType, update) => {
+          await this.recordSessionGroupRuntimeLifecycle(params.sessionId, eventType, update);
+        },
         onFailed: (error) => this.workspaceFailed(params.sessionId, error),
         onWorkspaceReady: (workdir) => this.workspaceReady(params.sessionId, workdir),
       });
@@ -1973,6 +1988,95 @@ export class SessionService {
       const message = error instanceof Error ? error.message : String(error);
       void this.workspaceFailed(params.sessionId, message);
     });
+  }
+
+  private async reserveRuntimeForSessionGroup(
+    sessionId: string,
+    sessionGroupId: string | null,
+  ): Promise<string | null> {
+    const runtimeInstanceId = await this.recordRuntimeLifecycle(
+      sessionId,
+      "session_runtime_start_requested",
+    );
+    if (!runtimeInstanceId || !sessionGroupId) return runtimeInstanceId;
+
+    await this.adoptPendingGroupRuntime(sessionId, sessionGroupId, runtimeInstanceId);
+    return runtimeInstanceId;
+  }
+
+  private async adoptPendingGroupRuntime(
+    sessionId: string,
+    sessionGroupId: string,
+    runtimeInstanceId: string,
+  ): Promise<void> {
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      select: { connection: true },
+    });
+    const groupConnection = this.parseConnection(group?.connection);
+    if (
+      groupConnection.state !== "requested" ||
+      groupConnection.runtimeInstanceId ||
+      !groupConnection.requestedAt
+    ) {
+      return;
+    }
+    const requestedAt = groupConnection.requestedAt;
+
+    const siblings = await prisma.session.findMany({
+      where: { sessionGroupId, id: { not: sessionId } },
+      select: { id: true },
+    });
+    await Promise.all(
+      siblings.map((sibling) =>
+        this.recordRuntimeLifecycle(
+          sibling.id,
+          "session_runtime_start_requested",
+          { runtimeInstanceId },
+          {
+            expectedGroupRequest: {
+              sessionGroupId,
+              requestedAt,
+            },
+          },
+        ),
+      ),
+    );
+  }
+
+  private async recordSessionGroupRuntimeLifecycle(
+    sessionId: string,
+    eventType: RuntimeLifecycleEventType,
+    update: RuntimeLifecycleUpdate = {},
+  ): Promise<void> {
+    const runtimeInstanceId = await this.recordRuntimeLifecycle(sessionId, eventType, update);
+    if (!runtimeInstanceId) return;
+
+    const primary = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { sessionGroupId: true },
+    });
+    if (!primary?.sessionGroupId) return;
+
+    await this.adoptPendingGroupRuntime(sessionId, primary.sessionGroupId, runtimeInstanceId);
+
+    const siblings = await prisma.session.findMany({
+      where: { sessionGroupId: primary.sessionGroupId, id: { not: sessionId } },
+      select: { id: true, connection: true },
+    });
+    await Promise.all(
+      siblings
+        .filter(
+          (sibling) =>
+            this.getConnectionRuntimeInstanceId(sibling.connection) === runtimeInstanceId,
+        )
+        .map((sibling) =>
+          this.recordRuntimeLifecycle(sibling.id, eventType, {
+            ...update,
+            runtimeInstanceId,
+          }),
+        ),
+    );
   }
 
   private async loadRuntimeWorkspaceSlugs(params: {
@@ -2109,11 +2213,23 @@ export class SessionService {
     };
   }
 
+  /**
+   * Apply a runtime lifecycle transition and emit its event.
+   *
+   * Returns the runtime instance id the connection is bound to afterwards, or
+   * `null` when the transition was declined because a different runtime
+   * generation owns the connection. For `session_runtime_start_requested` the
+   * returned id IS the reservation: identity is minted by the write that claims
+   * it, so a caller that gets `null` never held a runtime to begin with.
+   */
   private async recordRuntimeLifecycle(
     sessionId: string,
     eventType: RuntimeLifecycleEventType,
     update: RuntimeLifecycleUpdate = {},
-  ): Promise<void> {
+    options?: {
+      expectedGroupRequest?: { sessionGroupId: string; requestedAt: string };
+    },
+  ): Promise<string | null> {
     // Pull the immutable session metadata once for the event payload. The
     // connection itself is read inside `updateConnectionConditional` so we
     // re-read on retry and the write sees a consistent baseline.
@@ -2130,14 +2246,37 @@ export class SessionService {
       if (eventType === "session_runtime_start_requested") {
         throw new Error(`Cannot reserve runtime ownership for missing session ${sessionId}`);
       }
-      return;
+      return null;
+    }
+    if (
+      options?.expectedGroupRequest &&
+      session.sessionGroupId !== options.expectedGroupRequest.sessionGroupId
+    ) {
+      return null;
     }
 
     const isNewRuntimeRequest = eventType === "session_runtime_start_requested";
     const result = await this.updateConnectionConditional(
       sessionId,
       (conn) => {
-        if (update.runtimeInstanceId) {
+        if (
+          options?.expectedGroupRequest &&
+          (conn.state !== "requested" ||
+            conn.runtimeInstanceId ||
+            conn.requestedAt !== options.expectedGroupRequest.requestedAt)
+        ) {
+          return null;
+        }
+        // Reserve, then mint. A start request that arrives without an id gets
+        // one from inside the claim, so two concurrent provisions can never
+        // hold competing identities: the loser's mint never happens and it
+        // simply declines instead of failing a session the winner is serving.
+        const requestedRuntimeInstanceId =
+          isNewRuntimeRequest && !update.runtimeInstanceId
+            ? `runtime_${randomUUID()}`
+            : update.runtimeInstanceId;
+
+        if (requestedRuntimeInstanceId) {
           // A new launch may claim an unbound session, but every subsequent
           // lifecycle event must belong to the runtime generation that is
           // currently persisted. In particular, an old stop event must not
@@ -2156,7 +2295,7 @@ export class SessionService {
             (!conn.runtimeInstanceId ||
               isRuntimeTerminalState(conn.state) ||
               isRuntimeComputeGone(conn));
-          if (conn.runtimeInstanceId !== update.runtimeInstanceId && !canClaimStaleConnection) {
+          if (conn.runtimeInstanceId !== requestedRuntimeInstanceId && !canClaimStaleConnection) {
             return null;
           }
         }
@@ -2183,7 +2322,15 @@ export class SessionService {
           return null;
         }
 
-        return { ...conn, ...this.lifecycleConnectionPatch(eventType, conn, update, adapterType) };
+        return {
+          ...conn,
+          ...this.lifecycleConnectionPatch(
+            eventType,
+            conn,
+            { ...update, runtimeInstanceId: requestedRuntimeInstanceId },
+            adapterType,
+          ),
+        };
       },
       // A restart can intentionally create a fresh runtime without a new user
       // message. Refresh activity in the same optimistic write that claims the
@@ -2192,15 +2339,15 @@ export class SessionService {
       isNewRuntimeRequest ? { sessionData: { lastMessageAt: new Date() } } : undefined,
     );
 
-    if (!result) {
-      if (eventType === "session_runtime_start_requested") {
-        throw new Error(
-          `Cannot reserve runtime ${update.runtimeInstanceId ?? "unknown"} for session ${sessionId}`,
-        );
-      }
-      return;
-    }
+    // A declined start request means another provision already owns this
+    // session's live runtime. That is a normal outcome of two provisions
+    // racing, not a failure of the session, so report it and let the caller
+    // converge on the winner.
+    if (!result) return null;
 
+    const recordedRuntimeInstanceId = isNewRuntimeRequest
+      ? result.updated.runtimeInstanceId
+      : update.runtimeInstanceId;
     const adapterType = this.lifecycleAdapterType(result.updated, update);
     const lifecycleState = this.lifecycleConnectionState(eventType, adapterType);
     const sessionGroup = await this.loadSessionGroupSnapshot(result.sessionGroupId);
@@ -2217,7 +2364,7 @@ export class SessionService {
         connection: connJson(result.updated),
         agentStatus: result.session.agentStatus,
         sessionStatus: result.session.sessionStatus,
-        ...(update.runtimeInstanceId && { runtimeInstanceId: update.runtimeInstanceId }),
+        ...(recordedRuntimeInstanceId && { runtimeInstanceId: recordedRuntimeInstanceId }),
         ...(update.runtimeLabel && { runtimeLabel: update.runtimeLabel }),
         ...(update.providerRuntimeId && { providerRuntimeId: update.providerRuntimeId }),
         ...(update.providerRuntimeUrl && { providerRuntimeUrl: update.providerRuntimeUrl }),
@@ -2276,6 +2423,8 @@ export class SessionService {
         });
       }
     }
+
+    return result.updated.runtimeInstanceId ?? null;
   }
 
   /**
@@ -2491,8 +2640,12 @@ export class SessionService {
   private destroyRuntimeOptions(sessionId: string, reason: string) {
     return {
       reason,
-      onLifecycle: (eventType: RuntimeLifecycleEventType, update?: RuntimeLifecycleUpdate) =>
-        this.recordRuntimeLifecycle(sessionId, eventType, update),
+      onLifecycle: async (
+        eventType: RuntimeLifecycleEventType,
+        update?: RuntimeLifecycleUpdate,
+      ) => {
+        await this.recordRuntimeLifecycle(sessionId, eventType, update);
+      },
     };
   }
 
@@ -8357,6 +8510,42 @@ export class SessionService {
         );
       }
     }
+    if (session.sessionGroupId && workdirRuntimeInstanceId) {
+      await this.replayGroupPendingCommands(
+        session.id,
+        session.sessionGroupId,
+        workdirRuntimeInstanceId,
+      );
+    }
+  }
+
+  private async replayGroupPendingCommands(
+    readySessionId: string,
+    sessionGroupId: string,
+    runtimeInstanceId: string,
+  ): Promise<void> {
+    const siblings = await prisma.session.findMany({
+      where: { sessionGroupId, id: { not: readySessionId } },
+      select: { id: true, organizationId: true, connection: true, pendingRun: true },
+    });
+
+    for (const sibling of siblings) {
+      if (
+        this.getConnectionRuntimeInstanceId(sibling.connection) !== runtimeInstanceId ||
+        this.parsePendingCommands(sibling.pendingRun).length === 0
+      ) {
+        continue;
+      }
+      const replayResult = await this.deliverPendingCommand(sibling.id, sibling.pendingRun);
+      if (replayResult && replayResult !== "delivered") {
+        await this.persistConnectionFailure(
+          sibling.id,
+          sibling.organizationId,
+          replayResult,
+          "group_workspace_replay",
+        );
+      }
+    }
   }
 
   async workspaceFailed(sessionId: string, error: string) {
@@ -8509,6 +8698,13 @@ export class SessionService {
     reason: string,
     runtimeInstanceId?: string,
     observedAt = new Date().toISOString(),
+    /**
+     * The bridge connection whose death is being reported. Supplying it lets
+     * the write decline outright when that connection has already been
+     * replaced, which is the only way to settle the race correctly when the
+     * replacement landed on a different replica.
+     */
+    expectedConnectionGeneration?: string,
   ) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
@@ -8530,9 +8726,13 @@ export class SessionService {
     if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus, session.worktreeDeleted))
       return;
 
+    // Counts how often the fence actually saves a session. The mutator can run
+    // more than once under retry, so this records the last decision.
+    let supersededGeneration: string | undefined;
     const result = await this.updateConnectionConditional(
       sessionId,
       (conn, currentSession) => {
+        supersededGeneration = undefined;
         if (
           isFullyUnloadedSession(
             currentSession.agentStatus,
@@ -8546,6 +8746,21 @@ export class SessionService {
         // arrive after Retry/Move reserved a replacement; never let the stale
         // callback steal ownership back by writing its runtime id.
         if (runtimeInstanceId && conn.runtimeInstanceId !== runtimeInstanceId) return null;
+
+        // ...but a runtime instance id survives reconnects, so the check above
+        // passes when the *same* runtime simply reconnected — possibly onto
+        // another replica, which is invisible from here. The connection
+        // generation is what actually changes, so it is the fence that settles
+        // this. Both sides must be known: sessions bound before this field
+        // existed carry no generation and fall through to the checks below.
+        if (
+          expectedConnectionGeneration &&
+          conn.connectionGeneration &&
+          conn.connectionGeneration !== expectedConnectionGeneration
+        ) {
+          supersededGeneration = conn.connectionGeneration;
+          return null;
+        }
 
         // WebSocket close handling deliberately waits through a reconnect
         // grace period. During a rolling deployment the replacement API task
@@ -8586,7 +8801,22 @@ export class SessionService {
         },
       },
     );
-    if (!result) return;
+    if (!result) {
+      if (supersededGeneration) {
+        // A live session that would have been declared dead. Expected to be
+        // non-zero in production — every one of these is a workspace that the
+        // cloud retry path would otherwise have rebuilt from origin.
+        logAgentEnvironmentTelemetry("runtime.disconnect_fenced", {
+          organizationId: session.organizationId,
+          sessionId,
+          runtimeInstanceId,
+          reason,
+          reportedGeneration: expectedConnectionGeneration,
+          currentGeneration: supersededGeneration,
+        });
+      }
+      return;
+    }
     const updated = result.updated;
     const sessionGroup = await this.loadSessionGroupSnapshot(session.sessionGroupId);
 
@@ -8691,6 +8921,49 @@ export class SessionService {
   }
 
   /**
+   * Stamp the live bridge connection onto every session bound to this runtime.
+   *
+   * Runs on each `runtime_hello`, including the reconnect that follows a
+   * transient drop. That reconnect is normally a no-op for session state — the
+   * rows still read `connected`, so nothing else writes — which left the
+   * pending close callback on the old socket free to mark them disconnected
+   * once its grace period elapsed. Recording the generation gives that callback
+   * something to lose against.
+   *
+   * Written as one statement rather than per-session: a laptop bridge can own
+   * hundreds of sessions and reconnects routinely, and `version` is advanced in
+   * the same write so any in-flight `updateConnectionConditional` fails its
+   * compare-and-set and retries against the new generation instead of
+   * overwriting it.
+   */
+  private async stampConnectionGeneration(
+    runtimeInstanceId: string,
+    connectionGeneration: string,
+    organizationId?: string | null,
+  ): Promise<void> {
+    const scope = organizationId
+      ? Prisma.sql`AND "organizationId" = ${organizationId}`
+      : Prisma.empty;
+    await prisma.$executeRaw`
+      UPDATE "Session"
+      SET connection = jsonb_set(
+        jsonb_set(
+          connection,
+          '{connectionGeneration}',
+          to_jsonb(${connectionGeneration}::text),
+          true
+        ),
+        '{version}',
+        to_jsonb(COALESCE((connection ->> 'version')::int, 0) + 1),
+        true
+      )
+      WHERE connection ->> 'runtimeInstanceId' = ${runtimeInstanceId}
+        ${scope}
+        AND COALESCE(connection ->> 'connectionGeneration', '') <> ${connectionGeneration}
+    `;
+  }
+
+  /**
    * When a runtime connects, restore all sessions it previously owned except fully unloaded ones.
    * The DB (connection.runtimeInstanceId) is the single source of truth for ownership.
    * Excludes fully unloaded statuses (failed, merged).
@@ -8703,6 +8976,14 @@ export class SessionService {
       organizationId: organizationId ?? null,
       runtimeLabel: runtime.label,
     });
+
+    // Before any per-session work: the close callback for the socket this one
+    // replaced may already be counting down.
+    await this.stampConnectionGeneration(
+      runtimeId,
+      runtime.connectionGeneration,
+      organizationId ?? runtime.organizationId,
+    );
 
     const sessions = await prisma.session.findMany({
       where: {
@@ -8747,14 +9028,29 @@ export class SessionService {
 
       // Emit connection_restored for sessions that were disconnected or whose
       // provision wait timed out before this (now-connected) runtime's bridge
-      // arrived — but not for sessions already done, which don't need event
-      // churn. Healing `timed_out` here is what lets a slow-booting runtime
+      // arrived. Healing `timed_out` here is what lets a slow-booting runtime
       // reclaim its session after the 300s startup window elapsed.
+      //
+      // `done` sessions are healed too. They were skipped as event churn, but
+      // a done session is precisely one sitting idle between user messages —
+      // the state the incident session was in — and leaving it reading
+      // `disconnected` against a live runtime is what sends the next user
+      // action down the destructive retry path.
       const conn = this.parseConnection(session.connection);
-      if (
-        (conn.state === "disconnected" || conn.state === "timed_out") &&
-        session.agentStatus !== "done"
-      ) {
+      if (conn.state === "disconnected" || conn.state === "timed_out") {
+        // A disconnect this runtime immediately reversed means the fence lost
+        // its race — the generation stamp landed after the close callback's
+        // grace period had already elapsed. Should be ~zero; anything else is
+        // the residual worth chasing.
+        const downtimeMs = elapsedMs(conn.disconnectedAt, new Date().toISOString());
+        if (conn.state === "disconnected" && downtimeMs !== undefined && downtimeMs < 60_000) {
+          logAgentEnvironmentTelemetry("runtime.disconnect_reverted", {
+            organizationId: session.organizationId,
+            sessionId: session.id,
+            runtimeInstanceId: runtimeId,
+            downtimeMs,
+          });
+        }
         await this.markConnectionRestored(session.id, runtimeId);
       }
     }

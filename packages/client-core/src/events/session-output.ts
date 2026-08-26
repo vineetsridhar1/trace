@@ -87,6 +87,24 @@ export function shouldBumpSortTimestampForOutput(payload: JsonObject): boolean {
   return payload.type === "question_pending" || payload.type === "plan_pending";
 }
 
+/**
+ * Connection lifecycle writes carry a monotonically increasing version. Events
+ * are appended after those writes, so two replicas can publish them in the
+ * opposite order from the database commits. Never let an older event replace a
+ * newer connection snapshot already in the entity store.
+ *
+ * Missing versions remain rollout-compatible with legacy events and sessions.
+ */
+export function isConnectionPatchCurrent(existing: unknown, incoming: unknown): boolean {
+  const existingVersion = asJsonObject(existing)?.version;
+  const incomingVersion = asJsonObject(incoming)?.version;
+  return (
+    typeof existingVersion !== "number" ||
+    typeof incomingVersion !== "number" ||
+    incomingVersion >= existingVersion
+  );
+}
+
 export function patchGroupSessionsBranch(
   batch: StoreBatchWriter,
   sessionGroupId: string,
@@ -96,6 +114,19 @@ export function patchGroupSessionsBranch(
   for (const [sessionId, session] of Object.entries(allSessions)) {
     if (session.sessionGroupId === sessionGroupId) {
       batch.patch("sessions", sessionId, { branch } as Partial<SessionEntity>);
+    }
+  }
+}
+
+function patchGroupSessionsConnection(
+  batch: StoreBatchWriter,
+  sessionGroupId: string,
+  connection: SessionEntity["connection"],
+): void {
+  const allSessions = batch.getAll("sessions");
+  for (const [sessionId, session] of Object.entries(allSessions)) {
+    if (session.sessionGroupId === sessionGroupId) {
+      batch.patch("sessions", sessionId, { connection });
     }
   }
 }
@@ -169,11 +200,33 @@ export function routeSessionOutput({ event, payload, batch, ui }: RouteSessionOu
 
   const sessionPatch = sessionPatchFromOutput(payload);
   if (sessionPatch) {
+    const existingSession = batch.get("sessions", event.scopeId);
+    if (
+      sessionPatch.connection &&
+      !isConnectionPatchCurrent(existingSession?.connection, sessionPatch.connection)
+    ) {
+      delete sessionPatch.connection;
+    }
     batch.patch("sessions", event.scopeId, {
       ...sessionPatch,
       updatedAt: event.timestamp,
       ...(bumpSort ? { _sortTimestamp: event.timestamp } : {}),
     });
+  }
+
+  if (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type)) {
+    const sessionGroup = asJsonObject(payload.sessionGroup);
+    const groupConnection = asJsonObject(sessionGroup?.connection);
+    if (typeof sessionGroup?.id === "string" && groupConnection) {
+      // Runtime connectivity belongs to the shared workspace. A lifecycle
+      // event may be scoped to the session that triggered it, but sibling tabs
+      // must render the same authoritative group connection snapshot.
+      patchGroupSessionsConnection(
+        batch,
+        sessionGroup.id,
+        groupConnection as SessionEntity["connection"],
+      );
+    }
   }
 
   if (payload.type === "branch_renamed" && typeof payload.branch === "string") {

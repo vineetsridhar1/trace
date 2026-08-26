@@ -4,6 +4,8 @@ import { realtimeBackplane } from "./realtime-backplane.js";
 const TERMINAL_PREFIX = "trace:terminal:v1";
 const TERMINAL_SCOPE_PREFIX = "trace:terminal-scope:v1";
 const TERMINAL_TTL_MS = 24 * 60 * 60 * 1000;
+/** Remote owners can change across deploys, reconnects, and evictions. */
+const REMOTE_DESCRIPTOR_CACHE_MS = 5_000;
 
 export type TerminalDescriptor = {
   terminalId: string;
@@ -35,7 +37,7 @@ export type TerminalDirectoryScope = {
 };
 
 export class TerminalDirectory {
-  private descriptors = new Map<string, TerminalDescriptor>();
+  private descriptors = new Map<string, CachedDescriptor>();
 
   register(input: Omit<TerminalDescriptor, "frontendReplicaId" | "expiresAt">): void {
     const descriptor: TerminalDescriptor = {
@@ -43,7 +45,7 @@ export class TerminalDirectory {
       frontendReplicaId: realtimeBackplane.replicaId,
       expiresAt: Date.now() + TERMINAL_TTL_MS,
     };
-    this.descriptors.set(input.terminalId, descriptor);
+    this.descriptors.set(input.terminalId, { ...descriptor, cachedAt: Date.now() });
     if (realtimeBackplane.enabled) {
       void redis
         .set(this.key(input.terminalId), JSON.stringify(descriptor), "PX", TERMINAL_TTL_MS)
@@ -59,7 +61,7 @@ export class TerminalDirectory {
 
   async get(terminalId: string): Promise<TerminalDescriptor | undefined> {
     const cached = this.descriptors.get(terminalId);
-    if (cached && cached.expiresAt > Date.now()) return cached;
+    if (cached && cached.expiresAt > Date.now() && this.isCacheFresh(cached)) return cached;
     if (!realtimeBackplane.enabled) return undefined;
     return this.accept(terminalId, await redis.get(this.key(terminalId)));
   }
@@ -80,7 +82,7 @@ export class TerminalDirectory {
       ) {
         return undefined;
       }
-      this.descriptors.set(terminalId, descriptor);
+      this.descriptors.set(terminalId, { ...descriptor, cachedAt: Date.now() });
       return descriptor;
     } catch {
       return undefined;
@@ -92,13 +94,26 @@ export class TerminalDirectory {
     const cached = this.descriptors.get(terminalId);
     if (!cached || cached.frontendReplicaId !== realtimeBackplane.replicaId) return;
     if (cached.cols === cols && cached.rows === rows) return;
-    const descriptor: TerminalDescriptor = { ...cached, cols, rows };
+    const descriptor: CachedDescriptor = { ...cached, cols, rows };
     this.descriptors.set(terminalId, descriptor);
     if (!realtimeBackplane.enabled) return;
     const ttl = Math.max(descriptor.expiresAt - Date.now(), 1);
     void redis
       .set(this.key(terminalId), JSON.stringify(descriptor), "PX", ttl)
       .catch((error) => console.error("[terminal-directory] dimension refresh failed:", error));
+  }
+
+  /** Drop only a stale remote cache entry; the owner retains the Redis record. */
+  invalidate(terminalId: string): void {
+    const cached = this.descriptors.get(terminalId);
+    if (cached && cached.frontendReplicaId !== realtimeBackplane.replicaId) {
+      this.descriptors.delete(terminalId);
+    }
+  }
+
+  private isCacheFresh(cached: CachedDescriptor): boolean {
+    if (cached.frontendReplicaId === realtimeBackplane.replicaId) return true;
+    return cached.cachedAt + REMOTE_DESCRIPTOR_CACHE_MS > Date.now();
   }
 
   remove(terminalId: string): void {
