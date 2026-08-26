@@ -187,6 +187,12 @@ function createWindow() {
     }
   });
 
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown" || !input.control || input.key !== "Tab") return;
+    event.preventDefault();
+    mainWindow?.webContents.send("menu-command", input.shift ? "previous-tab" : "next-tab");
+  });
+
   // Forward mouse back/forward buttons as browser-style navigation
   // On macOS, use swipe events; on Windows/Linux, use app-command
   mainWindow.on("app-command", (_event, command) => {

@@ -850,51 +850,12 @@ export function SessionGroupDetailView({
     ],
   );
 
-  // Close whatever tab is currently shown. Files/terminals/traffic reveal the
-  // session beneath them; closing the last session tab returns to the table.
   const handleCloseSession = useCallback(
     (sessionId: string) => {
       void closeSession(sessionId);
     },
     [closeSession],
   );
-
-  const handleCloseCurrentTab = useCallback(() => {
-    if (activeArtifactId) {
-      handleCloseArtifact(activeArtifactId);
-      return;
-    }
-    if (activeWorkflowTab === "traffic" && trafficEndpointId) {
-      handleCloseTrafficTab();
-      return;
-    }
-    if (activeFilePath) {
-      handleCloseFile(activeFilePath);
-      return;
-    }
-    if (activeTerminalId) {
-      handleCloseTerminal(activeTerminalId);
-      return;
-    }
-    if (activeSessionId) {
-      handleCloseSession(activeSessionId);
-      return;
-    }
-    setActiveSessionGroupId(null);
-  }, [
-    activeWorkflowTab,
-    activeArtifactId,
-    trafficEndpointId,
-    activeFilePath,
-    activeTerminalId,
-    activeSessionId,
-    handleCloseTrafficTab,
-    handleCloseArtifact,
-    handleCloseFile,
-    handleCloseSession,
-    handleCloseTerminal,
-    setActiveSessionGroupId,
-  ]);
 
   const handleOpenBrowserWorkspace = useCallback(() => {
     const id = `draft:${crypto.randomUUID()}`;
@@ -904,14 +865,6 @@ export function SessionGroupDetailView({
 
   const sessionCommands = useMemo<RegisteredCommand[]>(() => {
     const commands: RegisteredCommand[] = [
-      {
-        id: "session.close-tab",
-        title: "Close tab",
-        group: "Session",
-        keywords: "close tab session terminal file",
-        run: handleCloseCurrentTab,
-        shortcut: { key: "w", mod: true },
-      },
       {
         id: "session.find-file",
         title: "Find file",
@@ -952,7 +905,6 @@ export function SessionGroupDetailView({
   }, [
     canNewChatCmd,
     canOpenTerminalCmd,
-    handleCloseCurrentTab,
     handleOpenBrowserWorkspace,
     handleToggleFilePalette,
     handleNewChat,

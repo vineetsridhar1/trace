@@ -29,6 +29,7 @@ interface SpatialWorkspaceControllerOptions {
   tabReplacements: Record<string, string>;
   onTabReplacementsApplied?: (sourceTabIds: string[]) => void;
   onActivateTab: (tabId: string) => void;
+  onCloseTab: (tabId: string) => void;
   onNewTab: (groupId: string) => string;
   onOverlayVisibilityChange?: (visible: boolean) => void;
 }
@@ -41,6 +42,7 @@ export function useSpatialWorkspaceController({
   tabReplacements,
   onTabReplacementsApplied,
   onActivateTab,
+  onCloseTab,
   onNewTab,
   onOverlayVisibilityChange,
 }: SpatialWorkspaceControllerOptions) {
@@ -206,6 +208,19 @@ export function useSpatialWorkspaceController({
   const workspaceCommands = useMemo<RegisteredCommand[]>(
     () => [
       {
+        id: "session.close-tab",
+        title: "Close tab",
+        group: "Workspace",
+        run: () => {
+          const tabId = getActiveGroup(
+            layoutRef.current,
+            activeGroupIdRef.current,
+          )?.activeTabId;
+          if (tabId) onCloseTab(tabId);
+        },
+        shortcut: { key: "w", mod: true },
+      },
+      {
         id: "workspace.new-tab",
         title: "New workspace tab",
         group: "Workspace",
@@ -267,6 +282,7 @@ export function useSpatialWorkspaceController({
     ],
     [
       handleCycleTab,
+      onCloseTab,
       handleFocusActiveBrowserAddress,
       handleFocusGroup,
       handleJoin,
