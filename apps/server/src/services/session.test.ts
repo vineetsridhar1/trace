@@ -8221,6 +8221,47 @@ describe("SessionService", () => {
       );
     });
 
+    it("restores an unlinked general session without preparing a workspace", async () => {
+      const generalSession = makeSession({
+        hosting: "local",
+        repoId: null,
+        repo: null,
+        branch: null,
+        workdir: "/home/coder",
+        sessionGroup: makeSessionGroup({ kind: "general", repoId: null, repo: null }),
+        connection: {
+          state: "disconnected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(generalSession);
+      prismaMock.session.findUnique.mockResolvedValue(generalSession);
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(generalSession);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-a",
+        key: "org-1:runtime-a",
+        label: "Laptop A",
+        hostingMode: "local",
+        ws: { readyState: 1, OPEN: 1 },
+      });
+
+      await service.retryConnection("session-1", "org-1", "user", "user-1");
+
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "org-1:runtime-a");
+      expect(sessionRouterMock.send).not.toHaveBeenCalled();
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            connection: expect.objectContaining({ state: "connected" }),
+          }),
+        }),
+      );
+    });
+
     it("reuses an unrecorded managed worktree when retrying a local session", async () => {
       const recoveredSession = makeSession({
         hosting: "local",

@@ -9382,8 +9382,7 @@ export class SessionService {
     }
 
     const restoredAt = new Date().toISOString();
-    const needsWorkspacePreparation =
-      Boolean(session.repo) || session.sessionGroup?.kind === "general";
+    const needsWorkspacePreparation = Boolean(session.repo);
     const restored = await this.updateConnectionConditional(sessionId, (current) => {
       if (homeRuntimeId) {
         if (current.runtimeInstanceId !== homeRuntimeId || runtime.id !== homeRuntimeId)
