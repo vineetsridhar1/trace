@@ -4,6 +4,7 @@ import { cn } from "../../lib/utils";
 import { useAttachedCheckoutForGroup, useDesktopBridgeInfo } from "../../stores/bridges";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { BROWSER_ADDRESS_FOCUS_EVENT } from "./browser-address-focus";
 
 const EMPTY_BROWSER_STATE: DesktopBrowserWorkspaceState = {
   sessionGroupId: "",
@@ -43,6 +44,16 @@ export function BrowserWorkspacePanel({
     attachedCheckout?.bridgeInstanceId ?? null,
     desktopBridgeInfo?.instanceId,
   );
+
+  useEffect(() => {
+    const handleFocusAddress = (event: Event) => {
+      if (!(event instanceof CustomEvent) || event.detail !== browserId) return;
+      addressInputRef.current?.focus();
+      addressInputRef.current?.select();
+    };
+    window.addEventListener(BROWSER_ADDRESS_FOCUS_EVENT, handleFocusAddress);
+    return () => window.removeEventListener(BROWSER_ADDRESS_FOCUS_EVENT, handleFocusAddress);
+  }, [browserId]);
 
   useEffect(() => {
     onTitleChange?.(browserId, state.title);

@@ -15,9 +15,7 @@ vi.mock("fs/promises", async (importOriginal) => {
     ...actual,
     rename: async (from: string, to: string) => {
       if (renameControl.failStagingRename && `${to}`.endsWith("-previous")) {
-        const error: NodeJS.ErrnoException = new Error(
-          "EXDEV: cross-device link not permitted",
-        );
+        const error: NodeJS.ErrnoException = new Error("EXDEV: cross-device link not permitted");
         error.code = "EXDEV";
         throw error;
       }
@@ -53,6 +51,22 @@ describe("ensureTraceRuntime", () => {
     expect(browserVideoSkill).toContain('artifact push video "$TRACE_BROWSER_VIDEO_DIR');
     expect(browserVideoSkill).toContain("Never override the session name");
     expect(browserVideoSkill).toContain('"$TRACE_BROWSER_VIDEO_VALIDATE"');
+    const visualPlanSkill = await readFile(
+      join(runtime.skillsDir, "visual-plan", "SKILL.md"),
+      "utf8",
+    );
+    expect(visualPlanSkill).toContain('"$TRACE_CLI" artifact push visual-plan');
+    expect(visualPlanSkill).toContain("Read the canvas brief");
+    expect(visualPlanSkill).toContain("documentation directory");
+    expect(visualPlanSkill).toContain("docs/session-artifact-upload-plan/");
+    expect(visualPlanSkill).toContain("Upload the repository folder directly");
+    expect(visualPlanSkill).toContain("Do not create a staging directory");
+    expect(visualPlanSkill).toContain("Trace renders the uploaded artifact");
+    expect(visualPlanSkill).toContain("Trace does not watch the repository");
+    expect(visualPlanSkill).not.toContain("Agent-Native Plans");
+    expect(await readFile(join(runtime.skillsDir, "visual-plan", "template.md"), "utf8")).toContain(
+      "Every major section opens with a drawing",
+    );
     expect(
       await readFile(join(runtime.skillsDir, "request-user-input", "SKILL.md"), "utf8"),
     ).toContain("<trace:request-input");

@@ -7,6 +7,7 @@ function keyEvent(init: {
   ctrlKey?: boolean;
   shiftKey?: boolean;
   altKey?: boolean;
+  code?: string;
 }): KeyboardEvent {
   return {
     metaKey: false,
@@ -40,13 +41,25 @@ describe("matchesShortcut", () => {
     );
     expect(matchesShortcut(keyEvent({ key: "e", metaKey: true }), cmdShiftE)).toBe(false);
     // A non-shift chord must not match when shift is held.
-    expect(matchesShortcut(keyEvent({ key: "k", metaKey: true, shiftKey: true }), cmdK)).toBe(false);
+    expect(matchesShortcut(keyEvent({ key: "k", metaKey: true, shiftKey: true }), cmdK)).toBe(
+      false,
+    );
   });
 
   it("distinguishes alt", () => {
     const altA: CommandShortcut = { key: "a", alt: true };
     expect(matchesShortcut(keyEvent({ key: "a", altKey: true }), altA)).toBe(true);
     expect(matchesShortcut(keyEvent({ key: "a" }), altA)).toBe(false);
+  });
+
+  it("supports Ctrl-only and physical-key shortcuts", () => {
+    const ctrlTab: CommandShortcut = { key: "Tab", ctrl: true };
+    const split: CommandShortcut = { key: "\\", code: "Backslash", mod: true };
+    expect(matchesShortcut(keyEvent({ key: "Tab", ctrlKey: true }), ctrlTab)).toBe(true);
+    expect(matchesShortcut(keyEvent({ key: "Tab", metaKey: true }), ctrlTab)).toBe(false);
+    expect(matchesShortcut(keyEvent({ key: "§", code: "Backslash", metaKey: true }), split)).toBe(
+      true,
+    );
   });
 });
 

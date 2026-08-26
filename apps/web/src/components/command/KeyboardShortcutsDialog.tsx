@@ -1,8 +1,7 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { useCommandPaletteStore } from "../../stores/command-palette";
 
-const isMac =
-  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 const mod = isMac ? "⌘" : "Ctrl";
 
 interface Shortcut {
@@ -31,7 +30,15 @@ const SECTIONS: Array<{ heading: string; shortcuts: Shortcut[] }> = [
     heading: "Sessions",
     shortcuts: [
       { keys: [mod, "T"], label: "New tab" },
+      { keys: [mod, "\\"], label: "Split active tab" },
+      { keys: [mod, "⇧", "\\"], label: "Join active pane" },
+      { keys: [mod, "⇧", "Enter"], label: "Toggle pane spotlight" },
       { keys: [mod, "W"], label: "Close tab" },
+      { keys: ["Ctrl", "Tab"], label: "Next tab" },
+      { keys: ["Ctrl", "⇧", "Tab"], label: "Previous tab" },
+      { keys: [mod, "1–4"], label: "Focus tab group" },
+      { keys: [mod, "⇧", "B"], label: "New browser tab" },
+      { keys: [mod, "L"], label: "Focus browser address" },
       { keys: [mod, "P"], label: "Find file" },
       { keys: [mod, "J"], label: "New terminal" },
       { keys: [mod, "⇧", "E"], label: "Toggle session sidebar" },
@@ -62,7 +69,10 @@ export function KeyboardShortcutsDialog() {
             <div key={section.heading} className="flex flex-col gap-1.5">
               <p className="text-xs font-medium text-muted-foreground">{section.heading}</p>
               {section.shortcuts.map((shortcut) => (
-                <div key={shortcut.label} className="flex items-center justify-between gap-4 py-0.5">
+                <div
+                  key={shortcut.label}
+                  className="flex items-center justify-between gap-4 py-0.5"
+                >
                   <span className="text-sm text-foreground">{shortcut.label}</span>
                   <span className="flex items-center gap-1">
                     {shortcut.keys.map((key) => (

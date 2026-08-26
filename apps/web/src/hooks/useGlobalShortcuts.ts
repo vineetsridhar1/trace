@@ -5,12 +5,7 @@ import { matchesShortcut, useCommandRegistryStore } from "../stores/command-regi
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
-  return (
-    tag === "INPUT" ||
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    target.isContentEditable
-  );
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
 }
 
 /** Registers app-wide keyboard shortcuts: command palette (⌘K / ⌘F) and help (?). */
@@ -46,13 +41,11 @@ export function useGlobalShortcuts() {
 
       // Chords contributed by mounted components via the command registry.
       const editable = isEditableTarget(event.target);
-      for (const commands of Object.values(
-        useCommandRegistryStore.getState().commandsByToken,
-      )) {
+      for (const commands of Object.values(useCommandRegistryStore.getState().commandsByToken)) {
         for (const command of commands) {
           if (!command.shortcut) continue;
           // Plain (modifier-less) chords are suppressed while typing.
-          if (!command.shortcut.mod && editable) continue;
+          if (!command.shortcut.mod && !command.shortcut.ctrl && editable) continue;
           if (matchesShortcut(event, command.shortcut)) {
             event.preventDefault();
             command.run();
@@ -73,9 +66,7 @@ export function useGlobalShortcuts() {
     if (!trace?.onMenuCommand) return;
     return trace.onMenuCommand((command) => {
       if (command !== "close-tab") return;
-      const commands = Object.values(
-        useCommandRegistryStore.getState().commandsByToken,
-      ).flat();
+      const commands = Object.values(useCommandRegistryStore.getState().commandsByToken).flat();
       const closeTab = commands.find((c) => c.id === "session.close-tab");
       if (closeTab) {
         closeTab.run();

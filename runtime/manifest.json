@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "version": 30,
   "protocolVersion": 1,
-  "contentHash": "f7175c9cc05911b4ef494d9a4da7b24844841b337c0f16b933608fe359c66f16",
+  "contentHash": "8037c9dbd7412907705f5b751c7836c713569ba38ba70ceec87e15ed15c0a105",
   "files": [
     "bin/trace",
     "bin/trace.mjs",
@@ -13,6 +13,6 @@
     "skills/trace-session/SKILL.md",
     "skills/trace-session/agents/openai.yaml",
     "skills/visual-plan/SKILL.md",
-    "skills/visual-plan/template.html"
+    "skills/visual-plan/template.md"
   ]
 }
