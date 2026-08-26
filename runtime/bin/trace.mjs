@@ -1109,11 +1109,11 @@ var artifactCommand = defineCommand({
   ],
   output: "The artifact ID, type, key, and idempotency key for a safe retry.",
   nextSteps: [
-    "Use the artifact type's required skill before preparing or revising its source files.",
+    "Use a stable type name for artifacts that should be grouped together.",
     "Keep the returned idempotency key when retrying a failed upload."
   ],
   notes: [
-    "Video artifacts must be one validated video file; other artifact types may use a file or directory.",
+    "Any non-empty artifact type is accepted; video artifacts must be one validated video file.",
     "The compressed upload must not exceed 64 MiB."
   ],
   positionals: [
@@ -3425,15 +3425,14 @@ var commandGroups = [
   },
   {
     name: "artifact",
-    description: "Validate and upload immutable Trace artifacts",
+    description: "Upload immutable Trace artifacts",
     workflow: [
-      "Use the required artifact skill to prepare and validate the source file or directory.",
       'Run "$TRACE_CLI" artifact push <type> <file-or-directory> --json once the artifact is ready.',
       "Keep the returned idempotency key for a safe retry if the upload fails."
     ],
     examples: ['"$TRACE_CLI" artifact push visual-plan docs/plan --key primary --json'],
     notes: [
-      "Artifact types can impose additional validation; use the relevant artifact skill when instructed."
+      "Any non-empty type is accepted. Visual plans, images, and videos receive additional type-specific validation."
     ]
   }
 ];

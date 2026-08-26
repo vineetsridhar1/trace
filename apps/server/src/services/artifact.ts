@@ -17,19 +17,12 @@ const TYPE_ALIASES: Record<string, string> = {
   document: "trace.document.v1",
   "file-bundle": "trace.file-bundle.v1",
 };
-const SUPPORTED_TYPES = new Set([
-  "trace.visual-plan.v1",
-  "trace.image.v1",
-  "trace.video.v1",
-  "trace.document.v1",
-  "trace.file-bundle.v1",
-]);
 const KEY_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/;
 
-function normalizeType(input: string): string {
-  const type = TYPE_ALIASES[input] ?? input;
-  if (!SUPPORTED_TYPES.has(type)) throw new ValidationError(`Unsupported artifact type: ${input}`);
-  return type;
+export function normalizeType(input: string): string {
+  const type = input.trim();
+  if (!type || type.length > 200) throw new ValidationError("Invalid artifact type");
+  return TYPE_ALIASES[type] ?? type;
 }
 
 export function validateType(type: string, manifest: ArtifactBundleManifest): void {
