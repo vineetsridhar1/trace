@@ -57,6 +57,7 @@ export function useSpatialWorkspaceController({
   );
   const layoutRef = useRef(layout);
   const activeGroupIdRef = useRef<string | null>(null);
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [resizingSplitId, setResizingSplitId] = useState<string | null>(null);
   const previousPreferredActiveTabIdRef = useRef(preferredActiveTabId);
   const previousForegroundTabIdRef = useRef<string | null>(null);
@@ -124,6 +125,7 @@ export function useSpatialWorkspaceController({
     (groupId: string, tabId: string) => {
       setLayout((current) => activateSpatialTab(current, groupId, tabId));
       activeGroupIdRef.current = groupId;
+      setActiveGroupId(groupId);
       onActivateTab(tabId);
     },
     [onActivateTab],
@@ -134,12 +136,14 @@ export function useSpatialWorkspaceController({
   }, []);
   const handleFocusPanel = useCallback((groupId: string) => {
     activeGroupIdRef.current = groupId;
+    setActiveGroupId(groupId);
     setLayout((current) =>
       current.focusedGroupId ? focusSpatialGroup(current, groupId) : current,
     );
   }, []);
   const handleTogglePanelFocus = useCallback((groupId: string) => {
     activeGroupIdRef.current = groupId;
+    setActiveGroupId(groupId);
     setLayout((current) =>
       current.focusedGroupId ? balanceSpatialGroups(current) : focusSpatialGroup(current, groupId),
     );
@@ -149,6 +153,7 @@ export function useSpatialWorkspaceController({
       const tabId = onNewTab(groupId);
       setLayout((current) => insertSpatialTab(current, tabId, groupId));
       activeGroupIdRef.current = groupId;
+      setActiveGroupId(groupId);
     },
     [onNewTab],
   );
@@ -314,6 +319,7 @@ export function useSpatialWorkspaceController({
     sensors: drag.sensors,
     setResizingSplitId,
     tabById,
+    activeTabId: getActiveGroup(layout, activeGroupId)?.activeTabId ?? null,
   };
 }
 

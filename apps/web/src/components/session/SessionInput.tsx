@@ -38,6 +38,7 @@ import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useB
 import { getSessionEmptyStateContent, kindSupportsDesignImplementation } from "./sessionEmptyState";
 import { DesignPickerDialog } from "./DesignPickerDialog";
 import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
+import { pastedComposerText, shouldCaptureComposerKey } from "./session-composer-capture";
 
 const EMPTY_ATTACHMENTS: FileAttachment[] = [];
 
@@ -49,6 +50,7 @@ export function SessionInput({
   onAccessRequested,
   condensed = false,
   centered = false,
+  captureTyping = false,
 }: {
   sessionId: string;
   onStop: () => void;
@@ -57,6 +59,7 @@ export function SessionInput({
   onAccessRequested?: () => void | Promise<void>;
   condensed?: boolean;
   centered?: boolean;
+  captureTyping?: boolean;
 }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
@@ -102,7 +105,6 @@ export function SessionInput({
   const [isSending, setIsSending] = useState(false);
   const [showDesignPicker, setShowDesignPicker] = useState(false);
   const isSendingRef = useRef(false);
-  const hasAutoFocusedRef = useRef(false);
   const editorRef = useRef<ChatEditorHandle>(null);
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
@@ -133,17 +135,6 @@ export function SessionInput({
 
   const slashCommands = useSlashCommands(sessionId);
 
-  useEffect(() => {
-    hasAutoFocusedRef.current = false;
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (hasAutoFocusedRef.current || !canSend || isSending) return;
-    hasAutoFocusedRef.current = true;
-    const frame = requestAnimationFrame(() => editorRef.current?.focus());
-    return () => cancelAnimationFrame(frame);
-  }, [canSend, isSending, sessionId]);
-
   // Cmd/Ctrl+L focuses the composer from anywhere in the session view.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -156,6 +147,39 @@ export function SessionInput({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [canSend, isSending]);
+
+  // Let the selected agent tab behave like a chat surface without forcing focus
+  // when the tab opens. Other workspace surfaces can stay active in split panes.
+  useEffect(() => {
+    if (!captureTyping || !canSend || isSending) return;
+
+    const focusAndInsert = (text: string): boolean => {
+      const editor = editorRef.current;
+      if (!editor || !text) return false;
+      editor.focus();
+      editor.insertText(text);
+      return true;
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!shouldCaptureComposerKey(event)) return;
+      if (focusAndInsert(event.key)) event.preventDefault();
+    };
+    const onPaste = (event: ClipboardEvent) => {
+      const text = pastedComposerText(event);
+      if (!text) return;
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.focus();
+      if (editor.pasteText(text)) event.preventDefault();
+    };
+
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    window.addEventListener("paste", onPaste, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, { capture: true });
+      window.removeEventListener("paste", onPaste, { capture: true });
+    };
+  }, [canSend, captureTyping, isSending]);
 
   // Apply a starter prompt requested from elsewhere (e.g. the empty-state chips).
   // Do the work synchronously, then consume: `submit()` reads the text we just set

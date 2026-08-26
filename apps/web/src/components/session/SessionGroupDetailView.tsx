@@ -1085,7 +1085,7 @@ export function SessionGroupDetailView({
   }, []);
 
   const renderWorkspaceTab = useCallback(
-    (tabId: string) => {
+    (tabId: string, _compact: boolean, captureTyping: boolean) => {
       if (tabId.startsWith("draft:")) {
         const draft = draftWorkspaceTabs.find((candidate) => candidate.id === tabId);
         if (draft?.surface) {
@@ -1270,6 +1270,7 @@ export function SessionGroupDetailView({
             onScrollComplete={handleScrollComplete}
             onForkSession={handleOpenForkDialog}
             canForkSession={!!tabSession && !tabSession._optimistic}
+            captureTyping={captureTyping && tabSession !== null}
           />
         </ArtifactOpenContext.Provider>
       );

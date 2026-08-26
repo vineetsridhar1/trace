@@ -40,6 +40,7 @@ interface SessionGroupContentAreaProps {
   getFileBuffer: (filePath: string) => FileEditorBuffer | undefined;
   setFileBuffer: (filePath: string, buffer: FileEditorBuffer) => void;
   emptyState?: ReactNode;
+  captureTyping?: boolean;
 }
 
 export function SessionGroupContentArea({
@@ -61,6 +62,7 @@ export function SessionGroupContentArea({
   getFileBuffer,
   setFileBuffer,
   emptyState,
+  captureTyping = false,
 }: SessionGroupContentAreaProps) {
   const activeFile = openFiles.find((file) => file.filePath === activeFilePath);
   const activeArtifact = useEntityStore((state) =>
@@ -189,6 +191,7 @@ export function SessionGroupContentArea({
         onScrollComplete={onScrollComplete}
         onForkSession={onForkSession}
         canForkSession={canForkSession}
+        captureTyping={captureTyping}
       />
     );
   }

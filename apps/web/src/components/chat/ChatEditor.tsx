@@ -49,6 +49,8 @@ export interface SlashCommandItem {
 
 export interface ChatEditorHandle {
   focus: () => void;
+  insertText: (text: string) => void;
+  pasteText: (text: string) => boolean;
   submit: (options?: ChatEditorSubmitOptions) => Promise<boolean>;
   getText: () => string;
   setText: (text: string) => void;
@@ -187,6 +189,29 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     setValue(nextHtml);
     onChangeRef.current?.(editor.getText().replace(/\n$/, ""), nextHtml);
   }, []);
+
+  const insertText = useCallback((text: string) => {
+    const editor = quillRef.current?.getEditor();
+    if (!editor || !text) return;
+    const selection = editor.getSelection(true) ?? { index: editor.getLength() - 1, length: 0 };
+    editor.insertText(selection.index, text, "user");
+    editor.setSelection(selection.index + text.length, 0, "silent");
+  }, []);
+
+  const pasteText = useCallback(
+    (text: string): boolean => {
+      if (!text) return false;
+      if (text.length > LARGE_PASTE_CHARACTER_THRESHOLD && onPasteFilesRef.current) {
+        const handled = onPasteFilesRef.current([createPastedTextFile(text)], {
+          fallbackToEditor: true,
+        });
+        if (handled) return true;
+      }
+      insertText(text);
+      return true;
+    },
+    [insertText],
+  );
 
   const isMentionMenuOpen = useCallback(() => {
     const editor = quillRef.current?.getEditor();
@@ -354,19 +379,17 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
         return editor?.getText().trim() ?? "";
       },
       setText: replaceEditorText,
+      insertText,
+      pasteText,
       clear: () => {
         clearEditor();
       },
     }),
-    [clearEditor, replaceEditorText, submit],
+    [clearEditor, insertText, pasteText, replaceEditorText, submit],
   );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey) {
-        e.stopPropagation();
-      }
-
       if (e.key === "Enter" && !e.shiftKey) {
         if (isMentionMenuOpen()) {
           return;

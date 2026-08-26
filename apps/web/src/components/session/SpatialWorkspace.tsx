@@ -21,7 +21,7 @@ interface SpatialWorkspaceProps {
   tabReplacements?: Record<string, string>;
   onTabReplacementsApplied?: (sourceTabIds: string[]) => void;
   onOverlayVisibilityChange?: (visible: boolean) => void;
-  renderTab: (tabId: string, compact: boolean) => ReactNode;
+  renderTab: (tabId: string, compact: boolean, captureTyping: boolean) => ReactNode;
 }
 export function SpatialWorkspace({
   persistenceKey,
@@ -74,7 +74,9 @@ export function SpatialWorkspace({
           onResizeStart={controller.setResizingSplitId}
           onResizeEnd={() => controller.setResizingSplitId(null)}
           onTogglePanelFocus={controller.handleTogglePanelFocus}
-          renderTab={renderTab}
+          renderTab={(tabId, compact) =>
+            renderTab(tabId, compact, tabId === controller.activeTabId)
+          }
         />
         {controller.draggedTabId ? (
           <SpatialWorkspaceSnapTargets
