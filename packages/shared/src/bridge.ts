@@ -580,6 +580,8 @@ export interface BridgeSessionOutput {
 export interface BridgeSessionComplete {
   type: "session_complete";
   sessionId: string;
+  /** Identifies the dispatched agent run so stale completions can be ignored. */
+  invocationId?: string;
 }
 
 export interface BridgeWorkspaceReady {

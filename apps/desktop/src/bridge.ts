@@ -1027,7 +1027,11 @@ export class BridgeClient implements IBridgeClient {
             this.pendingInputToolUseIds.delete(sessionId);
           }
           this.finishRun(sessionId, runId);
-          this.send({ type: "session_complete", sessionId });
+          this.send({
+            type: "session_complete",
+            sessionId,
+            invocationId: runtimeEnv?.TRACE_INVOCATION_ID,
+          });
           activeAdapter.abort();
           cleanupImages();
         }
@@ -1039,7 +1043,11 @@ export class BridgeClient implements IBridgeClient {
           this.pendingInputToolUseIds.delete(sessionId);
         }
         this.finishRun(sessionId, runId);
-        this.send({ type: "session_complete", sessionId });
+        this.send({
+          type: "session_complete",
+          sessionId,
+          invocationId: runtimeEnv?.TRACE_INVOCATION_ID,
+        });
         cleanupImages();
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,

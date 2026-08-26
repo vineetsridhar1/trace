@@ -427,7 +427,11 @@ export class ContainerBridge implements IBridgeClient {
             sessionId: cmd.sessionId,
             data: { type: "error", message: err instanceof Error ? err.message : String(err) },
           });
-          this.send({ type: "session_complete", sessionId: cmd.sessionId });
+          this.send({
+            type: "session_complete",
+            sessionId: cmd.sessionId,
+            invocationId: cmd.runtimeEnv?.TRACE_INVOCATION_ID,
+          });
         });
         break;
       }
@@ -1219,7 +1223,12 @@ export class ContainerBridge implements IBridgeClient {
 
     let browserCleanupStarted = false;
     const completeRun = () => {
-      const complete = () => this.send({ type: "session_complete", sessionId });
+      const complete = () =>
+        this.send({
+          type: "session_complete",
+          sessionId,
+          invocationId: runtimeEnv?.TRACE_INVOCATION_ID,
+        });
       if (resolvedTool !== "codex") {
         complete();
         return;

@@ -5591,6 +5591,20 @@ describe("SessionService", () => {
   });
 
   describe("complete", () => {
+    it("ignores completion from a superseded invocation", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+        activeInvocationId: "invocation-current",
+      });
+
+      await service.complete("session-1", { invocationId: "invocation-stale" });
+
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+
     it("returns finished sessions to in_progress when no follow-up input is needed", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce({
         agentStatus: "active",

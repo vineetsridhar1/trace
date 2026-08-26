@@ -1247,7 +1247,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         });
       } else if (msg.type === "session_complete" && msg.sessionId) {
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
-          await sessionService.complete(sessionId);
+          await sessionService.complete(sessionId, {
+            invocationId: typeof msg.invocationId === "string" ? msg.invocationId : undefined,
+          });
         });
       } else if (msg.type === "workspace_ready" && msg.sessionId) {
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {

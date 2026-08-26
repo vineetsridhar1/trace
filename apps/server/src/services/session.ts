@@ -6991,13 +6991,19 @@ export class SessionService {
     }
   }
 
-  async complete(id: string, options?: { drainPending?: boolean }) {
+  async complete(id: string, options?: { drainPending?: boolean; invocationId?: string }) {
     // Only transition from active — don't overwrite explicit user actions
     const current = await prisma.session.findUnique({
       where: { id },
-      select: { agentStatus: true, sessionStatus: true, sessionGroupId: true },
+      select: {
+        agentStatus: true,
+        sessionStatus: true,
+        sessionGroupId: true,
+        activeInvocationId: true,
+      },
     });
     if (!current || current.agentStatus !== "active") return;
+    if (options?.invocationId && current.activeInvocationId !== options.invocationId) return;
 
     // Find when the current run started (last session_resumed or session_started)
     const lastResume = await prisma.event.findFirst({
@@ -7053,7 +7059,9 @@ export class SessionService {
       select: { organizationId: true, createdById: true, name: true },
     });
     await prisma.session.updateMany({
-      where: { id, activeInvocationId: { not: null } },
+      where: options?.invocationId
+        ? { id, activeInvocationId: options.invocationId }
+        : { id, activeInvocationId: { not: null } },
       data: { activeInvocationId: null },
     });
     const sessionGroup = await this.loadSessionGroupSnapshot(current.sessionGroupId);
