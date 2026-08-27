@@ -835,6 +835,14 @@ export async function resolveSyncTargetCommitSha(
   return resolveTargetCommitSha(repoPath, branch);
 }
 
+export async function hasUncommittedTargetWorktreeChanges(
+  repoPath: string,
+  branch: string,
+): Promise<boolean> {
+  const worktreePath = await findWorktreePathForBranch(repoPath, branch);
+  return worktreePath ? hasUncommittedChanges(worktreePath) : false;
+}
+
 async function switchToDetachedCommit(repoPath: string, commitSha: string): Promise<void> {
   await runGit(repoPath, ["switch", "--detach", commitSha]);
 }
