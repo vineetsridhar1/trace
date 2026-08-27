@@ -219,18 +219,18 @@
 <body>
 <main>
   <header>
-    <p class="eyebrow">Product &amp; architecture plan · 23 August 2026</p>
+    <p class="eyebrow">Product &amp; architecture plan · 27 August 2026</p>
     <h1>Make the coding session a human-guided DAG.</h1>
-    <p class="lede">Add <strong>Orchestrate</strong> as a first-class, repository-backed session type. One controller scopes the work with the user, proposes a ticket DAG, and coordinates ordinary coding sessions. Humans approve the plan, consequential decisions, requested recordings, and final completion.</p>
+    <p class="lede">Add <strong>Orchestrate</strong> as a first-class, repository-backed session type. One controller scopes the work with the user and proposes a ticket DAG; durable services continuously schedule ordinary coding sessions. Successful tickets auto-integrate, while consequential decisions, requested result walkthroughs, and final completion return to the human.</p>
     <div class="decision">
-      <p><strong>Decision requested:</strong> approve the session boundary, durable orchestration model, human-gate policy, and one-ticket/one-commit integration contract described below.</p>
+      <p><strong>Decision requested:</strong> approve the session boundary, service-owned control plane, directly validated graph evolution, targeted human gates, and append-only ticket-attributed Git contract described below.</p>
       <span class="pill">Recommended architecture</span>
     </div>
 
     <figure>
       <svg viewBox="0 0 1100 560" role="img" aria-labelledby="hero-title hero-desc">
         <title id="hero-title">A human-guided ticket DAG becomes a linear integration branch</title>
-        <desc id="hero-desc">A human and orchestrator sit at the center of a branching ticket graph. Approved nodes flow into a single branch with one commit per ticket, while decision and video gates route back to the human.</desc>
+        <desc id="hero-desc">A human and orchestrator sit at the center of a branching ticket graph. Accepted nodes flow into a single branch as ticket-attributed commits, while consequential decisions and result walkthroughs route back to the human.</desc>
         <defs>
           <marker id="hero-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--line-strong)"/></marker>
           <marker id="hero-arrow-teal" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--teal)"/></marker>
@@ -284,7 +284,7 @@
         <text x="930" y="539" text-anchor="middle" class="micro">ticket C</text>
         <text x="1015" y="539" text-anchor="middle" class="micro">ticket D</text>
       </svg>
-      <figcaption><b>The product promise in one picture.</b> The DAG is the execution model, but the human remains the authority. Agents may move inside an approved plan; scope changes, significant decisions, requested recordings, integration conflicts, and final completion stop at a human gate.</figcaption>
+      <figcaption><b>The product promise in one picture.</b> The DAG is the execution model, but the human retains authority. Agents continuously execute and safely reshape unstarted work inside the approved scope; consequential decisions pause only the affected subgraph, requested walkthroughs gate their nodes, and final completion always waits for human acceptance.</figcaption>
     </figure>
   </header>
 
@@ -313,8 +313,8 @@
         <circle cx="430" cy="270" r="34" class="teal-fill" stroke="var(--teal)" stroke-width="2"/>
         <circle cx="545" cy="270" r="34" class="amber-fill" stroke="var(--amber)" stroke-width="2"/>
         <circle cx="660" cy="270" r="34" class="green-fill" stroke="var(--green)" stroke-width="2"/>
-        <text x="430" y="266" text-anchor="middle" class="small">plan &amp;</text><text x="430" y="282" text-anchor="middle" class="small">schedule</text>
-        <text x="545" y="266" text-anchor="middle" class="small">human</text><text x="545" y="282" text-anchor="middle" class="small">gates</text>
+        <text x="430" y="266" text-anchor="middle" class="small">schedule &amp;</text><text x="430" y="282" text-anchor="middle" class="small">reconcile</text>
+        <text x="545" y="266" text-anchor="middle" class="small">validate</text><text x="545" y="282" text-anchor="middle" class="small">graph + gates</text>
         <text x="660" y="266" text-anchor="middle" class="small">git</text><text x="660" y="282" text-anchor="middle" class="small">integrate</text>
         <text x="545" y="358" text-anchor="middle" class="small">validates · authorizes · persists · emits events</text>
 
@@ -349,8 +349,18 @@
     </figure>
     <div class="grid-2">
       <div class="note fact"><span class="tag">Recommendation</span><h3>Session kind plus durable run</h3><p>Add <code>orchestrate</code> to <code>SessionGroupKind</code>, then link the group one-to-one with an <code>OrchestrationRun</code>. The session remains the visible product object; the run holds DAG state that does not belong in session JSON.</p></div>
-      <div class="note risk"><span class="tag">Rejected boundary</span><h3>Sibling workers in one group</h3><p>Sessions inside one existing group share its branch and workdir. Parallel ticket workers there would race on the same files and make one-commit-per-ticket integration impossible to guarantee.</p></div>
+      <div class="note risk"><span class="tag">Rejected boundary</span><h3>Sibling workers in one group</h3><p>Sessions inside one existing group share its branch and workdir. Parallel ticket workers there would race on the same files and make ticket-attributed integration impossible to guarantee.</p></div>
     </div>
+    <table>
+      <thead><tr><th>Actor</th><th>Access surface</th><th>Authority</th></tr></thead>
+      <tbody>
+        <tr><td>Human / web client</td><td>GraphQL queries and mutations</td><td>Approve the initial plan and final result, answer gates, pause, cancel, reprioritize, and send feedback.</td></tr>
+        <tr><td>Controller agent</td><td>Role-scoped managed CLI</td><td>Scope, propose plans, inspect the whole run, and submit validated graph changes; no implementation commits.</td></tr>
+        <tr><td>Ticket worker</td><td>Execution-scoped managed CLI</td><td>Read its context, report progress and decisions, complete work, and propose a graph patch while its node is finalizing.</td></tr>
+        <tr><td>Scheduler / integrator</td><td>Internal service calls only</td><td>Claim ready nodes, start workers, validate transitions, serialize Git integration, and reconcile after restarts.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>The CLI is not the orchestrator.</strong> It is the typed agent-facing door into the same services the web UI reaches through GraphQL. No controller process, worker process, or CLI command must remain alive for the project to keep moving.</p>
   </section>
 
   <section>
@@ -359,7 +369,7 @@
     <figure>
       <svg viewBox="0 0 1100 565" role="img" aria-labelledby="lifecycle-title lifecycle-desc">
         <title id="lifecycle-title">Orchestration lifecycle with approval and feedback loops</title>
-        <desc id="lifecycle-desc">The run moves from scoping to plan review to execution. Questions, decisions, recordings, conflicts, and final review loop to the human. Feedback produces a revision or new attempt.</desc>
+        <desc id="lifecycle-desc">The run moves from scoping to plan review to continuous execution. Questions, decisions, requested walkthroughs, and final review loop to the human. Feedback resumes the same ticket context in a new attempt.</desc>
         <defs><marker id="life-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--line-strong)"/></marker><marker id="life-arrow-amber" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--amber)"/></marker></defs>
         <path d="M110 295 H968" class="hair"/>
         <path d="M207 295 H294 M422 295 H510 M640 295 H728 M858 295 H965" class="line teal-stroke" marker-end="url(#life-arrow)"/>
@@ -369,9 +379,9 @@
           <path d="M286 242 H428 L446 295 L428 348 H286 L268 295 Z" class="amber-fill" stroke="var(--amber)" stroke-width="3"/>
           <text x="357" y="281" text-anchor="middle" class="label">Plan review</text><text x="357" y="305" text-anchor="middle" class="small">tickets + edges</text><text x="357" y="327" text-anchor="middle" class="small">explicit approval</text>
           <path d="M509 249 Q575 204 641 249 L630 341 Q575 379 520 341 Z" class="violet-fill" stroke="var(--violet)" stroke-width="3"/>
-          <text x="575" y="280" text-anchor="middle" class="label">Execute</text><text x="575" y="304" text-anchor="middle" class="small">ready nodes</text><text x="575" y="326" text-anchor="middle" class="small">isolated workers</text>
+          <text x="575" y="280" text-anchor="middle" class="label">Execute</text><text x="575" y="304" text-anchor="middle" class="small">continuous starts</text><text x="575" y="326" text-anchor="middle" class="small">isolated workers</text>
           <path d="M728 242 H866 L886 295 L866 348 H728 L708 295 Z" class="amber-fill" stroke="var(--amber)" stroke-width="3"/>
-          <text x="797" y="281" text-anchor="middle" class="label">Node gates</text><text x="797" y="305" text-anchor="middle" class="small">decision · review</text><text x="797" y="327" text-anchor="middle" class="small">recording · conflict</text>
+          <text x="797" y="281" text-anchor="middle" class="label">Node gates</text><text x="797" y="305" text-anchor="middle" class="small">decision · requested</text><text x="797" y="327" text-anchor="middle" class="small">walkthrough · affected path</text>
           <circle cx="988" cy="295" r="58" class="green-fill" stroke="var(--green)" stroke-width="4"/>
           <text x="988" y="282" text-anchor="middle" class="label">Final</text><text x="988" y="305" text-anchor="middle" class="small">human review</text><text x="988" y="327" text-anchor="middle" class="small">complete</text>
         </g>
@@ -380,18 +390,19 @@
         <rect x="196" y="74" width="160" height="48" rx="24" class="amber-fill" stroke="var(--amber)" stroke-width="2"/>
         <text x="276" y="103" text-anchor="middle" class="small">feedback → revision</text>
         <path d="M797 354 C797 479 575 479 575 354" class="line amber-stroke" marker-end="url(#life-arrow-amber)"/>
-        <rect x="615" y="449" width="164" height="48" rx="24" class="amber-fill" stroke="var(--amber)" stroke-width="2"/>
-        <text x="697" y="478" text-anchor="middle" class="small">feedback → attempt n+1</text>
+        <rect x="578" y="443" width="238" height="60" rx="24" class="amber-fill" stroke="var(--amber)" stroke-width="2"/>
+        <text x="697" y="470" text-anchor="middle" class="small">feedback → same node</text>
+        <text x="697" y="489" text-anchor="middle" class="micro">resume its worker-session context</text>
         <path d="M988 354 C988 532 357 536 357 354" class="line red-stroke dash" marker-end="url(#life-arrow)"/>
-        <text x="686" y="548" text-anchor="middle" class="small">scope change → new plan revision; integrated commits remain immutable</text>
+        <text x="686" y="548" text-anchor="middle" class="small">out-of-scope change → new plan revision; integrated history remains append-only</text>
 
         <circle cx="136" cy="187" r="17" class="amber-fill" stroke="var(--amber)" stroke-width="3"/>
         <text x="136" y="192" text-anchor="middle" class="label">?</text>
         <text x="136" y="155" text-anchor="middle" class="micro">question gate</text>
       </svg>
-      <figcaption><b>Human-in-the-loop is a state machine, not a prompt preference.</b> Plan rejection creates a new immutable revision. Ticket feedback creates a new execution attempt. A late scope change may add or supersede unstarted work, but never silently rewrites already integrated commits.</figcaption>
+      <figcaption><b>Human-in-the-loop is a state machine, not a prompt preference.</b> The human approves the starting corridor and the final result. Inside it, successful nodes auto-integrate and validated graph patches may reshape unstarted work; feedback resumes the same ticket context, and consequential decisions pause only the descendants that depend on them.</figcaption>
     </figure>
-    <p>The approved plan is the autonomy boundary. Inside that corridor, the scheduler may launch ready nodes. Outside it, the service pauses the run and asks. Users may also pause the run or message any active worker at any point.</p>
+    <p>The approved plan is the autonomy boundary. Inside that corridor, the service continuously launches ready nodes within concurrency and budget limits. Outside it, the controller proposes a new plan revision. Users may pause the run, cancel or reprioritize nodes, or message any active worker at any point.</p>
   </section>
 
   <section>
@@ -422,7 +433,7 @@
         <circle cx="690" cy="376" r="18" class="amber-fill" stroke="var(--amber)" stroke-width="2"/><text x="690" y="382" text-anchor="middle" class="label">4</text>
         <text x="730" y="373" class="label">Dependencies</text><text x="730" y="394" class="small">integrated prerequisite tickets</text>
         <circle cx="690" cy="444" r="18" class="red-fill" stroke="var(--red)" stroke-width="2"/><text x="690" y="450" text-anchor="middle" class="label">5</text>
-        <text x="730" y="441" class="label">Review policy</text><text x="730" y="462" class="small">auto · summary · recording</text>
+        <text x="730" y="441" class="label">Review policy</text><text x="730" y="462" class="small">auto (default) · summary · walkthrough</text>
         <rect x="682" y="501" width="299" height="36" rx="18" class="violet-fill" stroke="var(--violet)" stroke-width="2"/><text x="831" y="524" text-anchor="middle" class="small">freedom to choose the implementation</text>
 
         <path d="M582 284 C611 284 619 284 646 284" class="line"/>
@@ -438,7 +449,7 @@
         <tr><td><code>Ticket.planContext</code></td><td>How the ticket fits the approved plan and which later work consumes it.</td><td>Prevents isolated workers from optimizing against the wrong objective.</td></tr>
         <tr><td><code>Ticket.acceptanceCriteria</code></td><td>Observable completion requirements.</td><td>The service and reviewer can evaluate the same contract.</td></tr>
         <tr><td><code>Ticket.verificationPlan</code></td><td>Tests, checks, or visible proof expected from the worker.</td><td>Evidence is planned before implementation begins.</td></tr>
-        <tr><td><code>OrchestrationNode.reviewPolicy</code></td><td><code>auto</code>, <code>summary</code>, or <code>recording</code>.</td><td>Review policy belongs to this run, not every future use of the ticket.</td></tr>
+        <tr><td><code>OrchestrationNode.reviewPolicy</code></td><td><code>auto</code> by default, with optional <code>summary</code> or <code>walkthrough</code> gates.</td><td>The human may pre-mark a node and a worker may escalate, but a worker cannot downgrade a gate.</td></tr>
       </tbody>
     </table>
   </section>
@@ -467,7 +478,7 @@
           <rect x="70" y="470" width="242" height="110" rx="24" class="green-fill" stroke="var(--green)" stroke-width="3"/>
           <text x="191" y="508" text-anchor="middle" class="label">Ticket</text><text x="191" y="533" text-anchor="middle" class="small">brief + acceptance</text><text x="191" y="555" text-anchor="middle" class="small">normal Trace entity</text>
           <rect x="757" y="468" width="275" height="114" rx="24" class="blue-fill" stroke="var(--blue)" stroke-width="3"/>
-          <text x="894" y="505" text-anchor="middle" class="label">TicketExecution</text><text x="894" y="530" text-anchor="middle" class="small">attempt · worker session</text><text x="894" y="552" text-anchor="middle" class="small">base/head/integration SHA</text>
+          <text x="894" y="505" text-anchor="middle" class="label">TicketExecution</text><text x="894" y="530" text-anchor="middle" class="small">attempt · worker session</text><text x="894" y="552" text-anchor="middle" class="small">base/head SHA · evidence</text>
           <path d="M455 245 Q550 177 645 245 L632 430 Q550 482 468 430 Z" class="amber-fill" stroke="var(--amber)" stroke-width="3"/>
           <text x="550" y="467" text-anchor="middle" class="label">OrchestrationNode</text>
         </g>
@@ -500,12 +511,14 @@
       <div>
         <ul>
           <li><code>OrchestrationRun</code> is unique by <code>sessionGroupId</code> and stores run status, goal, concurrency, integration branch, and current head SHA.</li>
-          <li><code>OrchestrationPlanRevision</code> stores a validated proposal and approval audit. Approval atomically materializes or updates unstarted tickets and edges.</li>
+          <li><code>OrchestrationPlanRevision</code> stores the human-approved scope and initial graph. Approval atomically materializes its tickets and edges.</li>
+          <li><code>OrchestrationGraphRevision</code> stores every directly validated graph patch with actor, rationale, before/after operations, affected frontier, and resulting version.</li>
           <li><code>OrchestrationNode</code> links a run to a normal ticket and stores execution/review state.</li>
           <li><code>TicketDependency</code> is a general ticket edge. Services reject self-edges, cross-organization edges, and cycles before write.</li>
-          <li><code>TicketExecution</code> is an immutable attempt with worker session/group, base SHA, submitted head SHA, evidence, and optional integration SHA.</li>
+          <li><code>TicketExecution</code> is an immutable attempt with worker session/group, base SHA, submitted head SHA, evidence, and finalizing window.</li>
+          <li><code>TicketIntegration</code> is an append-only canonical commit linked to one node and execution; a ticket may have an initial integration plus later human-requested revision integrations.</li>
           <li><code>OrchestrationDecision</code> records the worker's choice, alternatives, consequence, and whether it is important.</li>
-          <li><code>OrchestrationGate</code> is the source of truth for plan, question, decision, summary, recording, conflict, and final gates. Inbox items are only user-facing projections.</li>
+          <li><code>OrchestrationGate</code> is the source of truth for plan, question, decision, summary, walkthrough, and final gates. Inbox items are only user-facing projections.</li>
         </ul>
       </div>
     </details>
@@ -517,7 +530,7 @@
     <figure>
       <svg viewBox="0 0 1100 600" role="img" aria-labelledby="dag-title dag-desc">
         <title id="dag-title">Ticket DAG readiness and scheduling</title>
-        <desc id="dag-desc">Two independent nodes run in parallel. A join node remains blocked until both predecessors are integrated. A later node stops at a recording gate before integration. The scheduler keeps a bounded concurrency window.</desc>
+        <desc id="dag-desc">Two independent nodes run in parallel. A join node remains blocked until both predecessors are integrated. A later node stops at a requested result-walkthrough gate before integration. The service continuously fills a bounded concurrency window.</desc>
         <defs><marker id="dag-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--line-strong)"/></marker></defs>
         <path d="M145 298 C245 205 300 180 389 173" class="line" marker-end="url(#dag-arrow)"/>
         <path d="M145 316 C245 405 300 426 389 425" class="line" marker-end="url(#dag-arrow)"/>
@@ -547,7 +560,7 @@
         <path d="M958 304 V285 A22 22 0 0 1 1002 285 V304" fill="none" stroke="var(--amber)" stroke-width="6"/>
         <rect x="952" y="302" width="56" height="40" rx="9" class="surface-fill" stroke="var(--amber)" stroke-width="3"/>
         <text x="980" y="385" text-anchor="middle" class="label">E · gate</text>
-        <text x="980" y="407" text-anchor="middle" class="small">recording approval</text>
+        <text x="980" y="407" text-anchor="middle" class="small">result walkthrough</text>
 
         <rect x="286" y="47" width="316" height="48" rx="24" class="surface-fill" stroke="var(--line)" stroke-width="2"/>
         <rect x="294" y="55" width="145" height="32" rx="16" class="teal-fill"/>
@@ -557,20 +570,96 @@
         <path d="M145 548 H1010" class="hair"/>
         <path d="M145 548 H444" class="line teal-stroke" stroke-width="7"/>
         <text x="145" y="578" class="small">approved plan corridor</text>
-        <text x="1010" y="578" text-anchor="end" class="small">scheduler stops at every unresolved gate</text>
+        <text x="1010" y="578" text-anchor="end" class="small">only affected descendants stop at an unresolved gate</text>
       </svg>
       <figcaption><b>Completion does not release descendants; integration does.</b> This guarantees that a dependent worker starts from an integration head containing every prerequisite. Independent nodes may run in parallel, but integration is serialized.</figcaption>
     </figure>
-    <p>The scheduler is deterministic service logic, not an LLM polling loop. It selects nodes whose dependencies are integrated, whose gates are clear, and whose plan revision is approved. A reconciler reclaims queued/stuck work under distributed and database locks so a dropped process or duplicate event cannot launch duplicate workers.</p>
+    <p>The scheduler is deterministic service logic, not an LLM polling loop. Every state-changing event recalculates the ready set and fills available concurrency and budget slots. A reconciler reclaims queued or stuck work under distributed and database locks, so a dropped controller, worker, CLI process, or duplicate event cannot stall the run or launch duplicate workers.</p>
   </section>
 
   <section>
-    <p class="eyebrow">06 · Human gates</p>
-    <h2>Important decisions interrupt the run; feedback creates another attempt.</h2>
+    <p class="eyebrow">06 · Graph evolution</p>
+    <h2>Workers can reshape unstarted work without becoming the control plane.</h2>
+    <figure>
+      <svg viewBox="0 0 1100 670" role="img" aria-labelledby="graphrev-title graphrev-desc">
+        <title id="graphrev-title">A worker-authored graph patch passes through deterministic validation</title>
+        <desc id="graphrev-desc">A completed worker proposes splitting and rewiring pending work. The service validates scope, lifecycle, run ownership, and acyclicity, applies the patch atomically, emits an audit event, and leaves an independent running branch untouched.</desc>
+        <defs><marker id="graphrev-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--line-strong)"/></marker><marker id="graphrev-arrow-teal" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--teal)"/></marker></defs>
+
+        <text x="156" y="52" text-anchor="middle" class="label">Graph version 7</text>
+        <path d="M84 194 C124 145 168 145 208 194 M84 212 C124 264 168 264 208 212 M254 203 H315" class="line" marker-end="url(#graphrev-arrow)"/>
+        <circle cx="60" cy="203" r="29" class="green-fill" stroke="var(--green)" stroke-width="3"/><text x="60" y="208" text-anchor="middle" class="label">A</text>
+        <circle cx="230" cy="203" r="31" class="violet-fill" stroke="var(--violet)" stroke-width="3"/><text x="230" y="208" text-anchor="middle" class="label">B</text>
+        <circle cx="342" cy="203" r="29" class="surface-fill" stroke="var(--line-strong)" stroke-width="2" stroke-dasharray="7 5"/><text x="342" y="208" text-anchor="middle" class="label">C</text>
+        <path d="M60 400 C146 350 250 350 342 400" class="line blue-stroke" marker-end="url(#graphrev-arrow)"/>
+        <circle cx="60" cy="400" r="29" class="blue-fill" stroke="var(--blue)" stroke-width="3"/><text x="60" y="405" text-anchor="middle" class="label">E</text>
+        <circle cx="342" cy="400" r="29" class="surface-fill" stroke="var(--line-strong)" stroke-width="2" stroke-dasharray="7 5"/><text x="342" y="405" text-anchor="middle" class="label">F</text>
+        <text x="60" y="448" text-anchor="middle" class="small">running</text><text x="230" y="253" text-anchor="middle" class="small">finalizing</text><text x="342" y="253" text-anchor="middle" class="small">pending</text>
+
+        <path d="M383 203 H452" class="line violet-stroke" marker-end="url(#graphrev-arrow)"/>
+        <path d="M444 120 H615 L640 145 V355 H444 Z" class="surface-fill" stroke="var(--violet)" stroke-width="3"/>
+        <path d="M615 120 V145 H640" class="violet-fill" stroke="var(--violet)" stroke-width="2"/>
+        <text x="466" y="154" class="label">B finalizes</text>
+        <text x="466" y="177" class="micro">completion report + graph patch</text>
+        <text x="466" y="198" class="small">+ split pending C → C1, C2</text>
+        <text x="466" y="228" class="small">+ add dependency C1 → C2</text>
+        <text x="466" y="258" class="small">+ rewire descendant D</text>
+        <text x="466" y="288" class="small">◆ rationale + affected nodes</text>
+        <text x="466" y="326" class="micro">one atomic, typed worker action</text>
+
+        <path d="M641 238 H708" class="line teal-stroke" marker-end="url(#graphrev-arrow-teal)"/>
+        <path d="M734 102 L840 140 V270 C840 342 787 384 734 412 C681 384 628 342 628 270 V140 Z" class="teal-fill" stroke="var(--teal)" stroke-width="3" transform="translate(80 0)"/>
+        <text x="814" y="160" text-anchor="middle" class="label">Validate</text>
+        <text x="814" y="196" text-anchor="middle" class="small">inside approved scope</text>
+        <text x="814" y="226" text-anchor="middle" class="small">pending targets only</text>
+        <text x="814" y="256" text-anchor="middle" class="small">same run + organization</text>
+        <text x="814" y="286" text-anchor="middle" class="small">acyclic after patch</text>
+        <text x="814" y="316" text-anchor="middle" class="small">atomic version check</text>
+        <path d="M780 350 L802 372 L849 324" fill="none" stroke="var(--teal)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+        <path d="M900 238 H1027" class="line teal-stroke" marker-end="url(#graphrev-arrow-teal)"/>
+        <text x="1019" y="52" text-anchor="middle" class="label">Graph version 8</text>
+        <circle cx="958" cy="175" r="25" class="green-fill" stroke="var(--green)" stroke-width="3"/><text x="958" y="180" text-anchor="middle" class="label">B</text>
+        <circle cx="1028" cy="125" r="25" class="teal-fill" stroke="var(--teal)" stroke-width="3"/><text x="1028" y="130" text-anchor="middle" class="label">C1</text>
+        <circle cx="1028" cy="225" r="25" class="teal-fill" stroke="var(--teal)" stroke-width="3"/><text x="1028" y="230" text-anchor="middle" class="label">C2</text>
+        <path d="M979 159 L1006 140 M979 190 L1006 210 M1028 151 V196" class="line" marker-end="url(#graphrev-arrow)"/>
+        <circle cx="958" cy="400" r="25" class="blue-fill" stroke="var(--blue)" stroke-width="3"/><text x="958" y="405" text-anchor="middle" class="label">E</text>
+        <circle cx="1040" cy="400" r="25" class="surface-fill" stroke="var(--line-strong)" stroke-width="2" stroke-dasharray="7 5"/><text x="1040" y="405" text-anchor="middle" class="label">F</text>
+        <path d="M984 400 H1010" class="line blue-stroke" marker-end="url(#graphrev-arrow)"/>
+        <text x="997" y="448" text-anchor="middle" class="small">independent path keeps running</text>
+
+        <path d="M814 414 V500" class="line teal-stroke" marker-end="url(#graphrev-arrow-teal)"/>
+        <path d="M743 526 Q814 480 885 526 L874 608 Q814 644 754 608 Z" class="amber-fill" stroke="var(--amber)" stroke-width="3"/>
+        <text x="814" y="552" text-anchor="middle" class="label">Audit + notify</text>
+        <text x="814" y="577" text-anchor="middle" class="small">before / after · rationale</text>
+        <text x="814" y="599" text-anchor="middle" class="small">human may pause or correct</text>
+
+        <path d="M194 540 H604" class="hair"/>
+        <path d="M194 540 H414" class="line teal-stroke" stroke-width="7"/>
+        <text x="194" y="576" class="small">directly valid</text><text x="604" y="576" text-anchor="end" class="small">new plan approval required</text>
+        <text x="194" y="604" class="micro">add · split · supersede · rewire pending work</text>
+        <text x="604" y="604" text-anchor="end" class="micro">scope expansion · running/completed rewrite</text>
+      </svg>
+      <figcaption><b>Agents edit the DAG through validated patches, never direct record writes.</b> Safe changes to unstarted work apply immediately and create an immutable graph-revision event. Running and completed nodes are protected, independent work continues, and anything outside the human-approved scope becomes a new plan proposal.</figcaption>
+    </figure>
+    <table>
+      <thead><tr><th>Patch class</th><th>Service decision</th><th>Execution effect</th></tr></thead>
+      <tbody>
+        <tr><td>Add or split pending work; supersede a pending node; add or remove pending dependencies; revise pending acceptance or review policy.</td><td>Apply directly after authorization, scope, lifecycle, ownership, acyclicity, and graph-version validation.</td><td>Emit the full graph revision, notify the human, and recalculate readiness. Unrelated branches continue.</td></tr>
+        <tr><td>Touch a running, finalizing, completed, or integrated node; create a cycle or cross-run edge; submit with a stale graph version.</td><td>Reject atomically with a typed reason.</td><td>The existing graph remains unchanged; the worker may refresh and submit a narrower patch.</td></tr>
+        <tr><td>Expand the approved outcome or violate a project constraint.</td><td>Route to the controller as a proposed plan revision requiring human approval.</td><td>Freeze only the affected downstream frontier while independent work continues.</td></tr>
+      </tbody>
+    </table>
+    <p>A worker receives graph-write authority only for its linked execution and only through the node's short <code>finalizing</code> phase. Its completion report and graph patch are committed atomically by the service. Once terminal, that invocation becomes read-only; later human feedback reopens the same node and session context through a new execution.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">07 · Human gates</p>
+    <h2>Successful work flows through; important decisions stop only what depends on them.</h2>
     <figure>
       <svg viewBox="0 0 1100 675" role="img" aria-labelledby="gate-title gate-desc">
         <title id="gate-title">Worker completion report and human gate sequence</title>
-        <desc id="gate-desc">A worker submits structured evidence, decisions, commit SHA, and optional recording. The service evaluates policy. Important decisions or requested review create an inbox gate. Approval integrates; feedback starts a new attempt.</desc>
+        <desc id="gate-desc">A worker submits structured evidence, decisions, commit SHA, optional result walkthrough, and optional graph patch. The service auto-accepts successful work with no gate. Important decisions or requested review create an inbox gate whose feedback resumes the same node and worker context.</desc>
         <defs><marker id="gate-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--line-strong)"/></marker><marker id="gate-arrow-teal" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--teal)"/></marker></defs>
         <text x="125" y="55" text-anchor="middle" class="label">Worker session</text>
         <text x="394" y="55" text-anchor="middle" class="label">Orchestration service</text>
@@ -581,62 +670,65 @@
         <path d="M125 125 H381" class="line" marker-end="url(#gate-arrow)"/>
         <text x="253" y="108" text-anchor="middle" class="micro">worker report</text>
         <g transform="translate(164 140)">
-          <path d="M0 0 H188 L212 24 V145 H0 Z" class="surface-fill" stroke="var(--violet)" stroke-width="2"/>
+          <path d="M0 0 H188 L212 24 V174 H0 Z" class="surface-fill" stroke="var(--violet)" stroke-width="2"/>
           <path d="M188 0 V24 H212" class="violet-fill" stroke="var(--violet)" stroke-width="2"/>
           <text x="18" y="35" class="small">✓ acceptance evidence</text>
           <text x="18" y="61" class="small">◆ decisions[]</text>
-          <text x="18" y="87" class="small">▶ recordingArtifactId?</text>
-          <text x="18" y="113" class="small">● headCommitSha</text>
-          <text x="18" y="137" class="micro">submitted via typed CLI action</text>
+          <text x="18" y="87" class="small">▶ resultWalkthroughId?</text>
+          <text x="18" y="113" class="small">⌘ graphPatch?</text>
+          <text x="18" y="139" class="small">● headCommitSha</text>
+          <text x="18" y="163" class="micro">one typed finalization action</text>
         </g>
 
         <path d="M394 205 C516 205 575 205 693 205" class="line amber-stroke" marker-end="url(#gate-arrow)"/>
-        <text x="550" y="187" text-anchor="middle" class="small">important decision or review policy → gate</text>
+        <text x="550" y="187" text-anchor="middle" class="small">important decision or requested review → gate</text>
         <rect x="610" y="225" width="192" height="100" rx="22" class="amber-fill" stroke="var(--amber)" stroke-width="3"/>
         <text x="706" y="258" text-anchor="middle" class="label">Needs you</text>
         <text x="706" y="282" text-anchor="middle" class="small">decision · summary</text>
-        <text x="706" y="304" text-anchor="middle" class="small">recording · conflict</text>
+        <text x="706" y="304" text-anchor="middle" class="small">result walkthrough</text>
 
         <path d="M706 337 C706 390 536 390 410 390" class="line red-stroke" marker-end="url(#gate-arrow)"/>
         <text x="566" y="374" text-anchor="middle" class="small">feedback</text>
         <path d="M394 410 C304 456 204 460 137 430" class="line red-stroke" marker-end="url(#gate-arrow)"/>
-        <text x="258" y="457" text-anchor="middle" class="small">create attempt n+1 with feedback packet</text>
+        <text x="258" y="457" text-anchor="middle" class="small">resume same node + worker context with feedback</text>
 
         <path d="M706 337 C706 484 843 485 951 485" class="line teal-stroke" marker-end="url(#gate-arrow-teal)"/>
         <text x="841" y="467" text-anchor="middle" class="small">approve</text>
         <circle cx="968" cy="485" r="25" class="green-fill" stroke="var(--green)" stroke-width="4"/>
         <path d="M956 485 L966 495 L982 475" fill="none" stroke="var(--green)" stroke-width="5" stroke-linecap="round"/>
         <path d="M968 518 V596" class="line teal-stroke" marker-end="url(#gate-arrow-teal)"/>
-        <text x="946" y="558" text-anchor="end" class="small">one ticket commit</text>
+        <text x="946" y="558" text-anchor="end" class="small">ticket-attributed commit</text>
 
-        <rect x="252" y="524" width="286" height="84" rx="22" class="surface-fill" stroke="var(--line-strong)" stroke-width="2"/>
-        <text x="395" y="556" text-anchor="middle" class="label">No natural-language inference</text>
-        <text x="395" y="579" text-anchor="middle" class="small">the report and resolution are typed service actions</text>
+        <path d="M394 330 C470 560 756 604 946 512" class="line teal-stroke dash" marker-end="url(#gate-arrow-teal)"/>
+        <text x="678" y="598" text-anchor="middle" class="small">checks pass + no gate → auto-accept</text>
+        <rect x="248" y="530" width="280" height="70" rx="22" class="surface-fill" stroke="var(--line-strong)" stroke-width="2"/>
+        <text x="388" y="558" text-anchor="middle" class="label">Typed actions only</text>
+        <text x="388" y="580" text-anchor="middle" class="small">never infer approval from chat</text>
       </svg>
-      <figcaption><b>A worker cannot declare itself integrated.</b> It submits a structured completion report. The service verifies the linked session, ticket, commit, and required artifact, persists decisions, creates gates, and only integrates after every blocking gate resolves.</figcaption>
+      <figcaption><b>A worker cannot declare itself integrated, but a human need not approve routine success.</b> The service verifies the linked execution, evidence, checks, commit, and optional graph patch. With no gate it auto-accepts; an important decision or requested review blocks only that node and its dependent descendants.</figcaption>
     </figure>
     <table>
       <thead><tr><th>Gate</th><th>When it opens</th><th>Resolution</th></tr></thead>
       <tbody>
-        <tr><td>Question</td><td>Scoping or execution cannot continue without a human choice.</td><td>Answer is stored with the run and the controller resumes.</td></tr>
-        <tr><td>Plan</td><td>A new or revised DAG is ready.</td><td>Approve materializes the revision; feedback creates the next revision.</td></tr>
-        <tr><td>Decision</td><td>A worker flags a consequential product, architecture, security, data, or scope choice.</td><td>Approve the choice or return guidance for a new attempt.</td></tr>
-        <tr><td>Summary</td><td>The node policy requires a human completion review.</td><td>Approve or request another attempt.</td></tr>
-        <tr><td>Recording</td><td>The node policy requires visible video evidence.</td><td>Watch the linked video artifact, then approve or give feedback.</td></tr>
-        <tr><td>Conflict</td><td>Service-owned integration cannot apply the ticket cleanly.</td><td>Choose a repair attempt, replan, or skip/cancel.</td></tr>
-        <tr><td>Final</td><td>Every non-skipped node is integrated and final checks pass.</td><td>Mark complete; opening/merging a PR remains an explicit action.</td></tr>
+        <tr><td>Question</td><td>Scoping or execution cannot continue without a human choice.</td><td>Store the answer, resume the requesting context, and unblock only its affected descendants.</td></tr>
+        <tr><td>Plan</td><td>The initial DAG or an out-of-scope revision is ready.</td><td>Approve the scope corridor and materialize its graph; feedback creates another immutable proposal.</td></tr>
+        <tr><td>Decision</td><td>A worker flags a consequential product, architecture, security, data, or scope choice.</td><td>Approve the choice or return guidance to the same node; independent branches continue.</td></tr>
+        <tr><td>Summary</td><td>The human pre-marked the node or the worker escalated routine completion for review.</td><td>Approve or resume the same ticket context with feedback.</td></tr>
+        <tr><td>Walkthrough</td><td>The node requires a concise demonstration of the delivered result.</td><td>Review acceptance criteria and decisions in the linked video; feedback requires a replacement walkthrough from the same node.</td></tr>
+        <tr><td>Blocked integration</td><td>The same node cannot resolve a semantic rebase conflict safely.</td><td>Answer its question or revise the affected graph; no separate reconciliation ticket is created.</td></tr>
+        <tr><td>Final</td><td>Every required node is integrated, no gate remains open, and project-level checks pass.</td><td>Human acceptance marks the run complete; opening or merging a pull request remains explicit.</td></tr>
       </tbody>
     </table>
-    <div class="note open"><span class="tag">Recording rule</span><p><strong>Recording is evidence, not theater.</strong> Workers use the existing browser-video skill only when its safety and browser-fit gates pass. A server-only or native ticket should use alternate proof; if the human explicitly requires video where no safe recording exists, the node stays blocked and asks.</p></div>
+    <div class="note fact"><span class="tag">Walkthrough rule</span><p><strong>Show the result, never the work session.</strong> A walkthrough demonstrates the delivered behavior, acceptance criteria, and consequential decisions. Browser-visible tickets may reuse the existing browser-video proof flow; its current v1 output is scripted and silent. Server-only or native work uses alternate evidence unless a safe result-video path is added.</p></div>
   </section>
 
   <section>
-    <p class="eyebrow">07 · Git contract</p>
-    <h2>Workers may make many commits; the final branch gets exactly one per ticket.</h2>
+    <p class="eyebrow">08 · Git contract</p>
+    <h2>Each node rebases itself; the final branch stays append-only and ticket-attributed.</h2>
     <figure>
       <svg viewBox="0 0 1100 590" role="img" aria-labelledby="git-title git-desc">
-        <title id="git-title">Parallel ticket branches squash into one linear integration branch</title>
-        <desc id="git-desc">Two independent worker branches fork from the integration head and may contain multiple internal commits. The service serially applies each approved diff as one commit. A dependent ticket starts only after both integrations. Conflicts route to a gate.</desc>
+        <title id="git-title">Ticket-owned rebases and revisions become a linear integration branch</title>
+        <desc id="git-desc">Two independent worker branches fork from the integration head and may contain multiple internal commits. A stale ticket resumes its own worker context, rebases onto the latest integration head, reruns checks, and then lands under a service lock. Late feedback to an integrated ticket appends a ticket-linked revision commit.</desc>
         <defs><marker id="git-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--line-strong)"/></marker></defs>
         <path d="M94 310 H1020" class="line teal-stroke" stroke-width="7"/>
         <circle cx="140" cy="310" r="17" class="surface-fill" stroke="var(--teal)" stroke-width="4"/>
@@ -658,7 +750,7 @@
         <circle cx="385" cy="459" r="13" class="violet-fill" stroke="var(--violet)" stroke-width="3"/>
         <circle cx="525" cy="434" r="13" class="violet-fill" stroke="var(--violet)" stroke-width="3"/>
         <text x="368" y="517" text-anchor="middle" class="label">ticket B worker branch</text>
-        <text x="368" y="539" text-anchor="middle" class="small">3 internal commits · same base H</text>
+        <text x="368" y="539" text-anchor="middle" class="small">starts at H · same node rebases onto A</text>
         <path d="M540 425 C572 388 596 357 621 324" class="line violet-stroke" marker-end="url(#git-arrow)"/>
         <circle cx="642" cy="310" r="19" class="violet-fill" stroke="var(--violet)" stroke-width="4"/>
         <text x="642" y="351" text-anchor="middle" class="label">B</text>
@@ -673,28 +765,37 @@
         <circle cx="910" cy="310" r="19" class="blue-fill" stroke="var(--blue)" stroke-width="4"/>
         <text x="910" y="351" text-anchor="middle" class="label">C</text>
 
-        <path d="M642 328 C678 403 718 410 764 395" class="line red-stroke dash"/>
-        <path d="M764 395 l28 -18 l-3 34 z" class="red-fill" stroke="var(--red)" stroke-width="3"/>
-        <text x="785" y="445" text-anchor="middle" class="small">conflict → human gate</text>
+        <path d="M492 330 C502 378 516 405 537 420" class="line amber-stroke dash" marker-end="url(#git-arrow)"/>
+        <text x="655" y="454" text-anchor="middle" class="small">stale head → same node rebases + resolves</text>
+        <text x="655" y="474" text-anchor="middle" class="micro">rerun checks against the current integration head</text>
+
+        <path d="M910 299 C932 232 986 234 999 292" class="line amber-stroke" marker-end="url(#git-arrow)"/>
+        <circle cx="1000" cy="310" r="19" class="amber-fill" stroke="var(--amber)" stroke-width="4"/>
+        <text x="1000" y="315" text-anchor="middle" class="label">A₂</text>
+        <text x="969" y="205" text-anchor="middle" class="small">late feedback → same A context</text>
+        <text x="1000" y="351" text-anchor="middle" class="micro">revision commit</text>
 
         <rect x="750" y="36" width="300" height="70" rx="22" class="surface-fill" stroke="var(--teal)" stroke-width="2"/>
         <text x="900" y="66" text-anchor="middle" class="label">Serialized integration lock</text>
-        <text x="900" y="90" text-anchor="middle" class="small">verify base/head · apply diff · test · commit</text>
+        <text x="900" y="90" text-anchor="middle" class="small">verify rebased head · checks · apply · canonical commit</text>
       </svg>
-      <figcaption><b>One ticket commit is an integration property, not a worker behavior.</b> Workers keep normal iterative histories on their branches. The service computes the approved ticket diff, applies it to the current integration head under a lock, verifies it, and creates a canonical commit carrying the ticket and execution IDs.</figcaption>
+      <figcaption><b>The ticket node owns integration recovery; the service owns serialization.</b> Workers keep normal iterative histories. If the integration head moved, the service resumes that node's worker context to rebase, resolve, and retest. The service then verifies and lands a canonical commit carrying ticket, execution, graph-version, and revision identity.</figcaption>
     </figure>
     <ul>
       <li>The orchestrator controller cannot commit implementation changes.</li>
-      <li>Each attempt records <code>baseCommitSha</code> and submitted <code>headCommitSha</code>.</li>
-      <li>Integration records <code>integrationCommitSha</code>; events never infer success from branch names.</li>
+      <li>Each attempt records <code>baseCommitSha</code> and submitted <code>headCommitSha</code>; entering <code>integrating</code> compares both against the current orchestration head.</li>
+      <li>A stale node resumes its own session context, rebases, resolves conflicts, reruns completion checks, and resubmits. No reconciliation ticket is created.</li>
+      <li>The integration service holds the branch lock, verifies the rebased head and evidence, creates the canonical commit, and records it in <code>TicketIntegration</code>.</li>
       <li>Descendants become ready only after prerequisite integration commits exist.</li>
-      <li>Integrated history is append-only. Later feedback becomes a new ticket or compensating commit, never a history rewrite.</li>
+      <li>Late feedback reopens the same node and worker-session context. Its next accepted attempt appends a correction commit linked to the same ticket; it never rewrites the original or replays downstream history.</li>
+      <li>Every orchestration-created commit belongs to exactly one ticket, while a ticket may have an initial commit plus later human-requested revision commits.</li>
+      <li>If the worker cannot safely resolve a semantic conflict, it asks the human and pauses only its dependent subgraph.</li>
     </ul>
   </section>
 
   <section>
-    <p class="eyebrow">08 · Orchestrate workspace</p>
-    <h2>The graph is the home; chat, workers, decisions, and videos are one click away.</h2>
+    <p class="eyebrow">09 · Orchestrate workspace</p>
+    <h2>The graph is the home; workers, revisions, decisions, and walkthroughs stay one click away.</h2>
     <figure>
       <svg viewBox="0 0 1100 690" role="img" aria-labelledby="ux-title ux-desc">
         <title id="ux-title">Wireframe of the Orchestrate session workspace</title>
@@ -722,6 +823,8 @@
         <text x="64" y="282" class="small">I started two ready</text><text x="64" y="303" class="small">tickets. Auth roles is</text><text x="64" y="324" class="small">waiting on a decision.</text>
         <rect x="71" y="360" width="177" height="70" rx="18" class="violet-fill" stroke="var(--violet)"/>
         <text x="87" y="388" class="small">Keep the first release</text><text x="87" y="409" class="small">admin-only.</text>
+        <rect x="48" y="452" width="200" height="84" rx="18" class="surface-fill" stroke="var(--teal)"/>
+        <text x="64" y="478" class="small">Graph revision 3 applied</text><text x="64" y="501" class="micro">Agent B split QA into</text><text x="64" y="520" class="micro">browser + API tickets · View diff</text>
         <rect x="48" y="577" width="200" height="46" rx="20" class="surface-fill" stroke="var(--line-strong)"/>
         <text x="64" y="605" class="small">Ask or change the plan…</text>
 
@@ -755,22 +858,22 @@
         <text x="837" y="354" class="small">Should viewers see the</text><text x="837" y="375" class="small">role editor in v1?</text>
         <rect x="837" y="398" width="206" height="58" rx="15" class="amber-fill" stroke="var(--amber)"/><text x="852" y="422" class="micro">Agent recommends</text><text x="852" y="442" class="small">Admin-only</text>
         <text x="837" y="494" class="tag">Evidence</text>
-        <rect x="837" y="508" width="206" height="54" rx="15" class="surface-fill" stroke="var(--line)"/><text x="852" y="533" class="small">▶ UI walkthrough · 0:42</text><text x="852" y="551" class="micro">optional recording</text>
+        <rect x="837" y="508" width="206" height="54" rx="15" class="surface-fill" stroke="var(--line)"/><text x="852" y="533" class="small">▶ Result walkthrough · 0:42</text><text x="852" y="551" class="micro">acceptance criteria + decisions</text>
         <rect x="837" y="584" width="92" height="38" rx="19" class="teal-fill" stroke="var(--teal)"/><text x="883" y="608" text-anchor="middle" class="small">Approve</text>
         <rect x="941" y="584" width="102" height="38" rx="19" class="surface-fill" stroke="var(--line-strong)"/><text x="992" y="608" text-anchor="middle" class="small">Feedback</text>
       </svg>
-      <figcaption><b>The DAG stays visible while the details move around it.</b> Selecting a node opens its ticket, active attempt, worker session link, decisions, and artifacts. “Open session” uses the existing session experience; the orchestration canvas does not reimplement terminals or chat.</figcaption>
+      <figcaption><b>The DAG stays visible while the details move around it.</b> Selecting a node opens its ticket, active attempt, worker session link, decisions, integrations, and artifacts. The controller rail exposes every graph-revision diff. “Open session” uses the existing session experience; the orchestration canvas does not reimplement terminals or chat.</figcaption>
     </figure>
-    <p>Web ships the full graph first. Mobile can render the same normalized data as a topologically ordered, virtualized node list with “Needs you” filters before receiving a pan-and-zoom graph.</p>
+    <p>Feedback always targets a node, not an anonymous new worker. If the node is running, Trace delivers the message to its active session; if it is already integrated, Trace reopens the same ticket-owned session context and the next accepted attempt appends a revision commit. Web ships the full graph first; mobile can render the same normalized data as a topologically ordered, virtualized node list with “Needs you” filters.</p>
   </section>
 
   <section>
-    <p class="eyebrow">09 · Delivery slices</p>
+    <p class="eyebrow">10 · Delivery slices</p>
     <h2>Ship the human loop before the parallel loop.</h2>
     <figure>
       <svg viewBox="0 0 1100 560" role="img" aria-labelledby="phase-title phase-desc">
         <title id="phase-title">Five independently verifiable delivery phases</title>
-        <desc id="phase-desc">Foundation and planning occupy the first two slices, sequential execution and gates the third, one-commit integration the fourth, and parallel scheduling plus polish the fifth. Each phase ends with a usable product proof.</desc>
+        <desc id="phase-desc">Foundation and planning occupy the first two slices, sequential execution and direct graph patches the third, ticket-owned rebase integration the fourth, and parallel scheduling plus polish the fifth. Each phase ends with a usable product proof.</desc>
         <path d="M82 253 H1022" class="hair"/>
         <g>
           <rect x="82" y="218" width="178" height="70" rx="18" class="teal-fill" stroke="var(--teal)" stroke-width="2"/>
@@ -780,8 +883,8 @@
           <rect x="922" y="210" width="100" height="86" rx="18" class="blue-fill" stroke="var(--blue)" stroke-width="2"/>
           <text x="171" y="247" text-anchor="middle" class="label">0 · Foundation</text><text x="171" y="270" text-anchor="middle" class="micro">kind + run + skill</text>
           <text x="379" y="241" text-anchor="middle" class="label">1 · Plan</text><text x="379" y="264" text-anchor="middle" class="micro">scope + approve</text><text x="379" y="283" text-anchor="middle" class="micro">tickets + DAG</text>
-          <text x="609" y="231" text-anchor="middle" class="label">2 · Sequential</text><text x="609" y="254" text-anchor="middle" class="micro">one worker at a time</text><text x="609" y="273" text-anchor="middle" class="micro">decisions + reviews</text><text x="609" y="292" text-anchor="middle" class="micro">recording gate</text>
-          <text x="821" y="234" text-anchor="middle" class="label">3 · Integrate</text><text x="821" y="257" text-anchor="middle" class="micro">one ticket commit</text><text x="821" y="276" text-anchor="middle" class="micro">conflict + final gate</text>
+          <text x="609" y="231" text-anchor="middle" class="label">2 · Sequential</text><text x="609" y="254" text-anchor="middle" class="micro">auto-accept + gates</text><text x="609" y="273" text-anchor="middle" class="micro">direct graph patches</text><text x="609" y="292" text-anchor="middle" class="micro">result walkthrough</text>
+          <text x="821" y="234" text-anchor="middle" class="label">3 · Integrate</text><text x="821" y="257" text-anchor="middle" class="micro">same-node rebase</text><text x="821" y="276" text-anchor="middle" class="micro">revision + final gate</text>
           <text x="972" y="241" text-anchor="middle" class="label">4</text><text x="972" y="263" text-anchor="middle" class="micro">parallel</text><text x="972" y="281" text-anchor="middle" class="micro">polish</text>
         </g>
         <path d="M171 305 V390 M379 322 V390 M609 340 V390 M821 331 V390 M972 313 V390" class="hair dash"/>
@@ -792,8 +895,8 @@
         <circle cx="972" cy="406" r="14" class="blue-fill" stroke="var(--blue)" stroke-width="3"/>
         <text x="171" y="447" text-anchor="middle" class="small">create + reload</text><text x="171" y="467" text-anchor="middle" class="small">an Orchestrate session</text>
         <text x="379" y="447" text-anchor="middle" class="small">approve a plan</text><text x="379" y="467" text-anchor="middle" class="small">and see its DAG</text>
-        <text x="609" y="447" text-anchor="middle" class="small">run, review, revise</text><text x="609" y="467" text-anchor="middle" class="small">one real ticket</text>
-        <text x="821" y="447" text-anchor="middle" class="small">produce a branch with</text><text x="821" y="467" text-anchor="middle" class="small">one commit per ticket</text>
+        <text x="609" y="447" text-anchor="middle" class="small">auto-integrate one ticket</text><text x="609" y="467" text-anchor="middle" class="small">and apply its graph patch</text>
+        <text x="821" y="447" text-anchor="middle" class="small">rebase, land, then append</text><text x="821" y="467" text-anchor="middle" class="small">a late-feedback revision</text>
         <text x="972" y="447" text-anchor="middle" class="small">run a fork/join</text><text x="972" y="467" text-anchor="middle" class="small">without duplicates</text>
         <text x="82" y="95" class="title">Effort shape</text>
         <text x="82" y="124" class="small">Block height encodes relative implementation/risk, not calendar time.</text>
@@ -805,15 +908,15 @@
       <tbody>
         <tr><td>0 · Foundation</td><td><code>orchestrate</code> kind, run record, read-only controller prompt/skills, create/load/event hydration.</td><td>Start from Home, refresh, and recover the same run with no transcript parsing.</td></tr>
         <tr><td>1 · Scoping &amp; plan</td><td>Structured questions, immutable plan revisions, ticket materialization, cycle-safe dependencies, read-only DAG canvas.</td><td>Reject revision 1, approve revision 2, and see normal Trace tickets plus the approved graph.</td></tr>
-        <tr><td>2 · Sequential execution</td><td>Worker context packet, ticket-linked coding group, completion report, decisions, recording/summary gates, feedback attempts.</td><td>Run one ticket through approval, feedback, second attempt, and approval.</td></tr>
-        <tr><td>3 · Integration &amp; finish</td><td>Serialized squash integration, conflict gate, descendant readiness, final verification and human gate.</td><td>Final branch is base + exactly N canonical commits for N integrated tickets.</td></tr>
-        <tr><td>4 · Parallel &amp; polish</td><td>Bounded ready-node scheduling, durable reconciler, pause/resume, large-DAG UX, mobile list.</td><td>A fork/join DAG survives server restart, duplicate events, and one failed worker without double-launching.</td></tr>
+        <tr><td>2 · Sequential execution</td><td>Worker context packet, ticket-linked coding group, finalizing report, direct validated graph patches, auto-accept, decision/summary/walkthrough gates, and same-context feedback attempts.</td><td>Auto-integrate one ticket, apply its safe pending-work patch without approval, and prove an important decision blocks only its descendant.</td></tr>
+        <tr><td>3 · Integration &amp; finish</td><td>Same-node rebase loop, serialized canonical integration, append-only revision commits, descendant readiness, final verification, and required human acceptance.</td><td>Land a stale ticket after its own rebase, then send late feedback to that ticket and append a linked correction without rewriting history.</td></tr>
+        <tr><td>4 · Parallel &amp; polish</td><td>Bounded continuous scheduling, durable reconciler, affected-subgraph blocking, pause/resume, large-DAG UX, and mobile list.</td><td>A fork/join DAG survives restart, duplicate events, a direct graph edit, one gated branch, and one failed worker without double-launching or stalling unrelated work.</td></tr>
       </tbody>
     </table>
   </section>
 
   <section>
-    <p class="eyebrow">10 · Repository impact</p>
+    <p class="eyebrow">11 · Repository impact</p>
     <h2>The change crosses every seam, but each seam already has a sibling pattern.</h2>
     <figure>
       <svg viewBox="0 0 1100 650" role="img" aria-labelledby="impact-title impact-desc">
@@ -854,26 +957,26 @@
     <table>
       <thead><tr><th>Paths</th><th>Planned change</th></tr></thead>
       <tbody>
-        <tr><td><code>packages/gql/src/schema.graphql</code><br><code>apps/server/prisma/schema.prisma</code></td><td>Add <code>orchestrate</code>, orchestration types/inputs/events, ticket planning fields, dependency/run/node/execution/decision/gate models, and migration.</td></tr>
-        <tr><td><code>apps/server/src/services/orchestration*.ts</code></td><td>New service-owned lifecycle, plan materialization, scheduler, gate resolution, worker reports, readiness, and reconciliation.</td></tr>
-        <tr><td><code>apps/server/src/services/session.ts</code><br><code>ticket.ts</code><br><code>managed-git.ts</code></td><td>Controller instruction/read-only rule; consume the existing <code>ticketId</code> input; extend tickets; create isolated worker groups; verify and squash approved diffs.</td></tr>
-        <tr><td><code>apps/server/src/services/inbox.ts</code><br><code>artifact.ts</code><br><code>index.ts</code></td><td>Project gate notifications from durable gates, link video evidence without overloading visual-plan approval, and run a distributed reconciler.</td></tr>
+        <tr><td><code>packages/gql/src/schema.graphql</code><br><code>apps/server/prisma/schema.prisma</code></td><td>Add <code>orchestrate</code>; typed plan, graph-patch, report, gate, feedback, and acceptance inputs; ticket planning fields; run/node/dependency/execution/integration/decision/gate/revision models; full-snapshot events; and migration.</td></tr>
+        <tr><td><code>apps/server/src/services/orchestration*.ts</code></td><td>New service-owned lifecycle, plan materialization, graph-patch validation, continuous scheduler, affected-frontier blocking, gate resolution, auto-accept, worker finalization, readiness, and reconciliation.</td></tr>
+        <tr><td><code>apps/server/src/services/session.ts</code><br><code>ticket.ts</code><br><code>managed-git.ts</code></td><td>Controller read-only rule; consume the existing <code>ticketId</code> input; extend ticket briefs; create/resume isolated worker groups; perform ticket-owned rebase attempts; verify and serialize canonical initial and revision commits.</td></tr>
+        <tr><td><code>apps/server/src/services/inbox.ts</code><br><code>artifact.ts</code><br><code>index.ts</code></td><td>Project gate notifications from durable gates, link result-walkthrough evidence without overloading visual-plan approval, and run the scheduler/reconciler independently of agent processes.</td></tr>
         <tr><td><code>apps/server/src/schema/orchestration.ts</code><br><code>schema/resolvers.ts</code></td><td>Thin query/mutation wrappers over the services.</td></tr>
-        <tr><td><code>runtime/skills/orchestrate-*/</code><br><code>runtime/manifest.json</code></td><td>Ship controller and worker starter files: scoping protocol, ticket context contract, decision threshold, worker report, and gate behavior; regenerate the runtime bundle.</td></tr>
-        <tr><td><code>packages/cli-contract/src/index.ts</code><br><code>packages/cli/src/commands/orchestrate/</code></td><td>Add capability-restricted controller actions and a worker-report action scoped to the active run/execution; regenerate <code>runtime/bin</code>.</td></tr>
+        <tr><td><code>runtime/skills/orchestrate-*/</code><br><code>runtime/manifest.json</code></td><td>Ship controller and worker starter files: scoping protocol, plan contract, ticket context, decision threshold, finalizing/graph-patch report, rebase loop, walkthrough behavior, and same-context feedback; regenerate the runtime bundle.</td></tr>
+        <tr><td><code>packages/cli-contract/src/index.ts</code><br><code>packages/cli/src/commands/orchestrate/</code><br><code>apps/server/src/lib/agent-invocation-auth.ts</code><br><code>agent-authorization.ts</code></td><td>Add separate controller and worker capabilities, bind worker writes to one run/node/execution and lifecycle window, keep scheduler/integrator authority internal, and regenerate <code>runtime/bin</code>.</td></tr>
         <tr><td><code>packages/client-core/src/stores/entity.ts</code><br><code>events/handlers.ts</code></td><td>Add normalized orchestration entities and full-snapshot event upserts.</td></tr>
-        <tr><td><code>apps/web/src/components/home/</code><br><code>session/</code><br><code>orchestrate/</code><br><code>inbox/</code></td><td>Create/select Orchestrate, route the group to a graph-first workspace, inspect nodes/workers/gates, and resolve feedback/approval actions.</td></tr>
+        <tr><td><code>apps/web/src/components/home/</code><br><code>session/</code><br><code>orchestrate/</code><br><code>inbox/</code></td><td>Create/select Orchestrate, route the group to a graph-first workspace, inspect workers/gates/integrations/graph diffs, send node-addressed feedback, and resolve initial/final approval actions.</td></tr>
       </tbody>
     </table>
   </section>
 
   <section>
-    <p class="eyebrow">11 · Verification</p>
+    <p class="eyebrow">12 · Verification</p>
     <h2>Prove the state machine, the event stream, and the Git history separately.</h2>
     <figure>
       <svg viewBox="0 0 1100 560" role="img" aria-labelledby="verify-title verify-desc">
         <title id="verify-title">Four verification tracks converge on one end-to-end proof</title>
-        <desc id="verify-desc">Contract, service, client, and git verification tracks run independently, then converge on an end-to-end fork/join orchestration scenario with plan rejection, feedback, a recording gate, restart recovery, and final branch inspection.</desc>
+        <desc id="verify-desc">Contract, service, client, and Git verification tracks run independently, then converge on an end-to-end fork/join orchestration scenario with direct graph evolution, auto-accept, targeted human gates, same-node rebase, late feedback, restart recovery, and final human acceptance.</desc>
         <defs><marker id="verify-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="var(--line-strong)"/></marker></defs>
         <path d="M110 113 C420 113 560 255 813 278" class="line violet-stroke" marker-end="url(#verify-arrow)"/>
         <path d="M110 225 C420 225 560 274 813 289" class="line teal-stroke" marker-end="url(#verify-arrow)"/>
@@ -887,14 +990,14 @@
         </g>
         <path d="M816 236 Q922 181 1028 236 L1014 380 Q922 436 830 380 Z" class="amber-fill" stroke="var(--amber)" stroke-width="4"/>
         <text x="922" y="278" text-anchor="middle" class="title">E2E scenario</text>
-        <text x="922" y="309" text-anchor="middle" class="small">reject plan 1 · approve plan 2</text>
-        <text x="922" y="333" text-anchor="middle" class="small">fork/join · feedback attempt</text>
-        <text x="922" y="357" text-anchor="middle" class="small">video gate · restart · final review</text>
+        <text x="922" y="309" text-anchor="middle" class="small">plan approval · direct graph patch</text>
+        <text x="922" y="333" text-anchor="middle" class="small">auto-accept · targeted decision</text>
+        <text x="922" y="357" text-anchor="middle" class="small">rebase · late feedback · final acceptance</text>
 
         <rect x="280" y="72" width="316" height="72" rx="20" class="surface-fill" stroke="var(--line)"/><text x="438" y="100" text-anchor="middle" class="small">codegen + runtime bundle checks</text><text x="438" y="123" text-anchor="middle" class="micro">no duplicated enum/type definitions</text>
-        <rect x="280" y="184" width="316" height="72" rx="20" class="surface-fill" stroke="var(--line)"/><text x="438" y="212" text-anchor="middle" class="small">cycle, readiness, idempotency, auth</text><text x="438" y="235" text-anchor="middle" class="micro">every mutation asserts full event snapshot</text>
+        <rect x="280" y="184" width="316" height="72" rx="20" class="surface-fill" stroke="var(--line)"/><text x="438" y="212" text-anchor="middle" class="small">graph validation, readiness, locks, auth</text><text x="438" y="235" text-anchor="middle" class="micro">every mutation asserts full event snapshot</text>
         <rect x="280" y="296" width="316" height="72" rx="20" class="surface-fill" stroke="var(--line)"/><text x="438" y="324" text-anchor="middle" class="small">refresh, selectors, graph, gate actions</text><text x="438" y="347" text-anchor="middle" class="micro">no mutation-result store writes</text>
-        <rect x="280" y="408" width="316" height="72" rx="20" class="surface-fill" stroke="var(--line)"/><text x="438" y="436" text-anchor="middle" class="small">parallel base, conflict, squash identity</text><text x="438" y="459" text-anchor="middle" class="micro">base + N ticket commits exactly</text>
+        <rect x="280" y="408" width="316" height="72" rx="20" class="surface-fill" stroke="var(--line)"/><text x="438" y="436" text-anchor="middle" class="small">stale base, rebase, revision identity</text><text x="438" y="459" text-anchor="middle" class="micro">every commit maps to one ticket + execution</text>
       </svg>
       <figcaption><b>No single “happy path” test can prove this feature.</b> Schema/action authorization, lifecycle transitions, event hydration, and Git identity each get focused tests. The end-to-end scenario then proves that those tracks stay connected across human feedback and process restart.</figcaption>
     </figure>
@@ -902,25 +1005,26 @@
       <summary>Service and scheduler cases that must be explicit</summary>
       <div><ul>
         <li>Plan approval is idempotent; an older revision cannot overwrite a newer approved revision.</li>
-        <li>Self, cross-organization, and cyclic dependencies fail before any edge event publishes.</li>
+        <li>A safe worker patch to pending nodes applies immediately and atomically; self, cross-run, cross-organization, stale-version, running-node, completed-node, and cyclic mutations fail before any graph event publishes.</li>
         <li>Duplicate completion reports and duplicate worker-terminated events do not create duplicate gates or attempts.</li>
-        <li>An execution without a valid ticket link, clean/known head SHA, or required video artifact cannot enter review.</li>
-        <li>Decision gates always override <code>reviewPolicy: auto</code>.</li>
-        <li>Feedback resolves the old gate and creates exactly one new attempt; the prior attempt remains queryable.</li>
+        <li>An execution without a valid ticket link, clean/known head SHA, passing checks, or required result-walkthrough artifact cannot finalize.</li>
+        <li><code>reviewPolicy: auto</code> integrates routine success without a gate; an important decision or worker escalation always overrides it and blocks only the computed dependent frontier.</li>
+        <li>Feedback resolves the old gate and creates exactly one new execution in the same node and ticket-owned session context; the prior execution remains queryable.</li>
         <li>Concurrent scheduler replicas claim a ready node once under advisory/distributed locks.</li>
-        <li>Conflict leaves the integration branch unchanged and creates a visible gate.</li>
-        <li>Final completion is impossible with open gates, running attempts, or nonterminal required nodes.</li>
+        <li>A stale worker head leaves the integration branch unchanged, resumes the same node for rebase, and lands only after checks pass against the latest head; an unresolved semantic conflict opens a question gate without creating another ticket.</li>
+        <li>Late feedback to an integrated node appends one ticket-linked revision commit and never rewrites the original integration or downstream commits.</li>
+        <li>Final completion is impossible without explicit human acceptance or while any gate, execution, required node, or project-level check remains unresolved.</li>
       </ul></div>
     </details>
   </section>
 
   <section>
-    <p class="eyebrow">12 · Risks, assumptions &amp; non-goals</p>
+    <p class="eyebrow">13 · Risks, assumptions &amp; non-goals</p>
     <h2>The largest risk is pretending a prompt is a control plane.</h2>
     <figure>
       <svg viewBox="0 0 1100 600" role="img" aria-labelledby="risk-title risk-desc">
         <title id="risk-title">Risk balance between autonomy and human control</title>
-        <desc id="risk-desc">A balance scale shows the approved plan and durable service rules counterweighting agent autonomy. Risks that escape prompts—silent decisions, duplicate scheduling, branch conflict, and missing evidence—are caught by gates, locks, commit verification, and structured reports.</desc>
+        <desc id="risk-desc">A balance scale shows the approved plan and durable service rules counterweighting agent autonomy. Risks that escape prompts—silent decisions, duplicate scheduling, unsafe graph mutation, branch conflict, and missing evidence—are caught by targeted gates, role-scoped capabilities, graph validation, locks, commit verification, and structured reports.</desc>
         <path d="M550 117 V440" class="line" stroke-width="8"/>
         <path d="M390 467 H710" class="line" stroke-width="12" stroke-linecap="round"/>
         <circle cx="550" cy="118" r="26" class="amber-fill" stroke="var(--amber)" stroke-width="4"/>
@@ -948,7 +1052,7 @@
 
         <rect x="80" y="510" width="214" height="55" rx="18" class="amber-fill" stroke="var(--amber)"/><text x="187" y="543" text-anchor="middle" class="small">durable gates</text>
         <rect x="323" y="510" width="214" height="55" rx="18" class="surface-fill" stroke="var(--line-strong)"/><text x="430" y="543" text-anchor="middle" class="small">claims + reconciler</text>
-        <rect x="566" y="510" width="214" height="55" rx="18" class="green-fill" stroke="var(--green)"/><text x="673" y="543" text-anchor="middle" class="small">verified squash apply</text>
+        <rect x="566" y="510" width="214" height="55" rx="18" class="green-fill" stroke="var(--green)"/><text x="673" y="543" text-anchor="middle" class="small">validated graph + Git</text>
         <rect x="809" y="510" width="214" height="55" rx="18" class="violet-fill" stroke="var(--violet)"/><text x="916" y="543" text-anchor="middle" class="small">structured report</text>
       </svg>
       <figcaption><b>Prompts define behavior; services enforce permission and state.</b> The controller and worker starter files are essential, but correctness lives in typed actions, durable records, locks, events, and verified Git operations.</figcaption>
@@ -956,9 +1060,9 @@
 
     <div class="grid-2">
       <div class="note fact"><span class="tag">Assumption</span><h3>One repository per run in v1</h3><p>The Orchestrate group is linked to one channel repository and produces one integration branch. If multi-repo delivery is required immediately, the run/branch model and final-review experience both need another level.</p></div>
-      <div class="note fact"><span class="tag">Assumption</span><h3>The controller is read-only</h3><p>All implementation happens in ticket workers; only the integration service writes the final worktree. If the controller may edit, one-ticket/one-commit provenance becomes porous.</p></div>
-      <div class="note open"><span class="tag">Open product choice</span><h3>Default review policy</h3><p>Recommendation: <code>summary</code> for user-facing tickets, <code>auto</code> for bounded internal tickets, and <code>recording</code> only when the planner can name a safe visible scenario. Important decisions block in every mode.</p></div>
-      <div class="note open"><span class="tag">Open product choice</span><h3>Graph interaction in v1</h3><p>Recommendation: deterministic topological layout with selection, pan, zoom, and status filtering; no manual node dragging. The repository has no DAG renderer today, so avoid making layout editing part of the first release.</p></div>
+      <div class="note fact"><span class="tag">Assumption</span><h3>The controller is read-only</h3><p>All implementation happens in ticket workers; only the integration service writes the final worktree after a node prepares a rebased head. If the controller may edit, ticket provenance becomes porous.</p></div>
+      <div class="note fact"><span class="tag">Product decision</span><h3>Review is exception-driven</h3><p><code>auto</code> is the node default. Humans may pre-mark summary or result-walkthrough gates, and agents may escalate to review or an important decision, but agents may never downgrade an existing gate.</p></div>
+      <div class="note fact"><span class="tag">V1 boundary</span><h3>Graph layout is deterministic</h3><p>Use topological layout with selection, pan, zoom, status filtering, and visible revision diffs. Agents change structure through typed patches; manual node dragging is not a graph mutation and does not ship in v1.</p></div>
     </div>
 
     <h3>Explicit non-goals for the first release</h3>
@@ -968,7 +1072,8 @@
       <li>Rewriting an integrated ticket commit after later feedback.</li>
       <li>Letting agents create events directly, bypass service authorization, or infer approval from chat text.</li>
       <li>Running ticket workers in the Orchestrate group's shared worktree.</li>
-      <li>Requiring video for work that cannot be safely and meaningfully demonstrated in a browser.</li>
+      <li>Recording or replaying the full agent work session; result walkthroughs demonstrate delivered behavior only.</li>
+      <li>Pausing independent graph branches because one node needs a decision or cannot rebase safely.</li>
       <li>A full pan-and-zoom mobile graph in the first web release.</li>
     </ul>
 
@@ -981,6 +1086,7 @@
           <li><code>StartSessionInput.ticketId</code> exists in GraphQL and the managed CLI, but <code>SessionService.start</code> does not currently consume it.</li>
           <li>Tickets currently have title, description, status, priority, labels, projects, assignees, and generic links; they lack acceptance criteria and dependency edges.</li>
           <li>Inbox items currently support plan and question types. Video artifacts render today, but artifact approval is intentionally limited to visual plans.</li>
+          <li><code>AGENT_INVOCATION_CAPABILITIES</code> currently aliases the general managed-CLI capability list, so controller and worker roles require a new capability derivation path rather than prompt-only restrictions.</li>
           <li>The entity store has no orchestration tables, and the web package has no DAG-rendering dependency.</li>
           <li><code>AppDeploymentService</code> already demonstrates the durable queued-state plus reconciler pattern needed for reliable scheduler claims.</li>
         </ul>
@@ -989,7 +1095,7 @@
   </section>
 
   <footer class="footer">
-    <p><strong>Recommended decision:</strong> build Orchestrate as a first-class session group kind backed by durable run/node/execution/gate records; keep controllers read-only, workers isolated, human gates explicit, and integration service-owned. Start with scoping and sequential execution, then enable parallel scheduling after the state and Git contracts are proven.</p>
+    <p><strong>Recommended decision:</strong> build Orchestrate as a first-class session group kind backed by durable run, graph-revision, node, execution, integration, and gate records. Keep controllers read-only, workers isolated, scheduling and validation service-owned, safe pending-work graph edits directly applicable, review exception-driven, feedback ticket-addressed, Git history append-only, and final acceptance human-owned. Prove the control and Git contracts sequentially before enabling bounded parallel execution.</p>
     <div class="legend"><span><i class="new"></i>new orchestration surface</span><span><i class="existing"></i>existing Trace primitive</span><span><i class="gate"></i>human gate</span><span><i class="risk-color"></i>blocked or risky path</span></div>
   </footer>
 </main>
