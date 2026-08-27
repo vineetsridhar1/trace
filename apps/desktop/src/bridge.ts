@@ -40,14 +40,11 @@ import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
 import type { GitExecFn } from "@trace/shared";
 import { getUsedSlugs } from "@trace/shared/animal-names";
+import { resolveExecutable } from "@trace/shared/adapters";
 import {
-  AntigravityAdapter,
-  ClaudeCodeAdapter,
-  CodexAdapter,
-  CursorComposerAdapter,
-  PiAdapter,
-  resolveExecutable,
-} from "@trace/shared/adapters";
+  codingToolExecutableRegistry,
+  type CodingToolExecutableRegistry,
+} from "./coding-tool-executables.js";
 import { getBridgeLabel, getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
 import {
   commitLinkedCheckoutChanges,
@@ -72,6 +69,7 @@ import { runtimeDebug } from "./runtime-debug.js";
 import { generalWorkspacePath, removeGeneralWorkspace } from "@trace/shared/general-workspace";
 import { TerminalManager } from "@trace/shared/adapters";
 import { collectTrackedPrWorkspaces, type TrackedSessionWorkspace } from "./pr-tracking.js";
+import { createCodingToolAdapter, getSupportedCodingTools } from "./coding-tool-adapter-factory.js";
 
 const BRIDGE_USER_AGENT = "Trace-Desktop-Bridge/0.1";
 const HEARTBEAT_INTERVAL_MS = 10_000;
@@ -86,22 +84,8 @@ export type GithubCliStatus = {
   error: string | null;
 };
 
-// Once a tool is detected we keep reporting it: the probe runs on every
-// reconnect, and a transient timeout under load must never demote a tool that
-// is actually installed (which would leave existing sessions unable to send
-// messages until the app is reloaded).
-const detectedExecutables = new Set<string>();
-
 function hasExecutable(command: string): boolean {
-  if (detectedExecutables.has(command)) return true;
-  // Resolve against PATH + common install dirs instead of executing the binary:
-  // GUI-launched processes often have a narrower PATH than the user's shell, and
-  // executing `--version` is fragile (slow cold starts, non-interactive hangs).
-  if (resolveExecutable(command) !== null) {
-    detectedExecutables.add(command);
-    return true;
-  }
-  return false;
+  return resolveExecutable(command) !== null;
 }
 
 function emptyLinkedCheckoutStatus(repoId: string) {
@@ -356,6 +340,7 @@ export class BridgeClient implements IBridgeClient {
   private terminalManager: TerminalManager;
   private autoSyncManager: LinkedCheckoutAutoSyncManager;
   private getSessionCookieHeader: (url: string) => Promise<string | null>;
+  private codingToolExecutables: CodingToolExecutableRegistry;
   private traceRuntime = ensureTraceRuntime(path.join(os.homedir(), ".trace", "runtime"));
 
   private gitExec: GitExecFn = (args, cwd) =>
@@ -366,9 +351,14 @@ export class BridgeClient implements IBridgeClient {
       });
     });
 
-  constructor(serverUrl: string, getSessionCookieHeader: (url: string) => Promise<string | null>) {
+  constructor(
+    serverUrl: string,
+    getSessionCookieHeader: (url: string) => Promise<string | null>,
+    codingToolExecutables: CodingToolExecutableRegistry = codingToolExecutableRegistry,
+  ) {
     this.serverUrl = serverUrl;
     this.getSessionCookieHeader = getSessionCookieHeader;
+    this.codingToolExecutables = codingToolExecutables;
     this.instanceId = getOrCreateInstanceId();
     this.terminalManager = new TerminalManager({
       onOutput: (terminalId, data) => {
@@ -703,12 +693,7 @@ export class BridgeClient implements IBridgeClient {
     // using our stable instanceId, so we don't need to report session lists.
     const config = readConfig();
     const label = this.getLabel();
-    const supportedTools = ["custom"];
-    if (hasExecutable("claude")) supportedTools.push("claude_code");
-    if (hasExecutable("codex")) supportedTools.push("codex");
-    if (hasExecutable("pi")) supportedTools.push("pi");
-    if (hasExecutable("agy")) supportedTools.push("antigravity");
-    if (hasExecutable("cursor-agent")) supportedTools.push("cursor_composer");
+    const supportedTools = getSupportedCodingTools(this.codingToolExecutables);
     runtimeDebug("desktop bridge sending runtime_hello", {
       instanceId: this.instanceId,
       label,
@@ -763,19 +748,7 @@ export class BridgeClient implements IBridgeClient {
   }
 
   private createAdapter(tool?: string): CodingToolAdapter {
-    switch (tool) {
-      case "antigravity":
-        return new AntigravityAdapter();
-      case "pi":
-        return new PiAdapter();
-      case "codex":
-        return new CodexAdapter();
-      case "cursor_composer":
-        return new CursorComposerAdapter();
-      case "claude_code":
-      default:
-        return new ClaudeCodeAdapter();
-    }
+    return createCodingToolAdapter(tool, this.codingToolExecutables);
   }
 
   private startLocalPrPolling() {

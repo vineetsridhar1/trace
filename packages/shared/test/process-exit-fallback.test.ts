@@ -763,6 +763,35 @@ describe("coding tool adapter process exit fallback", () => {
     expect(spawnedChildren[2].stdin.read()?.toString()).toBe("- fix this bug");
   });
 
+  it("spawns primary tools from configured absolute executable paths", () => {
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    new ClaudeCodeAdapter("/Users/example/.nvm/bin/claude").run({
+      prompt: "hello",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+    expect(spawn).toHaveBeenLastCalledWith(
+      "/Users/example/.nvm/bin/claude",
+      expect.any(Array),
+      expect.any(Object),
+    );
+
+    new CodexAdapter("/Users/example/.nvm/bin/codex").run({
+      prompt: "hello",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+    expect(spawn).toHaveBeenLastCalledWith(
+      "/Users/example/.nvm/bin/codex",
+      expect.any(Array),
+      expect.any(Object),
+    );
+  });
+
   it("marks Pi runs as failed when assistant events report an error stop reason", () => {
     const adapter = new PiAdapter();
     const onOutput = vi.fn();

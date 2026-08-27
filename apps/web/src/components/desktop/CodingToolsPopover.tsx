@@ -65,7 +65,12 @@ export function CodingToolsPopover({ onClose }: { onClose: () => void }) {
     }
     if (summary === "missing") {
       const missing = visibleStatuses[0];
-      return missing ? state.installOrUpdate(missing.tool) : Promise.resolve();
+      if (!missing) return Promise.resolve();
+      if (missing.executableOverride) {
+        openSettings();
+        return Promise.resolve();
+      }
+      return state.installOrUpdate(missing.tool);
     }
     if (summary === "ready") return state.check();
     if (summary === "updated") {
@@ -83,7 +88,9 @@ export function CodingToolsPopover({ onClose }: { onClose: () => void }) {
         : summary === "failed"
           ? "Retry failed update"
           : summary === "missing"
-            ? `Install ${visibleStatuses[0]?.label ?? "tool"}`
+            ? visibleStatuses[0]?.executableOverride
+              ? "Choose executable"
+              : `Install ${visibleStatuses[0]?.label ?? "tool"}`
             : summary === "updated"
               ? "Done"
               : "Check for updates";
