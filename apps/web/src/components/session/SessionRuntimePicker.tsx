@@ -13,6 +13,7 @@ import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvi
 import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { TraceLoader } from "../ui/trace-loader";
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
+import { SessionMoveChangesDialog } from "./SessionMoveChangesDialog";
 
 interface RuntimeInstance {
   id: string;
@@ -22,6 +23,16 @@ interface RuntimeInstance {
   connected: boolean;
   sessionCount: number;
   registeredRepoIds: string[];
+}
+
+type MoveResolution = { strategy: "COMMIT" | "DISCARD"; commitMessage?: string };
+
+function hasSessionMoveChangesError(error: {
+  graphQLErrors: readonly { extensions: Record<string, unknown> }[];
+}) {
+  return error.graphQLErrors.some(
+    (graphQLError) => graphQLError.extensions.code === "SESSION_MOVE_LOCAL_CHANGES",
+  );
 }
 
 export function SessionRuntimePicker({
@@ -36,6 +47,7 @@ export function SessionRuntimePicker({
   const [runtimes, setRuntimes] = useState<RuntimeInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [moving, setMoving] = useState<string | null>(null);
+  const [conflictTarget, setConflictTarget] = useState<string | null>(null);
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | undefined;
@@ -70,16 +82,22 @@ export function SessionRuntimePicker({
   }, [sessionId]);
 
   const handleMove = useCallback(
-    async (runtimeInstanceId: string) => {
+    async (runtimeInstanceId: string, resolution?: MoveResolution) => {
       setMoving(runtimeInstanceId);
       try {
         const result = await client
           .mutation(MOVE_SESSION_TO_RUNTIME_MUTATION, {
             sessionId,
             runtimeInstanceId,
+            conflictStrategy: resolution?.strategy ?? null,
+            commitMessage: resolution?.commitMessage ?? null,
           })
           .toPromise();
         if (result.error) {
+          if (hasSessionMoveChangesError(result.error)) {
+            setConflictTarget(runtimeInstanceId);
+            return;
+          }
           toast.error("Failed to move session", { description: result.error.message });
           return;
         }
@@ -99,39 +117,62 @@ export function SessionRuntimePicker({
     [onClose, sessionId],
   );
 
-  const handleMoveToCloud = useCallback(async () => {
-    if (cloudDisabledReason) {
-      toast.error("Cloud is unavailable for this repo", { description: cloudDisabledReason });
-      return;
-    }
-    if (!cloudEnvironmentAvailable) {
-      toast.error("Cloud is not configured for this organization");
-      return;
-    }
-    setMoving("cloud");
-    try {
-      const result = await client
-        .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, {
-          sessionId,
-        })
-        .toPromise();
-      if (result.error) {
-        toast.error("Failed to move session", { description: result.error.message });
+  const handleMoveToCloud = useCallback(
+    async (resolution?: MoveResolution) => {
+      if (cloudDisabledReason) {
+        toast.error("Cloud is unavailable for this repo", { description: cloudDisabledReason });
         return;
       }
-      if (!result.data?.moveSessionToCloud?.id) {
-        toast.error("Failed to move session", { description: "No session returned" });
+      if (!cloudEnvironmentAvailable) {
+        toast.error("Cloud is not configured for this organization");
         return;
       }
-      onClose();
-    } catch (err) {
-      toast.error("Failed to move session", {
-        description: err instanceof Error ? err.message : "Unknown error",
-      });
-    } finally {
-      setMoving(null);
-    }
-  }, [cloudDisabledReason, cloudEnvironmentAvailable, onClose, sessionId]);
+      setMoving("cloud");
+      try {
+        const result = await client
+          .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, {
+            sessionId,
+            conflictStrategy: resolution?.strategy ?? null,
+            commitMessage: resolution?.commitMessage ?? null,
+          })
+          .toPromise();
+        if (result.error) {
+          if (hasSessionMoveChangesError(result.error)) {
+            setConflictTarget("cloud");
+            return;
+          }
+          toast.error("Failed to move session", { description: result.error.message });
+          return;
+        }
+        if (!result.data?.moveSessionToCloud?.id) {
+          toast.error("Failed to move session", { description: "No session returned" });
+          return;
+        }
+        onClose();
+      } catch (err) {
+        toast.error("Failed to move session", {
+          description: err instanceof Error ? err.message : "Unknown error",
+        });
+      } finally {
+        setMoving(null);
+      }
+    },
+    [cloudDisabledReason, cloudEnvironmentAvailable, onClose, sessionId],
+  );
+
+  const handleResolveConflict = useCallback(
+    async (resolution: MoveResolution) => {
+      const target = conflictTarget;
+      if (!target) return;
+      setConflictTarget(null);
+      if (target === "cloud") {
+        await handleMoveToCloud(resolution);
+      } else {
+        await handleMove(target, resolution);
+      }
+    },
+    [conflictTarget, handleMove, handleMoveToCloud],
+  );
 
   const localRuntimes = runtimes.filter(
     (rt: RuntimeInstance) => rt.hostingMode === "local" && rt.id !== currentRuntimeInstanceId,
@@ -139,6 +180,12 @@ export function SessionRuntimePicker({
 
   return (
     <div className={cn("mt-2 rounded-lg border border-border bg-surface p-3", className)}>
+      <SessionMoveChangesDialog
+        open={conflictTarget !== null}
+        pending={moving !== null}
+        onClose={() => setConflictTarget(null)}
+        onResolve={handleResolveConflict}
+      />
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-xs font-semibold text-foreground">Move to another instance</h3>
         <button onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground">
@@ -155,7 +202,7 @@ export function SessionRuntimePicker({
           {cloudEnvironmentAvailable ? (
             <DisabledTooltip message={cloudDisabledReason} fullWidth>
               <button
-                onClick={handleMoveToCloud}
+                onClick={() => void handleMoveToCloud()}
                 disabled={moving !== null || !!cloudDisabledReason}
                 className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors hover:bg-surface-elevated disabled:opacity-50"
               >
@@ -164,9 +211,7 @@ export function SessionRuntimePicker({
                   <span className="text-foreground">New cloud container</span>
                   <span className="ml-2 text-xs text-muted-foreground">pulls current branch</span>
                 </div>
-                {moving === "cloud" && (
-                  <TraceLoader size={12} showLabel={false} />
-                )}
+                {moving === "cloud" && <TraceLoader size={12} showLabel={false} />}
               </button>
             </DisabledTooltip>
           ) : null}
@@ -194,9 +239,7 @@ export function SessionRuntimePicker({
                       {rt.sessionCount} session{rt.sessionCount !== 1 ? "s" : ""}
                     </span>
                   </div>
-                  {moving === rt.id && (
-                    <TraceLoader size={12} showLabel={false} />
-                  )}
+                  {moving === rt.id && <TraceLoader size={12} showLabel={false} />}
                   {lacksRepo && (
                     <span className="flex items-center gap-1 text-xs text-amber-500">
                       <AlertTriangle size={10} />

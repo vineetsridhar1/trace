@@ -31,6 +31,7 @@ import {
   AuthenticationError,
   AuthorizationError,
   ToolNotInstalledError,
+  SessionMoveChangesError,
   ValidationError,
 } from "../lib/errors.js";
 import { eventService } from "./event.js";
@@ -872,6 +873,8 @@ type SessionMoveParams = {
   targetEnvironment?: ProvisioningEnvironment;
   reuseCloudRuntime?: RuntimeMetadata | null;
   allowUnverifiedSourceGitStatus?: boolean;
+  conflictStrategy?: "commit" | "discard";
+  commitMessage?: string | null;
   bootstrapPrompt?: string;
   conversion?: GeneratedSessionConversion;
   actorType: ActorType;
@@ -9481,10 +9484,7 @@ export class SessionService {
       // checkout is essential: creating a new worktree for the same branch is
       // rejected by Git. Only recover an unambiguous, Trace-managed match.
       const recoveredWorkspaceSlug =
-        session.hosting === "local" &&
-        session.repo &&
-        session.branch &&
-        !session.sessionGroup?.slug
+        session.hosting === "local" && session.repo && session.branch && !session.sessionGroup?.slug
           ? await sessionRouter
               .listRepoWorktrees(runtime.key, session.repo.id)
               .then((worktrees) => {
@@ -9739,6 +9739,8 @@ export class SessionService {
     workdir?: string | null;
     runtimeInstanceId?: string | null;
     allowUnverifiedSourceGitStatus?: boolean;
+    conflictStrategy?: "commit" | "discard";
+    commitMessage?: string | null;
   }): Promise<{
     status: BridgeSessionGitSyncStatus | null;
     verified: boolean;
@@ -9788,10 +9790,17 @@ export class SessionService {
       return { status: null, verified: false, skippedReason: "inspection_failed" };
     }
 
+    if (status.hasUncommittedChanges && params.conflictStrategy) {
+      status = await sessionRouter.resolveSessionGitChanges(params.runtimeInstanceId, {
+        sessionId: params.sessionId,
+        workdirHint: params.workdir,
+        strategy: params.conflictStrategy,
+        commitMessage: params.commitMessage,
+      });
+    }
+
     if (status.hasUncommittedChanges) {
-      throw new Error(
-        "Cannot move session: commit, stash, or discard local changes before moving.",
-      );
+      throw new SessionMoveChangesError();
     }
 
     if (!status.branch) {
@@ -9879,6 +9888,8 @@ export class SessionService {
       targetEnvironment: requestedTargetEnvironment,
       reuseCloudRuntime,
       allowUnverifiedSourceGitStatus,
+      conflictStrategy,
+      commitMessage,
       conversion,
     } = params;
     const currentSessionGroup = session.sessionGroup;
@@ -9945,6 +9956,8 @@ export class SessionService {
       workdir: session.workdir,
       runtimeInstanceId: inspectableSourceRuntimeId,
       allowUnverifiedSourceGitStatus,
+      conflictStrategy,
+      commitMessage,
     });
     const sourceGitStatus = sourceInspection.status;
     const siblings = session.sessionGroupId
@@ -10386,6 +10399,7 @@ export class SessionService {
     organizationId: string,
     actorType: ActorType,
     actorId: string,
+    options?: { conflictStrategy?: "commit" | "discard"; commitMessage?: string | null },
   ) {
     const session = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
@@ -10441,6 +10455,8 @@ export class SessionService {
       targetRuntimeLabel: targetRuntime.label,
       targetRuntime,
       allowUnverifiedSourceGitStatus: true,
+      conflictStrategy: options?.conflictStrategy,
+      commitMessage: options?.commitMessage,
       actorType,
       actorId,
     });
@@ -10455,6 +10471,7 @@ export class SessionService {
     organizationId: string,
     actorType: ActorType,
     actorId: string,
+    options?: { conflictStrategy?: "commit" | "discard"; commitMessage?: string | null },
   ) {
     if (isLocalMode()) {
       throw new Error("Cloud sessions are disabled in local mode");
@@ -10488,6 +10505,8 @@ export class SessionService {
       targetRuntimeInstanceId: null,
       targetRuntimeLabel: null,
       allowUnverifiedSourceGitStatus: true,
+      conflictStrategy: options?.conflictStrategy,
+      commitMessage: options?.commitMessage,
       actorType,
       actorId,
     });

@@ -1472,10 +1472,14 @@ export type MutationMoveChannelArgs = {
 };
 
 export type MutationMoveSessionToCloudArgs = {
+  commitMessage?: InputMaybe<Scalars["String"]["input"]>;
+  conflictStrategy?: InputMaybe<SessionMoveConflictStrategy>;
   sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationMoveSessionToRuntimeArgs = {
+  commitMessage?: InputMaybe<Scalars["String"]["input"]>;
+  conflictStrategy?: InputMaybe<SessionMoveConflictStrategy>;
   runtimeInstanceId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
 };
@@ -2838,6 +2842,8 @@ export type SessionMessage = {
 };
 
 export type SessionMessageRole = "assistant" | "system" | "user";
+
+export type SessionMoveConflictStrategy = "COMMIT" | "DISCARD";
 
 export type SessionPromptIndexItem = {
   __typename?: "SessionPromptIndexItem";

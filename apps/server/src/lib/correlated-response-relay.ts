@@ -12,6 +12,7 @@ const RELAYED_RESPONSE_TYPES = new Set([
   "linked_checkout_action_result",
   "session_current_branch_result",
   "session_git_sync_status_result",
+  "resolve_session_git_changes_result",
   "branches_result",
   "workspace_slugs_result",
   "worktrees_result",
@@ -53,6 +54,7 @@ const ROUTED_COMMAND_TYPES = new Set([
   "linked_checkout_set_auto_sync",
   "session_current_branch",
   "session_git_sync_status",
+  "resolve_session_git_changes",
 ]);
 
 type RelayedResponse = {

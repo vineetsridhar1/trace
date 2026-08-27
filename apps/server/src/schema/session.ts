@@ -667,24 +667,47 @@ export const sessionMutations = {
     args: {
       sessionId: string;
       runtimeInstanceId: string;
+      conflictStrategy?: "COMMIT" | "DISCARD" | null;
+      commitMessage?: string | null;
     },
     ctx: Context,
   ) => {
-    return sessionService.moveToRuntime(
-      args.sessionId,
-      args.runtimeInstanceId,
-      requireOrgContext(ctx),
-      ctx.actorType,
-      ctx.userId,
-    );
+    return sessionService
+      .moveToRuntime(
+        args.sessionId,
+        args.runtimeInstanceId,
+        requireOrgContext(ctx),
+        ctx.actorType,
+        ctx.userId,
+        {
+          conflictStrategy: args.conflictStrategy?.toLowerCase() as
+            | "commit"
+            | "discard"
+            | undefined,
+          commitMessage: args.commitMessage,
+        },
+      )
+      .catch((error: unknown) => {
+        throw toGraphQLError(error);
+      });
   },
-  moveSessionToCloud: (_: unknown, args: { sessionId: string }, ctx: Context) => {
-    return sessionService.moveToCloud(
-      args.sessionId,
-      requireOrgContext(ctx),
-      ctx.actorType,
-      ctx.userId,
-    );
+  moveSessionToCloud: (
+    _: unknown,
+    args: {
+      sessionId: string;
+      conflictStrategy?: "COMMIT" | "DISCARD" | null;
+      commitMessage?: string | null;
+    },
+    ctx: Context,
+  ) => {
+    return sessionService
+      .moveToCloud(args.sessionId, requireOrgContext(ctx), ctx.actorType, ctx.userId, {
+        conflictStrategy: args.conflictStrategy?.toLowerCase() as "commit" | "discard" | undefined,
+        commitMessage: args.commitMessage,
+      })
+      .catch((error: unknown) => {
+        throw toGraphQLError(error);
+      });
   },
   saveSessionGroupFile: (
     _: unknown,

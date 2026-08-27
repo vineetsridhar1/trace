@@ -1007,7 +1007,9 @@ export class BridgeClient implements IBridgeClient {
         hasForwardedOutput = true;
         const message = actionableErrorMessage(output);
         const sourceTool = tool ?? this.sessionTools.get(sessionId);
-        const artifact = message ? actionRequiredArtifactForToolError(sourceTool, message) : undefined;
+        const artifact = message
+          ? actionRequiredArtifactForToolError(sourceTool, message)
+          : undefined;
         const data =
           output.type === "error" || output.type === "assistant"
             ? {
@@ -1768,6 +1770,65 @@ export class BridgeClient implements IBridgeClient {
               error: message,
             });
           });
+        break;
+      }
+      case "resolve_session_git_changes": {
+        const workdir = this.sessionWorkdirs.get(cmd.sessionId) ?? cmd.workdirHint;
+        if (!workdir) {
+          this.send({
+            type: "resolve_session_git_changes_result",
+            requestId: cmd.requestId,
+            error: "Session workdir is unavailable",
+          });
+          break;
+        }
+        void (async () => {
+          if (cmd.strategy === "commit") {
+            const message = cmd.commitMessage?.trim();
+            if (!message) throw new Error("A commit message is required");
+            await execFileAsync("git", ["add", "-A"], { cwd: workdir, timeout: 30_000 });
+            await execFileAsync("git", ["commit", "-m", message], {
+              cwd: workdir,
+              timeout: 30_000,
+            });
+            const { stdout } = await execFileAsync("git", ["branch", "--show-current"], {
+              cwd: workdir,
+              timeout: 10_000,
+            });
+            const branch = String(stdout).trim();
+            if (branch) {
+              await execFileAsync("git", ["push", "origin", `HEAD:refs/heads/${branch}`], {
+                cwd: workdir,
+                timeout: 60_000,
+              });
+            }
+          } else {
+            await execFileAsync("git", ["reset", "--hard", "HEAD"], {
+              cwd: workdir,
+              timeout: 30_000,
+            });
+            await execFileAsync("git", ["clean", "-fd"], { cwd: workdir, timeout: 30_000 });
+          }
+          const status = await inspectSessionGitSyncStatus((args, options) =>
+            execFileAsync("git", args, {
+              cwd: workdir,
+              maxBuffer: options?.maxBuffer,
+              timeout: options?.timeoutMs,
+            }).then(({ stdout }) => String(stdout)),
+          );
+          this.send({
+            type: "resolve_session_git_changes_result",
+            requestId: cmd.requestId,
+            status,
+          });
+        })().catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          this.send({
+            type: "resolve_session_git_changes_result",
+            requestId: cmd.requestId,
+            error: message,
+          });
+        });
         break;
       }
       case "list_files": {

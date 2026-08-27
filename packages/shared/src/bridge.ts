@@ -357,6 +357,15 @@ export interface BridgeSessionGitSyncStatusCommand {
   workdirHint?: string;
 }
 
+export interface BridgeResolveSessionGitChangesCommand {
+  type: "resolve_session_git_changes";
+  requestId: string;
+  sessionId: string;
+  workdirHint?: string;
+  strategy: "commit" | "discard";
+  commitMessage?: string;
+}
+
 export interface BridgeSessionCurrentBranchCommand {
   type: "session_current_branch";
   requestId: string;
@@ -544,6 +553,7 @@ export type BridgeCommand =
   | BridgeRestoreLinkedCheckoutCommand
   | BridgeSetLinkedCheckoutAutoSyncCommand
   | BridgeSessionGitSyncStatusCommand
+  | BridgeResolveSessionGitChangesCommand
   | BridgeSessionCurrentBranchCommand
   | BridgeTrackSessionCommand
   | BridgeTerminalCreateCommand
@@ -746,6 +756,13 @@ export interface BridgeSessionGitSyncStatus {
 
 export interface BridgeSessionGitSyncStatusResult {
   type: "session_git_sync_status_result";
+  requestId: string;
+  status?: BridgeSessionGitSyncStatus;
+  error?: string;
+}
+
+export interface BridgeResolveSessionGitChangesResult {
+  type: "resolve_session_git_changes_result";
   requestId: string;
   status?: BridgeSessionGitSyncStatus;
   error?: string;
@@ -1028,6 +1045,7 @@ export type BridgeMessage =
   | BridgeLinkedCheckoutChangedFileResult
   | BridgeLinkedCheckoutActionResult
   | BridgeSessionGitSyncStatusResult
+  | BridgeResolveSessionGitChangesResult
   | BridgeSessionCurrentBranchResult
   | BridgeSessionPrStatus
   | BridgeBranchesResult
