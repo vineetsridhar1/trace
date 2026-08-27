@@ -5,6 +5,7 @@ describe("branch diff bridge handler", () => {
   it("returns committed, uncommitted, and untracked workspace changes", async () => {
     const sent: BridgeMessage[] = [];
     const gitExec = vi.fn(async (args: string[]) => {
+      if (args[0] === "merge-base") return "merge-base-sha\n";
       if (args[0] === "diff" && args[1] === "--numstat") return "2\t1\tsrc/app.ts\n";
       if (args[0] === "diff" && args[1] === "--name-status") return "M\tsrc/app.ts\n";
       if (args[0] === "ls-files" && args.includes(".trace-work")) {
@@ -26,8 +27,9 @@ describe("branch diff bridge handler", () => {
       gitExec,
     );
 
-    expect(gitExec).toHaveBeenCalledWith(["diff", "--numstat", "origin/main..."], "/repo");
-    expect(gitExec).toHaveBeenCalledWith(["diff", "--name-status", "origin/main..."], "/repo");
+    expect(gitExec).toHaveBeenCalledWith(["merge-base", "origin/main", "HEAD"], "/repo");
+    expect(gitExec).toHaveBeenCalledWith(["diff", "--numstat", "merge-base-sha"], "/repo");
+    expect(gitExec).toHaveBeenCalledWith(["diff", "--name-status", "merge-base-sha"], "/repo");
     expect(gitExec).toHaveBeenCalledWith(
       ["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", ".trace-work"],
       "/repo",

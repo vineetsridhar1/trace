@@ -1801,11 +1801,15 @@ export async function handleBranchDiff(
   }
 
   try {
+    const mergeBase = (await gitExec(["merge-base", baseBranch, "HEAD"], workdir)).trim();
+    if (!mergeBase) {
+      throw new Error(`Could not resolve merge base for ${baseBranch}`);
+    }
     const [numstatOut, nameStatusOut, untrackedOut, ignoredTraceWorkOut] = await Promise.all([
-      // With the right side omitted, the three-dot range compares its merge base
-      // to the working tree instead of only to HEAD.
-      gitExec(["diff", "--numstat", `${baseBranch}...`], workdir),
-      gitExec(["diff", "--name-status", `${baseBranch}...`], workdir),
+      // `git diff <base>...` does not compare against the worktree. Resolve the
+      // merge base explicitly, then compare it with the live workspace.
+      gitExec(["diff", "--numstat", mergeBase], workdir),
+      gitExec(["diff", "--name-status", mergeBase], workdir),
       gitExec(["ls-files", "--others", "--exclude-standard", "-z"], workdir),
       // Trace agents may place generated plans and other workspace artifacts
       // under .trace-work/, which projects commonly ignore.
