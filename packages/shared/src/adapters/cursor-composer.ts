@@ -2,7 +2,11 @@ import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput, MessageBlock } from "./coding-tool.js";
 import { resolveCursorComposerModel } from "../models.js";
-import { buildChildProcessEnv } from "./spawn-env.js";
+import {
+  buildChildProcessEnv,
+  getExecutable,
+  type ExecutableProvider,
+} from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 
@@ -47,6 +51,8 @@ export class CursorComposerAdapter implements CodingToolAdapter {
   private resultEmitted = false;
   private processGeneration = 0;
 
+  constructor(private readonly executable: ExecutableProvider = "cursor-agent") {}
+
   run({
     prompt,
     cwd,
@@ -79,7 +85,7 @@ export class CursorComposerAdapter implements CodingToolAdapter {
     }
 
     const processGeneration = ++this.processGeneration;
-    const child = spawn("cursor-agent", args, {
+    const child = spawn(getExecutable(this.executable), args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
       env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),

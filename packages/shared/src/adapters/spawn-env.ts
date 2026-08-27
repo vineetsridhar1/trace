@@ -1,8 +1,14 @@
-import { statSync } from "fs";
+import { accessSync, constants, statSync } from "fs";
 import { delimiter, join } from "path";
 
 const MAX_CHILD_ENV_BYTES = 64 * 1024;
 const MAX_CHILD_ENV_VALUE_BYTES = 16 * 1024;
+
+export type ExecutableProvider = string | (() => string);
+
+export function getExecutable(provider: ExecutableProvider): string {
+  return typeof provider === "function" ? provider() : provider;
+}
 
 /**
  * Bin directories that GUI-launched processes (e.g. the Electron bridge) often
@@ -43,6 +49,7 @@ export function resolveExecutable(
 ): string | null {
   if (command.includes("/")) {
     try {
+      accessSync(command, constants.X_OK);
       return statSync(command).isFile() ? command : null;
     } catch {
       return null;
@@ -52,6 +59,7 @@ export function resolveExecutable(
     if (!dir) continue;
     const full = join(dir, command);
     try {
+      accessSync(full, constants.X_OK);
       if (statSync(full).isFile()) return full;
     } catch {
       // Not in this dir — keep scanning.

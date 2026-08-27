@@ -1,12 +1,37 @@
-import { execFileSync } from "child_process";
+import { execFile } from "child_process";
 
-type ExecFileSyncFn = (
+type ExecFileFn = (
   file: string,
   args: string[],
-  options: { encoding: BufferEncoding; timeout: number; env: NodeJS.ProcessEnv },
-) => string;
+  options: { timeout: number; env: NodeJS.ProcessEnv },
+) => Promise<string>;
 
-const FALLBACK_PATHS = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+const FALLBACK_PATHS = [
+  "/opt/homebrew/bin",
+  "/usr/local/bin",
+  "/usr/bin",
+  "/bin",
+  "/usr/sbin",
+  "/sbin",
+];
+const LOGIN_SHELL_TIMEOUT_MS = 10_000;
+const PATH_MARKER = "__TRACE_LOGIN_SHELL_PATH__=";
+
+export type LoginShellPathResult = {
+  loaded: boolean;
+  error: string | null;
+};
+
+const execFileAsync: ExecFileFn = (file, args, options) =>
+  new Promise((resolve, reject) => {
+    execFile(file, args, { ...options, encoding: "utf8" }, (error, stdout) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(stdout);
+    });
+  });
 
 function splitPath(value: string | undefined): string[] {
   return (value ?? "")
@@ -30,46 +55,56 @@ function mergePaths(...paths: string[]): string {
   return merged.join(":");
 }
 
-function readLoginShellPath(
+async function readLoginShellPath(
   env: NodeJS.ProcessEnv,
-  execFileSyncFn: ExecFileSyncFn,
-): string | null {
-  if (process.platform === "win32") return null;
-
+  execFileFn: ExecFileFn,
+): Promise<{ path: string | null; error: string | null }> {
   const shell = env.SHELL?.trim() || "/bin/zsh";
 
   try {
-    const stdout = execFileSyncFn(shell, ["-lic", 'printf "%s" "$PATH"'], {
-      encoding: "utf8",
-      timeout: 2_000,
+    const stdout = await execFileFn(shell, ["-lic", `printf "\\n${PATH_MARKER}%s\\n" "$PATH"`], {
+      timeout: LOGIN_SHELL_TIMEOUT_MS,
       env: { ...env },
     });
-    const lines = stdout
+    const markedLine = stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
-      .filter(Boolean);
-    return lines.at(-1) ?? null;
-  } catch {
-    return null;
+      .find((line) => line.startsWith(PATH_MARKER));
+    const loginShellPath = markedLine?.slice(PATH_MARKER.length) || null;
+    return loginShellPath
+      ? { path: loginShellPath, error: null }
+      : { path: null, error: "The login shell did not return its PATH." };
+  } catch (error) {
+    return {
+      path: null,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 
-export function hydrateLoginShellPath(
+/**
+ * Merge the user's login-shell PATH into the desktop process environment.
+ * Returns whether the login shell answered successfully. Fallback directories
+ * are still applied when shell startup fails or times out.
+ */
+export async function hydrateLoginShellPath(
   env: NodeJS.ProcessEnv = process.env,
-  execFileSyncFn: ExecFileSyncFn = execFileSync,
-): boolean {
-  if (!env.SHELL?.trim() && process.platform !== "win32") {
+  execFileFn: ExecFileFn = execFileAsync,
+): Promise<LoginShellPathResult> {
+  if (!env.SHELL?.trim()) {
     env.SHELL = "/bin/zsh";
   }
 
-  const loginShellPath = readLoginShellPath(env, execFileSyncFn);
+  const loginShell = await readLoginShellPath(env, execFileFn);
   const mergedPath = mergePaths(
-    loginShellPath ?? "",
+    loginShell.path ?? "",
     env.PATH ?? "",
     FALLBACK_PATHS.join(":"),
   );
 
-  if (!mergedPath || mergedPath === env.PATH) return false;
-  env.PATH = mergedPath;
-  return true;
+  if (mergedPath) env.PATH = mergedPath;
+  return {
+    loaded: loginShell.path !== null,
+    error: loginShell.error,
+  };
 }

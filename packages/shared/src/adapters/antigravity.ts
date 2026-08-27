@@ -4,7 +4,11 @@ import { homedir } from "os";
 import { join } from "path";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, TokenUsage } from "./coding-tool.js";
-import { buildChildProcessEnv } from "./spawn-env.js";
+import {
+  buildChildProcessEnv,
+  getExecutable,
+  type ExecutableProvider,
+} from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 /** Generous cap so long agent runs aren't cut short by agy's default 5m print timeout. */
@@ -101,6 +105,8 @@ export class AntigravityAdapter implements CodingToolAdapter {
   private processGeneration = 0;
   private lastUsage: TokenUsage | undefined;
 
+  constructor(private readonly executable: ExecutableProvider = "agy") {}
+
   run({ prompt, cwd, onOutput, onComplete, toolSessionId, runtimeEnv }: RunOptions) {
     this.lastUsage = undefined;
 
@@ -119,7 +125,7 @@ export class AntigravityAdapter implements CodingToolAdapter {
     }
 
     const processGeneration = ++this.processGeneration;
-    const child = spawn("agy", args, {
+    const child = spawn(getExecutable(this.executable), args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
       env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),

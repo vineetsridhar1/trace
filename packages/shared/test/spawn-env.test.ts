@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildChildProcessEnv } from "../src/adapters/spawn-env.js";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { buildChildProcessEnv, resolveExecutable } from "../src/adapters/spawn-env.js";
 
 describe("buildChildProcessEnv", () => {
   it("drops oversized non-essential values", () => {
@@ -66,5 +69,22 @@ describe("buildChildProcessEnv", () => {
     expect(env.TRACE_SKILLS_DIR).toBe("/trace/runtime/skills");
     expect(env.PLAYWRIGHT_CLI_SESSION).toBe("trace-123");
     expect(env.PLAYWRIGHT_MCP_OUTPUT_DIR).toBe("/tmp/trace-playwright/123");
+  });
+});
+
+describe("resolveExecutable", () => {
+  it("only resolves executable files", () => {
+    const directory = mkdtempSync(join(tmpdir(), "trace-executable-test-"));
+    const executablePath = join(directory, "claude");
+    try {
+      writeFileSync(executablePath, "#!/bin/sh\n");
+      chmodSync(executablePath, 0o644);
+      expect(resolveExecutable("claude", { PATH: directory })).toBeNull();
+
+      chmodSync(executablePath, 0o755);
+      expect(resolveExecutable("claude", { PATH: directory })).toBe(executablePath);
+    } finally {
+      rmSync(directory, { force: true, recursive: true });
+    }
   });
 });
