@@ -74,11 +74,14 @@ export function LinkedCheckoutSyncConflictDialog({
         <DialogHeader className="border-b border-border px-5 py-4">
           <DialogTitle className="flex items-center gap-2">
             <TriangleAlert size={16} className="text-amber-500" />
-            Resolve {source === "Trace worktree" ? "Worktree" : "Main Worktree"} Changes
+            {source === "Trace worktree"
+              ? "Worktree Has Local Changes"
+              : "Resolve Main Worktree Changes"}
           </DialogTitle>
           <DialogDescription>
-            Spotlight stopped because the {source} has local changes. Review the files, then choose
-            how Trace should handle them before spotlighting this session.
+            {source === "Trace worktree"
+              ? "The worktree for this session has uncommitted changes. Choose how you want to handle them before spotlighting."
+              : "Sync stopped because the main worktree has local changes. Review the files, then choose how Trace should handle them before syncing this session."}
           </DialogDescription>
         </DialogHeader>
 
@@ -168,8 +171,8 @@ export function LinkedCheckoutSyncConflictDialog({
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 Save the current {source} changes as a commit on the session branch, then spotlight
-                that new commit. Trace also pushes the commit to origin when the
-                remote is configured.
+                that new commit. Trace also pushes the commit to origin when the remote is
+                configured.
               </p>
               <Textarea
                 className="mt-3 min-h-20"

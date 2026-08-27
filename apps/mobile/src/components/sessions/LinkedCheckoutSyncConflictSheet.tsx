@@ -57,10 +57,15 @@ export function LinkedCheckoutSyncConflictSheet({
         contentContainerStyle={[styles.content, { paddingBottom: theme.spacing.md }]}
       >
         <View style={styles.header}>
-          <Text variant="headline">Resolve Spotlight Conflict</Text>
+          <Text variant="headline">
+            {source === "Trace worktree"
+              ? "Worktree Has Local Changes"
+              : "Resolve Spotlight Conflict"}
+          </Text>
           <Text variant="footnote" color="mutedForeground">
-            Spotlight stopped because the {source} has local changes. Choose how Trace should
-            resolve them before spotlighting this workspace.
+            {source === "Trace worktree"
+              ? "The worktree for this session has uncommitted changes. Choose how you want to handle them before spotlighting."
+              : "Spotlight stopped because the main worktree has local changes. Choose how Trace should resolve them before spotlighting this workspace."}
           </Text>
         </View>
 
@@ -193,8 +198,8 @@ export function LinkedCheckoutSyncConflictSheet({
               <Text variant="subheadline">Replay local changes</Text>
             </View>
             <Text variant="footnote" color="mutedForeground">
-              Replay the current {source} changes onto the synced session commit and keep them
-              as local edits.
+              Replay the current {source} changes onto the synced session commit and keep them as
+              local edits.
             </Text>
             <View style={styles.buttonSlot}>
               <Button
