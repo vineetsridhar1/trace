@@ -14,9 +14,7 @@ export function useFileActions(sessionGroupId: string) {
   const setActiveTerminalId = useUIStore(
     (s: { setActiveTerminalId: (id: string | null) => void }) => s.setActiveTerminalId,
   );
-  const openFiles = useUIStore(
-    (s) => s.openFileTabsByGroup[sessionGroupId] ?? EMPTY_OPEN_FILES,
-  );
+  const openFiles = useUIStore((s) => s.openFileTabsByGroup[sessionGroupId] ?? EMPTY_OPEN_FILES);
   const activeFilePath = useUIStore((s) => s.activeFilePathsByGroup[sessionGroupId] ?? null);
   const openFileTab = useUIStore((s) => s.openFileTab);
   const closeFileTab = useUIStore((s) => s.closeFileTab);
@@ -81,7 +79,12 @@ export function useFileActions(sessionGroupId: string) {
     (filePath: string, status: string) => {
       const diffKey = `diff:${filePath}`;
       const fileName = filePath.split("/").pop() ?? filePath;
-      openFileTab(sessionGroupId, { filePath: diffKey, fileName, isDiff: true, diffStatus: status });
+      openFileTab(sessionGroupId, {
+        filePath: diffKey,
+        fileName,
+        isDiff: true,
+        diffStatus: status,
+      });
       setActiveTerminalId(null);
     },
     [openFileTab, sessionGroupId, setActiveTerminalId],
@@ -92,13 +95,16 @@ export function useFileActions(sessionGroupId: string) {
       setActiveFilePath(filePath);
       setActiveTerminalId(null);
     },
-    [setActiveTerminalId],
+    [setActiveFilePath, setActiveTerminalId],
   );
 
-  const handleCloseFile = useCallback((filePath: string) => {
-    fileBuffersRef.current.delete(filePath);
-    closeFileTab(sessionGroupId, filePath);
-  }, [closeFileTab, sessionGroupId]);
+  const handleCloseFile = useCallback(
+    (filePath: string) => {
+      fileBuffersRef.current.delete(filePath);
+      closeFileTab(sessionGroupId, filePath);
+    },
+    [closeFileTab, sessionGroupId],
+  );
 
   return {
     openFiles,
