@@ -701,7 +701,7 @@ export interface BridgeWorktreeChangesPayload {
   truncated: boolean;
 }
 
-export type BridgeLinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT";
+export type BridgeLinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT" | "DIRTY_WORKTREE";
 
 export interface BridgeLinkedCheckoutActionResultPayload {
   ok: boolean;

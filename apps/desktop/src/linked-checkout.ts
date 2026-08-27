@@ -110,6 +110,7 @@ interface ChangedPathState {
 }
 
 const LINKED_CHECKOUT_COMMIT_MESSAGE = "Commit linked checkout changes";
+const LINKED_CHECKOUT_WORKTREE_COMMIT_MESSAGE = "Save Trace worktree changes";
 const LINKED_CHECKOUT_REBASE_STASH_MESSAGE = "Trace linked checkout rebase";
 const LINKED_CHECKOUT_SYNC_STASH_MESSAGE = "Trace linked checkout stash";
 const LINKED_CHECKOUT_DIFF_PREVIEW_LIMIT = 80_000;
@@ -1078,6 +1079,23 @@ async function commitChangedPathsToWorktree(
   return targetCommitSha;
 }
 
+async function commitWorktreeChanges(
+  worktreePath: string,
+  targetBranch: string,
+  commitMessage: string,
+): Promise<string> {
+  await execFileAsync("git", ["add", "-A"], {
+    cwd: worktreePath,
+    maxBuffer: GIT_MAX_BUFFER,
+  });
+  await execFileAsync("git", ["commit", "-m", commitMessage], {
+    cwd: worktreePath,
+    maxBuffer: GIT_MAX_BUFFER,
+  });
+  await pushBranchToOriginIfAvailable(worktreePath, targetBranch);
+  return getCurrentCommitSha(worktreePath);
+}
+
 async function restoreRootCheckoutPaths(
   repoPath: string,
   changedPaths: ChangedPathState[],
@@ -1216,7 +1234,27 @@ async function actionResult(
   ok: boolean,
   error: string | null = null,
   errorCode: BridgeLinkedCheckoutErrorCode | null = null,
+  changedFilesPath?: string,
 ): Promise<LinkedCheckoutActionResult> {
+  if (changedFilesPath) {
+    const [status, changedFilesState] = await Promise.all([
+      readStatus(repoId),
+      readChangedFilesState(changedFilesPath),
+    ]);
+    return {
+      ok,
+      error,
+      errorCode,
+      status: {
+        ...status,
+        hasUncommittedChanges: changedFilesState.dirty,
+        changedFiles: changedFilesState.changedFiles,
+        changedFilesTotalCount: changedFilesState.totalCount,
+        changedFilesTruncated: changedFilesState.truncated,
+      },
+    };
+  }
+
   return {
     ok,
     error,
@@ -1315,6 +1353,7 @@ export function syncLinkedCheckout(
         input.commitSha,
       );
       let rebaseAttachmentPrimed = false;
+      let replayWorktreeChanges = false;
 
       if (await requiresSyncConflictResolution(repoPath, targetCommitSha)) {
         if (input.conflictStrategy === "discard") {
@@ -1364,7 +1403,30 @@ export function syncLinkedCheckout(
         }
       }
 
-      if (input.conflictStrategy !== "rebase") {
+      const worktreePath = await findWorktreePathForBranch(repoPath, input.branch);
+      if (worktreePath && (await hasUncommittedChanges(worktreePath))) {
+        if (input.conflictStrategy === "discard") {
+          await discardAllChanges(worktreePath);
+        } else if (input.conflictStrategy === "commit") {
+          targetCommitSha = await commitWorktreeChanges(
+            worktreePath,
+            input.branch,
+            resolveCommitMessage(input.commitMessage ?? LINKED_CHECKOUT_WORKTREE_COMMIT_MESSAGE),
+          );
+        } else if (input.conflictStrategy === "stash") {
+          await stashAllChangesWithMessage(worktreePath, LINKED_CHECKOUT_SYNC_STASH_MESSAGE);
+        } else if (input.conflictStrategy === "rebase") {
+          await stashAllChanges(worktreePath);
+          replayWorktreeChanges = true;
+        } else {
+          throw new LinkedCheckoutError(
+            "The Trace worktree has local changes that must be resolved before spotlighting.",
+            "DIRTY_WORKTREE",
+          );
+        }
+      }
+
+      if (input.conflictStrategy !== "rebase" || replayWorktreeChanges) {
         await switchToDetachedCommit(repoPath, targetCommitSha);
       }
 
@@ -1391,16 +1453,23 @@ export function syncLinkedCheckout(
           });
         }
       }
+      if (replayWorktreeChanges) {
+        await popStashedChanges(repoPath);
+      }
       triggerAutoSyncReconcile(input.repoId);
 
       return actionResult(input.repoId, true);
     } catch (error) {
       const message = formatGitError(error);
       const errorCode = getLinkedCheckoutErrorCode(error);
-      if (errorCode !== "DIRTY_ROOT_CHECKOUT") {
+      if (errorCode !== "DIRTY_ROOT_CHECKOUT" && errorCode !== "DIRTY_WORKTREE") {
         await pauseExistingAttachment(input.repoId, message);
       }
-      return actionResult(input.repoId, false, message, errorCode);
+      const worktreePath =
+        errorCode === "DIRTY_WORKTREE"
+          ? await findWorktreePathForBranch(repoPath, input.branch).catch(() => null)
+          : null;
+      return actionResult(input.repoId, false, message, errorCode, worktreePath ?? undefined);
     }
   });
 }

@@ -938,7 +938,7 @@ export type LinkedCheckoutChangedFile = {
   truncated: Scalars["Boolean"]["output"];
 };
 
-export type LinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT";
+export type LinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT" | "DIRTY_WORKTREE";
 
 export type LinkedCheckoutStatus = {
   __typename?: "LinkedCheckoutStatus";
