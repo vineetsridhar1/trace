@@ -5255,6 +5255,65 @@ describe("SessionService", () => {
           }),
         }),
       );
+      // Staying usable must not mean staying silent: without this the message
+      // never runs and nothing on screen says so.
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "delivery_deferred",
+            reason: "runtime_disconnected",
+            operation: "send",
+            connection: expect.objectContaining({ state: "connected" }),
+          }),
+        }),
+      );
+    });
+
+    // A relay that misses its 3s ack budget says nothing about liveness either,
+    // and reached the same destructive "use Move" banner.
+    it("confirms liveness for a relay timeout, not just an unroutable send", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "needs_input",
+        workdir: "/workspace/session-1",
+        toolSessionId: "tool-session-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(session);
+      prismaMock.session.findUnique.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValueOnce("delivery_failed");
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "Continue with a different approach.",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "delivery_deferred",
+            reason: "delivery_failed",
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({ type: "connection_lost" }),
+        }),
+      );
     });
 
     it("assumes the bridge is alive when the directory confirmation itself fails", async () => {
@@ -5275,7 +5334,9 @@ describe("SessionService", () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(session);
       prismaMock.session.findUnique.mockResolvedValue(session);
       sessionRouterMock.send.mockReturnValueOnce("runtime_disconnected");
-      // Redis trouble must not manufacture an offline verdict.
+      // The sync mirror says offline, so only the caught rejection can keep
+      // this on the transient path.
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(false);
       sessionRouterMock.isRuntimeAvailableConfirmed.mockRejectedValueOnce(
         new Error("redis unavailable"),
       );
@@ -5287,6 +5348,12 @@ describe("SessionService", () => {
         actorId: "user-1",
       });
 
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({ type: "delivery_deferred" }),
+        }),
+      );
       expect(eventServiceMock.create).not.toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "session_output",

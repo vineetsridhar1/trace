@@ -1175,6 +1175,12 @@ export class SessionRouter {
 
     const localResult = this.send(sessionId, command, options);
     if (localResult === "delivered" || !options?.expectedHomeRuntimeId) return localResult;
+    // Sampled before the read-throughs below: `lookup()` installs what it finds
+    // into the mirror, so asking afterwards cannot tell "the mirror knew" from
+    // "we just populated it" — which is the whole point of the field.
+    const mirrorHitBeforeLookup = Boolean(
+      runtimeDirectory.find(options.expectedHomeRuntimeId, options.organizationId),
+    );
     // Read through to Redis: a mirror miss here means giving up on a runtime
     // that is alive on a peer replica, which surfaces as "bridge offline".
     let descriptor = await runtimeDirectory.lookup(
@@ -1193,20 +1199,22 @@ export class SessionRouter {
       );
     }
     if (!descriptor || descriptor.ownerReplicaId === realtimeBackplane.replicaId) {
-      logAgentEnvironmentTelemetry("runtime.delivery_unroutable", {
-        sessionId,
-        runtimeInstanceId: options.expectedHomeRuntimeId,
-        organizationId: options.organizationId ?? null,
-        commandType: command.type,
-        localResult,
-        replicaId: realtimeBackplane.replicaId,
-        backplaneEnabled: realtimeBackplane.enabled,
-        hadLocalRuntime: Boolean(localRuntime),
-        mirrorHit: Boolean(
-          runtimeDirectory.find(options.expectedHomeRuntimeId, options.organizationId),
-        ),
-        directoryOwnerReplicaId: descriptor?.ownerReplicaId ?? null,
-      });
+      // Only interesting where cross-replica routing exists. Single-replica and
+      // local dev reach this branch by construction on every failed dispatch,
+      // and that noise would bury the real misses.
+      if (realtimeBackplane.enabled) {
+        logAgentEnvironmentTelemetry("runtime.delivery_unroutable", {
+          sessionId,
+          runtimeInstanceId: options.expectedHomeRuntimeId,
+          organizationId: options.organizationId ?? null,
+          commandType: command.type,
+          localResult,
+          replicaId: realtimeBackplane.replicaId,
+          hadLocalRuntime: Boolean(localRuntime),
+          mirrorHitBeforeLookup,
+          directoryOwnerReplicaId: descriptor?.ownerReplicaId ?? null,
+        });
+      }
       return localResult;
     }
     return this.sendToRuntimeAsync(

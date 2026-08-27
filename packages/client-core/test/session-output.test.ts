@@ -48,6 +48,22 @@ describe("sessionPatchFromOutput", () => {
     expect(patch?.connection).toEqual({ state: "disconnected" });
   });
 
+  it("applies the connection snapshot for delivery_deferred without disconnecting", () => {
+    // The bridge is confirmed alive; the client must take the new version so
+    // later lifecycle events order correctly, and must stay `connected` so the
+    // composer is not swapped for the recovery panel.
+    const patch = sessionPatchFromOutput({
+      type: "delivery_deferred",
+      reason: "runtime_disconnected",
+      connection: { state: "connected", version: 9, lastDeliveryFailureAt: "2026-08-27T15:43:51Z" },
+    });
+    expect(patch?.connection).toEqual({
+      state: "connected",
+      version: 9,
+      lastDeliveryFailureAt: "2026-08-27T15:43:51Z",
+    });
+  });
+
   it("returns retryable patch for workspace_failed", () => {
     const patch = sessionPatchFromOutput({
       type: "workspace_failed",

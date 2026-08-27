@@ -188,6 +188,12 @@ function renderSessionOutput(
     return <SystemBadge text={error || "Workspace preparation failed"} />;
   }
 
+  // The bridge is still up, so this is deliberately not the offline banner —
+  // moving or retrying the connection here would rebuild a healthy workspace.
+  if (type === "delivery_deferred") {
+    return <SystemBadge text="Couldn't reach the workspace — send again to retry." />;
+  }
+
   if (type === "workspace_restored_from_base" || type === "workspace_kept_local_changes") {
     const message = str(payload.message);
     if (message) return <SystemBadge text={message} />;

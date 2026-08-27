@@ -8,6 +8,7 @@ import type { OrgEventUIBindings } from "./ui-bindings.js";
 const CONNECTION_EVENT_TYPES = new Set([
   "connection_lost",
   "connection_restored",
+  "delivery_deferred",
   "recovery_failed",
   "recovery_requested",
   "session_rehomed",
