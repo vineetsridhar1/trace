@@ -426,6 +426,7 @@ export class ContainerBridge implements IBridgeClient {
             type: "session_output",
             sessionId: cmd.sessionId,
             data: { type: "error", message: err instanceof Error ? err.message : String(err) },
+            invocationId: cmd.runtimeEnv?.TRACE_INVOCATION_ID,
           });
           this.send({
             type: "session_complete",
@@ -511,6 +512,26 @@ export class ContainerBridge implements IBridgeClient {
             this.send({ type: "workspace_failed", sessionId, error: message });
           }
         })();
+        break;
+      }
+
+      case "prepare_general": {
+        const prepareVersion = this.beginWorkspacePreparation(cmd.sessionId);
+        const workdir = os.homedir();
+        if (!this.isCurrentWorkspacePreparation(cmd.sessionId, prepareVersion)) break;
+        this.sessionWorkdirs.set(cmd.sessionId, workdir);
+        this.readOnlySessions.delete(cmd.sessionId);
+        this.send({ type: "register_session", sessionId: cmd.sessionId });
+        this.send({ type: "workspace_ready", sessionId: cmd.sessionId, workdir });
+        break;
+      }
+
+      case "cleanup_general_workspace": {
+        this.send({
+          type: "cleanup_general_workspace_result",
+          sessionId: cmd.sessionId,
+          success: true,
+        });
         break;
       }
 
@@ -1306,7 +1327,12 @@ export class ContainerBridge implements IBridgeClient {
         }
 
         hasForwardedOutput = true;
-        this.send({ type: "session_output", sessionId, data: output });
+        this.send({
+          type: "session_output",
+          sessionId,
+          data: output,
+          invocationId: runtimeEnv?.TRACE_INVOCATION_ID,
+        });
 
         maybeReportToolSessionId();
 

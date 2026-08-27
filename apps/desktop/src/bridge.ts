@@ -1015,7 +1015,12 @@ export class BridgeClient implements IBridgeClient {
                 ...(artifact ? { artifact } : {}),
               }
             : output;
-        this.send({ type: "session_output", sessionId, data });
+        this.send({
+          type: "session_output",
+          sessionId,
+          data,
+          invocationId: runtimeEnv?.TRACE_INVOCATION_ID,
+        });
 
         maybeReportToolSessionId();
 
@@ -1147,6 +1152,23 @@ export class BridgeClient implements IBridgeClient {
       case "run":
       case "send": {
         void this.runAfterWorkspacePrep(cmd);
+        break;
+      }
+      case "prepare_general": {
+        const prepareVersion = this.beginWorkspacePreparation(cmd.sessionId);
+        const workdir = os.homedir();
+        this.markWorkspaceReady(cmd.sessionId, workdir, prepareVersion);
+        this.sessionGroupIds.set(cmd.sessionId, cmd.sessionGroupId ?? null);
+        this.readOnlySessions.delete(cmd.sessionId);
+        this.send({ type: "workspace_ready", sessionId: cmd.sessionId, workdir });
+        break;
+      }
+      case "cleanup_general_workspace": {
+        this.send({
+          type: "cleanup_general_workspace_result",
+          sessionId: cmd.sessionId,
+          success: true,
+        });
         break;
       }
       case "prepare": {

@@ -86,6 +86,27 @@ export interface BridgePrepareCommand {
   adoptWorktreePath?: string;
 }
 
+/** @deprecated Kept so updated bridges remain compatible with older servers. */
+export interface BridgePrepareGeneralCommand {
+  type: "prepare_general";
+  sessionId: string;
+  sessionGroupId?: string;
+}
+
+/** @deprecated Kept so updated bridges can acknowledge older-server cleanup. */
+export interface BridgeCleanupGeneralWorkspaceCommand {
+  type: "cleanup_general_workspace";
+  sessionId: string;
+  sessionGroupId?: string;
+}
+
+export interface BridgeCleanupGeneralWorkspaceResult {
+  type: "cleanup_general_workspace_result";
+  sessionId: string;
+  success: boolean;
+  error?: string;
+}
+
 export interface BridgePrepareAppCommand {
   type: "prepare_app";
   sessionId: string;
@@ -493,6 +514,8 @@ export type BridgeCommand =
   | BridgeRunCommand
   | BridgeSendCommand
   | BridgePrepareCommand
+  | BridgePrepareGeneralCommand
+  | BridgeCleanupGeneralWorkspaceCommand
   | BridgePrepareAppCommand
   | BridgeUpgradeWorkspaceCommand
   | BridgeTerminateCommand
@@ -575,6 +598,8 @@ export interface BridgeSessionOutput {
   type: "session_output";
   sessionId: string;
   data: unknown;
+  /** Identifies the dispatched agent run so stale output can be ignored. */
+  invocationId?: string;
 }
 
 export interface BridgeSessionComplete {
@@ -997,6 +1022,7 @@ export type BridgeMessage =
   | BridgeRuntimeHeartbeat
   | BridgeRegisterSession
   | BridgeSessionOutput
+  | BridgeCleanupGeneralWorkspaceResult
   | BridgeSessionComplete
   | BridgeWorkspaceReady
   | BridgeWorkspaceFailed

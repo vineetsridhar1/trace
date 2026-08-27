@@ -1243,7 +1243,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         const data = (msg.data ?? {}) as Record<string, unknown>;
 
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
-          await sessionService.recordOutput(sessionId, data);
+          await sessionService.recordOutput(sessionId, data, {
+            invocationId: typeof msg.invocationId === "string" ? msg.invocationId : undefined,
+          });
         });
       } else if (msg.type === "session_complete" && msg.sessionId) {
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {

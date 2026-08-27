@@ -5355,6 +5355,26 @@ describe("SessionService", () => {
   });
 
   describe("recordOutput", () => {
+    it("ignores output from a superseded invocation", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        organizationId: "org-1",
+        tool: "codex",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+        activeInvocationId: "invocation-current",
+      });
+
+      await service.recordOutput(
+        "session-1",
+        { type: "assistant", message: "stale" },
+        { invocationId: "invocation-stale" },
+      );
+
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+    });
+
     it("does not attach a recovery artifact to assistant instructions", async () => {
       const data = {
         type: "assistant",
@@ -5601,6 +5621,35 @@ describe("SessionService", () => {
 
       await service.complete("session-1", { invocationId: "invocation-stale" });
 
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+
+    it("does not complete when its invocation was replaced during finalization", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+        activeInvocationId: "invocation-current",
+      });
+      prismaMock.event.findFirst.mockResolvedValueOnce(null);
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await service.complete("session-1", { invocationId: "invocation-current" });
+
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: "session-1",
+          agentStatus: "active",
+          activeInvocationId: "invocation-current",
+        },
+        data: {
+          agentStatus: "done",
+          sessionStatus: "in_progress",
+          activeInvocationId: null,
+        },
+      });
       expect(prismaMock.session.update).not.toHaveBeenCalled();
       expect(eventServiceMock.create).not.toHaveBeenCalled();
     });

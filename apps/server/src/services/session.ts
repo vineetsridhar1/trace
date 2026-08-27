@@ -6651,7 +6651,11 @@ export class SessionService {
     return tool === "claude_code" && (createdBy?.enableClaudeInChrome ?? false);
   }
 
-  async recordOutput(sessionId: string, data: Record<string, unknown>) {
+  async recordOutput(
+    sessionId: string,
+    data: Record<string, unknown>,
+    options?: { invocationId?: string },
+  ) {
     // Extract and strip <trace-title> and <trace-branch> tags from assistant text before persisting
     const extractedTitle = this.extractAndStripTitle(data);
     const extractedBranch = this.extractAndStripBranch(data);
@@ -6667,9 +6671,11 @@ export class SessionService {
         sessionGroupId: true,
         workdir: true,
         connection: true,
+        activeInvocationId: true,
       },
     });
     if (!session) return;
+    if (options?.invocationId && session.activeInvocationId !== options.invocationId) return;
 
     const parentToolUseId =
       typeof data.parentToolUseId === "string" ? data.parentToolUseId : undefined;
@@ -7050,20 +7056,37 @@ export class SessionService {
             ? "in_review"
             : "in_progress";
 
-    const session = await prisma.session.update({
-      where: { id },
-      data: {
-        agentStatus: newAgentStatus,
-        sessionStatus: newSessionStatus,
-      },
-      select: { organizationId: true, createdById: true, name: true },
-    });
-    await prisma.session.updateMany({
-      where: options?.invocationId
-        ? { id, activeInvocationId: options.invocationId }
-        : { id, activeInvocationId: { not: null } },
-      data: { activeInvocationId: null },
-    });
+    const session = options?.invocationId
+      ? await (async () => {
+          const completed = await prisma.session.updateMany({
+            where: { id, agentStatus: "active", activeInvocationId: options.invocationId },
+            data: {
+              agentStatus: newAgentStatus,
+              sessionStatus: newSessionStatus,
+              activeInvocationId: null,
+            },
+          });
+          if (completed.count !== 1) return null;
+          return prisma.session.findUniqueOrThrow({
+            where: { id },
+            select: { organizationId: true, createdById: true, name: true },
+          });
+        })()
+      : await prisma.session.update({
+          where: { id },
+          data: {
+            agentStatus: newAgentStatus,
+            sessionStatus: newSessionStatus,
+          },
+          select: { organizationId: true, createdById: true, name: true },
+        });
+    if (!session) return;
+    if (!options?.invocationId) {
+      await prisma.session.updateMany({
+        where: { id, activeInvocationId: { not: null } },
+        data: { activeInvocationId: null },
+      });
+    }
     const sessionGroup = await this.loadSessionGroupSnapshot(current.sessionGroupId);
 
     await eventService.create({
