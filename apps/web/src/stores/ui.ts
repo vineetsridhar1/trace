@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { useEntityStore } from "@trace/client-core";
 import type { SessionEntity } from "@trace/client-core";
 import { blockNavigation } from "../lib/navigation-blocker";
+import type { OpenFileTab } from "../components/session/openFileTab";
 import {
   buildPath as buildPathInternal,
   persistActiveChannelId,
@@ -69,6 +70,11 @@ export interface UIState {
   openArtifactTab: (groupId: string, artifactId: string) => void;
   closeArtifactTab: (groupId: string, artifactId: string) => void;
   setActiveArtifactId: (groupId: string, artifactId: string | null) => void;
+  openFileTabsByGroup: Record<string, OpenFileTab[]>;
+  activeFilePathsByGroup: Record<string, string | null>;
+  openFileTab: (groupId: string, file: OpenFileTab) => void;
+  closeFileTab: (groupId: string, filePath: string) => void;
+  setActiveFilePath: (groupId: string, filePath: string | null) => void;
   restoreLastVisited: (tab: "dm" | "main") => void;
   channelSubPage: ChannelSubPage;
   setChannelSubPage: (subPage: ChannelSubPage) => void;
@@ -122,6 +128,8 @@ const initialNavigationState = {
   hiddenSessionTabsByGroup: {} as Record<string, Record<string, string>>,
   openArtifactTabsByGroup: {} as Record<string, string[]>,
   activeArtifactIdsByGroup: {} as Record<string, string | null>,
+  openFileTabsByGroup: {} as Record<string, OpenFileTab[]>,
+  activeFilePathsByGroup: {} as Record<string, string | null>,
   channelSubPage: null as ChannelSubPage,
   settingsInitialTab: null as string | null,
   unreadChatIds: {} as Record<string, boolean>,
@@ -328,6 +336,44 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
         ...s.activeArtifactIdsByGroup,
         [groupId]: artifactId,
       },
+    }));
+  },
+
+  openFileTab: (groupId: string, file: OpenFileTab) => {
+    set((s: UIState) => {
+      const existing = s.openFileTabsByGroup[groupId] ?? [];
+      const existingIndex = existing.findIndex((tab) => tab.filePath === file.filePath);
+      const tabs =
+        existingIndex === -1
+          ? [...existing, file]
+          : existing.map((tab, index) => (index === existingIndex ? { ...tab, ...file } : tab));
+      return {
+        openFileTabsByGroup: { ...s.openFileTabsByGroup, [groupId]: tabs },
+        activeFilePathsByGroup: { ...s.activeFilePathsByGroup, [groupId]: file.filePath },
+      };
+    });
+  },
+
+  closeFileTab: (groupId: string, filePath: string) => {
+    set((s: UIState) => {
+      const existing = s.openFileTabsByGroup[groupId] ?? [];
+      if (!existing.some((tab) => tab.filePath === filePath)) return {};
+      return {
+        openFileTabsByGroup: {
+          ...s.openFileTabsByGroup,
+          [groupId]: existing.filter((tab) => tab.filePath !== filePath),
+        },
+        activeFilePathsByGroup:
+          s.activeFilePathsByGroup[groupId] === filePath
+            ? { ...s.activeFilePathsByGroup, [groupId]: null }
+            : s.activeFilePathsByGroup,
+      };
+    });
+  },
+
+  setActiveFilePath: (groupId: string, filePath: string | null) => {
+    set((s: UIState) => ({
+      activeFilePathsByGroup: { ...s.activeFilePathsByGroup, [groupId]: filePath },
     }));
   },
 
