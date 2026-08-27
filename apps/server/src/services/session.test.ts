@@ -4775,6 +4775,38 @@ describe("SessionService", () => {
       expect(sessionRouterMock.listFiles).not.toHaveBeenCalled();
     });
 
+    it("lists files from the live bridge before GitHub", async () => {
+      const group = {
+        id: "group-1",
+        kind: "coding",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+      };
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(group);
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
+      ]);
+      sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "runtime-1",
+        hostingMode: "local",
+      } as never);
+      sessionRouterMock.listFiles.mockResolvedValueOnce(["generated/output.ts"]);
+
+      await expect(service.listFiles("group-1", "org-1", "user-1")).resolves.toEqual([
+        "generated/output.ts",
+      ]);
+      expect(sessionRouterMock.listFiles).toHaveBeenCalledWith(
+        "runtime-1",
+        "session-1",
+        "/tmp/trace",
+      );
+      expect(githubRepoServiceMock.listFiles).not.toHaveBeenCalled();
+    });
+
     it("lists directory entries through GitHub", async () => {
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",
@@ -4844,6 +4876,34 @@ describe("SessionService", () => {
         "gh-token",
       );
       expect(sessionRouterMock.listFiles).not.toHaveBeenCalled();
+    });
+
+    it("returns the recursive file tree from the live bridge before GitHub", async () => {
+      const group = {
+        id: "group-1",
+        kind: "coding",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+      };
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(group);
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
+      ]);
+      sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "runtime-1",
+        hostingMode: "local",
+      } as never);
+      sessionRouterMock.listFiles.mockResolvedValueOnce(["generated/output.ts"]);
+
+      await expect(service.listFileTree("group-1", "org-1", "user-1")).resolves.toEqual({
+        paths: ["generated/output.ts"],
+        truncated: false,
+      });
+      expect(githubRepoServiceMock.listFileTree).not.toHaveBeenCalled();
     });
 
     it("falls back to the default branch when the session branch is unavailable", async () => {

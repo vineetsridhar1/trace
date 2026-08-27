@@ -10943,12 +10943,32 @@ export class SessionService {
     }
   }
 
+  /** List files from the live workspace when a bridge is available. */
+  private async listWorkspaceFiles(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<string[]> {
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.listFiles(runtime.runtimeId, runtime.sessionId, runtime.workdirHint);
+  }
+
   /** List files in a session group's branch from GitHub. */
   async listFiles(
     sessionGroupId: string,
     organizationId: string,
     userId: string,
   ): Promise<string[]> {
+    try {
+      return await this.listWorkspaceFiles(sessionGroupId, organizationId, userId);
+    } catch {
+      // GitHub remains available when the bridge is disconnected or cannot
+      // resolve the local worktree.
+    }
     const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
       organizationId,
@@ -10969,6 +10989,15 @@ export class SessionService {
     organizationId: string,
     userId: string,
   ): Promise<GitHubFileTree> {
+    try {
+      return {
+        paths: await this.listWorkspaceFiles(sessionGroupId, organizationId, userId),
+        truncated: false,
+      };
+    } catch {
+      // GitHub remains available when the bridge is disconnected or cannot
+      // resolve the local worktree.
+    }
     const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
       organizationId,
