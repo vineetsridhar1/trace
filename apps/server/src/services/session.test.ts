@@ -62,6 +62,7 @@ vi.mock("../lib/session-router.js", () => ({
     commitFileChanges: vi.fn().mockResolvedValue("commit123"),
     listWorktreeChanges: vi.fn().mockResolvedValue({ files: [], totalCount: 0, truncated: false }),
     revertWorktreeFile: vi.fn().mockResolvedValue(undefined),
+    branchDiff: vi.fn().mockResolvedValue([]),
     getLinkedCheckoutStatus: vi.fn().mockResolvedValue(null),
     linkLinkedCheckoutRepo: vi.fn().mockResolvedValue(null),
     syncLinkedCheckout: vi.fn().mockResolvedValue(null),
@@ -4450,7 +4451,7 @@ describe("SessionService", () => {
     });
 
     it("reads GitHub files by converting absolute workdir paths to repo-relative paths", async () => {
-      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+      const group = {
         id: "group-1",
         branch: "trace/test",
         workdir: "/tmp/trace",
@@ -4461,7 +4462,8 @@ describe("SessionService", () => {
           remoteUrl: "git@github.com:trace/trace.git",
           defaultBranch: "main",
         },
-      });
+      };
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(group).mockResolvedValueOnce(group);
       githubRepoServiceMock.readFile.mockResolvedValueOnce("hello");
 
       await expect(
@@ -4478,18 +4480,20 @@ describe("SessionService", () => {
     });
 
     it("falls back to the default branch when reading the session branch fails", async () => {
-      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+      const group = {
         id: "group-1",
         branch: "trace/test",
         workdir: "/tmp/trace",
         visibility: "public",
         ownerUserId: "user-1",
+        channel: { baseBranch: "develop" },
         repo: {
           provider: "github",
           remoteUrl: "git@github.com:trace/trace.git",
           defaultBranch: "main",
         },
-      });
+      };
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(group).mockResolvedValueOnce(group);
       githubRepoServiceMock.readFile
         .mockRejectedValueOnce(new GitHubApiError(404, "Not Found"))
         .mockResolvedValueOnce("default branch contents");
@@ -4518,8 +4522,90 @@ describe("SessionService", () => {
       );
     });
 
-    it("computes branch diffs through GitHub", async () => {
-      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+    it("reads deep-linked files from the live bridge before GitHub", async () => {
+      const group = {
+        id: "group-1",
+        kind: "coding",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+      };
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(group);
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
+      ]);
+      sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "runtime-1",
+        hostingMode: "local",
+      } as never);
+      sessionRouterMock.readFile.mockResolvedValueOnce("generated file contents");
+
+      await expect(
+        service.readFileWithSource("group-1", "generated/output.ts", "org-1", "user-1"),
+      ).resolves.toEqual({
+        content: "generated file contents",
+        ref: "workspace",
+        requestedRef: "workspace",
+        usedFallback: false,
+      });
+      expect(sessionRouterMock.readFile).toHaveBeenCalledWith(
+        "runtime-1",
+        "session-1",
+        "generated/output.ts",
+        "/tmp/trace",
+      );
+      expect(githubRepoServiceMock.readFile).not.toHaveBeenCalled();
+    });
+
+    it("falls back to GitHub when the bridge cannot read a deep-linked file", async () => {
+      const group = {
+        id: "group-1",
+        kind: "coding",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
+      };
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(group).mockResolvedValueOnce(group);
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
+      ]);
+      sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "runtime-1",
+        hostingMode: "local",
+      } as never);
+      sessionRouterMock.readFile.mockRejectedValueOnce(new Error("File not found"));
+      githubRepoServiceMock.readFile.mockResolvedValueOnce("committed contents");
+
+      await expect(
+        service.readFileWithSource("group-1", "src/app.ts", "org-1", "user-1"),
+      ).resolves.toEqual({
+        content: "committed contents",
+        ref: "trace/test",
+        requestedRef: "trace/test",
+        usedFallback: false,
+      });
+      expect(githubRepoServiceMock.readFile).toHaveBeenCalledWith(
+        { owner: "trace", repo: "trace" },
+        "trace/test",
+        "src/app.ts",
+        "gh-token",
+      );
+    });
+
+    it("falls back to GitHub when no bridge is available", async () => {
+      const group = {
         id: "group-1",
         branch: "trace/test",
         workdir: "/tmp/trace",
@@ -4530,7 +4616,8 @@ describe("SessionService", () => {
           remoteUrl: "git@github.com:trace/trace.git",
           defaultBranch: "main",
         },
-      });
+      };
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(group).mockResolvedValueOnce(group);
       githubRepoServiceMock.branchDiff.mockResolvedValueOnce([
         { path: "src/app.ts", status: "M", additions: 2, deletions: 1 },
       ]);
@@ -4545,6 +4632,95 @@ describe("SessionService", () => {
         "gh-token",
       );
       expect(sessionRouterMock.inspectSessionGitSyncStatus).not.toHaveBeenCalled();
+    });
+
+    it("computes branch diffs through the bridge against the channel base branch", async () => {
+      const group = {
+        id: "group-1",
+        kind: "coding",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+        channel: { baseBranch: "develop" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
+      };
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce(group)
+        .mockResolvedValueOnce({ channel: group.channel, repo: group.repo });
+      prismaMock.session.findMany.mockResolvedValue([
+        { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
+      ]);
+      sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "runtime-1",
+        hostingMode: "local",
+      } as never);
+      sessionRouterMock.branchDiff.mockResolvedValueOnce([
+        { path: "src/app.ts", status: "M", additions: 2, deletions: 1 },
+      ]);
+
+      await expect(service.branchDiff("group-1", "org-1", "user-1")).resolves.toEqual([
+        { path: "src/app.ts", status: "M", additions: 2, deletions: 1 },
+      ]);
+      expect(sessionRouterMock.branchDiff).toHaveBeenCalledWith(
+        "runtime-1",
+        "session-1",
+        "origin/develop",
+        "/tmp/trace",
+      );
+      expect(githubRepoServiceMock.branchDiff).not.toHaveBeenCalled();
+    });
+
+    it("falls back to GitHub when the bridge diff request fails", async () => {
+      const group = {
+        id: "group-1",
+        kind: "coding",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+        channel: { baseBranch: "develop" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
+      };
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce(group)
+        .mockResolvedValueOnce({ channel: group.channel, repo: group.repo })
+        .mockResolvedValueOnce(group);
+      prismaMock.session.findMany.mockResolvedValue([
+        { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
+      ]);
+      sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "runtime-1",
+        hostingMode: "local",
+      } as never);
+      sessionRouterMock.branchDiff.mockRejectedValueOnce(new Error("Bridge timed out"));
+      githubRepoServiceMock.branchDiff.mockResolvedValueOnce([
+        { path: "src/app.ts", status: "M", additions: 2, deletions: 1 },
+      ]);
+
+      await expect(service.branchDiff("group-1", "org-1", "user-1")).resolves.toEqual([
+        { path: "src/app.ts", status: "M", additions: 2, deletions: 1 },
+      ]);
+      expect(githubRepoServiceMock.branchDiff).toHaveBeenCalledWith(
+        { owner: "trace", repo: "trace" },
+        "develop",
+        "trace/test",
+        "gh-token",
+      );
     });
 
     it("reads files at refs through GitHub", async () => {
@@ -4597,6 +4773,38 @@ describe("SessionService", () => {
         "gh-token",
       );
       expect(sessionRouterMock.listFiles).not.toHaveBeenCalled();
+    });
+
+    it("lists files from the live bridge before GitHub", async () => {
+      const group = {
+        id: "group-1",
+        kind: "coding",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+      };
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(group);
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
+      ]);
+      sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "runtime-1",
+        hostingMode: "local",
+      } as never);
+      sessionRouterMock.listFiles.mockResolvedValueOnce(["generated/output.ts"]);
+
+      await expect(service.listFiles("group-1", "org-1", "user-1")).resolves.toEqual([
+        "generated/output.ts",
+      ]);
+      expect(sessionRouterMock.listFiles).toHaveBeenCalledWith(
+        "runtime-1",
+        "session-1",
+        "/tmp/trace",
+      );
+      expect(githubRepoServiceMock.listFiles).not.toHaveBeenCalled();
     });
 
     it("lists directory entries through GitHub", async () => {
@@ -4668,6 +4876,34 @@ describe("SessionService", () => {
         "gh-token",
       );
       expect(sessionRouterMock.listFiles).not.toHaveBeenCalled();
+    });
+
+    it("returns the recursive file tree from the live bridge before GitHub", async () => {
+      const group = {
+        id: "group-1",
+        kind: "coding",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+      };
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(group);
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
+      ]);
+      sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "runtime-1",
+        hostingMode: "local",
+      } as never);
+      sessionRouterMock.listFiles.mockResolvedValueOnce(["generated/output.ts"]);
+
+      await expect(service.listFileTree("group-1", "org-1", "user-1")).resolves.toEqual({
+        paths: ["generated/output.ts"],
+        truncated: false,
+      });
+      expect(githubRepoServiceMock.listFileTree).not.toHaveBeenCalled();
     });
 
     it("falls back to the default branch when the session branch is unavailable", async () => {

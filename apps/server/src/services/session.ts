@@ -931,6 +931,7 @@ type GitHubSessionGroupFileSource = {
   token: string;
   branch: string;
   defaultBranch: string;
+  baseBranch: string;
   workdir: string | null;
 };
 
@@ -10942,12 +10943,32 @@ export class SessionService {
     }
   }
 
+  /** List files from the live workspace when a bridge is available. */
+  private async listWorkspaceFiles(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<string[]> {
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.listFiles(runtime.runtimeId, runtime.sessionId, runtime.workdirHint);
+  }
+
   /** List files in a session group's branch from GitHub. */
   async listFiles(
     sessionGroupId: string,
     organizationId: string,
     userId: string,
   ): Promise<string[]> {
+    try {
+      return await this.listWorkspaceFiles(sessionGroupId, organizationId, userId);
+    } catch {
+      // GitHub remains available when the bridge is disconnected or cannot
+      // resolve the local worktree.
+    }
     const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
       organizationId,
@@ -10968,6 +10989,15 @@ export class SessionService {
     organizationId: string,
     userId: string,
   ): Promise<GitHubFileTree> {
+    try {
+      return {
+        paths: await this.listWorkspaceFiles(sessionGroupId, organizationId, userId),
+        truncated: false,
+      };
+    } catch {
+      // GitHub remains available when the bridge is disconnected or cannot
+      // resolve the local worktree.
+    }
     const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
       organizationId,
@@ -11016,7 +11046,10 @@ export class SessionService {
     return result.content;
   }
 
-  /** Read a file's content and report whether it came from the requested branch or default branch. */
+  /**
+   * Read a file from the live workspace when available, falling back to the
+   * session's GitHub branch when the bridge cannot fulfill the request.
+   */
   async readFileWithSource(
     sessionGroupId: string,
     filePath: string,
@@ -11024,6 +11057,28 @@ export class SessionService {
     userId: string,
   ): Promise<SessionGroupFileContentResult> {
     const normalizedPath = this.normalizeFilePath(filePath);
+    try {
+      const runtime = await this.resolveAccessibleSessionGroupRuntime(
+        sessionGroupId,
+        organizationId,
+        userId,
+      );
+      return {
+        content: await sessionRouter.readFile(
+          runtime.runtimeId,
+          runtime.sessionId,
+          normalizedPath,
+          runtime.workdirHint,
+        ),
+        ref: "workspace",
+        requestedRef: "workspace",
+        usedFallback: false,
+      };
+    } catch {
+      // A deep link may point at an uncommitted or generated workspace file.
+      // Use GitHub only when no live bridge can read it.
+    }
+
     const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
       organizationId,
@@ -11465,19 +11520,50 @@ export class SessionService {
     return true;
   }
 
-  /** Compute the branch diff for a session group from GitHub (changed files vs default branch). */
+  /**
+   * Compute a session group's branch diff against its channel base branch.
+   * Prefer the session's live bridge so unpushed local commits are visible, but
+   * retain GitHub as a fallback when the bridge cannot fulfill the request.
+   */
   async branchDiff(sessionGroupId: string, organizationId: string, userId: string) {
+    try {
+      const runtime = await this.resolveAccessibleSessionGroupRuntime(
+        sessionGroupId,
+        organizationId,
+        userId,
+      );
+      const group = await prisma.sessionGroup.findFirst({
+        where: { id: sessionGroupId, organizationId },
+        select: {
+          channel: { select: { baseBranch: true } },
+          repo: { select: { defaultBranch: true } },
+        },
+      });
+      const baseBranch = this.toGitHubRef(
+        group?.channel?.baseBranch ?? group?.repo?.defaultBranch ?? "main",
+      );
+      return await sessionRouter.branchDiff(
+        runtime.runtimeId,
+        runtime.sessionId,
+        `origin/${baseBranch}`,
+        runtime.workdirHint,
+      );
+    } catch {
+      // GitHub remains available when the bridge is disconnected, fails, or
+      // cannot resolve the local worktree.
+    }
+
     const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
       organizationId,
       userId,
     );
-    if (source.branch === source.defaultBranch) {
+    if (source.branch === source.baseBranch) {
       return [];
     }
     return githubRepoService.branchDiff(
       source.repo,
-      source.defaultBranch,
+      source.baseBranch,
       source.branch,
       source.token,
     );
@@ -11523,6 +11609,7 @@ export class SessionService {
         workdir: true,
         visibility: true,
         ownerUserId: true,
+        channel: { select: { baseBranch: true } },
         repo: { select: { provider: true, remoteUrl: true, defaultBranch: true } },
       },
     });
@@ -11556,6 +11643,7 @@ export class SessionService {
     }
 
     const defaultBranch = this.toGitHubRef(group.repo.defaultBranch || "main");
+    const baseBranch = this.toGitHubRef(group.channel?.baseBranch || defaultBranch);
     const branch = this.toGitHubRef(group.branch || defaultBranch);
 
     return {
@@ -11563,6 +11651,7 @@ export class SessionService {
       token: githubToken,
       branch,
       defaultBranch,
+      baseBranch,
       workdir: group.workdir,
     };
   }

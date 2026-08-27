@@ -1774,8 +1774,8 @@ function hasInvalidGitRef(ref: string): boolean {
 }
 
 /**
- * Handle a `branch_diff` bridge command. Runs git diff --numstat and --name-status,
- * merges results by path.
+ * Handle a `branch_diff` bridge command. Compares the merge base with the live
+ * worktree, so both committed branch changes and uncommitted agent edits appear.
  */
 export async function handleBranchDiff(
   cmd: BridgeBranchDiffCommand,
@@ -1801,9 +1801,22 @@ export async function handleBranchDiff(
   }
 
   try {
-    const [numstatOut, nameStatusOut] = await Promise.all([
-      gitExec(["diff", "--numstat", `${baseBranch}...HEAD`], workdir),
-      gitExec(["diff", "--name-status", `${baseBranch}...HEAD`], workdir),
+    const mergeBase = (await gitExec(["merge-base", baseBranch, "HEAD"], workdir)).trim();
+    if (!mergeBase) {
+      throw new Error(`Could not resolve merge base for ${baseBranch}`);
+    }
+    const [numstatOut, nameStatusOut, untrackedOut, ignoredTraceWorkOut] = await Promise.all([
+      // `git diff <base>...` does not compare against the worktree. Resolve the
+      // merge base explicitly, then compare it with the live workspace.
+      gitExec(["diff", "--numstat", mergeBase], workdir),
+      gitExec(["diff", "--name-status", mergeBase], workdir),
+      gitExec(["ls-files", "--others", "--exclude-standard", "-z"], workdir),
+      // Trace agents may place generated plans and other workspace artifacts
+      // under .trace-work/, which projects commonly ignore.
+      gitExec(
+        ["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", ".trace-work"],
+        workdir,
+      ),
     ]);
 
     // Parse --name-status: "M\tpath" or "R100\told\tnew"
@@ -1829,6 +1842,14 @@ export async function handleBranchDiff(
         additions: isNaN(additions) ? 0 : additions,
         deletions: isNaN(deletions) ? 0 : deletions,
       });
+    }
+
+    // Git diff intentionally excludes untracked files. Agent-created files are
+    // still part of the live workspace, so surface them as additions.
+    const knownPaths = new Set(files.map((file) => file.path));
+    for (const filePath of `${untrackedOut}\0${ignoredTraceWorkOut}`.split("\0").filter(Boolean)) {
+      if (knownPaths.has(filePath)) continue;
+      files.push({ path: filePath, status: "A", additions: 0, deletions: 0 });
     }
 
     send({ type: "branch_diff_result", requestId, files });
