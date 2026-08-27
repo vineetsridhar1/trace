@@ -11356,6 +11356,24 @@ export class SessionService {
     const conn = this.parseConnection(session.connection);
 
     const homeOffline = deliveryResult === "runtime_disconnected" && !!conn.runtimeInstanceId;
+
+    // A failed dispatch is a transport fact, not a liveness verdict. Writing
+    // `disconnected` here swaps the composer for the recovery panel and tells
+    // the user to Move — and both Retry and Move rebuild the workspace. On a
+    // multi-replica backend a single unroutable send is routinely a routing
+    // miss against a container that never died, so confirm before acting on it.
+    if (homeOffline && conn.runtimeInstanceId) {
+      const stillAvailable = await sessionRouter
+        .isRuntimeAvailableConfirmed(conn.runtimeInstanceId, organizationId)
+        // Redis trouble must not manufacture an offline verdict: assume the
+        // bridge is alive and degrade to a soft failure the user can retry.
+        .catch(() => true);
+      if (stillAvailable) {
+        await this.recordTransientDeliveryFailure(sessionId, conn, deliveryResult, operation);
+        return;
+      }
+    }
+
     const unsupportedHomeTool = deliveryResult === "no_runtime" && !!conn.runtimeInstanceId;
     const bridgeLabel = conn.runtimeLabel ?? "The selected bridge";
     const lastError = homeOffline
@@ -11412,6 +11430,37 @@ export class SessionService {
       },
       actorType: "system",
       actorId: "system",
+    });
+  }
+
+  /**
+   * Record a dispatch that did not land against a runtime the directory still
+   * confirms is alive. The command is already preserved in `pendingRun`, so the
+   * session stays usable — no `disconnected` state, no "use Move" banner, no
+   * auto-retry loop pointed at a healthy container. Only the timestamp moves,
+   * and the miss is emitted as telemetry so the routing gap stays visible.
+   */
+  private async recordTransientDeliveryFailure(
+    sessionId: string,
+    conn: SessionConnectionData,
+    deliveryResult: DeliveryResult,
+    operation: string,
+  ) {
+    logAgentEnvironmentTelemetry("runtime.transient_delivery_failure", {
+      sessionId,
+      operation,
+      deliveryResult,
+      connectionState: conn.state,
+      runtimeInstanceId: conn.runtimeInstanceId ?? null,
+    });
+    await this.updateConnectionConditional(sessionId, (current) => {
+      if (
+        !isSameRuntimeGeneration(current, conn) ||
+        (current.version ?? 0) !== (conn.version ?? 0)
+      ) {
+        return null;
+      }
+      return { ...current, lastDeliveryFailureAt: new Date().toISOString() };
     });
   }
 

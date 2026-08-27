@@ -2715,3 +2715,92 @@ describe("SessionRouter peer-owned runtime missing from the local mirror", () =>
     router.dispose();
   });
 });
+
+describe("SessionRouter delivery against a stale self-owned directory entry", () => {
+  const org = "org-stale";
+  const runtimeId = "runtime-stale";
+  let restoreEnabled: (() => void) | null = null;
+
+  function forceBackplaneEnabled() {
+    const original = Object.getOwnPropertyDescriptor(realtimeBackplane, "enabled");
+    Object.defineProperty(realtimeBackplane, "enabled", { value: true, configurable: true });
+    restoreEnabled = () => {
+      if (original) Object.defineProperty(realtimeBackplane, "enabled", original);
+    };
+  }
+
+  function descriptorOwnedBy(ownerReplicaId: string) {
+    const now = Date.now();
+    return {
+      key: runtimeRouterKey(runtimeId, org),
+      id: runtimeId,
+      organizationId: org,
+      ownerReplicaId,
+      connectionGeneration: "generation-stale",
+      ownershipEpoch: 3,
+      label: runtimeId,
+      hostingMode: "cloud" as const,
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+      linkedCheckoutStatuses: [],
+      linkedCheckoutStatusObservedAt: {},
+      lastHeartbeat: now,
+      expiresAt: now + 120_000,
+    };
+  }
+
+  const command = {
+    type: "send" as const,
+    sessionId: "session-1",
+    prompt: "continue",
+  };
+
+  afterEach(() => {
+    restoreEnabled?.();
+    restoreEnabled = null;
+    vi.restoreAllMocks();
+  });
+
+  // Regression: `lookup()` returns the mirror entry before touching Redis, so a
+  // mirror that stale-claims this replica owns the socket short-circuited the
+  // read-through and reported a live peer-owned bridge as offline.
+  it("re-reads Redis authoritatively and relays to the real owner", async () => {
+    const router = new SessionRouter();
+    forceBackplaneEnabled();
+    const lookup = vi
+      .spyOn(runtimeDirectory, "lookup")
+      .mockResolvedValueOnce(descriptorOwnedBy(realtimeBackplane.replicaId) as never)
+      .mockResolvedValueOnce(descriptorOwnedBy("peer-replica") as never);
+    const relay = vi.spyOn(router, "sendToRuntimeAsync").mockResolvedValue("delivered");
+
+    await expect(
+      router.sendAsync("session-1", command, {
+        expectedHomeRuntimeId: runtimeId,
+        organizationId: org,
+      }),
+    ).resolves.toBe("delivered");
+
+    expect(lookup).toHaveBeenNthCalledWith(2, runtimeId, org, { bypassCache: true });
+    expect(relay).toHaveBeenCalledWith(runtimeId, expect.objectContaining({ type: "send" }), org);
+    router.dispose();
+  });
+
+  it("still reports the local failure when the authoritative read agrees", async () => {
+    const router = new SessionRouter();
+    forceBackplaneEnabled();
+    vi.spyOn(runtimeDirectory, "lookup").mockResolvedValue(
+      descriptorOwnedBy(realtimeBackplane.replicaId) as never,
+    );
+    const relay = vi.spyOn(router, "sendToRuntimeAsync");
+
+    await expect(
+      router.sendAsync("session-1", command, {
+        expectedHomeRuntimeId: runtimeId,
+        organizationId: org,
+      }),
+    ).resolves.toBe("runtime_disconnected");
+
+    expect(relay).not.toHaveBeenCalled();
+    router.dispose();
+  });
+});

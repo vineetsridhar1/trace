@@ -262,6 +262,39 @@ describe("RuntimeDirectory read-through lookup", () => {
     expect(get).not.toHaveBeenCalled();
   });
 
+  it("bypasses the mirror on request so a stale entry cannot mask Redis", async () => {
+    const directory = new RuntimeDirectory();
+    directories.push(directory);
+    await directory.start();
+    // The mirror still names the replica that used to own the socket.
+    await realtimeBackplane.broadcast("runtime_presence_changed", {
+      action: "upsert",
+      descriptor: descriptor({
+        key: "org-1:runtime-moved",
+        id: "runtime-moved",
+        ownerReplicaId: "old-replica",
+        ownershipEpoch: 1,
+      }),
+    });
+    forceBackplaneEnabled();
+    const get = vi.spyOn(redis, "get").mockResolvedValue(
+      JSON.stringify(
+        descriptor({
+          key: "org-1:runtime-moved",
+          id: "runtime-moved",
+          ownerReplicaId: "new-replica",
+          ownershipEpoch: 2,
+          expiresAt: Date.now() + 120_000,
+        }),
+      ),
+    );
+
+    await expect(
+      directory.lookup("runtime-moved", "org-1", { bypassCache: true }),
+    ).resolves.toMatchObject({ ownerReplicaId: "new-replica" });
+    expect(get).toHaveBeenCalled();
+  });
+
   it("degrades to the mirror when no organization scopes the key", async () => {
     const directory = new RuntimeDirectory();
     directories.push(directory);

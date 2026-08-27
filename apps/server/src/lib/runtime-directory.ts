@@ -395,12 +395,18 @@ export class RuntimeDirectory {
    *
    * Requires `organizationId` to derive the Redis key; without it this degrades
    * to the mirror-only lookup rather than guessing.
+   *
+   * `bypassCache` skips the mirror entirely. Use it when the mirror's answer is
+   * provably wrong — e.g. it names this replica as the socket owner but this
+   * replica has no deliverable socket — because the short-circuit above would
+   * otherwise return the stale entry and never reach Redis.
    */
   async lookup(
     runtimeInstanceId: string,
     organizationId?: string | null,
+    options?: { bypassCache?: boolean },
   ): Promise<RuntimeDescriptor | undefined> {
-    const cached = this.find(runtimeInstanceId, organizationId);
+    const cached = options?.bypassCache ? undefined : this.find(runtimeInstanceId, organizationId);
     if (cached) return cached;
     if (!realtimeBackplane.enabled || !organizationId) return undefined;
     // Local bridges register under `org:id`; cloud bridges pass no key to

@@ -1177,11 +1177,36 @@ export class SessionRouter {
     if (localResult === "delivered" || !options?.expectedHomeRuntimeId) return localResult;
     // Read through to Redis: a mirror miss here means giving up on a runtime
     // that is alive on a peer replica, which surfaces as "bridge offline".
-    const descriptor = await runtimeDirectory.lookup(
+    let descriptor = await runtimeDirectory.lookup(
       options.expectedHomeRuntimeId,
       options.organizationId,
     );
+    if (descriptor && descriptor.ownerReplicaId === realtimeBackplane.replicaId) {
+      // The mirror names *this* replica as the socket owner, but we just failed
+      // to deliver locally — so the mirror is provably stale. `lookup()` returns
+      // the cached entry before touching Redis, so without bypassing it here we
+      // would report a live peer-owned bridge as offline. Re-read authoritatively.
+      descriptor = await runtimeDirectory.lookup(
+        options.expectedHomeRuntimeId,
+        options.organizationId,
+        { bypassCache: true },
+      );
+    }
     if (!descriptor || descriptor.ownerReplicaId === realtimeBackplane.replicaId) {
+      logAgentEnvironmentTelemetry("runtime.delivery_unroutable", {
+        sessionId,
+        runtimeInstanceId: options.expectedHomeRuntimeId,
+        organizationId: options.organizationId ?? null,
+        commandType: command.type,
+        localResult,
+        replicaId: realtimeBackplane.replicaId,
+        backplaneEnabled: realtimeBackplane.enabled,
+        hadLocalRuntime: Boolean(localRuntime),
+        mirrorHit: Boolean(
+          runtimeDirectory.find(options.expectedHomeRuntimeId, options.organizationId),
+        ),
+        directoryOwnerReplicaId: descriptor?.ownerReplicaId ?? null,
+      });
       return localResult;
     }
     return this.sendToRuntimeAsync(

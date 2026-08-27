@@ -5173,6 +5173,9 @@ describe("SessionService", () => {
         sessionStatus: "in_progress",
       });
       sessionRouterMock.send.mockReturnValueOnce("runtime_disconnected");
+      // A confirmed-absent runtime is what makes this a real disconnect rather
+      // than a routing miss, which is the case this test describes.
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(false);
 
       await service.sendMessage({
         sessionId: "session-1",
@@ -5194,6 +5197,100 @@ describe("SessionService", () => {
         expect.objectContaining({
           eventType: "message_sent",
           payload: expect.objectContaining({ sessionStatus: "in_progress" }),
+        }),
+      );
+    });
+
+    // An unroutable dispatch on a multi-replica backend is routinely a routing
+    // miss, not a dead container. Persisting `disconnected` for one would swap
+    // the composer for the recovery panel, whose only actions rebuild the
+    // workspace — so a false negative there costs a live container.
+    it("keeps a session usable when delivery fails but the home runtime is confirmed alive", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "needs_input",
+        workdir: "/workspace/session-1",
+        toolSessionId: "tool-session-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(session);
+      prismaMock.session.findUnique.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValueOnce("runtime_disconnected");
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "Continue with a different approach.",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(eventServiceMock.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({ type: "connection_lost" }),
+        }),
+      );
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            connection: expect.objectContaining({
+              state: "connected",
+              lastDeliveryFailureAt: expect.any(String),
+            }),
+          }),
+        }),
+      );
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            connection: expect.objectContaining({ state: "disconnected" }),
+          }),
+        }),
+      );
+    });
+
+    it("assumes the bridge is alive when the directory confirmation itself fails", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "needs_input",
+        workdir: "/workspace/session-1",
+        toolSessionId: "tool-session-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(session);
+      prismaMock.session.findUnique.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValueOnce("runtime_disconnected");
+      // Redis trouble must not manufacture an offline verdict.
+      sessionRouterMock.isRuntimeAvailableConfirmed.mockRejectedValueOnce(
+        new Error("redis unavailable"),
+      );
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "Continue with a different approach.",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(eventServiceMock.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({ type: "connection_lost" }),
         }),
       );
     });
