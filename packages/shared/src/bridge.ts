@@ -1774,8 +1774,8 @@ function hasInvalidGitRef(ref: string): boolean {
 }
 
 /**
- * Handle a `branch_diff` bridge command. Runs git diff --numstat and --name-status,
- * merges results by path.
+ * Handle a `branch_diff` bridge command. Compares the merge base with the live
+ * worktree, so both committed branch changes and uncommitted agent edits appear.
  */
 export async function handleBranchDiff(
   cmd: BridgeBranchDiffCommand,
@@ -1801,9 +1801,12 @@ export async function handleBranchDiff(
   }
 
   try {
-    const [numstatOut, nameStatusOut] = await Promise.all([
-      gitExec(["diff", "--numstat", `${baseBranch}...HEAD`], workdir),
-      gitExec(["diff", "--name-status", `${baseBranch}...HEAD`], workdir),
+    const [numstatOut, nameStatusOut, untrackedOut] = await Promise.all([
+      // With the right side omitted, the three-dot range compares its merge base
+      // to the working tree instead of only to HEAD.
+      gitExec(["diff", "--numstat", `${baseBranch}...`], workdir),
+      gitExec(["diff", "--name-status", `${baseBranch}...`], workdir),
+      gitExec(["ls-files", "--others", "--exclude-standard", "-z"], workdir),
     ]);
 
     // Parse --name-status: "M\tpath" or "R100\told\tnew"
@@ -1829,6 +1832,14 @@ export async function handleBranchDiff(
         additions: isNaN(additions) ? 0 : additions,
         deletions: isNaN(deletions) ? 0 : deletions,
       });
+    }
+
+    // Git diff intentionally excludes untracked files. Agent-created files are
+    // still part of the live workspace, so surface them as additions.
+    const knownPaths = new Set(files.map((file) => file.path));
+    for (const filePath of untrackedOut.split("\0").filter(Boolean)) {
+      if (knownPaths.has(filePath)) continue;
+      files.push({ path: filePath, status: "A", additions: 0, deletions: 0 });
     }
 
     send({ type: "branch_diff_result", requestId, files });
