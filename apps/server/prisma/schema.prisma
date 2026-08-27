@@ -830,7 +830,6 @@ model Session {
   workdir                                 String?
   toolSessionId                           String?
   pendingRun                              Json?
-  pendingGeneralWorkspaceCleanupRuntimeId String?
   endpoints                               Json?
   connection                              Json?
   prUrl                                   String?
@@ -857,7 +856,6 @@ model Session {
   @@index([sessionGroupId, updatedAt])
   @@index([organizationId, agentStatus])
   @@index([channelId, updatedAt])
-  @@index([pendingGeneralWorkspaceCleanupRuntimeId])
 }
 
 model SessionMessage {

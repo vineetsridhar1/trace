@@ -812,7 +812,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
   });
 
-  it("prepares a repo-linked general session in scratch space instead of its repo", async () => {
+  it("prepares a repo-linked general session as read-only context", async () => {
     const router = new SessionRouter();
     const ws = makeWs();
     router.registerRuntime({
@@ -849,13 +849,15 @@ describe("SessionRouter runtime adapter dispatch", () => {
     expect(failures).toEqual([]);
     const send = ws.send as unknown as ReturnType<typeof vi.fn>;
     expect(JSON.parse(send.mock.calls[0]?.[0] as string)).toMatchObject({
-      type: "prepare_general",
+      type: "prepare",
       sessionId: "session-1",
       sessionGroupId: "group-1",
+      repoId: "repo-1",
+      readOnly: true,
     });
   });
 
-  it("prepares a provisioned general session in cloud scratch space", async () => {
+  it("prepares a provisioned general session with read-only repo context", async () => {
     const provisionedAdapter: RuntimeAdapter = {
       type: "provisioned",
       async validateConfig() {},
@@ -909,18 +911,20 @@ describe("SessionRouter runtime adapter dispatch", () => {
     expect(
       JSON.parse((ws.send as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]),
     ).toMatchObject({
-      type: "prepare_general",
+      type: "prepare",
       sessionId: "session-1",
       sessionGroupId: "group-1",
+      repoId: "repo-1",
+      readOnly: true,
     });
   });
 
-  it("refuses to run a general session from home on an older local bridge", async () => {
+  it("starts an unlinked general session in the runtime home", async () => {
     const router = new SessionRouter();
     const ws = makeWs();
     router.registerRuntime({
       id: "runtime-1",
-      label: "Older laptop",
+      label: "Laptop",
       ws,
       hostingMode: "local",
       supportedTools: ["codex"],
@@ -944,12 +948,8 @@ describe("SessionRouter runtime adapter dispatch", () => {
       onFailed,
     });
 
-    await vi.waitFor(() =>
-      expect(onFailed).toHaveBeenCalledWith(
-        "This Trace runtime is too old to create an isolated workspace. Upgrade it before retrying this session.",
-      ),
-    );
-    expect(onWorkspaceReady).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(onWorkspaceReady).toHaveBeenCalledWith("/home/coder"));
+    expect(onFailed).not.toHaveBeenCalled();
     expect(ws.send).not.toHaveBeenCalled();
   });
 
@@ -1004,7 +1004,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
       expect(remoteDelivery).toHaveBeenCalledWith(
         runtimeId,
-        expect.objectContaining({ type: "prepare_general", sessionId: "session-1" }),
+        expect.objectContaining({ type: "prepare", sessionId: "session-1", readOnly: true }),
         organizationId,
       );
     } finally {

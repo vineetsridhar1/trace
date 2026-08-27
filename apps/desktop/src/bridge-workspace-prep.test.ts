@@ -223,4 +223,24 @@ describe("BridgeClient workspace prep gating", () => {
     expect(args.cwd).toBeTruthy();
     expect(args.cwd).not.toBe("/stale/workdir");
   });
+
+  it("uses home mode when an older server sends prepare_general", async () => {
+    const { handleCommand, sent, runPrompt } = createHarness();
+    handleCommand({ type: "prepare_general", sessionId: "session-1", sessionGroupId: "group-1" });
+    handleCommand({ ...SEND, workspaceMode: undefined });
+
+    await vi.waitFor(() => expect(runPrompt).toHaveBeenCalledTimes(1));
+    expect(sent).toContainEqual(expect.objectContaining({ type: "workspace_ready" }));
+    const args = runPrompt.mock.calls[0][0] as RunPromptArgs;
+    expect(args.cwd).not.toBe("/stale/workdir");
+  });
+
+  it("acknowledges deprecated general-workspace cleanup", () => {
+    const { handleCommand, sent } = createHarness();
+    handleCommand({ type: "cleanup_general_workspace", sessionId: "session-1" });
+
+    expect(sent).toEqual([
+      { type: "cleanup_general_workspace_result", sessionId: "session-1", success: true },
+    ]);
+  });
 });

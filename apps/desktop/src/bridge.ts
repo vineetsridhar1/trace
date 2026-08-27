@@ -69,7 +69,6 @@ import {
   type CreatedWorktree,
 } from "./worktree.js";
 import { runtimeDebug } from "./runtime-debug.js";
-import { generalWorkspacePath, removeGeneralWorkspace } from "@trace/shared/general-workspace";
 import { TerminalManager } from "@trace/shared/adapters";
 import { collectTrackedPrWorkspaces, type TrackedSessionWorkspace } from "./pr-tracking.js";
 
@@ -1016,7 +1015,12 @@ export class BridgeClient implements IBridgeClient {
                 ...(artifact ? { artifact } : {}),
               }
             : output;
-        this.send({ type: "session_output", sessionId, data });
+        this.send({
+          type: "session_output",
+          sessionId,
+          data,
+          invocationId: runtimeEnv?.TRACE_INVOCATION_ID,
+        });
 
         maybeReportToolSessionId();
 
@@ -1028,7 +1032,11 @@ export class BridgeClient implements IBridgeClient {
             this.pendingInputToolUseIds.delete(sessionId);
           }
           this.finishRun(sessionId, runId);
-          this.send({ type: "session_complete", sessionId });
+          this.send({
+            type: "session_complete",
+            sessionId,
+            invocationId: runtimeEnv?.TRACE_INVOCATION_ID,
+          });
           activeAdapter.abort();
           cleanupImages();
         }
@@ -1040,7 +1048,11 @@ export class BridgeClient implements IBridgeClient {
           this.pendingInputToolUseIds.delete(sessionId);
         }
         this.finishRun(sessionId, runId);
-        this.send({ type: "session_complete", sessionId });
+        this.send({
+          type: "session_complete",
+          sessionId,
+          invocationId: runtimeEnv?.TRACE_INVOCATION_ID,
+        });
         cleanupImages();
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
@@ -1140,6 +1152,23 @@ export class BridgeClient implements IBridgeClient {
       case "run":
       case "send": {
         void this.runAfterWorkspacePrep(cmd);
+        break;
+      }
+      case "prepare_general": {
+        const prepareVersion = this.beginWorkspacePreparation(cmd.sessionId);
+        const workdir = os.homedir();
+        this.markWorkspaceReady(cmd.sessionId, workdir, prepareVersion);
+        this.sessionGroupIds.set(cmd.sessionId, cmd.sessionGroupId ?? null);
+        this.readOnlySessions.delete(cmd.sessionId);
+        this.send({ type: "workspace_ready", sessionId: cmd.sessionId, workdir });
+        break;
+      }
+      case "cleanup_general_workspace": {
+        this.send({
+          type: "cleanup_general_workspace_result",
+          sessionId: cmd.sessionId,
+          success: true,
+        });
         break;
       }
       case "prepare": {
@@ -1256,53 +1285,6 @@ export class BridgeClient implements IBridgeClient {
         this.trackWorkspacePreparation(sessionId, prepared);
         break;
       }
-      case "prepare_general": {
-        const { sessionId, sessionGroupId } = cmd;
-        const workdir = generalWorkspacePath(sessionGroupId ?? sessionId);
-        const prepareVersion = this.beginWorkspacePreparation(sessionId);
-        const prepared = fs.promises
-          .mkdir(workdir, { recursive: true })
-          .then(() => {
-            this.markWorkspaceReady(sessionId, workdir, prepareVersion);
-            if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
-            this.sessionGroupIds.set(sessionId, sessionGroupId ?? null);
-            this.send({ type: "workspace_ready", sessionId, workdir });
-          })
-          .catch((err: Error) => {
-            this.markWorkspaceFailed(sessionId, err.message, prepareVersion);
-            throw err;
-          });
-        this.trackWorkspacePreparation(sessionId, prepared);
-        break;
-      }
-      case "cleanup_general_workspace": {
-        const sessionKey = cmd.sessionGroupId ?? cmd.sessionId;
-        const workdir = this.sessionWorkdirs.get(cmd.sessionId);
-        void removeGeneralWorkspace(workdir, sessionKey)
-          .then((removed) => {
-            if (removed && workdir) {
-              for (const [trackedSessionId, trackedWorkdir] of this.sessionWorkdirs) {
-                if (trackedWorkdir === workdir) this.sessionWorkdirs.delete(trackedSessionId);
-              }
-            }
-            this.send({
-              type: "cleanup_general_workspace_result",
-              sessionId: cmd.sessionId,
-              success: removed,
-              ...(!removed ? { error: "General workspace path was rejected" } : {}),
-            });
-          })
-          .catch((err: Error) => {
-            console.warn(`[bridge] failed to remove general workspace ${workdir}:`, err.message);
-            this.send({
-              type: "cleanup_general_workspace_result",
-              sessionId: cmd.sessionId,
-              success: false,
-              error: err.message,
-            });
-          });
-        break;
-      }
       case "list_workspace_slugs": {
         const repoConfig = getRepoConfig(cmd.repoId);
         const repoPath = repoConfig?.path;
@@ -1374,7 +1356,6 @@ export class BridgeClient implements IBridgeClient {
         } = cmd;
         const repoConfig = getRepoConfig(repoId);
         const repoPath = repoConfig?.path;
-        const previousWorkdir = this.sessionWorkdirs.get(sessionId);
         const prepareVersion = this.beginWorkspacePreparation(sessionId);
 
         if (!repoPath) {
@@ -1408,22 +1389,6 @@ export class BridgeClient implements IBridgeClient {
               branch: worktreeBranch,
               slug: worktreeSlug,
             });
-            const sessionKey = sessionGroupId ?? sessionId;
-            void removeGeneralWorkspace(previousWorkdir, sessionKey)
-              .then((removed) => {
-                if (!removed || !previousWorkdir) return;
-                for (const [trackedSessionId, trackedWorkdir] of this.sessionWorkdirs) {
-                  if (trackedWorkdir === previousWorkdir) {
-                    this.sessionWorkdirs.delete(trackedSessionId);
-                  }
-                }
-              })
-              .catch((err: Error) => {
-                console.warn(
-                  `[bridge] failed to remove general workspace ${previousWorkdir}:`,
-                  err.message,
-                );
-              });
             void this.pollLocalPrStatuses();
           })
           .catch((err: Error) => {

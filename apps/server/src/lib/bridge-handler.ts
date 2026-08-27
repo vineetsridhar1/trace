@@ -1243,11 +1243,15 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         const data = (msg.data ?? {}) as Record<string, unknown>;
 
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
-          await sessionService.recordOutput(sessionId, data);
+          await sessionService.recordOutput(sessionId, data, {
+            invocationId: typeof msg.invocationId === "string" ? msg.invocationId : undefined,
+          });
         });
       } else if (msg.type === "session_complete" && msg.sessionId) {
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
-          await sessionService.complete(sessionId);
+          await sessionService.complete(sessionId, {
+            invocationId: typeof msg.invocationId === "string" ? msg.invocationId : undefined,
+          });
         });
       } else if (msg.type === "workspace_ready" && msg.sessionId) {
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
@@ -1264,15 +1268,6 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       } else if (msg.type === "workspace_failed" && msg.sessionId) {
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
           await sessionService.workspaceFailed(sessionId, (msg.error as string) ?? "Unknown error");
-        });
-      } else if (msg.type === "cleanup_general_workspace_result" && msg.sessionId) {
-        if (!bridgeAuth) return;
-        await sessionService.generalWorkspaceCleanupCompleted({
-          sessionId: msg.sessionId as string,
-          organizationId: bridgeAuth.organizationId,
-          runtimeInstanceId: runtimeId,
-          success: msg.success === true,
-          error: typeof msg.error === "string" ? msg.error : undefined,
         });
       } else if (msg.type === "register_session" && msg.sessionId) {
         void (async () => {

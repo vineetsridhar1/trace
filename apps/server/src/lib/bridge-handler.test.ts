@@ -261,51 +261,6 @@ describe("bridge handler auth", () => {
     expect(mocks.addRegisteredRepoToLocalRuntime).not.toHaveBeenCalled();
   });
 
-  it("accepts a general-workspace cleanup result from its source runtime", async () => {
-    const ws = createMockWs();
-    mocks.registerLocalRuntimeConnection.mockResolvedValueOnce({
-      id: "bridge-runtime-1",
-      label: "Laptop",
-      organizationId: "org-1",
-      ownerUserId: "user-1",
-    });
-
-    handleBridgeConnection(ws as never, {
-      bridgeAuth: {
-        kind: "local",
-        instanceId: "bridge-owned",
-        organizationId: "org-1",
-        userId: "user-1",
-      },
-    });
-    ws.emitMessage({
-      type: "runtime_hello",
-      instanceId: "bridge-owned",
-      hostingMode: "local",
-      supportedTools: ["codex"],
-      registeredRepoIds: [],
-    });
-    await vi.waitFor(() => {
-      expect(mocks.registerRuntime).toHaveBeenCalled();
-    });
-
-    ws.emitMessage({
-      type: "cleanup_general_workspace_result",
-      sessionId: "session-1",
-      success: true,
-    });
-
-    await vi.waitFor(() => {
-      expect(mocks.generalWorkspaceCleanupCompleted).toHaveBeenCalledWith({
-        sessionId: "session-1",
-        organizationId: "org-1",
-        runtimeInstanceId: "bridge-owned",
-        success: true,
-        error: undefined,
-      });
-    });
-  });
-
   it("ignores post-registration messages from a superseded websocket", async () => {
     const ws = createMockWs();
     mocks.registerLocalRuntimeConnection.mockResolvedValueOnce({

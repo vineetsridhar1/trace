@@ -35,7 +35,6 @@ import type {
   BridgeDesignSystemExportCommand,
   ActionRequiredArtifact,
 } from "@trace/shared";
-import { GENERAL_WORKSPACE_PROTOCOL_VERSION } from "@trace/shared";
 import { prisma } from "./db.js";
 import { isGeneratedProjectKind } from "./generated-project.js";
 import { runtimeDebug } from "./runtime-debug.js";
@@ -60,8 +59,6 @@ interface BaseSessionCommand {
     | "resume"
     | "send"
     | "prepare"
-    | "prepare_general"
-    | "cleanup_general_workspace"
     | "prepare_app"
     | "delete"
     | "list_branches"
@@ -2504,43 +2501,6 @@ export class SessionRouter {
           return;
         }
 
-        // A linked repository is context for a general session, not permission
-        // to place the agent in a writable checkout. General sessions always
-        // start in their disposable scratch directory and convert before coding.
-        if (options.sessionGroupKind === "general") {
-          const localRuntime = expectedHomeRuntimeId
-            ? this.getRuntime(expectedHomeRuntimeId, options.organizationId)
-            : this.getRuntimeForSession(options.sessionId);
-          // The bridge can be owned by another server replica. Read through to
-          // the shared directory before treating an absent local runtime as an
-          // older bridge, otherwise a current desktop runtime is misclassified.
-          const runtime =
-            localRuntime ??
-            (expectedHomeRuntimeId
-              ? await runtimeDirectory.lookup(expectedHomeRuntimeId, options.organizationId)
-              : undefined);
-          if ((runtime?.protocolVersion ?? 1) < GENERAL_WORKSPACE_PROTOCOL_VERSION) {
-            options.onFailed(
-              "This Trace runtime is too old to create an isolated workspace. Upgrade it before retrying this session.",
-            );
-            return;
-          }
-          const result = await this.sendAsync(
-            options.sessionId,
-            {
-              type: "prepare_general",
-              sessionId: options.sessionId,
-              sessionGroupId: options.sessionGroupId,
-            },
-            {
-              expectedHomeRuntimeId,
-              organizationId: options.organizationId,
-            },
-          );
-          if (result !== "delivered") options.onFailed(`prepare_general: ${result}`);
-          return;
-        }
-
         if (options.repo) {
           const result = await this.sendAsync(
             options.sessionId,
@@ -2556,7 +2516,7 @@ export class SessionRouter {
               defaultBranch: options.repo.defaultBranch,
               branch: options.branch,
               baseCommitSha: options.baseCommitSha,
-              readOnly: options.readOnly,
+              readOnly: options.sessionGroupKind === "general" || options.readOnly,
               adoptWorktreePath: options.adoptWorktreePath,
             },
             {
@@ -2570,9 +2530,7 @@ export class SessionRouter {
           return;
         }
 
-        if (adapterType === "provisioned") {
-          options.onWorkspaceReady?.("/home/coder");
-        }
+        options.onWorkspaceReady?.("/home/coder");
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[runtime-adapter] failed to start ${options.sessionId}:`, message);

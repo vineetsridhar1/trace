@@ -133,7 +133,6 @@ export type {
 } from "./bridge.js";
 export {
   BRIDGE_PROTOCOL_VERSION,
-  GENERAL_WORKSPACE_PROTOCOL_VERSION,
   resolveBridgeWorkdir,
   parseBranchOutput,
   parseWorktreeListPorcelain,

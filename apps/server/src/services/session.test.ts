@@ -873,7 +873,6 @@ describe("SessionService", () => {
               repoId: managedRepo.id,
               readOnlyWorkspace: false,
               projects: { deleteMany: {} },
-              pendingGeneralWorkspaceCleanupRuntimeId: "runtime-local",
               pendingRun: expect.objectContaining({
                 prompt: `Continue the user's request in the newly prepared ${kind === "pdf" ? "PDF" : kind} workspace.`,
               }),
@@ -906,7 +905,7 @@ describe("SessionService", () => {
         repoId: null,
         repo: null,
         branch: null,
-        workdir: "/home/coder/trace/general-sessions/group-general",
+        workdir: "/home/coder",
       });
       const managedRepo = await managedGitServiceMock.createManagedRepo({
         organizationId: "org-1",
@@ -1027,7 +1026,6 @@ describe("SessionService", () => {
         expect.objectContaining({
           data: expect.objectContaining({
             hosting: "cloud",
-            pendingGeneralWorkspaceCleanupRuntimeId: null,
             connection: expect.objectContaining({
               state: "connected",
               runtimeInstanceId: runtime.id,
@@ -5357,6 +5355,26 @@ describe("SessionService", () => {
   });
 
   describe("recordOutput", () => {
+    it("ignores output from a superseded invocation", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        organizationId: "org-1",
+        tool: "codex",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+        activeInvocationId: "invocation-current",
+      });
+
+      await service.recordOutput(
+        "session-1",
+        { type: "assistant", message: "stale" },
+        { invocationId: "invocation-stale" },
+      );
+
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+    });
+
     it("does not attach a recovery artifact to assistant instructions", async () => {
       const data = {
         type: "assistant",
@@ -5593,6 +5611,49 @@ describe("SessionService", () => {
   });
 
   describe("complete", () => {
+    it("ignores completion from a superseded invocation", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+        activeInvocationId: "invocation-current",
+      });
+
+      await service.complete("session-1", { invocationId: "invocation-stale" });
+
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+
+    it("does not complete when its invocation was replaced during finalization", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+        activeInvocationId: "invocation-current",
+      });
+      prismaMock.event.findFirst.mockResolvedValueOnce(null);
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await service.complete("session-1", { invocationId: "invocation-current" });
+
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: "session-1",
+          agentStatus: "active",
+          activeInvocationId: "invocation-current",
+        },
+        data: {
+          agentStatus: "done",
+          sessionStatus: "in_progress",
+          activeInvocationId: null,
+        },
+      });
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+
     it("returns finished sessions to in_progress when no follow-up input is needed", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce({
         agentStatus: "active",
@@ -6443,7 +6504,7 @@ describe("SessionService", () => {
         agentStatus: "done",
         sessionStatus: "in_progress",
         hosting: "local",
-        workdir: "/tmp/trace/general-sessions/group-1",
+        workdir: "/tmp/worktree",
         toolSessionId: "tool-sess-1",
         repoId: "repo-1",
         sessionGroup: makeSessionGroup({ kind: "general", repoId: "repo-1" }),
@@ -6467,6 +6528,35 @@ describe("SessionService", () => {
       expect(command?.prompt).toContain("never perform a non-coding conversion automatically");
       expect(command?.prompt).not.toContain("trace-<slug>-<descriptive-name>");
       expect(command?.prompt).not.toContain("git add -A");
+    });
+
+    it("runs an unlinked general session from the runtime home", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        hosting: "local",
+        workdir: "/home/coder",
+        toolSessionId: "tool-sess-1",
+        repoId: null,
+        repo: null,
+        sessionGroup: makeSessionGroup({ kind: "general", repoId: null, repo: null }),
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
+      prismaMock.session.update.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValue("delivered");
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "help me think through this",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({ workspaceMode: "home", cwd: "/home/coder" }),
+        expect.any(Object),
+      );
     });
 
     it("injects an active artifact credential into plan-mode bridge commands", async () => {
@@ -8194,6 +8284,47 @@ describe("SessionService", () => {
       );
     });
 
+    it("restores an unlinked general session without preparing a workspace", async () => {
+      const generalSession = makeSession({
+        hosting: "local",
+        repoId: null,
+        repo: null,
+        branch: null,
+        workdir: "/home/coder",
+        sessionGroup: makeSessionGroup({ kind: "general", repoId: null, repo: null }),
+        connection: {
+          state: "disconnected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(generalSession);
+      prismaMock.session.findUnique.mockResolvedValue(generalSession);
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(generalSession);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-a",
+        key: "org-1:runtime-a",
+        label: "Laptop A",
+        hostingMode: "local",
+        ws: { readyState: 1, OPEN: 1 },
+      });
+
+      await service.retryConnection("session-1", "org-1", "user", "user-1");
+
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "org-1:runtime-a");
+      expect(sessionRouterMock.send).not.toHaveBeenCalled();
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            connection: expect.objectContaining({ state: "connected" }),
+          }),
+        }),
+      );
+    });
+
     it("reuses an unrecorded managed worktree when retrying a local session", async () => {
       const recoveredSession = makeSession({
         hosting: "local",
@@ -9317,69 +9448,6 @@ describe("SessionService", () => {
       );
     });
 
-    it("retries durable general-workspace cleanup when the source runtime reconnects", async () => {
-      sessionRouterMock.getRuntime.mockReturnValueOnce({
-        key: "org-1:runtime-source",
-        id: "runtime-source",
-        label: "Laptop",
-        hostingMode: "local",
-        organizationId: "org-1",
-        supportedTools: ["codex"],
-        registeredRepoIds: [],
-        boundSessions: new Set<string>(),
-        ws: { readyState: 1, OPEN: 1 },
-      });
-      prismaMock.session.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([
-          { id: "session-1", sessionGroupId: "group-1", organizationId: "org-1" },
-        ]);
-      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
-
-      await service.restoreSessionsForRuntime("runtime-source", "org-1");
-
-      expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
-        "runtime-source",
-        {
-          type: "cleanup_general_workspace",
-          sessionId: "session-1",
-          sessionGroupId: "group-1",
-        },
-        "org-1",
-      );
-      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
-    });
-
-    it("clears durable general-workspace cleanup only after bridge confirmation", async () => {
-      await service.generalWorkspaceCleanupCompleted({
-        sessionId: "session-1",
-        organizationId: "org-1",
-        runtimeInstanceId: "runtime-source",
-        success: true,
-      });
-
-      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
-        where: {
-          id: "session-1",
-          organizationId: "org-1",
-          pendingGeneralWorkspaceCleanupRuntimeId: "runtime-source",
-        },
-        data: { pendingGeneralWorkspaceCleanupRuntimeId: null },
-      });
-    });
-
-    it("keeps durable cleanup pending when the bridge reports a deletion failure", async () => {
-      await service.generalWorkspaceCleanupCompleted({
-        sessionId: "session-1",
-        organizationId: "org-1",
-        runtimeInstanceId: "runtime-source",
-        success: false,
-        error: "permission denied",
-      });
-
-      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
-    });
-
     it("heals a timed-out cloud session when its runtime reconnects", async () => {
       sessionRouterMock.getRuntime.mockReturnValueOnce({
         key: "runtime-cloud",
@@ -9473,62 +9541,6 @@ describe("SessionService", () => {
   });
 
   describe("workspaceReady", () => {
-    it("cleans the source general workspace after the replacement workspace is ready", async () => {
-      const pendingRun = {
-        type: "run",
-        prompt: "Continue in the generated workspace",
-        interactionMode: null,
-      };
-      const readySession = makeSession({
-        hosting: "cloud",
-        workdir: "/home/coder",
-        sessionGroup: makeSessionGroup({ kind: "coding", workdir: "/home/coder" }),
-      });
-      prismaMock.session.findUniqueOrThrow
-        .mockResolvedValueOnce({
-          pendingRun,
-          agentStatus: "active",
-          sessionStatus: "in_progress",
-          readOnlyWorkspace: false,
-          workdir: null,
-          pendingGeneralWorkspaceCleanupRuntimeId: "runtime-local",
-        })
-        .mockResolvedValueOnce(readySession);
-      prismaMock.session.update.mockResolvedValue(readySession);
-      prismaMock.sessionGroup.update.mockResolvedValue(
-        makeSessionGroup({ kind: "coding", workdir: "/home/coder" }),
-      );
-      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
-      prismaMock.event.findMany.mockResolvedValue([]);
-
-      await service.workspaceReady("session-1", "/home/coder");
-
-      expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
-        "runtime-local",
-        {
-          type: "cleanup_general_workspace",
-          sessionId: "session-1",
-          sessionGroupId: "group-1",
-        },
-        "org-1",
-      );
-      expect(prismaMock.session.updateMany).not.toHaveBeenCalledWith({
-        where: expect.objectContaining({
-          id: "session-1",
-          pendingGeneralWorkspaceCleanupRuntimeId: "runtime-local",
-        }),
-        data: { pendingGeneralWorkspaceCleanupRuntimeId: null },
-      });
-      expect(sessionRouterMock.send).toHaveBeenCalledWith(
-        "session-1",
-        expect.objectContaining({
-          type: "run",
-          prompt: expect.stringContaining("Continue in the generated workspace"),
-        }),
-        expect.any(Object),
-      );
-    });
-
     it("auto-starts design sessions through the shared application service", async () => {
       const startApplication = vi
         .spyOn(sessionApplicationService, "startApplication")

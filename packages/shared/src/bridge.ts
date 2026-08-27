@@ -4,7 +4,6 @@
  */
 
 export const BRIDGE_PROTOCOL_VERSION = 5;
-export const GENERAL_WORKSPACE_PROTOCOL_VERSION = 3;
 
 /**
  * Resolve the only directory a bridge may use to start an agent. Missing
@@ -87,12 +86,14 @@ export interface BridgePrepareCommand {
   adoptWorktreePath?: string;
 }
 
+/** @deprecated Kept so updated bridges remain compatible with older servers. */
 export interface BridgePrepareGeneralCommand {
   type: "prepare_general";
   sessionId: string;
   sessionGroupId?: string;
 }
 
+/** @deprecated Kept so updated bridges can acknowledge older-server cleanup. */
 export interface BridgeCleanupGeneralWorkspaceCommand {
   type: "cleanup_general_workspace";
   sessionId: string;
@@ -597,11 +598,15 @@ export interface BridgeSessionOutput {
   type: "session_output";
   sessionId: string;
   data: unknown;
+  /** Identifies the dispatched agent run so stale output can be ignored. */
+  invocationId?: string;
 }
 
 export interface BridgeSessionComplete {
   type: "session_complete";
   sessionId: string;
+  /** Identifies the dispatched agent run so stale completions can be ignored. */
+  invocationId?: string;
 }
 
 export interface BridgeWorkspaceReady {
@@ -1017,10 +1022,10 @@ export type BridgeMessage =
   | BridgeRuntimeHeartbeat
   | BridgeRegisterSession
   | BridgeSessionOutput
+  | BridgeCleanupGeneralWorkspaceResult
   | BridgeSessionComplete
   | BridgeWorkspaceReady
   | BridgeWorkspaceFailed
-  | BridgeCleanupGeneralWorkspaceResult
   | BridgeToolSessionId
   | BridgeToolSessionMissing
   | BridgeRepoLinked

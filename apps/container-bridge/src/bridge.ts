@@ -34,7 +34,6 @@ import {
 } from "@trace/shared";
 import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
-import { generalWorkspacePath, removeGeneralWorkspace } from "@trace/shared/general-workspace";
 import type { GitExecFn } from "@trace/shared";
 import {
   AntigravityAdapter,
@@ -427,8 +426,13 @@ export class ContainerBridge implements IBridgeClient {
             type: "session_output",
             sessionId: cmd.sessionId,
             data: { type: "error", message: err instanceof Error ? err.message : String(err) },
+            invocationId: cmd.runtimeEnv?.TRACE_INVOCATION_ID,
           });
-          this.send({ type: "session_complete", sessionId: cmd.sessionId });
+          this.send({
+            type: "session_complete",
+            sessionId: cmd.sessionId,
+            invocationId: cmd.runtimeEnv?.TRACE_INVOCATION_ID,
+          });
         });
         break;
       }
@@ -512,52 +516,22 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "prepare_general": {
-        const workdir = generalWorkspacePath(cmd.sessionGroupId ?? cmd.sessionId);
         const prepareVersion = this.beginWorkspacePreparation(cmd.sessionId);
-        fs.promises
-          .mkdir(workdir, { recursive: true })
-          .then(() => {
-            if (!this.isCurrentWorkspacePreparation(cmd.sessionId, prepareVersion)) return;
-            this.sessionWorkdirs.set(cmd.sessionId, workdir);
-            this.send({ type: "register_session", sessionId: cmd.sessionId });
-            this.send({ type: "workspace_ready", sessionId: cmd.sessionId, workdir });
-          })
-          .catch((err: Error) => {
-            if (!this.isCurrentWorkspacePreparation(cmd.sessionId, prepareVersion)) return;
-            this.send({ type: "workspace_failed", sessionId: cmd.sessionId, error: err.message });
-          });
+        const workdir = os.homedir();
+        if (!this.isCurrentWorkspacePreparation(cmd.sessionId, prepareVersion)) break;
+        this.sessionWorkdirs.set(cmd.sessionId, workdir);
+        this.readOnlySessions.delete(cmd.sessionId);
+        this.send({ type: "register_session", sessionId: cmd.sessionId });
+        this.send({ type: "workspace_ready", sessionId: cmd.sessionId, workdir });
         break;
       }
 
       case "cleanup_general_workspace": {
-        const sessionKey = cmd.sessionGroupId ?? cmd.sessionId;
-        const workdir = this.sessionWorkdirs.get(cmd.sessionId);
-        void removeGeneralWorkspace(workdir, sessionKey)
-          .then((removed) => {
-            if (removed && workdir) {
-              for (const [trackedSessionId, trackedWorkdir] of this.sessionWorkdirs) {
-                if (trackedWorkdir === workdir) this.sessionWorkdirs.delete(trackedSessionId);
-              }
-            }
-            this.send({
-              type: "cleanup_general_workspace_result",
-              sessionId: cmd.sessionId,
-              success: removed,
-              ...(!removed ? { error: "General workspace path was rejected" } : {}),
-            });
-          })
-          .catch((err: Error) => {
-            console.warn(
-              `[container-bridge] failed to remove general workspace ${workdir}:`,
-              err.message,
-            );
-            this.send({
-              type: "cleanup_general_workspace_result",
-              sessionId: cmd.sessionId,
-              success: false,
-              error: err.message,
-            });
-          });
+        this.send({
+          type: "cleanup_general_workspace_result",
+          sessionId: cmd.sessionId,
+          success: true,
+        });
         break;
       }
 
@@ -608,7 +582,6 @@ export class ContainerBridge implements IBridgeClient {
           designSystemPackage,
           sourceRepository,
         } = cmd;
-        const previousWorkdir = this.sessionWorkdirs.get(sessionId);
         const prepareVersion = this.beginWorkspacePreparation(sessionId);
         (async () => {
           try {
@@ -652,14 +625,6 @@ export class ContainerBridge implements IBridgeClient {
               ...(sourceWorkdir ? { sourceWorkdir } : {}),
               ...(sourceCommitSha ? { sourceCommitSha } : {}),
             });
-            try {
-              await removeGeneralWorkspace(previousWorkdir, sessionGroupId ?? sessionId);
-            } catch (error) {
-              console.warn(
-                `[container-bridge] failed to remove converted general workspace ${previousWorkdir}:`,
-                error instanceof Error ? error.message : String(error),
-              );
-            }
           } catch (err) {
             if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
             const message = err instanceof Error ? err.message : String(err);
@@ -681,7 +646,6 @@ export class ContainerBridge implements IBridgeClient {
           branch,
           preserveBranchName,
         } = cmd;
-        const previousWorkdir = this.sessionWorkdirs.get(sessionId);
         const prepareVersion = this.beginWorkspacePreparation(sessionId);
 
         (async () => {
@@ -713,22 +677,6 @@ export class ContainerBridge implements IBridgeClient {
               slug: worktreeSlug,
               warning: repoResult.warning,
             });
-            const sessionKey = sessionGroupId ?? sessionId;
-            try {
-              const removed = await removeGeneralWorkspace(previousWorkdir, sessionKey);
-              if (removed && previousWorkdir) {
-                for (const [trackedSessionId, trackedWorkdir] of this.sessionWorkdirs) {
-                  if (trackedWorkdir === previousWorkdir) {
-                    this.sessionWorkdirs.delete(trackedSessionId);
-                  }
-                }
-              }
-            } catch (error) {
-              console.warn(
-                `[container-bridge] failed to remove upgraded general workspace ${previousWorkdir}:`,
-                error instanceof Error ? error.message : String(error),
-              );
-            }
           } catch (err) {
             if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
             const message = err instanceof Error ? err.message : String(err);
@@ -1296,7 +1244,12 @@ export class ContainerBridge implements IBridgeClient {
 
     let browserCleanupStarted = false;
     const completeRun = () => {
-      const complete = () => this.send({ type: "session_complete", sessionId });
+      const complete = () =>
+        this.send({
+          type: "session_complete",
+          sessionId,
+          invocationId: runtimeEnv?.TRACE_INVOCATION_ID,
+        });
       if (resolvedTool !== "codex") {
         complete();
         return;
@@ -1374,7 +1327,12 @@ export class ContainerBridge implements IBridgeClient {
         }
 
         hasForwardedOutput = true;
-        this.send({ type: "session_output", sessionId, data: output });
+        this.send({
+          type: "session_output",
+          sessionId,
+          data: output,
+          invocationId: runtimeEnv?.TRACE_INVOCATION_ID,
+        });
 
         maybeReportToolSessionId();
 
