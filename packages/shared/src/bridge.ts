@@ -1801,12 +1801,18 @@ export async function handleBranchDiff(
   }
 
   try {
-    const [numstatOut, nameStatusOut, untrackedOut] = await Promise.all([
+    const [numstatOut, nameStatusOut, untrackedOut, ignoredTraceWorkOut] = await Promise.all([
       // With the right side omitted, the three-dot range compares its merge base
       // to the working tree instead of only to HEAD.
       gitExec(["diff", "--numstat", `${baseBranch}...`], workdir),
       gitExec(["diff", "--name-status", `${baseBranch}...`], workdir),
       gitExec(["ls-files", "--others", "--exclude-standard", "-z"], workdir),
+      // Trace agents may place generated plans and other workspace artifacts
+      // under .trace-work/, which projects commonly ignore.
+      gitExec(
+        ["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", ".trace-work"],
+        workdir,
+      ),
     ]);
 
     // Parse --name-status: "M\tpath" or "R100\told\tnew"
@@ -1837,7 +1843,7 @@ export async function handleBranchDiff(
     // Git diff intentionally excludes untracked files. Agent-created files are
     // still part of the live workspace, so surface them as additions.
     const knownPaths = new Set(files.map((file) => file.path));
-    for (const filePath of untrackedOut.split("\0").filter(Boolean)) {
+    for (const filePath of `${untrackedOut}\0${ignoredTraceWorkOut}`.split("\0").filter(Boolean)) {
       if (knownPaths.has(filePath)) continue;
       files.push({ path: filePath, status: "A", additions: 0, deletions: 0 });
     }
