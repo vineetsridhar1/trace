@@ -4486,6 +4486,7 @@ describe("SessionService", () => {
         workdir: "/tmp/trace",
         visibility: "public",
         ownerUserId: "user-1",
+        channel: { baseBranch: "develop" },
         repo: {
           provider: "github",
           remoteUrl: "git@github.com:trace/trace.git",
@@ -4535,7 +4536,7 @@ describe("SessionService", () => {
       prismaMock.session.findMany.mockResolvedValueOnce([
         { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
       ]);
-      sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+      sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce({
         id: "runtime-1",
         key: "runtime-1",
         hostingMode: "local",
@@ -4579,7 +4580,7 @@ describe("SessionService", () => {
       prismaMock.session.findMany.mockResolvedValueOnce([
         { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
       ]);
-      sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+      sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce({
         id: "runtime-1",
         key: "runtime-1",
         hostingMode: "local",
@@ -4656,7 +4657,7 @@ describe("SessionService", () => {
       prismaMock.session.findMany.mockResolvedValue([
         { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
       ]);
-      sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+      sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce({
         id: "runtime-1",
         key: "runtime-1",
         hostingMode: "local",
@@ -4701,7 +4702,7 @@ describe("SessionService", () => {
       prismaMock.session.findMany.mockResolvedValue([
         { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
       ]);
-      sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+      sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce({
         id: "runtime-1",
         key: "runtime-1",
         hostingMode: "local",

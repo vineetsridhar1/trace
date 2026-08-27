@@ -931,6 +931,7 @@ type GitHubSessionGroupFileSource = {
   token: string;
   branch: string;
   defaultBranch: string;
+  baseBranch: string;
   workdir: string | null;
 };
 
@@ -11528,12 +11529,12 @@ export class SessionService {
       organizationId,
       userId,
     );
-    if (source.branch === source.defaultBranch) {
+    if (source.branch === source.baseBranch) {
       return [];
     }
     return githubRepoService.branchDiff(
       source.repo,
-      source.defaultBranch,
+      source.baseBranch,
       source.branch,
       source.token,
     );
@@ -11612,9 +11613,8 @@ export class SessionService {
       );
     }
 
-    const defaultBranch = this.toGitHubRef(
-      group.channel?.baseBranch || group.repo.defaultBranch || "main",
-    );
+    const defaultBranch = this.toGitHubRef(group.repo.defaultBranch || "main");
+    const baseBranch = this.toGitHubRef(group.channel?.baseBranch || defaultBranch);
     const branch = this.toGitHubRef(group.branch || defaultBranch);
 
     return {
@@ -11622,6 +11622,7 @@ export class SessionService {
       token: githubToken,
       branch,
       defaultBranch,
+      baseBranch,
       workdir: group.workdir,
     };
   }
