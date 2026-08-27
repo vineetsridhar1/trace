@@ -43,10 +43,8 @@ export function LinkedCheckoutSyncConflictDialog({
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) {
-      setCommitMessage(defaultCommitMessage);
-      setSelectedPath(null);
-    }
+    setCommitMessage(defaultCommitMessage);
+    if (!open) setSelectedPath(null);
   }, [defaultCommitMessage, open]);
 
   useEffect(() => {
@@ -187,7 +185,7 @@ export function LinkedCheckoutSyncConflictDialog({
                   }
                   disabled={commitDisabled}
                 >
-                  Commit And Sync
+                  Commit And {source === "Trace worktree" ? "Spotlight" : "Sync"}
                 </Button>
               </div>
             </div>
@@ -207,7 +205,7 @@ export function LinkedCheckoutSyncConflictDialog({
                   onClick={() => void onResolve({ strategy: "STASH" })}
                   disabled={pending}
                 >
-                  Stash And Sync
+                  Stash And {source === "Trace worktree" ? "Spotlight" : "Sync"}
                 </Button>
               </div>
             </div>
@@ -228,7 +226,7 @@ export function LinkedCheckoutSyncConflictDialog({
                   onClick={() => void onResolve({ strategy: "REBASE" })}
                   disabled={pending}
                 >
-                  Reapply And Sync
+                  Reapply And {source === "Trace worktree" ? "Spotlight" : "Sync"}
                 </Button>
               </div>
             </div>
@@ -248,7 +246,7 @@ export function LinkedCheckoutSyncConflictDialog({
                   onClick={() => void onResolve({ strategy: "DISCARD" })}
                   disabled={pending}
                 >
-                  Discard And Sync
+                  Discard And {source === "Trace worktree" ? "Spotlight" : "Sync"}
                 </Button>
               </div>
             </div>

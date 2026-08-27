@@ -30,9 +30,12 @@ export function LinkedCheckoutSyncConflictSheet({
   const [commitMessage, setCommitMessage] = useState(defaultCommitMessage);
 
   useEffect(() => {
-    if (open) return;
-    setSelectedStrategy(null);
-    setCommitMessage(defaultCommitMessage);
+    if (open) {
+      setCommitMessage(defaultCommitMessage);
+    } else {
+      setSelectedStrategy(null);
+      setCommitMessage(defaultCommitMessage);
+    }
   }, [defaultCommitMessage, open]);
 
   const trimmedCommitMessage = commitMessage.trim();
