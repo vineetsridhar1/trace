@@ -414,6 +414,13 @@ export type CreateChatInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateIntegrationCredentialInput = {
+  allowedChannelIds: Array<Scalars["ID"]["input"]>;
+  expiresAt?: InputMaybe<Scalars["DateTime"]["input"]>;
+  name: Scalars["String"]["input"];
+  organizationId: Scalars["ID"]["input"];
+};
+
 export type CreateProjectInput = {
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
@@ -436,6 +443,12 @@ export type CreateTicketInput = {
   priority?: InputMaybe<Priority>;
   projectId?: InputMaybe<Scalars["ID"]["input"]>;
   title: Scalars["String"]["input"];
+};
+
+export type CreatedIntegrationCredential = {
+  __typename?: "CreatedIntegrationCredential";
+  credential: IntegrationCredential;
+  token: Scalars["String"]["output"];
 };
 
 export type DeliveryResult =
@@ -512,6 +525,8 @@ export type EventType =
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
+  | "integration_credential_created"
+  | "integration_credential_revoked"
   | "managed_git_token_minted"
   | "member_joined"
   | "member_left"
@@ -608,6 +623,23 @@ export type InboxItem = {
 export type InboxItemStatus = "active" | "dismissed" | "expired" | "resolved";
 
 export type InboxItemType = "plan" | "question";
+
+export type IntegrationCredential = {
+  __typename?: "IntegrationCredential";
+  allowedChannelIds: Array<Scalars["ID"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  createdById: Scalars["ID"]["output"];
+  expiresAt?: Maybe<Scalars["DateTime"]["output"]>;
+  id: Scalars["ID"]["output"];
+  lastUsedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  name: Scalars["String"]["output"];
+  organizationId: Scalars["ID"]["output"];
+  revokedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  scopes: Array<IntegrationCredentialScope>;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type IntegrationCredentialScope = "sessions_create" | "sessions_read";
 
 export type LinkedCheckoutActionResult = {
   __typename?: "LinkedCheckoutActionResult";
@@ -718,6 +750,7 @@ export type Mutation = {
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
   createChat: Chat;
+  createIntegrationCredential: CreatedIntegrationCredential;
   createProject: Project;
   createRepo: Repo;
   createSessionEndpointPreview: SessionEndpointPreview;
@@ -779,6 +812,7 @@ export type Mutation = {
   retrySessionGroupSetup: SessionGroup;
   revertSessionGroupFileChange: Scalars["Boolean"]["output"];
   revokeBridgeAccessGrant: BridgeAccessGrant;
+  revokeIntegrationCredential: IntegrationCredential;
   rotateSessionEndpoint: SessionEndpoint;
   runSession: Session;
   runSessionGroupSetupScript: Scalars["Boolean"]["output"];
@@ -917,6 +951,10 @@ export type MutationCreateChannelTerminalArgs = {
 
 export type MutationCreateChatArgs = {
   input: CreateChatInput;
+};
+
+export type MutationCreateIntegrationCredentialArgs = {
+  input: CreateIntegrationCredentialInput;
 };
 
 export type MutationCreateProjectArgs = {
@@ -1199,6 +1237,10 @@ export type MutationRevertSessionGroupFileChangeArgs = {
 
 export type MutationRevokeBridgeAccessGrantArgs = {
   grantId: Scalars["ID"]["input"];
+};
+
+export type MutationRevokeIntegrationCredentialArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationRotateSessionEndpointArgs = {
@@ -1533,6 +1575,7 @@ export type Query = {
   events: Array<Event>;
   hiddenSessionTabs: Array<HiddenSessionTab>;
   inboxItems: Array<InboxItem>;
+  integrationCredentials: Array<IntegrationCredential>;
   linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
@@ -1697,6 +1740,10 @@ export type QueryHiddenSessionTabsArgs = {
 export type QueryInboxItemsArgs = {
   organizationId: Scalars["ID"]["input"];
   status?: InputMaybe<InboxItemStatus>;
+};
+
+export type QueryIntegrationCredentialsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryLinkedCheckoutChangedFileArgs = {
@@ -2818,9 +2865,11 @@ export type ResolversTypes = ResolversObject<{
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
+  CreateIntegrationCredentialInput: CreateIntegrationCredentialInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
+  CreatedIntegrationCredential: ResolverTypeWrapper<CreatedIntegrationCredential>;
   DateTime: ResolverTypeWrapper<Scalars["DateTime"]["output"]>;
   DeliveryResult: DeliveryResult;
   DesignPreviewStatus: DesignPreviewStatus;
@@ -2837,6 +2886,8 @@ export type ResolversTypes = ResolversObject<{
   InboxItemStatus: InboxItemStatus;
   InboxItemType: InboxItemType;
   Int: ResolverTypeWrapper<Scalars["Int"]["output"]>;
+  IntegrationCredential: ResolverTypeWrapper<IntegrationCredential>;
+  IntegrationCredentialScope: IntegrationCredentialScope;
   JSON: ResolverTypeWrapper<Scalars["JSON"]["output"]>;
   LinkedCheckoutActionResult: ResolverTypeWrapper<LinkedCheckoutActionResult>;
   LinkedCheckoutChangedFile: ResolverTypeWrapper<LinkedCheckoutChangedFile>;
@@ -2982,9 +3033,11 @@ export type ResolversParentTypes = ResolversObject<{
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
+  CreateIntegrationCredentialInput: CreateIntegrationCredentialInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
+  CreatedIntegrationCredential: CreatedIntegrationCredential;
   DateTime: Scalars["DateTime"]["output"];
   EndpointTrafficEntry: EndpointTrafficEntry;
   Event: Event;
@@ -2993,6 +3046,7 @@ export type ResolversParentTypes = ResolversObject<{
   ID: Scalars["ID"]["output"];
   InboxItem: InboxItem;
   Int: Scalars["Int"]["output"];
+  IntegrationCredential: IntegrationCredential;
   JSON: Scalars["JSON"]["output"];
   LinkedCheckoutActionResult: LinkedCheckoutActionResult;
   LinkedCheckoutChangedFile: LinkedCheckoutChangedFile;
@@ -3464,6 +3518,16 @@ export type ConnectionsRepoEntryResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type CreatedIntegrationCredentialResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["CreatedIntegrationCredential"] =
+    ResolversParentTypes["CreatedIntegrationCredential"],
+> = ResolversObject<{
+  credential?: Resolver<ResolversTypes["IntegrationCredential"], ParentType, ContextType>;
+  token?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export interface DateTimeScalarConfig extends GraphQLScalarTypeConfig<
   ResolversTypes["DateTime"],
   any
@@ -3538,6 +3602,25 @@ export type InboxItemResolvers<
   summary?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   title?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   userId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type IntegrationCredentialResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["IntegrationCredential"] =
+    ResolversParentTypes["IntegrationCredential"],
+> = ResolversObject<{
+  allowedChannelIds?: Resolver<Array<ResolversTypes["ID"]>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  createdById?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  expiresAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  lastUsedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  revokedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  scopes?: Resolver<Array<ResolversTypes["IntegrationCredentialScope"]>, ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3762,6 +3845,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationCreateChatArgs, "input">
+  >;
+  createIntegrationCredential?: Resolver<
+    ResolversTypes["CreatedIntegrationCredential"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateIntegrationCredentialArgs, "input">
   >;
   createProject?: Resolver<
     ResolversTypes["Project"],
@@ -4120,6 +4209,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationRevokeBridgeAccessGrantArgs, "grantId">
+  >;
+  revokeIntegrationCredential?: Resolver<
+    ResolversTypes["IntegrationCredential"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRevokeIntegrationCredentialArgs, "id">
   >;
   rotateSessionEndpoint?: Resolver<
     ResolversTypes["SessionEndpoint"],
@@ -4608,6 +4703,12 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QueryInboxItemsArgs, "organizationId">
+  >;
+  integrationCredentials?: Resolver<
+    Array<ResolversTypes["IntegrationCredential"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryIntegrationCredentialsArgs, "organizationId">
   >;
   linkedCheckoutChangedFile?: Resolver<
     ResolversTypes["LinkedCheckoutChangedFile"],
@@ -5604,11 +5705,13 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   CollapsedSessionEvents?: CollapsedSessionEventsResolvers<ContextType>;
   ConnectionsBridge?: ConnectionsBridgeResolvers<ContextType>;
   ConnectionsRepoEntry?: ConnectionsRepoEntryResolvers<ContextType>;
+  CreatedIntegrationCredential?: CreatedIntegrationCredentialResolvers<ContextType>;
   DateTime?: GraphQLScalarType;
   EndpointTrafficEntry?: EndpointTrafficEntryResolvers<ContextType>;
   Event?: EventResolvers<ContextType>;
   HiddenSessionTab?: HiddenSessionTabResolvers<ContextType>;
   InboxItem?: InboxItemResolvers<ContextType>;
+  IntegrationCredential?: IntegrationCredentialResolvers<ContextType>;
   JSON?: GraphQLScalarType;
   LinkedCheckoutActionResult?: LinkedCheckoutActionResultResolvers<ContextType>;
   LinkedCheckoutChangedFile?: LinkedCheckoutChangedFileResolvers<ContextType>;

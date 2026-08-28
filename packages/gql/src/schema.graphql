@@ -386,6 +386,8 @@ enum EventType {
   session_endpoint_rotated
   session_endpoint_access_updated
   session_endpoint_traffic_capture_updated
+  integration_credential_created
+  integration_credential_revoked
 }
 
 # --- Core Types ---
@@ -1287,6 +1289,37 @@ input StartSessionInput {
   worktreePath: String
 }
 
+enum IntegrationCredentialScope {
+  sessions_create
+  sessions_read
+}
+
+type IntegrationCredential {
+  id: ID!
+  name: String!
+  organizationId: ID!
+  createdById: ID!
+  scopes: [IntegrationCredentialScope!]!
+  allowedChannelIds: [ID!]!
+  expiresAt: DateTime
+  lastUsedAt: DateTime
+  revokedAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type CreatedIntegrationCredential {
+  credential: IntegrationCredential!
+  token: String!
+}
+
+input CreateIntegrationCredentialInput {
+  organizationId: ID!
+  name: String!
+  allowedChannelIds: [ID!]!
+  expiresAt: DateTime
+}
+
 input ConvertSessionGroupInput {
   sessionGroupId: ID!
   kind: SessionGroupKind!
@@ -1597,6 +1630,7 @@ type Query {
   threadSummary(rootMessageId: ID!): ThreadSummary
   participants(scopeType: String!, scopeId: ID!): [Participant!]!
   myApiTokens: [ApiTokenStatus!]!
+  integrationCredentials(organizationId: ID!): [IntegrationCredential!]!
   myCodexCredential: CodexCredentialStatus
   sessionTerminals(sessionId: ID!): [Terminal!]!
   terminalCapture(terminalId: ID!, maxBytes: Int, plainText: Boolean): TerminalCapture!
@@ -1697,6 +1731,10 @@ type Mutation {
     prompt: String!
   ): ArtifactApprovalResult!
   createChannel(input: CreateChannelInput!): Channel!
+  createIntegrationCredential(
+    input: CreateIntegrationCredentialInput!
+  ): CreatedIntegrationCredential!
+  revokeIntegrationCredential(id: ID!): IntegrationCredential!
   createAgentEnvironment(input: CreateAgentEnvironmentInput!): AgentEnvironment!
   updateAgentEnvironment(input: UpdateAgentEnvironmentInput!): AgentEnvironment!
   deleteAgentEnvironment(id: ID!): Boolean!

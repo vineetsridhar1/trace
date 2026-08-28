@@ -265,6 +265,8 @@ enum EventType {
   session_endpoint_rotated
   session_endpoint_access_updated
   session_endpoint_traffic_capture_updated
+  integration_credential_created
+  integration_credential_revoked
 }
 
 enum SessionApplicationProcessStatus {
@@ -340,6 +342,7 @@ model Organization {
   aiConversations             AiConversation[]
   slackInstalls               SlackInstall[]
   slackChannelBindings        SlackChannelBinding[]
+  integrationCredentials      IntegrationCredential[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -432,6 +435,7 @@ model User {
   createdArtifacts             Artifact[]            @relation("ArtifactCreator")
   approvedArtifacts            Artifact[]            @relation("ArtifactApprover")
   hiddenSessionTabs            HiddenSessionTab[]
+  integrationCredentials       IntegrationCredential[] @relation("IntegrationCredentialCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -636,6 +640,8 @@ model Session {
   worktreeDeleted   Boolean       @default(false)
   readOnlyWorkspace Boolean       @default(false)
   activeInvocationId String?
+  integrationCredentialId String?
+  integrationCredential   IntegrationCredential? @relation(fields: [integrationCredentialId], references: [id], onDelete: SetNull)
 
   inputTokens         BigInt @default(0)
   outputTokens        BigInt @default(0)
@@ -657,6 +663,29 @@ model Session {
   @@index([organizationId, agentStatus])
   @@index([channelId, updatedAt])
   @@index([pendingGeneralWorkspaceCleanupRuntimeId])
+  @@index([integrationCredentialId, createdAt])
+}
+
+model IntegrationCredential {
+  id                String       @id @default(uuid())
+  name              String
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById       String
+  createdBy         User         @relation("IntegrationCredentialCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  tokenHash         String       @unique
+  scopes            String[]
+  allowedChannelIds String[]
+  expiresAt         DateTime?
+  lastUsedAt        DateTime?
+  revokedAt         DateTime?
+  sessions          Session[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, revokedAt])
+  @@index([createdById])
 }
 
 model HiddenSessionTab {

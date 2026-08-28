@@ -66,6 +66,10 @@ import { resolveActor } from "../services/actor.js";
 import { restrictAgentRootResolvers } from "../lib/agent-authorization.js";
 import { artifactMutations, artifactQueries, artifactTypeResolvers } from "./artifact.js";
 import { workspaceMutations } from "./workspace.js";
+import {
+  integrationCredentialMutations,
+  integrationCredentialQueries,
+} from "./integration-credential.js";
 
 const queries = {
   ...organizationQueries,
@@ -88,6 +92,7 @@ const queries = {
   ...threadQueries,
   ...aiConversationQueries,
   ...artifactQueries,
+  ...integrationCredentialQueries,
 };
 
 const mutations = {
@@ -110,6 +115,7 @@ const mutations = {
   ...aiConversationMutations,
   ...artifactMutations,
   ...workspaceMutations,
+  ...integrationCredentialMutations,
 };
 
 const subscriptions = {

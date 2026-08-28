@@ -30,6 +30,7 @@ import { slackRouter } from "./routes/slack.js";
 import { gitRouter } from "./routes/git.js";
 import { agentArtifactRouter } from "./routes/agent-artifact.js";
 import { artifactContentRouter } from "./routes/artifact-content.js";
+import { integrationSessionsRouter } from "./routes/integration-sessions.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -273,6 +274,7 @@ async function main() {
   });
   app.use(authRouter);
   app.use(uploadRouter);
+  app.use(integrationSessionsRouter);
 
   // MCP OAuth: Trace acts as the authorization server for the hosted /mcp
   // endpoint. mcpAuthRouter serves discovery metadata, dynamic client

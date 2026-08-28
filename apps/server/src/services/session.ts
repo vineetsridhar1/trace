@@ -110,6 +110,7 @@ export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   startEventId?: string;
   buildStartEvent?: (input: StartSessionBuildStartEventInput) => StartSessionEventOverride;
   afterCreate?: (input: StartSessionAfterCreateInput) => Promise<void>;
+  integrationCredentialId?: string | null;
 };
 
 async function runtimeAttachmentUrls(
@@ -4746,6 +4747,7 @@ export class SessionService {
             hosting,
             organizationId: input.organizationId,
             createdById: input.createdById,
+            integrationCredentialId: input.integrationCredentialId ?? undefined,
             repoId: resolvedRepoId ?? undefined,
             branch: resolvedBranch ?? undefined,
             workdir: sessionGroup.workdir ?? undefined,
@@ -4821,7 +4823,7 @@ export class SessionService {
             eventType: "session_started",
             payload: startEventOverride?.payload ?? startEventPayload,
             metadata: startEventOverride?.metadata ?? startEventMetadata,
-            actorType: startEventOverride?.actorType ?? "user",
+            actorType: startEventOverride?.actorType ?? input.actorType ?? "user",
             actorId: startEventOverride?.actorId ?? input.createdById,
             timestamp: startEventOverride?.timestamp,
             deferPublish: true,
