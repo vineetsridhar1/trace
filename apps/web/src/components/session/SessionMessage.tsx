@@ -2,6 +2,8 @@ import { memo } from "react";
 import {
   attachmentKeysFromPayload,
   asJsonObject,
+  deferredDeliveryMessage,
+  DELIVERY_DEFERRED_OUTPUT_TYPE,
   isActionRequiredArtifact,
   type JsonObject,
 } from "@trace/shared";
@@ -190,8 +192,8 @@ function renderSessionOutput(
 
   // The bridge is still up, so this is deliberately not the offline banner —
   // moving or retrying the connection here would rebuild a healthy workspace.
-  if (type === "delivery_deferred") {
-    return <SystemBadge text="Couldn't reach the workspace — send again to retry." />;
+  if (type === DELIVERY_DEFERRED_OUTPUT_TYPE) {
+    return <SystemBadge text={deferredDeliveryMessage(payload)} />;
   }
 
   if (type === "workspace_restored_from_base" || type === "workspace_kept_local_changes") {

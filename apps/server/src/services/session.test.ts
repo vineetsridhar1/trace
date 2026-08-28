@@ -109,7 +109,10 @@ vi.mock("../lib/storage/index.js", () => ({
 
 vi.mock("@trace/shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@trace/shared")>();
+  // Partial mock: this used to be an allowlist, so every new export the service
+  // imported failed here as a missing mock rather than in the code under test.
   return {
+    ...actual,
     getDefaultModel: vi.fn().mockReturnValue("claude-sonnet-5"),
     getDefaultReasoningEffort: vi.fn().mockReturnValue("auto"),
     isSupportedModel: vi.fn().mockReturnValue(true),
@@ -117,9 +120,6 @@ vi.mock("@trace/shared", async (importOriginal) => {
     hasQuestionBlock: vi.fn().mockReturnValue(false),
     hasPlanBlock: vi.fn().mockReturnValue(false),
     MAX_WORKSPACE_NAME_LENGTH: 80,
-    CODING_TOOL_IDS: actual.CODING_TOOL_IDS,
-    actionRequiredArtifactForToolError: actual.actionRequiredArtifactForToolError,
-    actionRequiredArtifactForToolOutput: actual.actionRequiredArtifactForToolOutput,
   };
 });
 

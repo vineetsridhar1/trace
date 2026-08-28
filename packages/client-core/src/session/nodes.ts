@@ -2,6 +2,7 @@ import type { Event } from "@trace/gql";
 import {
   asJsonObject,
   actionRequiredArtifactKey,
+  DELIVERY_DEFERRED_OUTPUT_TYPE,
   hasVisibleUserSessionContent,
   isActionRequiredArtifact,
   parseQuestion,
@@ -395,25 +396,34 @@ export function buildSessionNodes(
   };
 }
 
-/** Remove duplicate consecutive "result" session_output events */
+/**
+ * Payload types that render identical, information-free rows, so a run of them
+ * reads as noise. `delivery_deferred` bursts when a replay loop retries several
+ * queued commands against the same unroutable runtime; user-initiated ones are
+ * separated by their own message bubbles and so survive this collapse.
+ */
+const COLLAPSE_CONSECUTIVE_TYPES = new Set(["result", DELIVERY_DEFERRED_OUTPUT_TYPE]);
+
+/** Remove duplicate consecutive "result" and deferred-delivery session_output events */
 function deduplicateResultEvents(
   nodes: SessionNode[],
   events: Record<string, Event>,
 ): SessionNode[] {
   const result: SessionNode[] = [];
-  let lastWasResult = false;
+  let lastCollapsibleType: string | undefined;
 
   for (const node of nodes) {
     if (node.kind === "event") {
       const event = events[node.id];
       const payload =
         event?.eventType === "session_output" ? asJsonObject(event.payload) : undefined;
-      const isResult = payload?.type === "result";
+      const type = typeof payload?.type === "string" ? payload.type : undefined;
+      const collapsibleType = type && COLLAPSE_CONSECUTIVE_TYPES.has(type) ? type : undefined;
 
-      if (isResult && lastWasResult) continue;
-      lastWasResult = isResult;
+      if (collapsibleType && collapsibleType === lastCollapsibleType) continue;
+      lastCollapsibleType = collapsibleType;
     } else {
-      lastWasResult = false;
+      lastCollapsibleType = undefined;
     }
     result.push(node);
   }
@@ -457,7 +467,9 @@ function extractQuestionLeadingText(blocks: unknown[]): string | undefined {
     if (parsed.type === "question") break;
     if (parsed.type !== "text" || typeof parsed.text !== "string") continue;
 
-    const unfencedText = parsed.text.replace(/```[\s\S]*?```/gu, (fence) => " ".repeat(fence.length));
+    const unfencedText = parsed.text.replace(/```[\s\S]*?```/gu, (fence) =>
+      " ".repeat(fence.length),
+    );
     const requestInputIndex = unfencedText.search(/<trace:request-input\b/iu);
     if (requestInputIndex >= 0 && parseTraceRequestInputs(parsed.text).length > 0) {
       textParts.push(parsed.text.slice(0, requestInputIndex));

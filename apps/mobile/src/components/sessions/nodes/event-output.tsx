@@ -1,5 +1,10 @@
 import { Fragment, type ReactNode } from "react";
-import { asJsonObject, type JsonObject } from "@trace/shared";
+import {
+  asJsonObject,
+  deferredDeliveryMessage,
+  DELIVERY_DEFERRED_OUTPUT_TYPE,
+  type JsonObject,
+} from "@trace/shared";
 import { AssistantMessage } from "./AssistantMessage";
 import { CompletionRow } from "./CompletionRow";
 import { SubagentRow } from "./SubagentRow";
@@ -24,6 +29,11 @@ export function renderSessionOutput(payload: JsonObject, context: NodeRenderCont
   if (type === "workspace_restored_from_base") {
     const message = typeof payload.message === "string" ? payload.message : "";
     if (message) return <SystemBadge text={message} />;
+  }
+  // Without this a deferred command is invisible here: the composer stays live
+  // and the message simply never runs.
+  if (type === DELIVERY_DEFERRED_OUTPUT_TYPE) {
+    return <SystemBadge text={deferredDeliveryMessage(payload)} />;
   }
   return null;
 }

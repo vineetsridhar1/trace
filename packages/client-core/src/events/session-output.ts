@@ -1,4 +1,4 @@
-import { asJsonObject } from "@trace/shared";
+import { asJsonObject, DELIVERY_DEFERRED_OUTPUT_TYPE } from "@trace/shared";
 import type { JsonObject } from "@trace/shared";
 import type { AgentStatus, Event, EventType, ScopeType, SessionStatus } from "@trace/gql";
 import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
@@ -8,7 +8,7 @@ import type { OrgEventUIBindings } from "./ui-bindings.js";
 const CONNECTION_EVENT_TYPES = new Set([
   "connection_lost",
   "connection_restored",
-  "delivery_deferred",
+  DELIVERY_DEFERRED_OUTPUT_TYPE,
   "recovery_failed",
   "recovery_requested",
   "session_rehomed",
@@ -120,6 +120,27 @@ export function patchGroupSessionsBranch(
   }
 }
 
+/**
+ * Connection events whose snapshot describes the shared runtime and so must
+ * reach every tab in the group.
+ *
+ * `delivery_deferred` is deliberately absent: one tab failing to route a
+ * command says nothing about the others, and the group fan-out below is
+ * unguarded — it stamps the initiating session's connection (including its
+ * `version`, which is a per-session counter) onto every sibling. Broadcasting a
+ * per-session delivery miss through it would pollute sibling versions for no
+ * reason. That version-counter mismatch predates this event type and affects
+ * the five below; fixing it means patching only the runtime-identity fields,
+ * the way `mergeRuntimeBinding` already does server-side.
+ */
+const GROUP_CONNECTION_EVENT_TYPES = new Set([
+  "connection_lost",
+  "connection_restored",
+  "recovery_failed",
+  "recovery_requested",
+  "session_rehomed",
+]);
+
 function patchGroupSessionsConnection(
   batch: StoreBatchWriter,
   sessionGroupId: string,
@@ -216,7 +237,7 @@ export function routeSessionOutput({ event, payload, batch, ui }: RouteSessionOu
     });
   }
 
-  if (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type)) {
+  if (typeof payload.type === "string" && GROUP_CONNECTION_EVENT_TYPES.has(payload.type)) {
     const sessionGroup = asJsonObject(payload.sessionGroup);
     const groupConnection = asJsonObject(sessionGroup?.connection);
     if (typeof sessionGroup?.id === "string" && groupConnection) {

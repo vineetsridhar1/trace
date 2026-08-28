@@ -17,6 +17,7 @@ import {
   actionRequiredArtifactForToolOutput,
   isSupportedModel,
   isSupportedReasoningEffort,
+  DELIVERY_DEFERRED_OUTPUT_TYPE,
   MAX_WORKSPACE_NAME_LENGTH,
   type BridgeSessionGitSyncStatus,
   type BridgeWorkspaceWarning,
@@ -11492,19 +11493,20 @@ export class SessionService {
       return { ...current, lastDeliveryFailureAt: new Date().toISOString() };
     });
     if (!result) return;
-    const sessionGroup = await this.loadSessionGroupSnapshot(result.sessionGroupId);
 
+    // No sessionGroup snapshot on purpose. Other connection events carry one so
+    // sibling tabs adopt the shared runtime state, but one tab failing to route
+    // a command says nothing about the others — and nothing group-level moved.
     await eventService.create({
       organizationId,
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_output",
       payload: {
-        type: "delivery_deferred",
+        type: DELIVERY_DEFERRED_OUTPUT_TYPE,
         reason: deliveryResult,
         operation,
         connection: connJson(result.updated),
-        ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
       actorId: "system",

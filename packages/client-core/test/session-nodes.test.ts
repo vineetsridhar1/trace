@@ -20,6 +20,42 @@ function makeEvent(overrides: Partial<Event> = {}): Event {
 }
 
 describe("buildSessionNodes", () => {
+  // Replay loops can retry several queued commands against the same unroutable
+  // runtime, producing a run of identical, information-free badges.
+  it("collapses a burst of consecutive deferred deliveries into one node", () => {
+    const events = ["a", "b", "c"].map((id) =>
+      makeEvent({
+        id,
+        eventType: "session_output",
+        payload: { type: "delivery_deferred", reason: "runtime_disconnected" },
+      }),
+    );
+    const byId = Object.fromEntries(events.map((event) => [event.id, event]));
+
+    const result = buildSessionNodes(["a", "b", "c"], byId);
+
+    expect(result.nodes).toEqual([{ kind: "event", id: "a" }]);
+  });
+
+  it("keeps deferred deliveries that the user's own messages separate", () => {
+    const deferred = (id: string) =>
+      makeEvent({
+        id,
+        eventType: "session_output",
+        payload: { type: "delivery_deferred", reason: "runtime_disconnected" },
+      });
+    const message = makeEvent({
+      id: "msg",
+      eventType: "message_sent",
+      payload: { text: "try again" },
+    });
+    const byId = { a: deferred("a"), msg: message, b: deferred("b") };
+
+    const result = buildSessionNodes(["a", "msg", "b"], byId);
+
+    expect(result.nodes.filter((node) => node.kind === "event")).toHaveLength(3);
+  });
+
   it("keeps runtime start failures that carry an actionable artifact", () => {
     const event = makeEvent({
       eventType: "session_runtime_start_failed",
