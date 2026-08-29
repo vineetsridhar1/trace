@@ -183,8 +183,13 @@ function buildActiveGrantWhere(params: {
   return where;
 }
 
+/**
+ * Presence for display. Bridge listings render one of these per runtime, so an
+ * authoritative read here would be a Redis round-trip per row to draw a status
+ * dot. Nothing downstream of this acts destructively on a `false`.
+ */
 function isConnectedRuntime(instanceId: string, organizationId: string): boolean {
-  return sessionRouter.isRuntimeAvailable(instanceId, organizationId);
+  return sessionRouter.peekRuntimePresence(instanceId, organizationId);
 }
 
 function runtimeHostingMode(
@@ -391,8 +396,9 @@ class RuntimeAccessService {
     });
   }
 
+  /** Presence for display only — see {@link isConnectedRuntime}. */
   isRuntimeConnected(runtimeInstanceId: string, organizationId: string): boolean {
-    return sessionRouter.isRuntimeAvailable(runtimeInstanceId, organizationId);
+    return sessionRouter.peekRuntimePresence(runtimeInstanceId, organizationId);
   }
 
   async listRuntimeRegisteredRepoIds(input: {
@@ -427,7 +433,7 @@ class RuntimeAccessService {
     organizationId: string;
   }): Promise<BridgeLinkedCheckoutStatus[]> {
     const runtime = sessionRouter.getRuntimeMetadata(input.runtimeInstanceId, input.organizationId);
-    if (!runtime || !sessionRouter.isRuntimeAvailable(runtime.id, input.organizationId)) return [];
+    if (!runtime || !sessionRouter.peekRuntimePresence(runtime.id, input.organizationId)) return [];
 
     const repoIds = await this.listRuntimeRegisteredRepoIds({
       runtimeInstanceId: runtime.id,
@@ -499,7 +505,11 @@ class RuntimeAccessService {
       },
     });
 
-    const hostingMode = runtimeHostingMode(input.runtimeInstanceId, input.organizationId, persisted);
+    const hostingMode = runtimeHostingMode(
+      input.runtimeInstanceId,
+      input.organizationId,
+      persisted,
+    );
     const connected = isConnectedRuntime(input.runtimeInstanceId, input.organizationId);
 
     if (!persisted) {
@@ -588,10 +598,13 @@ class RuntimeAccessService {
     organizationId: string;
     sessionGroupId?: string | null;
     capability?: BridgeAccessCapability;
+    /** Candidate discovery only; liveness must still be confirmed by SessionRouter. */
+    potentiallyConnectedOnly?: boolean;
   }): Promise<Set<string>> {
     const runtimes = await prisma.bridgeRuntime.findMany({
       where: {
         organizationId: input.organizationId,
+        ...(input.potentiallyConnectedOnly ? { disconnectedAt: null } : {}),
         OR: [
           { ownerUserId: input.userId },
           {

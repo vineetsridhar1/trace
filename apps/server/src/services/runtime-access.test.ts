@@ -7,7 +7,8 @@ vi.mock("../lib/db.js", async () => {
 
 vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
-    isRuntimeAvailable: vi.fn().mockReturnValue(true),
+    peekRuntimePresence: vi.fn().mockReturnValue(true),
+    resolveRuntime: vi.fn().mockResolvedValue({ state: "local" }),
     getRuntime: vi.fn().mockReturnValue({
       id: "runtime-1",
       label: "Laptop",
@@ -42,7 +43,8 @@ import { runtimeAccessService } from "./runtime-access.js";
 
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const sessionRouterMock = sessionRouter as unknown as {
-  isRuntimeAvailable: ReturnType<typeof vi.fn>;
+  peekRuntimePresence: ReturnType<typeof vi.fn>;
+  resolveRuntime: ReturnType<typeof vi.fn>;
   getRuntime: ReturnType<typeof vi.fn>;
   getRuntimeMetadata: ReturnType<typeof vi.fn>;
   getLinkedCheckoutStatus: ReturnType<typeof vi.fn>;
@@ -60,7 +62,7 @@ const terminalRelayMock = terminalRelay as unknown as {
 describe("runtimeAccessService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+    sessionRouterMock.peekRuntimePresence.mockReturnValue(true);
     sessionRouterMock.getRuntime.mockReturnValue({
       id: "runtime-1",
       label: "Laptop",
@@ -171,9 +173,7 @@ describe("runtimeAccessService", () => {
       id: "runtime-remote",
       organizationId: "org-1",
       registeredRepoIds: ["repo-1"],
-      linkedCheckoutStatuses: [
-        { repoId: "repo-1", repoPath: "/repos/one", isAttached: true },
-      ],
+      linkedCheckoutStatuses: [{ repoId: "repo-1", repoPath: "/repos/one", isAttached: true }],
     });
     sessionRouterMock.isLinkedCheckoutStatusFresh.mockReturnValue(false);
     prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-1" }]);
@@ -426,7 +426,7 @@ describe("runtimeAccessService", () => {
       label: "Jane's Laptop",
       hostingMode: "local",
     });
-    sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+    sessionRouterMock.peekRuntimePresence.mockReturnValue(true);
 
     const access = await runtimeAccessService.getAccessState({
       userId: "user-2",
@@ -443,7 +443,7 @@ describe("runtimeAccessService", () => {
   it("fails closed for unknown runtime ids", async () => {
     prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce(null);
     sessionRouterMock.getRuntime.mockReturnValue(null);
-    sessionRouterMock.isRuntimeAvailable.mockReturnValue(false);
+    sessionRouterMock.peekRuntimePresence.mockReturnValue(false);
 
     const access = await runtimeAccessService.getAccessState({
       userId: "user-2",

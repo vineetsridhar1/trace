@@ -87,18 +87,43 @@ export type SessionCommand =
   | BridgeTerminalResizeCommand
   | BridgeTerminalDestroyCommand;
 
+/**
+ * Outcome of a dispatch, as a vocabulary callers can act on.
+ *
+ * Delivery results describe command transport, never runtime liveness. Only
+ * the replica holding a socket may declare it disconnected, from the socket's
+ * close path and behind the persisted connection-generation fence.
+ */
 export type DeliveryResult =
   | "delivered"
   | "no_runtime"
-  | "runtime_disconnected"
   | "session_unbound"
   | "delivery_failed"
   | "unsupported_runtime";
+
+/** Where a runtime's socket lives, as resolved by {@link SessionRouter.resolveRuntime}. */
+export type RuntimeResolution =
+  /** This replica holds an open, confirmed-current socket. */
+  | { state: "local"; runtime: RuntimeInstance }
+  /** A peer has acknowledged that it holds this open, current-generation socket. */
+  | { state: "remote"; descriptor: RuntimeDescriptor }
+  /** No authoritative route is currently available. Not a liveness verdict. */
+  | { state: "unreachable" };
+
+type LocalOwnershipResult = "owned" | "superseded" | "unreachable";
 
 type PendingRuntimeRequest<T> = {
   runtimeId: string;
   connectionGeneration?: string;
   resolve: (value: T) => void;
+  reject: (err: Error) => void;
+};
+
+type PendingBridgeWait = {
+  waitId: string;
+  expectedRuntimeId?: string;
+  startedAt: number;
+  resolve: () => void;
   reject: (err: Error) => void;
 };
 
@@ -389,9 +414,13 @@ export class SessionRouter {
         for (const [sessionId, pending] of this.pendingWaits) {
           if (pending.expectedRuntimeId && pending.expectedRuntimeId !== message.descriptor.id)
             continue;
-          this.sessionRuntime.set(sessionId, message.descriptor.key);
-          this.pendingWaits.delete(sessionId);
-          pending.resolve();
+          // Presence is only a prompt to ask the named owner. The broadcast
+          // may be stale, and registration publishes it just before the owner
+          // installs the socket in its local map, so defer the confirmation to
+          // the next turn.
+          setTimeout(() => {
+            void this.resolvePendingBridgeWait(sessionId, pending, message.descriptor);
+          }, 0);
         }
       }),
     );
@@ -402,21 +431,13 @@ export class SessionRouter {
   /** Maps sessionId → runtimeId */
   private sessionRuntime = new Map<string, string>();
   /** Pending waitForBridge promises for cloud sessions */
-  private pendingWaits = new Map<
-    string,
-    {
-      waitId: string;
-      expectedRuntimeId?: string;
-      startedAt: number;
-      resolve: () => void;
-      reject: (err: Error) => void;
-    }
-  >();
+  private pendingWaits = new Map<string, PendingBridgeWait>();
   private pendingRemoteDeliveries = new Map<
     string,
     {
       runtimeKey: string;
       connectionGeneration: string;
+      ownerReplicaId: string;
       resolve: (result: DeliveryResult) => void;
       timer: NodeJS.Timeout;
     }
@@ -425,6 +446,11 @@ export class SessionRouter {
 
   dispose(): void {
     for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
+    for (const pending of this.pendingRemoteDeliveries.values()) {
+      clearTimeout(pending.timer);
+      pending.resolve("delivery_failed");
+    }
+    this.pendingRemoteDeliveries.clear();
   }
   private runtimeCommandQueues = new Map<string, Promise<void>>();
   /** Pending branch list requests: requestId → resolve/reject */
@@ -556,8 +582,6 @@ export class SessionRouter {
    * HEARTBEAT_TIMEOUT_MS cadence by checkStaleRuntimes.
    */
   static DIRECTORY_TTL_MS = 120_000;
-  /** Minimum gap between reclaim attempts for one runtime key. */
-  static DIRECTORY_RECLAIM_COOLDOWN_MS = 5_000;
   static LINKED_CHECKOUT_SNAPSHOT_REFRESH_MS = 30_000;
   static LINKED_CHECKOUT_SNAPSHOT_TTL_MS = 120_000;
 
@@ -682,7 +706,7 @@ export class SessionRouter {
         // simply expired. Try to reclaim before killing a live bridge —
         // reclaimDirectoryEntry closes the socket itself if a peer really owns
         // the key now.
-        this.reclaimDirectoryEntry(runtime);
+        void this.reclaimDirectoryEntry(runtime);
       })
       .catch((error) => console.error("[runtime-directory] heartbeat renewal failed:", error));
     this.refreshLinkedCheckoutSnapshots(runtime);
@@ -690,7 +714,7 @@ export class SessionRouter {
   }
 
   private linkedCheckoutRefreshAfter = new Map<string, number>();
-  private directoryReclaimAfter = new Map<string, number>();
+  private directoryReclaims = new Map<string, Promise<LocalOwnershipResult>>();
 
   private refreshLinkedCheckoutSnapshots(runtime: RuntimeInstance): void {
     if (runtime.hostingMode !== "local" || runtime.registeredRepoIds.length === 0) return;
@@ -747,27 +771,19 @@ export class SessionRouter {
    * immediately binds the session (handles race where the runtime
    * connected before the session's connection data was written to DB).
    */
-  waitForBridge(sessionId: string, timeoutMs = 60_000, runtimeId?: string): Promise<void> {
-    // Already bound to a connected runtime.
-    const boundRuntimeId = this.sessionRuntime.get(sessionId);
-    if (boundRuntimeId && (!runtimeId || boundRuntimeId === runtimeId)) {
-      const boundRuntime = this.runtimes.get(boundRuntimeId);
-      if (boundRuntime && boundRuntime.ws.readyState === boundRuntime.ws.OPEN) {
-        return Promise.resolve();
-      }
-    }
-
-    // If runtime is already connected, bind immediately (fixes race condition)
-    if (runtimeId) {
-      const runtime = this.runtimes.get(runtimeId);
-      if (runtime && runtime.ws.readyState === runtime.ws.OPEN) {
-        this.bindSession(sessionId, runtimeId);
-        return Promise.resolve();
-      }
-      const descriptor = realtimeBackplane.enabled ? runtimeDirectory.find(runtimeId) : undefined;
-      if (descriptor) {
-        this.sessionRuntime.set(sessionId, descriptor.key);
-        return Promise.resolve();
+  async waitForBridge(
+    sessionId: string,
+    timeoutMs = 60_000,
+    runtimeId?: string,
+    organizationId?: string | null,
+  ): Promise<void> {
+    const candidateRuntimeId = runtimeId ?? this.sessionRuntime.get(sessionId);
+    if (candidateRuntimeId) {
+      const resolution = await this.resolveRuntime(candidateRuntimeId, organizationId);
+      if (resolution.state !== "unreachable") {
+        const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
+        this.bindSession(sessionId, runtime.key);
+        return;
       }
     }
 
@@ -804,6 +820,35 @@ export class SessionRouter {
     });
   }
 
+  private async resolvePendingBridgeWait(
+    sessionId: string,
+    pending: PendingBridgeWait,
+    descriptor: Pick<RuntimeDescriptor, "id" | "organizationId">,
+  ): Promise<void> {
+    if (this.pendingWaits.get(sessionId) !== pending) return;
+    const resolution = await this.resolveRuntime(descriptor.id, descriptor.organizationId);
+    if (resolution.state === "unreachable" || this.pendingWaits.get(sessionId) !== pending) return;
+    const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
+    this.bindSession(sessionId, runtime.key);
+    this.completePendingBridgeWait(sessionId, pending, runtime.key);
+  }
+
+  private completePendingBridgeWait(
+    sessionId: string,
+    pending: PendingBridgeWait,
+    runtimeId: string,
+  ): void {
+    if (this.pendingWaits.get(sessionId) !== pending) return;
+    this.pendingWaits.delete(sessionId);
+    logAgentEnvironmentTelemetry("bridge.connected", {
+      sessionId,
+      runtimeInstanceId: runtimeId,
+      expectedRuntimeId: pending.expectedRuntimeId,
+      latencyMs: Date.now() - pending.startedAt,
+    });
+    pending.resolve();
+  }
+
   /**
    * Unregister a runtime and return the session IDs that were bound to it.
    */
@@ -826,7 +871,6 @@ export class SessionRouter {
     }
     this.runtimes.delete(runtimeId);
     this.linkedCheckoutRefreshAfter.delete(runtime.key);
-    this.directoryReclaimAfter.delete(runtime.key);
     void runtimeDirectory
       .remove(runtime.key, runtime.connectionGeneration)
       .catch((error) => console.error("[runtime-directory] failed to unregister runtime:", error));
@@ -860,10 +904,14 @@ export class SessionRouter {
       boundSessions: runtime ? [...runtime.boundSessions] : [],
     });
 
-    // Resolve any pending waitForBridge promise
+    // A binding records routing intent; it is not proof that a socket exists.
+    // Confirm the local owner before completing bridge readiness.
     const pending = this.pendingWaits.get(sessionId);
     if (pending) {
-      if (pending.expectedRuntimeId && pending.expectedRuntimeId !== runtimeId) {
+      if (
+        pending.expectedRuntimeId &&
+        !runtimeResponseMatches(pending.expectedRuntimeId, runtimeKey)
+      ) {
         runtimeDebug("pending bridge wait ignored mismatched runtime", {
           sessionId,
           expectedRuntimeId: pending.expectedRuntimeId,
@@ -871,14 +919,9 @@ export class SessionRouter {
         });
         return;
       }
-      this.pendingWaits.delete(sessionId);
-      logAgentEnvironmentTelemetry("bridge.connected", {
-        sessionId,
-        runtimeInstanceId: runtimeId,
-        expectedRuntimeId: pending.expectedRuntimeId,
-        latencyMs: Date.now() - pending.startedAt,
-      });
-      pending.resolve();
+      if (runtime) {
+        void this.resolvePendingBridgeWait(sessionId, pending, runtime);
+      }
     }
   }
 
@@ -1005,16 +1048,17 @@ export class SessionRouter {
   }
 
   /**
-   * Heal a lapsed directory lease for a socket we still hold. Rate-limited so a
-   * burst of lookups cannot stampede Redis. If a peer has genuinely taken the
-   * lease, close our socket so the bridge reconnects to the real owner instead
-   * of serving state from a replica that no longer owns it.
+   * Heal a lapsed directory lease for a socket we still hold. Concurrent calls
+   * are coalesced so a burst of lookups cannot stampede Redis. If a peer has
+   * genuinely taken the lease, close our socket so the bridge reconnects to
+   * the real owner instead of serving state from a replica that no longer owns
+   * it.
    */
-  private reclaimDirectoryEntry(runtime: RuntimeInstance): void {
-    const now = Date.now();
-    if ((this.directoryReclaimAfter.get(runtime.key) ?? 0) > now) return;
-    this.directoryReclaimAfter.set(runtime.key, now + SessionRouter.DIRECTORY_RECLAIM_COOLDOWN_MS);
-    void runtimeDirectory
+  private reclaimDirectoryEntry(runtime: RuntimeInstance): Promise<LocalOwnershipResult> {
+    const pending = this.directoryReclaims.get(runtime.key);
+    if (pending) return pending;
+
+    const reclaim = runtimeDirectory
       .reclaim(this.descriptorFor(runtime), SessionRouter.DIRECTORY_TTL_MS)
       .then((reclaimed) => {
         if (reclaimed) {
@@ -1022,22 +1066,26 @@ export class SessionRouter {
             runtimeId: runtime.id,
             connectionGeneration: runtime.connectionGeneration,
           });
-          return;
+          return "owned" as const;
         }
-        if (runtime.ws.readyState === runtime.ws.OPEN) {
-          runtime.ws.close(1012, "Runtime ownership replaced");
-        }
+        this.disownRuntime(runtime);
+        return "superseded" as const;
       })
-      .catch((error) => console.error("[runtime-directory] lapsed lease reclaim failed:", error));
+      .catch((error) => {
+        console.error("[runtime-directory] lapsed lease reclaim failed:", error);
+        return "unreachable" as const;
+      })
+      .finally(() => {
+        if (this.directoryReclaims.get(runtime.key) === reclaim) {
+          this.directoryReclaims.delete(runtime.key);
+        }
+      });
+    this.directoryReclaims.set(runtime.key, reclaim);
+    return reclaim;
   }
 
-  private async confirmCurrentLocalOwner(runtime: RuntimeInstance): Promise<boolean> {
-    const current = await runtimeDirectory.isCurrentOwner(
-      runtime.key,
-      runtime.connectionGeneration,
-      realtimeBackplane.replicaId,
-    );
-    if (current) return true;
+  /** Drop a socket this replica no longer owns, failing anything waiting on it. */
+  private disownRuntime(runtime: RuntimeInstance): void {
     this.rejectRuntimeRequests(runtime.key, new Error("Runtime ownership replaced"));
     if (this.runtimes.get(runtime.key)?.ws === runtime.ws) {
       this.runtimes.delete(runtime.key);
@@ -1045,43 +1093,106 @@ export class SessionRouter {
     if (runtime.ws.readyState === runtime.ws.OPEN) {
       runtime.ws.close(1012, "Runtime ownership replaced");
     }
+  }
+
+  /**
+   * Authoritative check that this replica may still write to a socket it holds.
+   *
+   * The absent case is the one that matters: a peer taking over writes its own
+   * descriptor rather than deleting ours, so a missing entry is a lapsed lease
+   * and the socket is still ours to reclaim. Reading absence as a takeover here
+   * closed live bridges — `recordHeartbeat` and `isCurrentLocalOwner` already
+   * applied the right rule, this path did not, and that asymmetry produced
+   * phantom disconnects on runtimes that never died.
+   */
+  private async confirmCurrentLocalOwner(runtime: RuntimeInstance): Promise<boolean> {
+    const status = await runtimeDirectory.ownershipStatus(
+      runtime.key,
+      runtime.connectionGeneration,
+      realtimeBackplane.replicaId,
+    );
+    if (status === "owned") return true;
+    // A directory we cannot read is neither permission to write nor evidence
+    // of a takeover. Keep the socket, but defer delivery until ownership can be
+    // fenced again; this prevents split-brain during a one-replica partition.
+    if (status === "unknown") return false;
+    if (status === "absent") {
+      if (runtime.ws.readyState === runtime.ws.OPEN) {
+        return (await this.reclaimDirectoryEntry(runtime)) === "owned";
+      }
+      if (!realtimeBackplane.enabled) return true;
+    }
+    this.disownRuntime(runtime);
     return false;
   }
 
-  private getCurrentLocalRuntime(
+  /**
+   * The single authority on "can I reach this runtime right now".
+   *
+   * Every dispatch and every irreversible decision goes through here. The
+   * answer is a fact owned by the replica holding the socket, not an inference
+   * assembled from whichever sources a given caller happened to consult — five
+   * separate combinations of the local map, the mirror and Redis used to
+   * disagree, and each disagreement surfaced as a live bridge reported offline.
+   *
+   * Directory state is routing information, not proof of liveness. A missing
+   * lease may belong to a live socket that is reclaiming it, and a descriptor
+   * may outlive its socket. Delivery is confirmed by the named owner; only that
+   * owner's socket-close path may persist an offline state.
+   */
+  async resolveRuntime(
     runtimeId: string,
     organizationId?: string | null,
-  ): RuntimeInstance | undefined {
-    const runtime = this.getRuntime(runtimeId, organizationId);
-    return runtime && this.isCurrentLocalOwner(runtime) ? runtime : undefined;
+  ): Promise<RuntimeResolution> {
+    const local = this.getRuntime(runtimeId, organizationId);
+    if (local && (await this.confirmCurrentLocalOwner(local))) {
+      if (local.ws.readyState === local.ws.OPEN) return { state: "local", runtime: local };
+    }
+
+    // No deliverable socket here. A mirror entry naming a peer is only a route
+    // candidate; the named replica must confirm it still holds the socket. If
+    // the mirror is missing or names us, it is provably stale and must be read
+    // through to Redis before there is anyone to probe.
+    const mirrored = runtimeDirectory.find(runtimeId, organizationId);
+    // A missing directory entry is never an offline verdict: a live owner may
+    // be atomically reclaiming a lapsed lease. Without a route, callers defer.
+    if (!realtimeBackplane.enabled) return { state: "unreachable" };
+
+    let descriptor: RuntimeDescriptor | undefined =
+      mirrored?.ownerReplicaId !== realtimeBackplane.replicaId ? mirrored : undefined;
+    if (!descriptor && !organizationId) return { state: "unreachable" };
+    try {
+      descriptor ??= await runtimeDirectory.lookup(runtimeId, organizationId, {
+        bypassCache: Boolean(mirrored),
+      });
+    } catch (error) {
+      console.error("[session-router] authoritative runtime lookup failed:", error);
+      return { state: "unreachable" };
+    }
+    if (!descriptor || descriptor.ownerReplicaId === realtimeBackplane.replicaId) {
+      return { state: "unreachable" };
+    }
+    const confirmed = await this.confirmRemoteOwner(descriptor);
+    return confirmed ? { state: "remote", descriptor: confirmed } : { state: "unreachable" };
   }
 
-  /** True when the given runtime is registered and its websocket is open. */
-  isRuntimeAvailable(runtimeId: string, organizationId?: string | null): boolean {
+  /**
+   * Cache-only view of runtime presence, for rendering rather than deciding.
+   *
+   * This is `resolveRuntime`'s fast path without the authoritative read, and it
+   * can be wrong: a replica that missed a presence broadcast reports a live
+   * peer-owned runtime as absent. That is acceptable for a status dot and never
+   * acceptable for a decision. If a wrong answer here would move a session,
+   * rebuild a workspace, or tell a user their bridge is offline, use
+   * `resolveRuntime` instead.
+   */
+  peekRuntimePresence(runtimeId: string, organizationId?: string | null): boolean {
     const descriptor = runtimeDirectory.find(runtimeId, organizationId);
     const runtime = this.getRuntime(runtimeId, organizationId);
     if (runtime && this.isCurrentLocalOwner(runtime, descriptor)) {
       return runtime.ws.readyState === runtime.ws.OPEN;
     }
     return descriptor !== undefined;
-  }
-
-  /**
-   * Availability confirmed against Redis rather than the local mirror.
-   *
-   * `isRuntimeAvailable` answers from the mirror, which is correct for hot paths
-   * but reports a peer-owned runtime as absent whenever this replica missed its
-   * presence broadcast — and nothing resyncs the mirror afterwards. Callers that
-   * would otherwise take an irreversible action on a false negative (moving a
-   * session onto a fresh runtime, telling the user its bridge is offline) must
-   * use this instead.
-   */
-  async isRuntimeAvailableConfirmed(
-    runtimeId: string,
-    organizationId?: string | null,
-  ): Promise<boolean> {
-    if (this.isRuntimeAvailable(runtimeId, organizationId)) return true;
-    return (await runtimeDirectory.lookup(runtimeId, organizationId)) !== undefined;
   }
 
   getRuntimeDescriptor(
@@ -1112,83 +1223,49 @@ export class SessionRouter {
    * `no_runtime` rather than auto-binding to whichever bridge happens to be
    * connected first (which previously leaked PTYs/commands across orgs).
    */
-  send(
-    sessionId: string,
-    command: SessionCommand,
-    options?: { expectedHomeRuntimeId?: string; organizationId?: string | null },
-  ): DeliveryResult {
-    const expectedHomeId = options?.expectedHomeRuntimeId;
-    if (expectedHomeId) {
-      const expectedRuntime = this.getCurrentLocalRuntime(expectedHomeId, options?.organizationId);
-      if (!expectedRuntime || expectedRuntime.ws.readyState !== expectedRuntime.ws.OPEN) {
-        return "runtime_disconnected";
-      }
-      // Force the in-memory binding to match the persisted home so we never
-      // dispatch to a stale (possibly hijacked) runtime.
-      this.bindSession(sessionId, expectedRuntime.key);
-    }
-
-    const runtimeId = this.sessionRuntime.get(sessionId);
-    if (!runtimeId) return "no_runtime";
-
-    const requiredTool =
-      "tool" in command && typeof command.tool === "string" ? command.tool : undefined;
-
-    const runtime = this.runtimes.get(runtimeId);
-    if (!runtime) return "session_unbound";
-    if (!this.isCurrentLocalOwner(runtime)) return "runtime_disconnected";
-    if (runtime.ws.readyState !== runtime.ws.OPEN) return "runtime_disconnected";
-    if (requiredTool && !runtime.supportedTools.includes(requiredTool)) {
-      // The bound runtime doesn't speak the requested tool. We used to silently
-      // rebind to any connected runtime that did — that's a cross-tenant
-      // dispatch, so we now fail and let the caller resolve a proper home
-      // runtime via the authorized-runtime-selection path.
-      return "no_runtime";
-    }
-
-    try {
-      runtime.ws.send(JSON.stringify(command));
-      if (command.type === "run" || command.type === "send") {
-        runtime.commandDeliveredSessions ??= new Set<string>();
-        runtime.commandDeliveredSessions.add(sessionId);
-      }
-      return "delivered";
-    } catch {
-      return "delivery_failed";
-    }
-  }
-
   async sendAsync(
     sessionId: string,
     command: SessionCommand,
     options?: { expectedHomeRuntimeId?: string; organizationId?: string | null },
   ): Promise<DeliveryResult> {
-    const expectedRuntime = options?.expectedHomeRuntimeId
-      ? this.getRuntime(options.expectedHomeRuntimeId, options.organizationId)
-      : undefined;
-    const boundRuntimeId = this.sessionRuntime.get(sessionId);
-    const localRuntime =
-      expectedRuntime ?? (boundRuntimeId ? this.runtimes.get(boundRuntimeId) : undefined);
-    if (localRuntime && (await this.confirmCurrentLocalOwner(localRuntime))) {
-      return this.send(sessionId, command, options);
+    const expectedHomeId = options?.expectedHomeRuntimeId;
+    if (expectedHomeId) {
+      const resolution = await this.resolveRuntime(expectedHomeId, options?.organizationId);
+      const rejected = this.dispatchTo(resolution, command);
+      if (rejected !== null) return rejected;
+      if (resolution.state === "local") {
+        // Force the in-memory binding to match the persisted home so we never
+        // dispatch to a stale (possibly hijacked) runtime.
+        this.bindSession(sessionId, resolution.runtime.key);
+        return this.writeToRuntime(resolution.runtime, command, sessionId);
+      }
+      if (resolution.state === "remote") {
+        return this.relayToOwner(
+          resolution.descriptor,
+          command as unknown as Record<string, unknown>,
+        );
+      }
+      return "delivery_failed";
     }
 
-    const localResult = this.send(sessionId, command, options);
-    if (localResult === "delivered" || !options?.expectedHomeRuntimeId) return localResult;
-    // Read through to Redis: a mirror miss here means giving up on a runtime
-    // that is alive on a peer replica, which surfaces as "bridge offline".
-    const descriptor = await runtimeDirectory.lookup(
-      options.expectedHomeRuntimeId,
-      options.organizationId,
-    );
-    if (!descriptor || descriptor.ownerReplicaId === realtimeBackplane.replicaId) {
-      return localResult;
+    // A binding is only a route candidate. The socket may have reconnected on
+    // another replica since it was recorded, so it goes through the same owner
+    // authority as an explicitly pinned runtime.
+    const boundKey = this.sessionRuntime.get(sessionId);
+    if (!boundKey) return "no_runtime";
+    const resolution = await this.resolveRuntime(boundKey, options?.organizationId);
+    const rejected = this.dispatchTo(resolution, command);
+    if (rejected !== null) return rejected;
+    if (resolution.state === "local") {
+      return this.writeToRuntime(resolution.runtime, command, sessionId);
     }
-    return this.sendToRuntimeAsync(
-      options.expectedHomeRuntimeId,
-      command as unknown as Record<string, unknown>,
-      options.organizationId,
-    );
+    if (resolution.state === "remote") {
+      return this.relayToOwner(
+        resolution.descriptor,
+        command as unknown as Record<string, unknown>,
+      );
+    }
+    return "delivery_failed";
   }
 
   /** Find a connected runtime that has a given repo registered (or any cloud runtime). */
@@ -1338,45 +1415,87 @@ export class SessionRouter {
   }
 
   /** Send a command directly to a runtime (not session-scoped). */
-  sendToRuntime(
+  async sendToRuntimeAsync(
     runtimeId: string,
     command: Record<string, unknown>,
     organizationId?: string | null,
+  ): Promise<DeliveryResult> {
+    const resolution = await this.resolveRuntime(runtimeId, organizationId);
+    const dispatch = this.dispatchTo(resolution, command);
+    if (dispatch !== null) return dispatch;
+
+    if (resolution.state === "local") return this.writeToRuntime(resolution.runtime, command);
+    if (resolution.state === "remote") {
+      return this.relayToOwner(resolution.descriptor, command);
+    }
+    return "delivery_failed";
+  }
+
+  /** Write to a socket `resolveRuntime` has already confirmed is ours and current. */
+  private writeToRuntime(
+    runtime: RuntimeInstance,
+    command: SessionCommand | Record<string, unknown>,
+    sessionId?: string,
   ): DeliveryResult {
-    const runtime = this.getCurrentLocalRuntime(runtimeId, organizationId);
-    if (!runtime) return "no_runtime";
-    if (runtime.ws.readyState !== runtime.ws.OPEN) return "runtime_disconnected";
+    // Transport, not a verdict: the socket closed between resolution and this
+    // write, which does not tell us the bridge is gone — it may be reconnecting
+    // to a peer right now. A delivery path never declares a runtime offline.
+    if (runtime.ws.readyState !== runtime.ws.OPEN) return "delivery_failed";
     try {
       runtime.ws.send(JSON.stringify(command));
+      const type = (command as { type?: unknown }).type;
+      if (sessionId && (type === "run" || type === "send")) {
+        runtime.commandDeliveredSessions ??= new Set<string>();
+        runtime.commandDeliveredSessions.add(sessionId);
+      }
       return "delivered";
     } catch {
       return "delivery_failed";
     }
   }
 
-  async sendToRuntimeAsync(
-    runtimeId: string,
-    command: Record<string, unknown>,
-    organizationId?: string | null,
-  ): Promise<DeliveryResult> {
-    const localRuntime = this.getRuntime(runtimeId, organizationId);
-    if (localRuntime && (await this.confirmCurrentLocalOwner(localRuntime))) {
-      return this.sendToRuntime(runtimeId, command, organizationId);
-    }
+  /**
+   * Capability checks that must not depend on which replica took the request.
+   * Applied against whichever of the runtime or its descriptor we resolved —
+   * both carry the same values, copied at registration.
+   */
+  private dispatchTo(
+    resolution: RuntimeResolution,
+    command: SessionCommand | Record<string, unknown>,
+  ): DeliveryResult | null {
+    const target =
+      resolution.state === "local"
+        ? resolution.runtime
+        : resolution.state === "remote"
+          ? resolution.descriptor
+          : null;
+    if (!target) return null;
 
-    const descriptor = runtimeDirectory.find(runtimeId, organizationId);
-    if (!descriptor) return "no_runtime";
-    if (descriptor.ownerReplicaId === realtimeBackplane.replicaId) return "runtime_disconnected";
-    const requiredTool = typeof command.tool === "string" ? command.tool : undefined;
-    if (requiredTool && !descriptor.supportedTools.includes(requiredTool)) return "no_runtime";
+    const fields = command as Record<string, unknown>;
+    const requiredTool = typeof fields.tool === "string" ? fields.tool : undefined;
+    if (requiredTool && !target.supportedTools.includes(requiredTool)) {
+      // The runtime doesn't speak the requested tool. We used to silently
+      // rebind to any connected runtime that did — that's a cross-tenant
+      // dispatch, so we now fail and let the caller resolve a proper home
+      // runtime via the authorized-runtime-selection path.
+      return "no_runtime";
+    }
     if (
-      command.type === "prepare_app" &&
-      (command.designSystemPackage || command.sourceRepository) &&
-      (descriptor.protocolVersion ?? 1) < 2
+      fields.type === "prepare_app" &&
+      (fields.designSystemPackage || fields.sourceRepository) &&
+      (target.protocolVersion ?? 1) < 2
     ) {
       return "unsupported_runtime";
     }
+    return null;
+  }
 
+  /** Hand a command to the replica that owns the socket and await its ack. */
+  private async relayToOwner(
+    descriptor: RuntimeDescriptor,
+    command: Record<string, unknown>,
+    confirmOnly = false,
+  ): Promise<DeliveryResult> {
     const deliveryId = randomUUID();
     const timeoutMs = Number(process.env.TRACE_RUNTIME_COMMAND_TIMEOUT_MS) || 3_000;
     const result = new Promise<DeliveryResult>((resolve) => {
@@ -1387,6 +1506,7 @@ export class SessionRouter {
       this.pendingRemoteDeliveries.set(deliveryId, {
         runtimeKey: descriptor.key,
         connectionGeneration: descriptor.connectionGeneration,
+        ownerReplicaId: descriptor.ownerReplicaId,
         resolve,
         timer,
       });
@@ -1396,7 +1516,10 @@ export class SessionRouter {
         typeof command.requestId === "string"
           ? {
               ...command,
-              requestId: correlatedResponseRelay.routeRequestId(command.type, command.requestId),
+              requestId: correlatedResponseRelay.routeRequestId(
+                command.type as string,
+                command.requestId,
+              ),
             }
           : command;
       await realtimeBackplane.send(descriptor.ownerReplicaId, "runtime_command", {
@@ -1405,6 +1528,7 @@ export class SessionRouter {
         organizationId: descriptor.organizationId,
         connectionGeneration: descriptor.connectionGeneration,
         command: routedCommand,
+        confirmOnly,
       });
     } catch {
       const pending = this.pendingRemoteDeliveries.get(deliveryId);
@@ -1415,6 +1539,42 @@ export class SessionRouter {
       }
     }
     return result;
+  }
+
+  /**
+   * Turn a directory route into an owner-authoritative fact.
+   *
+   * `runtime_command` is used instead of a new backplane message so this is
+   * safe during rolling deploys. An older owner will forward the deliberately
+   * unknown command to the bridge (where it is ignored) and acknowledge the
+   * socket write; a current owner validates without writing to the socket.
+   */
+  private async confirmRemoteOwner(
+    descriptor: RuntimeDescriptor,
+  ): Promise<RuntimeDescriptor | undefined> {
+    const check = { type: "runtime_route_check" };
+    if ((await this.relayToOwner(descriptor, check, true)) === "delivered") {
+      return descriptor;
+    }
+    if (!descriptor.organizationId) return undefined;
+
+    let current: RuntimeDescriptor | undefined;
+    try {
+      current = await runtimeDirectory.lookup(descriptor.id, descriptor.organizationId, {
+        bypassCache: true,
+      });
+    } catch {
+      return undefined;
+    }
+    if (
+      !current ||
+      current.ownerReplicaId === realtimeBackplane.replicaId ||
+      (current.ownerReplicaId === descriptor.ownerReplicaId &&
+        current.connectionGeneration === descriptor.connectionGeneration)
+    ) {
+      return undefined;
+    }
+    return (await this.relayToOwner(current, check, true)) === "delivered" ? current : undefined;
   }
 
   private receiveRuntimeCommand(envelope: BackplaneEnvelope): void {
@@ -1433,27 +1593,40 @@ export class SessionRouter {
     }
 
     const previous = this.runtimeCommandQueues.get(input.runtimeKey) ?? Promise.resolve();
-    const delivery = previous.then(async () => {
-      const runtime = this.runtimes.get(input.runtimeKey as string);
-      let result: DeliveryResult = "runtime_disconnected";
-      if (
-        runtime &&
-        runtime.connectionGeneration === input.connectionGeneration &&
-        runtime.ws.readyState === runtime.ws.OPEN &&
-        (await this.confirmCurrentLocalOwner(runtime))
-      ) {
-        result = this.sendToRuntime(runtime.key, input.command as Record<string, unknown>);
-      }
-      await realtimeBackplane.send(envelope.sourceReplicaId, "runtime_command_ack", {
-        deliveryId: input.deliveryId,
-        result,
+    const delivery = previous
+      .catch(() => undefined)
+      .then(async () => {
+        const runtime = this.runtimes.get(input.runtimeKey as string);
+        // `delivery_failed`, not `runtime_disconnected`: this replica failing to
+        // deliver locally is exactly the non-authoritative answer this design
+        // removed. The bridge may have just reconnected somewhere else, and the
+        // requesting replica re-resolves on its next attempt.
+        let result: DeliveryResult = "delivery_failed";
+        if (
+          runtime &&
+          runtime.connectionGeneration === input.connectionGeneration &&
+          runtime.ws.readyState === runtime.ws.OPEN &&
+          (await this.confirmCurrentLocalOwner(runtime))
+        ) {
+          result =
+            input.confirmOnly === true
+              ? "delivered"
+              : this.writeToRuntime(runtime, input.command as Record<string, unknown>);
+        }
+        await realtimeBackplane.send(envelope.sourceReplicaId, "runtime_command_ack", {
+          deliveryId: input.deliveryId,
+          result,
+        });
       });
-    });
     this.runtimeCommandQueues.set(input.runtimeKey, delivery);
-    void delivery.finally(() => {
+    const finish = () => {
       if (this.runtimeCommandQueues.get(input.runtimeKey as string) === delivery) {
         this.runtimeCommandQueues.delete(input.runtimeKey as string);
       }
+    };
+    void delivery.then(finish, (error: unknown) => {
+      console.error("[session-router] runtime command acknowledgement failed:", error);
+      finish();
     });
   }
 
@@ -1463,13 +1636,15 @@ export class SessionRouter {
     const input = payload as Record<string, unknown>;
     if (typeof input.deliveryId !== "string" || typeof input.result !== "string") return;
     const pending = this.pendingRemoteDeliveries.get(input.deliveryId);
-    if (!pending) return;
+    if (!pending || pending.ownerReplicaId !== envelope.sourceReplicaId) return;
     clearTimeout(pending.timer);
     this.pendingRemoteDeliveries.delete(input.deliveryId);
+    // `runtime_disconnected` is deliberately not accepted over the wire. A
+    // replica still running the previous build may send one, so a rolling
+    // deploy degrades it to a retry rather than an offline verdict.
     const allowed: DeliveryResult[] = [
       "delivered",
       "no_runtime",
-      "runtime_disconnected",
       "session_unbound",
       "unsupported_runtime",
       "delivery_failed",
@@ -1489,15 +1664,19 @@ export class SessionRouter {
     timeoutMs: number,
     timeoutMessage: string,
     organizationId?: string | null,
+    responseRuntimeId = runtimeId,
   ): Promise<T> {
     const requestId = randomUUID();
-    const connectionGeneration = runtimeDirectory.find(runtimeId)?.connectionGeneration;
+    const connectionGeneration = runtimeDirectory.find(
+      runtimeId,
+      organizationId,
+    )?.connectionGeneration;
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         pendingRequests.get(requestId)?.reject(new Error(timeoutMessage));
       }, timeoutMs);
       const pending: PendingRuntimeRequest<T> = {
-        runtimeId,
+        runtimeId: responseRuntimeId,
         connectionGeneration,
         resolve: (value) => {
           clearTimeout(timer);
@@ -1547,7 +1726,9 @@ export class SessionRouter {
       ) {
         clearTimeout(pending.timer);
         this.pendingRemoteDeliveries.delete(deliveryId);
-        pending.resolve("runtime_disconnected");
+        // A new generation means the bridge reconnected, not that it died. The
+        // in-flight delivery was superseded and is worth retrying.
+        pending.resolve("delivery_failed");
       }
     }
   }
@@ -1598,22 +1779,25 @@ export class SessionRouter {
    * Used before durable session-group slug allocation so local bridge state
    * participates in the server-owned reservation.
    */
-  listWorkspaceSlugs(
+  async listWorkspaceSlugs(
     runtimeId: string,
     repoId: string,
     organizationId?: string | null,
     timeoutMs = 10_000,
   ): Promise<string[]> {
-    const runtime = runtimeDirectory.find(runtimeId, organizationId);
-    if (!runtime) {
-      return Promise.reject(new Error("Runtime not available: no_runtime"));
+    const resolution = await this.resolveRuntime(runtimeId, organizationId);
+    if (resolution.state === "unreachable") {
+      throw new Error("Runtime not available: delivery_failed");
     }
+    const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
     return this.requestRuntimeResponse(
-      runtime.key,
+      runtimeId,
       { type: "list_workspace_slugs", repoId },
       this.pendingWorkspaceSlugRequests,
       timeoutMs,
       "Workspace slug request timed out",
+      organizationId,
+      runtime.key,
     );
   }
 
@@ -1635,21 +1819,25 @@ export class SessionRouter {
   }
 
   /** Ask a runtime to list the on-disk git worktrees for a repo. */
-  listRepoWorktrees(
+  async listRepoWorktrees(
     runtimeId: string,
     repoId: string,
+    organizationId?: string | null,
     timeoutMs = 10_000,
   ): Promise<BridgeRepoWorktree[]> {
-    const runtime = runtimeDirectory.find(runtimeId);
-    if (!runtime) {
-      return Promise.reject(new Error("Runtime not available: no_runtime"));
+    const resolution = await this.resolveRuntime(runtimeId, organizationId);
+    if (resolution.state === "unreachable") {
+      throw new Error("Runtime not available: delivery_failed");
     }
+    const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
     return this.requestRuntimeResponse(
-      runtime.key,
+      runtimeId,
       { type: "list_worktrees", repoId },
       this.pendingWorktreeListRequests,
       timeoutMs,
       "Worktree list request timed out",
+      organizationId,
+      runtime.key,
     );
   }
 
@@ -2441,6 +2629,7 @@ export class SessionRouter {
               options.sessionId,
               startupTimeoutMs(options.environment),
               startResult.runtimeInstanceId,
+              options.organizationId,
             );
             logAgentEnvironmentTelemetry("provisioned.bridge_ready", {
               organizationId: options.organizationId,
@@ -2508,9 +2697,15 @@ export class SessionRouter {
         // to place the agent in a writable checkout. General sessions always
         // start in their disposable scratch directory and convert before coding.
         if (options.sessionGroupKind === "general") {
-          const runtime = expectedHomeRuntimeId
-            ? this.getRuntime(expectedHomeRuntimeId, options.organizationId)
-            : this.getRuntimeForSession(options.sessionId);
+          const runtimeId = expectedHomeRuntimeId ?? this.sessionRuntime.get(options.sessionId);
+          const resolution = runtimeId
+            ? await this.resolveRuntime(runtimeId, options.organizationId)
+            : { state: "unreachable" as const };
+          if (resolution.state === "unreachable") {
+            options.onFailed("prepare_general: delivery_failed");
+            return;
+          }
+          const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
           if ((runtime?.protocolVersion ?? 1) < GENERAL_WORKSPACE_PROTOCOL_VERSION) {
             options.onFailed(
               "This Trace runtime is too old to create an isolated workspace. Upgrade it before retrying this session.",
@@ -2820,7 +3015,7 @@ export class SessionRouter {
       runtimeId =
         startResult.runtimeInstanceId ??
         (typeof conn?.runtimeInstanceId === "string" ? conn.runtimeInstanceId : undefined);
-      await this.waitForBridge(sessionId, 120_000, runtimeId);
+      await this.waitForBridge(sessionId, 120_000, runtimeId, session.organizationId);
     }
 
     return this.sendAsync(

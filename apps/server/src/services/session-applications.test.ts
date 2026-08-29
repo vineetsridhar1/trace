@@ -12,7 +12,8 @@ vi.mock("../lib/session-router.js", () => {
     sessionRouter: {
       getRuntime,
       getRuntimeMetadata: vi.fn((...args: unknown[]) => getRuntime(...args)),
-      isRuntimeAvailable: vi.fn().mockReturnValue(true),
+      peekRuntimePresence: vi.fn().mockReturnValue(true),
+      resolveRuntime: vi.fn().mockResolvedValue({ state: "local" }),
       sendToRuntime,
       sendToRuntimeAsync: vi.fn((...args: unknown[]) => Promise.resolve(sendToRuntime(...args))),
     },
@@ -40,7 +41,8 @@ const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").c
 const sessionRouterMock = sessionRouter as unknown as {
   getRuntime: ReturnType<typeof vi.fn>;
   getRuntimeMetadata: ReturnType<typeof vi.fn>;
-  isRuntimeAvailable: ReturnType<typeof vi.fn>;
+  peekRuntimePresence: ReturnType<typeof vi.fn>;
+  resolveRuntime: ReturnType<typeof vi.fn>;
   sendToRuntime: ReturnType<typeof vi.fn>;
   sendToRuntimeAsync: ReturnType<typeof vi.fn>;
 };
@@ -152,7 +154,11 @@ describe("SessionApplicationService", () => {
     sessionRouterMock.getRuntimeMetadata.mockImplementation((...args: unknown[]) =>
       sessionRouterMock.getRuntime(...args),
     );
-    sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+    sessionRouterMock.resolveRuntime.mockImplementation(async (...args: unknown[]) => {
+      const runtime = sessionRouterMock.getRuntime(...args);
+      return runtime ? { state: "local", runtime } : { state: "unreachable" };
+    });
+    sessionRouterMock.peekRuntimePresence.mockReturnValue(true);
     sessionRouterMock.sendToRuntime.mockReturnValue("delivered");
     prismaMock.sessionEndpoint.findUnique.mockResolvedValue(null);
     prismaMock.sessionEndpoint.create.mockResolvedValue({
@@ -645,7 +651,7 @@ describe("SessionApplicationService", () => {
     expect(prismaMock.sessionApplicationProcess.findUnique).not.toHaveBeenCalled();
   });
 
-  it("refuses to enable forwarding when no runtime is connected", async () => {
+  it("defers enabling forwarding when runtime routing is unavailable", async () => {
     prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce({
       id: "endpoint-1",
       organizationId: "org-1",
@@ -658,7 +664,7 @@ describe("SessionApplicationService", () => {
 
     await expect(
       new SessionApplicationService().enableEndpoint("endpoint-1", "org-1", "user-1"),
-    ).rejects.toThrow("Session group runtime is not connected");
+    ).rejects.toThrow("Runtime routing is temporarily unavailable");
   });
 
   it("publishes the primary enabled endpoint for an app session", async () => {

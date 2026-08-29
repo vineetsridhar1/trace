@@ -99,6 +99,25 @@ describe("RuntimeDirectory descriptor ordering", () => {
     expect(current?.linkedCheckoutStatuses).toEqual([]);
   });
 
+  it("does not treat a cached descriptor as ownership when Redis is unreadable", async () => {
+    const directory = new RuntimeDirectory();
+    directories.push(directory);
+    const local = directory.registerLocal(descriptor());
+    const original = Object.getOwnPropertyDescriptor(realtimeBackplane, "enabled");
+    Object.defineProperty(realtimeBackplane, "enabled", { value: true, configurable: true });
+    vi.spyOn(redis, "get").mockRejectedValue(new Error("redis unavailable"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      await expect(
+        directory.ownershipStatus(local.key, local.connectionGeneration, local.ownerReplicaId),
+      ).resolves.toBe("unknown");
+    } finally {
+      if (original) Object.defineProperty(realtimeBackplane, "enabled", original);
+      vi.restoreAllMocks();
+    }
+  });
+
   redisIntegrationIt(
     "preserves empty descriptor arrays when Redis evaluates the registration script",
     async () => {
@@ -260,6 +279,39 @@ describe("RuntimeDirectory read-through lookup", () => {
       id: "runtime-cached",
     });
     expect(get).not.toHaveBeenCalled();
+  });
+
+  it("bypasses the mirror on request so a stale entry cannot mask Redis", async () => {
+    const directory = new RuntimeDirectory();
+    directories.push(directory);
+    await directory.start();
+    // The mirror still names the replica that used to own the socket.
+    await realtimeBackplane.broadcast("runtime_presence_changed", {
+      action: "upsert",
+      descriptor: descriptor({
+        key: "org-1:runtime-moved",
+        id: "runtime-moved",
+        ownerReplicaId: "old-replica",
+        ownershipEpoch: 1,
+      }),
+    });
+    forceBackplaneEnabled();
+    const get = vi.spyOn(redis, "get").mockResolvedValue(
+      JSON.stringify(
+        descriptor({
+          key: "org-1:runtime-moved",
+          id: "runtime-moved",
+          ownerReplicaId: "new-replica",
+          ownershipEpoch: 2,
+          expiresAt: Date.now() + 120_000,
+        }),
+      ),
+    );
+
+    await expect(
+      directory.lookup("runtime-moved", "org-1", { bypassCache: true }),
+    ).resolves.toMatchObject({ ownerReplicaId: "new-replica" });
+    expect(get).toHaveBeenCalled();
   });
 
   it("degrades to the mirror when no organization scopes the key", async () => {
