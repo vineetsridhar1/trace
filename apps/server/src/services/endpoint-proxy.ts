@@ -70,7 +70,7 @@ async function endpointRuntimeInstanceId(endpoint: {
   return process.runtimeInstanceId;
 }
 
-async function sendRuntimeCommand(...args: Parameters<typeof sessionRouter.sendToRuntime>) {
+async function sendRuntimeCommand(...args: Parameters<typeof sessionRouter.sendToRuntimeAsync>) {
   return sessionRouter.sendToRuntimeAsync(...args);
 }
 

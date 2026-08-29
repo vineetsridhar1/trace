@@ -37,6 +37,16 @@ type PresenceMessage =
   | { action: "upsert"; descriptor: RuntimeDescriptor }
   | { action: "remove"; runtimeKey: string; connectionGeneration: string };
 
+/**
+ * Result of an authoritative ownership read for a socket this replica holds.
+ *
+ * - `owned` — Redis agrees this replica holds the current generation.
+ * - `superseded` — a live entry exists under a different generation or replica.
+ * - `absent` — no live entry; the lease lapsed. Not a takeover.
+ * - `unknown` — Redis was unreadable. Not evidence either way.
+ */
+export type OwnershipStatus = "owned" | "superseded" | "absent" | "unknown";
+
 type DescriptorUpdate = "installed" | "current" | "stale";
 type RuntimeDescriptorMutation = (current: RuntimeDescriptor, now: number) => RuntimeDescriptor;
 
@@ -182,41 +192,45 @@ export class RuntimeDirectory {
    * Confirm a local socket still owns Redis immediately before writing to it.
    * Pub/sub presence is only an invalidation accelerator; it is not the
    * authority because a presence publish can fail after a newer lease commits.
+   *
+   * Four-valued on purpose. The boolean this replaced collapsed `absent` into
+   * `superseded`, so a lapsed lease — an entry that simply expired — read as a
+   * takeover and the caller closed a live bridge. Only an owner ever writes its
+   * own key, so `absent` means the lease expired, never that a peer claimed it;
+   * a real takeover is visible as a live entry under a different generation or
+   * replica. `unknown` is a Redis read we could not complete, which is not
+   * evidence of anything.
    */
-  async isCurrentOwner(
+  async ownershipStatus(
     runtimeKey: string,
     connectionGeneration: string,
     ownerReplicaId: string,
-  ): Promise<boolean> {
+  ): Promise<OwnershipStatus> {
     const cached = this.descriptors.get(runtimeKey);
+    const matches = (descriptor: RuntimeDescriptor | undefined) =>
+      descriptor?.connectionGeneration === connectionGeneration &&
+      descriptor.ownerReplicaId === ownerReplicaId;
+
     if (!realtimeBackplane.enabled) {
-      return (
-        cached?.connectionGeneration === connectionGeneration &&
-        cached.ownerReplicaId === ownerReplicaId
-      );
+      if (matches(cached)) return "owned";
+      return cached ? "superseded" : "absent";
     }
 
     try {
       const value = await redis.get(this.redisKey(runtimeKey));
-      if (!value) return false;
+      if (!value) return "absent";
       const descriptor = descriptorFrom(JSON.parse(value));
-      if (!descriptor || descriptor.expiresAt <= Date.now()) return false;
+      if (!descriptor || descriptor.expiresAt <= Date.now()) return "absent";
       if (this.applyDescriptor(descriptor) === "installed") {
         this.emit({ action: "upsert", descriptor });
       }
-      return (
-        descriptor.connectionGeneration === connectionGeneration &&
-        descriptor.ownerReplicaId === ownerReplicaId
-      );
+      return matches(descriptor) ? "owned" : "superseded";
     } catch (error) {
-      // Preserve the plan's local-delivery behavior during a total Redis
-      // outage. Once Redis is reachable, the next write/heartbeat fences any
-      // superseded socket.
+      // The mirror cannot renew or fence a lease. Treating its cached copy as
+      // ownership during a Redis partition permits two replicas to write to
+      // different sockets for the same runtime generation.
       console.error("[runtime-directory] ownership validation failed:", error);
-      return (
-        cached?.connectionGeneration === connectionGeneration &&
-        cached.ownerReplicaId === ownerReplicaId
-      );
+      return "unknown";
     }
   }
 
@@ -392,12 +406,18 @@ export class RuntimeDirectory {
    *
    * Requires `organizationId` to derive the Redis key; without it this degrades
    * to the mirror-only lookup rather than guessing.
+   *
+   * `bypassCache` skips the mirror entirely. Use it when the mirror's answer is
+   * provably wrong — e.g. it names this replica as the socket owner but this
+   * replica has no deliverable socket — because the short-circuit above would
+   * otherwise return the stale entry and never reach Redis.
    */
   async lookup(
     runtimeInstanceId: string,
     organizationId?: string | null,
+    options?: { bypassCache?: boolean },
   ): Promise<RuntimeDescriptor | undefined> {
-    const cached = this.find(runtimeInstanceId, organizationId);
+    const cached = options?.bypassCache ? undefined : this.find(runtimeInstanceId, organizationId);
     if (cached) return cached;
     if (!realtimeBackplane.enabled || !organizationId) return undefined;
     // Local bridges register under `org:id`; cloud bridges pass no key to

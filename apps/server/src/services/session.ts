@@ -19,6 +19,7 @@ import {
   actionRequiredArtifactForToolOutput,
   isSupportedModel,
   isSupportedReasoningEffort,
+  DELIVERY_DEFERRED_OUTPUT_TYPE,
   MAX_WORKSPACE_NAME_LENGTH,
   resolveGitHubCloneUrl,
   type BridgeSessionGitSyncStatus,
@@ -201,8 +202,6 @@ const LOCAL_TOOL_FALLBACK_ORDER: readonly CodingTool[] = [
   "pi",
   "custom",
 ];
-const PI_INSTALL_COMMAND = "npm install -g @earendil-works/pi-coding-agent";
-const PI_INSTALL_DOCS_URL = "https://pi.dev/docs/latest/quickstart";
 const ORG_GITHUB_TOKEN_SECRET_NAME = "GITHUB_TOKEN";
 
 type GitHubPullRequestRef = GitHubRepoRef & {
@@ -1571,13 +1570,13 @@ function listRuntimeMetadata(filter?: { hostingMode?: string }) {
 }
 
 async function sendSessionCommand(
-  ...args: Parameters<typeof sessionRouter.send>
+  ...args: Parameters<typeof sessionRouter.sendAsync>
 ): Promise<DeliveryResult> {
   return sessionRouter.sendAsync(...args);
 }
 
 async function sendRuntimeCommand(
-  ...args: Parameters<typeof sessionRouter.sendToRuntime>
+  ...args: Parameters<typeof sessionRouter.sendToRuntimeAsync>
 ): Promise<DeliveryResult> {
   return sessionRouter.sendToRuntimeAsync(...args);
 }
@@ -2996,14 +2995,24 @@ export class SessionService {
       userId: params.userId,
       organizationId: params.organizationId,
       sessionGroupId: params.sessionGroupId,
+      potentiallyConnectedOnly: true,
     });
-
-    for (const runtime of listRuntimeMetadata({ hostingMode: "local" })) {
-      if (runtime.organizationId !== params.organizationId) continue;
-      if (!accessibleRuntimeIds.has(runtime.id)) continue;
+    const resolutions = await Promise.all(
+      [...accessibleRuntimeIds].map((runtimeId) =>
+        sessionRouter.resolveRuntime(runtimeId, params.organizationId),
+      ),
+    );
+    for (const resolution of resolutions) {
+      if (resolution.state === "unreachable") continue;
+      const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
+      if (runtime.hostingMode !== "local") continue;
       if (params.tool && !runtime.supportedTools.includes(params.tool)) continue;
       if (params.repoId && !runtime.registeredRepoIds.includes(params.repoId)) continue;
       return runtime;
+    }
+
+    if (resolutions.some((resolution) => resolution.state === "unreachable")) {
+      throw new Error("Runtime routing is temporarily unavailable");
     }
 
     return undefined;
@@ -3041,32 +3050,34 @@ export class SessionService {
         sessionGroupId: params.sessionGroupId,
         failureMessage: params.failureMessage,
       });
-      const runtime = runtimeMetadata(conn.runtimeInstanceId, params.organizationId);
-      if (runtime) {
-        const supportsTool = runtime.supportedTools?.includes(params.tool) ?? true;
-        if (!supportsTool) {
-          if (!params.allowToolFallback) {
-            throw new ToolNotInstalledError(
-              params.tool,
-              runtime.label ?? conn.runtimeLabel ?? null,
-            );
-          }
-          const fallbackTool = selectRuntimeSupportedTool(runtime, params.tool);
-          if (!fallbackTool) {
-            throw new Error("Selected runtime does not support any known coding tool");
-          }
-          sessionRouter.bindSession(params.sessionId, runtime.key);
-          return {
-            runtimeId: conn.runtimeInstanceId,
-            runtimeLabel: runtime.label ?? conn.runtimeLabel ?? null,
-            fallbackTool,
-          };
+      const resolution = await sessionRouter.resolveRuntime(
+        conn.runtimeInstanceId,
+        params.organizationId,
+      );
+      if (resolution.state === "unreachable") {
+        throw new Error("Runtime routing is temporarily unavailable");
+      }
+      const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
+      const supportsTool = runtime.supportedTools?.includes(params.tool) ?? true;
+      if (!supportsTool) {
+        if (!params.allowToolFallback) {
+          throw new ToolNotInstalledError(params.tool, runtime.label ?? conn.runtimeLabel ?? null);
+        }
+        const fallbackTool = selectRuntimeSupportedTool(runtime, params.tool);
+        if (!fallbackTool) {
+          throw new Error("Selected runtime does not support any known coding tool");
         }
         sessionRouter.bindSession(params.sessionId, runtime.key);
+        return {
+          runtimeId: conn.runtimeInstanceId,
+          runtimeLabel: runtime.label ?? conn.runtimeLabel ?? null,
+          fallbackTool,
+        };
       }
+      sessionRouter.bindSession(params.sessionId, runtime.key);
       return {
         runtimeId: conn.runtimeInstanceId,
-        runtimeLabel: runtime?.label ?? conn.runtimeLabel ?? null,
+        runtimeLabel: runtime.label ?? conn.runtimeLabel ?? null,
       };
     }
 
@@ -3169,10 +3180,11 @@ export class SessionService {
 
     const groupRuntimeId = this.getConnectionRuntimeInstanceId(group.connection);
     if (groupRuntimeId) {
-      const runtime = runtimeMetadata(groupRuntimeId, organizationId);
-      if (!runtime) {
-        throw new Error("No connected runtime available for this session group");
+      const resolution = await sessionRouter.resolveRuntime(groupRuntimeId, organizationId);
+      if (resolution.state === "unreachable") {
+        throw new Error("Runtime routing is temporarily unavailable");
       }
+      const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
       if (options.requireWrite) {
         this.assertSessionGroupFileWriteAccess(group, runtime, userId);
       }
@@ -3205,8 +3217,9 @@ export class SessionService {
     for (const session of sessions) {
       const runtimeId = resolveSessionRuntimeId(session);
       if (!runtimeId) continue;
-      const runtime = runtimeMetadata(runtimeId, organizationId);
-      if (!runtime) continue;
+      const resolution = await sessionRouter.resolveRuntime(runtimeId, organizationId);
+      if (resolution.state === "unreachable") continue;
+      const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
       try {
         if (options.requireWrite) {
           this.assertSessionGroupFileWriteAccess(group, runtime, userId);
@@ -3306,16 +3319,28 @@ export class SessionService {
     }
 
     const groupRuntimeId = this.getConnectionRuntimeInstanceId(group.connection);
-    const ownedRuntimesForRepo = listRuntimeMetadata({ hostingMode: "local" }).filter(
-      (candidate) => {
-        if (candidate.organizationId !== organizationId) return false;
-        if (candidate.ownerUserId !== userId) return false;
-        if (options.requireRegisteredRepo && !candidate.registeredRepoIds.includes(repoId)) {
-          return false;
-        }
-        return true;
-      },
+    const accessibleRuntimeIds = await runtimeAccessService.listAccessibleRuntimeInstanceIds({
+      userId,
+      organizationId,
+      sessionGroupId,
+      potentiallyConnectedOnly: true,
+    });
+    const candidateIds = new Set(accessibleRuntimeIds);
+    for (const runtime of listRuntimeMetadata({ hostingMode: "local" })) {
+      if (runtime.organizationId === organizationId) candidateIds.add(runtime.id);
+    }
+    if (groupRuntimeId) candidateIds.add(groupRuntimeId);
+    if (options.runtimeInstanceId) candidateIds.add(options.runtimeInstanceId);
+    const resolutions = await Promise.all(
+      [...candidateIds].map((runtimeId) => sessionRouter.resolveRuntime(runtimeId, organizationId)),
     );
+    const ownedRuntimesForRepo = resolutions.flatMap((resolution) => {
+      if (resolution.state === "unreachable") return [];
+      const candidate = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
+      if (candidate.hostingMode !== "local" || candidate.ownerUserId !== userId) return [];
+      if (options.requireRegisteredRepo && !candidate.registeredRepoIds.includes(repoId)) return [];
+      return [candidate];
+    });
     const runtime = options.runtimeInstanceId
       ? ownedRuntimesForRepo.find((candidate) => candidate.id === options.runtimeInstanceId)
       : (ownedRuntimesForRepo.find((candidate) => candidate.id === groupRuntimeId) ??
@@ -3323,6 +3348,9 @@ export class SessionService {
         ownedRuntimesForRepo[0]);
 
     if (!runtime) {
+      if (resolutions.some((resolution) => resolution.state === "unreachable")) {
+        throw new Error("Runtime routing is temporarily unavailable");
+      }
       throw new Error(
         options.runtimeInstanceId
           ? "Requested local runtime is not connected or not available for this repo"
@@ -3375,12 +3403,13 @@ export class SessionService {
     const ownerRuntimeInstanceId = this.getConnectionRuntimeInstanceId(params.group.connection);
     if (!ownerRuntimeInstanceId) return null;
 
-    const ownerRuntime = listRuntimeMetadata().find(
-      (candidate) =>
-        candidate.organizationId === params.organizationId &&
-        candidate.id === ownerRuntimeInstanceId,
+    const ownerResolution = await sessionRouter.resolveRuntime(
+      ownerRuntimeInstanceId,
+      params.organizationId,
     );
-    if (!ownerRuntime) return null;
+    if (ownerResolution.state === "unreachable") return null;
+    const ownerRuntime =
+      ownerResolution.state === "local" ? ownerResolution.runtime : ownerResolution.descriptor;
 
     let branch: string | null;
     try {
@@ -3690,7 +3719,7 @@ export class SessionService {
     });
     const sourceSession = requireSingleGeneralConversionSession(source);
     const target = resolveConversionToolSelection(sourceSession.tool, input);
-    const reusableCloudRuntime = this.resolveReusableGeneratedConversionRuntime(
+    const reusableCloudRuntime = await this.resolveReusableGeneratedConversionRuntime(
       sourceSession,
       target.tool,
     );
@@ -3781,23 +3810,23 @@ export class SessionService {
     return locked.value;
   }
 
-  private resolveReusableGeneratedConversionRuntime(
+  private async resolveReusableGeneratedConversionRuntime(
     session: { id: string; hosting: string; organizationId: string; connection: unknown },
     tool: CodingTool,
-  ): RuntimeMetadata | null {
+  ): Promise<RuntimeMetadata | null> {
     if (session.hosting !== "cloud") return null;
     const boundRuntime = sessionRouter.getRuntimeForSession(session.id);
     const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
-    const runtime =
-      boundRuntime ??
-      (persistedRuntimeId
-        ? runtimeMetadata(persistedRuntimeId, session.organizationId)
-        : undefined);
+    const runtimeId = boundRuntime?.id ?? persistedRuntimeId;
+    if (!runtimeId) return null;
+    const resolution = await sessionRouter.resolveRuntime(runtimeId, session.organizationId);
+    if (resolution.state === "unreachable") {
+      throw new Error("Runtime routing is temporarily unavailable");
+    }
+    const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
     if (
-      !runtime ||
       runtime.hostingMode !== "cloud" ||
       (runtime.organizationId && runtime.organizationId !== session.organizationId) ||
-      !sessionRouter.isRuntimeAvailable(runtime.id, session.organizationId) ||
       !runtime.supportedTools.includes(tool)
     ) {
       return null;
@@ -6416,8 +6445,14 @@ export class SessionService {
           runtimeInstanceId: config.runtimeInstanceId,
           sessionGroupId: prev.sessionGroupId,
         });
-        const runtime = runtimeMetadata(config.runtimeInstanceId, organizationId);
-        if (!runtime) throw new Error("Requested runtime not found");
+        const resolution = await sessionRouter.resolveRuntime(
+          config.runtimeInstanceId,
+          organizationId,
+        );
+        if (resolution.state === "unreachable") {
+          throw new Error("Runtime routing is temporarily unavailable");
+        }
+        const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
         newHosting = runtime.hostingMode;
         runtimeInstanceId = runtime.id;
         runtimeLabel = runtime.label;
@@ -9323,12 +9358,13 @@ export class SessionService {
         sessionGroupId: session.sessionGroupId,
       });
     }
-    // Confirmed against Redis, not the local directory mirror: a false negative
-    // here provisions a fresh runtime and rebuilds the workspace from origin,
-    // discarding uncommitted work on a container that never died.
-    const homeRuntimeAvailable = homeRuntimeId
-      ? await sessionRouter.isRuntimeAvailableConfirmed(homeRuntimeId, organizationId)
-      : false;
+    // This path is entered only from an owner-authored disconnected/failed
+    // state. A route lets us reuse the original runtime; a missing route does
+    // not independently declare it offline.
+    const homeResolution = homeRuntimeId
+      ? await sessionRouter.resolveRuntime(homeRuntimeId, organizationId)
+      : null;
+    const homeRuntimeAvailable = Boolean(homeResolution && homeResolution.state !== "unreachable");
     if (session.hosting === "cloud" && !homeRuntimeAvailable) {
       return this.moveSessionInPlace({
         session,
@@ -9343,9 +9379,11 @@ export class SessionService {
     }
 
     const runtime = homeRuntimeId
-      ? homeRuntimeAvailable
-        ? runtimeMetadata(homeRuntimeId, organizationId)
-        : undefined
+      ? homeResolution?.state === "local"
+        ? homeResolution.runtime
+        : homeResolution?.state === "remote"
+          ? homeResolution.descriptor
+          : undefined
       : session.hosting === "local"
         ? await this.resolveDefaultAccessibleLocalRuntime({
             userId: actorId,
@@ -9858,10 +9896,14 @@ export class SessionService {
       this.getConnectionRuntimeInstanceId(session.connection) ??
       sessionRouter.getRuntimeForSession(session.id)?.id ??
       null;
-    const inspectableSourceRuntimeId =
-      sourceRuntimeId && sessionRouter.isRuntimeAvailable(sourceRuntimeId, session.organizationId)
-        ? sourceRuntimeId
-        : null;
+    // Only the owner-authored disconnected state permits skipping source
+    // inspection. Routing uncertainty must fail the inspection and abort the
+    // move rather than silently rebuilding a potentially live workspace.
+    const currentSourceConnection = this.parseConnection(session.connection);
+    const sourceMayStillBeLive =
+      currentSourceConnection.state !== "disconnected" &&
+      !isRuntimeComputeGone(currentSourceConnection);
+    const inspectableSourceRuntimeId = sourceMayStillBeLive ? sourceRuntimeId : null;
     const targetEnvironment =
       targetHosting === "cloud" && !reuseCloudRuntime
         ? (requestedTargetEnvironment ??
@@ -9990,25 +10032,25 @@ export class SessionService {
   }
 
   private async stopSessionMoveSources(sessions: SessionWithInclude[]): Promise<void> {
-    // Stop every reachable source process before committing the shared target
-    // binding. If a live bridge rejects teardown, no database binding changes.
+    // Stop every source not already declared disconnected by its socket owner
+    // before committing the shared target binding. Routing uncertainty aborts
+    // the move instead of leaving an old process attached to the workspace.
     for (const session of sessions) {
-      const boundRuntime = sessionRouter.getRuntimeForSession(session.id);
-      const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
-      const reachableRuntimeId =
-        boundRuntime?.id &&
-        sessionRouter.isRuntimeAvailable(boundRuntime.id, session.organizationId)
-          ? boundRuntime.id
-          : persistedRuntimeId &&
-              sessionRouter.isRuntimeAvailable(persistedRuntimeId, session.organizationId)
-            ? persistedRuntimeId
-            : null;
-      if (reachableRuntimeId) {
-        await sessionRouter.transitionRuntime(
-          session.id,
-          session.hosting as "cloud" | "local",
-          "terminate",
-        );
+      const connection = this.parseConnection(session.connection);
+      if (
+        connection.state === "disconnected" ||
+        isRuntimeComputeGone(connection) ||
+        !connection.runtimeInstanceId
+      ) {
+        continue;
+      }
+      const result = await sessionRouter.transitionRuntime(
+        session.id,
+        session.hosting as "cloud" | "local",
+        "terminate",
+      );
+      if (result !== "delivered") {
+        throw new Error(`Cannot move session: source teardown was deferred (${result})`);
       }
     }
   }
@@ -10368,10 +10410,12 @@ export class SessionService {
       runtimeInstanceId,
       sessionGroupId: session.sessionGroupId,
     });
-    const targetRuntime = runtimeMetadata(runtimeInstanceId, organizationId);
-    if (!targetRuntime) {
-      throw new Error("Selected runtime is not available");
+    const targetResolution = await sessionRouter.resolveRuntime(runtimeInstanceId, organizationId);
+    if (targetResolution.state === "unreachable") {
+      throw new Error("Runtime routing is temporarily unavailable");
     }
+    const targetRuntime =
+      targetResolution.state === "local" ? targetResolution.runtime : targetResolution.descriptor;
     if (
       Array.isArray(targetRuntime.supportedTools) &&
       !targetRuntime.supportedTools.includes(session.tool)
@@ -10603,8 +10647,11 @@ export class SessionService {
         runtimeInstanceId: runtimeId,
         sessionGroupId,
       });
-      const runtime = runtimeMetadata(runtimeId, organizationId);
-      if (!runtime) throw new Error("Requested runtime not found");
+      const resolution = await sessionRouter.resolveRuntime(runtimeId, organizationId);
+      if (resolution.state === "unreachable") {
+        throw new Error("Runtime routing is temporarily unavailable");
+      }
+      const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
       runtimeId = runtime.key;
     } else {
       const accessibleRuntimeIds = await runtimeAccessService.listAccessibleRuntimeInstanceIds({
@@ -10612,13 +10659,28 @@ export class SessionService {
         organizationId,
         sessionGroupId,
       });
-      const runtime = listRuntimeMetadata().find(
-        (runtime) =>
-          runtime.organizationId === organizationId &&
-          (runtime.hostingMode === "cloud" || accessibleRuntimeIds.has(runtime.id)) &&
-          runtime.registeredRepoIds.includes(repoId),
+      const candidateIds = new Set(accessibleRuntimeIds);
+      for (const runtime of listRuntimeMetadata()) {
+        if (runtime.organizationId === organizationId && runtime.hostingMode === "cloud") {
+          candidateIds.add(runtime.id);
+        }
+      }
+      const resolutions = await Promise.all(
+        [...candidateIds].map((candidateId) =>
+          sessionRouter.resolveRuntime(candidateId, organizationId),
+        ),
       );
-      runtimeId = runtime?.key;
+      for (const resolution of resolutions) {
+        if (resolution.state === "unreachable") continue;
+        const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
+        if (runtime.registeredRepoIds.includes(repoId)) {
+          runtimeId = runtime.key;
+          break;
+        }
+      }
+      if (!runtimeId && resolutions.some((resolution) => resolution.state === "unreachable")) {
+        throw new Error("Runtime routing is temporarily unavailable");
+      }
     }
     if (!runtimeId) throw new Error("Repo not cloned on any connected runtime");
     return sessionRouter.listBranches(runtimeId, repoId);
@@ -10639,28 +10701,39 @@ export class SessionService {
     let runtimeId = runtimeInstanceId;
     if (runtimeId) {
       await this.assertRuntimeAccess({ userId, organizationId, runtimeInstanceId: runtimeId });
-      const runtime = runtimeMetadata(runtimeId, organizationId);
-      if (!runtime) throw new Error("Requested runtime not found");
+      const resolution = await sessionRouter.resolveRuntime(runtimeId, organizationId);
+      if (resolution.state === "unreachable") {
+        throw new Error("Runtime routing is temporarily unavailable");
+      }
+      const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
       if (runtime.hostingMode !== "local") {
         throw new ValidationError("Worktree import is only available for local runtimes");
       }
-      runtimeId = runtime.key;
+      runtimeId = runtime.id;
     } else {
       const accessibleRuntimeIds = await runtimeAccessService.listAccessibleRuntimeInstanceIds({
         userId,
         organizationId,
       });
-      const runtime = listRuntimeMetadata().find(
-        (runtime) =>
-          runtime.organizationId === organizationId &&
-          runtime.hostingMode === "local" &&
-          accessibleRuntimeIds.has(runtime.id) &&
-          runtime.registeredRepoIds.includes(repoId),
+      const resolutions = await Promise.all(
+        [...accessibleRuntimeIds].map((candidateId) =>
+          sessionRouter.resolveRuntime(candidateId, organizationId),
+        ),
       );
-      runtimeId = runtime?.key;
+      for (const resolution of resolutions) {
+        if (resolution.state === "unreachable") continue;
+        const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
+        if (runtime.hostingMode === "local" && runtime.registeredRepoIds.includes(repoId)) {
+          runtimeId = runtime.id;
+          break;
+        }
+      }
+      if (!runtimeId && resolutions.some((resolution) => resolution.state === "unreachable")) {
+        throw new Error("Runtime routing is temporarily unavailable");
+      }
     }
     if (!runtimeId) throw new Error("Repo not cloned on any connected local runtime");
-    const worktrees = await sessionRouter.listRepoWorktrees(runtimeId, repoId);
+    const worktrees = await sessionRouter.listRepoWorktrees(runtimeId, repoId, organizationId);
     // Only importable worktrees: hide Trace-managed ones and the repo's main
     // checkout (a session must never adopt the user's primary working tree).
     return worktrees.filter((worktree) => !worktree.isTraceManaged && !worktree.isMain);
@@ -12499,7 +12572,6 @@ export class SessionService {
         agentStatus: true,
         sessionStatus: true,
         worktreeDeleted: true,
-        tool: true,
         hosting: true,
         connection: true,
         sessionGroupId: true,
@@ -12513,21 +12585,21 @@ export class SessionService {
     }
     const conn = this.parseConnection(session.connection);
 
-    const homeOffline = deliveryResult === "runtime_disconnected" && !!conn.runtimeInstanceId;
-    const unsupportedHomeTool = deliveryResult === "no_runtime" && !!conn.runtimeInstanceId;
-    const unsupportedRuntime = deliveryResult === "unsupported_runtime";
-    const bridgeLabel = conn.runtimeLabel ?? "The selected bridge";
-    const lastError = homeOffline
-      ? conn.runtimeLabel
-        ? `${conn.runtimeLabel} is offline — use Move to continue on another bridge`
-        : "The original bridge is offline — use Move to continue on another bridge"
-      : unsupportedRuntime
-        ? `${bridgeLabel} must be updated before it can prepare design-system packages`
-        : unsupportedHomeTool
-          ? session.tool === "pi"
-            ? `${bridgeLabel} does not have Pi installed. Install it with \`${PI_INSTALL_COMMAND}\`, then restart the bridge. Docs: ${PI_INSTALL_DOCS_URL}`
-            : `${bridgeLabel} does not support ${session.tool}`
-          : `${operation}: ${deliveryResult}`;
+    // Request routing never owns liveness. Missing/stale directory state,
+    // transport timeouts, and mixed-version relay results all defer here; the
+    // socket owner's fenced close path is the only writer of `disconnected`.
+    if (conn.runtimeInstanceId) {
+      await this.recordTransientDeliveryFailure(
+        sessionId,
+        organizationId,
+        conn,
+        deliveryResult,
+        operation,
+      );
+      return;
+    }
+
+    const lastError = `${operation}: ${deliveryResult}`;
     const result = await this.updateConnectionConditional(sessionId, (current, currentSession) => {
       // Delivery happened against the snapshot read above. A reconnect or move
       // that advanced either the generation or version supersedes this result.
@@ -12551,11 +12623,7 @@ export class SessionService {
         canRetry: true,
         canMove: true,
         // Don't spin the auto-retry loop for a non-transient failure.
-        autoRetryable:
-          currentSession.hosting !== "cloud" &&
-          !homeOffline &&
-          !unsupportedHomeTool &&
-          !unsupportedRuntime,
+        autoRetryable: currentSession.hosting !== "cloud",
       };
     });
     if (!result) return;
@@ -12574,6 +12642,60 @@ export class SessionService {
         sessionStatus: session.sessionStatus,
         connection: connJson(updated),
         ...(sessionGroup ? { sessionGroup } : {}),
+      },
+      actorType: "system",
+      actorId: "system",
+    });
+  }
+
+  /**
+   * Record a dispatch that did not land against a runtime the directory still
+   * confirms is alive. The command is already preserved in `pendingRun`, so the
+   * session stays usable — no `disconnected` state, no "use Move" banner, no
+   * auto-retry loop pointed at a healthy container.
+   *
+   * This still emits `delivery_deferred`. Silently stamping a timestamp would
+   * leave the user watching a message that never ran with nothing on screen to
+   * say so, and clients would carry a stale connection version.
+   */
+  private async recordTransientDeliveryFailure(
+    sessionId: string,
+    organizationId: string,
+    conn: SessionConnectionData,
+    deliveryResult: DeliveryResult,
+    operation: string,
+  ) {
+    logAgentEnvironmentTelemetry("runtime.transient_delivery_failure", {
+      sessionId,
+      operation,
+      deliveryResult,
+      connectionState: conn.state,
+      runtimeInstanceId: conn.runtimeInstanceId ?? null,
+    });
+    const result = await this.updateConnectionConditional(sessionId, (current) => {
+      if (
+        !isSameRuntimeGeneration(current, conn) ||
+        (current.version ?? 0) !== (conn.version ?? 0)
+      ) {
+        return null;
+      }
+      return { ...current, lastDeliveryFailureAt: new Date().toISOString() };
+    });
+    if (!result) return;
+
+    // No sessionGroup snapshot on purpose. Other connection events carry one so
+    // sibling tabs adopt the shared runtime state, but one tab failing to route
+    // a command says nothing about the others — and nothing group-level moved.
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: {
+        type: DELIVERY_DEFERRED_OUTPUT_TYPE,
+        reason: deliveryResult,
+        operation,
+        connection: connJson(result.updated),
       },
       actorType: "system",
       actorId: "system",

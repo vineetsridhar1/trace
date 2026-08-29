@@ -5,15 +5,21 @@ vi.mock("../lib/db.js", async () => {
   return { prisma: createPrismaMock() };
 });
 
-vi.mock("../lib/session-router.js", () => ({
-  sessionRouter: {
-    getRuntime: vi.fn(),
-    getRuntimeMetadata: vi.fn(),
-    isRuntimeAvailable: vi.fn().mockReturnValue(true),
-    sendToRuntime: vi.fn().mockReturnValue("delivered"),
-    sendToRuntimeAsync: vi.fn(),
-  },
-}));
+vi.mock("../lib/session-router.js", () => {
+  const sendToRuntime = vi.fn().mockReturnValue("delivered");
+  const getRuntime = vi.fn();
+  return {
+    sessionRouter: {
+      getRuntime,
+      getRuntimeMetadata: vi.fn((...args: unknown[]) => getRuntime(...args)),
+      isRuntimeAvailable: vi.fn().mockReturnValue(true),
+      peekRuntimePresence: vi.fn().mockReturnValue(true),
+      resolveRuntime: vi.fn().mockResolvedValue({ state: "local" }),
+      sendToRuntime,
+      sendToRuntimeAsync: vi.fn((...args: unknown[]) => Promise.resolve(sendToRuntime(...args))),
+    },
+  };
+});
 
 vi.mock("./event.js", () => ({
   eventService: {
@@ -35,7 +41,8 @@ const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").c
 const sessionRouterMock = sessionRouter as unknown as {
   getRuntime: ReturnType<typeof vi.fn>;
   getRuntimeMetadata: ReturnType<typeof vi.fn>;
-  isRuntimeAvailable: ReturnType<typeof vi.fn>;
+  peekRuntimePresence: ReturnType<typeof vi.fn>;
+  resolveRuntime: ReturnType<typeof vi.fn>;
   sendToRuntime: ReturnType<typeof vi.fn>;
   sendToRuntimeAsync: ReturnType<typeof vi.fn>;
 };
@@ -111,7 +118,11 @@ describe("SessionApplicationService", () => {
     sessionRouterMock.getRuntimeMetadata.mockImplementation((...args: unknown[]) =>
       sessionRouterMock.getRuntime(...args),
     );
-    sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+    sessionRouterMock.resolveRuntime.mockImplementation(async (...args: unknown[]) => {
+      const runtime = sessionRouterMock.getRuntime(...args);
+      return runtime ? { state: "local", runtime } : { state: "unreachable" };
+    });
+    sessionRouterMock.peekRuntimePresence.mockReturnValue(true);
     sessionRouterMock.sendToRuntime.mockReturnValue("delivered");
     prismaMock.sessionEndpoint.findUnique.mockResolvedValue(null);
     prismaMock.sessionEndpoint.create.mockResolvedValue({

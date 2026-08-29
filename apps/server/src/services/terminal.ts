@@ -183,10 +183,11 @@ class TerminalService {
     });
     if (!bridge) throw new Error("Bridge not found");
 
-    const runtime = sessionRouter.getRuntimeMetadata(bridge.instanceId, input.organizationId);
-    if (!runtime || !sessionRouter.isRuntimeAvailable(runtime.id, input.organizationId)) {
-      throw new AuthorizationError(TERMINAL_NO_RUNTIME_ERROR);
+    const resolution = await sessionRouter.resolveRuntime(bridge.instanceId, input.organizationId);
+    if (resolution.state === "unreachable") {
+      throw new Error("Runtime routing is temporarily unavailable");
     }
+    const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
     if (runtime.organizationId !== input.organizationId) {
       throw new AuthorizationError(TERMINAL_NO_RUNTIME_ERROR);
     }
@@ -483,7 +484,7 @@ class TerminalService {
           status: "ready",
           cols: descriptor.cols ?? DEFAULT_TERMINAL_COLS,
           rows: descriptor.rows ?? DEFAULT_TERMINAL_ROWS,
-          connected: sessionRouter.isRuntimeAvailable(
+          connected: sessionRouter.peekRuntimePresence(
             descriptor.runtimeInstanceId,
             descriptor.organizationId,
           ),
