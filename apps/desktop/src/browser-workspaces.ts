@@ -154,10 +154,13 @@ export class BrowserWorkspaceManager {
       this.window.contentView.removeChildView(workspace.view);
     }
     this.visibleWorkspaceIds.delete(key);
-    // Detaching the view should not suspend Chromium: a page can still be
-    // loading when the user switches to another session.
     workspace.view.webContents.setAudioMuted(true);
-    workspace.state.suspensionState = "muted";
+    if (workspace.view.webContents.isLoading() || workspace.pendingNavigation) {
+      // Let in-flight navigation finish while this browser is out of view.
+      workspace.state.suspensionState = "muted";
+    } else {
+      await this.freezeHiddenWorkspace(workspace);
+    }
     this.persistWorkspace(workspace);
     await this.flushPersistence();
     this.publish(workspace);
@@ -353,6 +356,7 @@ export class BrowserWorkspaceManager {
       .finally(() => {
         if (workspace.pendingNavigation?.promise === promise) {
           workspace.pendingNavigation = null;
+          void this.freezeHiddenWorkspace(workspace);
         }
       });
     workspace.pendingNavigation = { url, promise };
@@ -363,7 +367,10 @@ export class BrowserWorkspaceManager {
     const { webContents } = workspace.view;
     const sync = () => this.updateState(workspace);
     webContents.on("did-start-loading", sync);
-    webContents.on("did-stop-loading", sync);
+    webContents.on("did-stop-loading", () => {
+      this.updateState(workspace);
+      void this.freezeHiddenWorkspace(workspace);
+    });
     webContents.on("did-navigate", sync);
     webContents.on("did-navigate-in-page", sync);
     webContents.on("page-title-updated", sync);
@@ -590,6 +597,22 @@ export class BrowserWorkspaceManager {
       webContents.openDevTools({ mode: "right", title: "Trace Browser DevTools" });
     }
     return frozen ? "frozen" : "active";
+  }
+
+  private async freezeHiddenWorkspace(workspace: BrowserWorkspace): Promise<void> {
+    if (
+      this.visibleWorkspaceIds.has(workspace.key) ||
+      workspace.view.webContents.isLoading() ||
+      workspace.pendingNavigation
+    ) {
+      return;
+    }
+    const suspensionState = await this.setFrozen(workspace, true);
+    workspace.state.suspensionState = this.visibleWorkspaceIds.has(workspace.key)
+      ? await this.setFrozen(workspace, false)
+      : suspensionState;
+    this.persistWorkspace(workspace);
+    this.publish(workspace);
   }
 
   private async loadSnapshots() {
