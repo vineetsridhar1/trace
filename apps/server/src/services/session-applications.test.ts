@@ -334,6 +334,15 @@ describe("SessionApplicationService", () => {
       organizationId: "org-1",
       hostingMode: "cloud",
     });
+    sessionRouterMock.resolveRuntime.mockResolvedValueOnce({
+      state: "remote",
+      descriptor: {
+        key: "org-1:runtime-1",
+        id: "runtime-1",
+        organizationId: "org-1",
+        hostingMode: "cloud",
+      },
+    });
 
     await expect(
       new SessionApplicationService().startProcess("group-1", "web", "dev", "org-1", "user-1"),

@@ -47,6 +47,7 @@ vi.mock("../lib/session-router.js", () => ({
     getRuntime: vi.fn().mockReturnValue(null),
     getRuntimeMetadata: vi.fn().mockReturnValue(null),
     getRuntimeForSession: vi.fn().mockReturnValue(null),
+    isRuntimeAvailable: vi.fn().mockReturnValue(true),
     getBoundSessionIds: vi.fn().mockReturnValue([]),
     peekRuntimePresence: vi.fn().mockReturnValue(true),
     resolveRuntime: vi.fn().mockResolvedValue({ state: "local" }),
@@ -403,6 +404,8 @@ describe("SessionService", () => {
       sessionRouterMock.listRuntimes(...args),
     );
     sessionRouterMock.peekRuntimePresence.mockReturnValue(true);
+    sessionRouterMock.isRuntimeAvailable.mockReset();
+    sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
     sessionRouterMock.resolveRuntime.mockReset();
     sessionRouterMock.resolveRuntime.mockImplementation(async (...args) => {
       const runtimeId = args[0];

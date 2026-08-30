@@ -894,7 +894,6 @@ type PreparedSessionMove = {
   baseCommitSha: string | null;
   sourceBranch: string | null;
   sourceConnection: SessionConnectionData;
-  shouldCleanupGeneralWorkspace: boolean;
   nextConnectionBase: SessionConnectionData;
 };
 
@@ -7727,10 +7726,10 @@ export class SessionService {
       this.getConnectionRuntimeInstanceId(session.connection) ??
       sessionRouter.getRuntimeForSession(session.id)?.id ??
       null;
-    if (
-      !runtimeInstanceId ||
-      !sessionRouter.isRuntimeAvailable(runtimeInstanceId, session.organizationId)
-    ) {
+    const runtime = runtimeInstanceId
+      ? await sessionRouter.resolveRuntime(runtimeInstanceId, session.organizationId)
+      : null;
+    if (!runtime || runtime.state === "unreachable") {
       return "runtime_unavailable";
     }
 
@@ -10013,7 +10012,6 @@ export class SessionService {
       baseCommitSha,
       sourceBranch,
       sourceConnection,
-      shouldCleanupGeneralWorkspace,
       nextConnectionBase,
     };
   }
@@ -10071,7 +10069,6 @@ export class SessionService {
       bootstrapPrompt,
       sourceBranch,
       sourceConnection,
-      shouldCleanupGeneralWorkspace,
       nextConnectionBase,
     } = prepared;
     const movedSessions = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {

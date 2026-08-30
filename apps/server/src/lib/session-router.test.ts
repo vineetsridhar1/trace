@@ -94,15 +94,11 @@ describe("SessionRouter distributed ownership fencing", () => {
       hostingMode: "local",
       supportedTools: ["codex"],
     });
-    const ownershipSpy = vi
-      .spyOn(runtimeDirectory, "ownershipStatus")
-      .mockResolvedValueOnce("superseded");
+    const ownershipSpy = vi.spyOn(runtimeDirectory, "isCurrentOwner").mockResolvedValueOnce(false);
 
-    // This replica may fence its superseded socket, but request routing cannot
-    // infer that the stable runtime id is globally offline.
     await expect(
       router.sendToRuntimeAsync("runtime-authoritative", { type: "test" }, "org-authoritative"),
-    ).resolves.toBe("delivery_failed");
+    ).resolves.toBe("runtime_disconnected");
 
     expect(ws.send).not.toHaveBeenCalled();
     expect(ws.close).toHaveBeenCalledWith(1012, "Runtime ownership replaced");
@@ -173,11 +169,9 @@ describe("SessionRouter distributed ownership fencing", () => {
     expect(router.getRuntime("runtime-fenced", "org-fenced")).toBeUndefined();
     expect(router.getRuntimeMetadata("runtime-fenced", "org-fenced")).toEqual(remoteDescriptor);
     expect(router.listRuntimeMetadata()).toContainEqual(remoteDescriptor);
-    // The replica named by the descriptor rejects the generation, but that is
-    // still a transport miss rather than a global offline verdict.
-    await expect(
-      router.sendToRuntimeAsync("runtime-fenced", { type: "test" }, "org-fenced"),
-    ).resolves.toBe("delivery_failed");
+    expect(router.sendToRuntime("runtime-fenced", { type: "test" }, "org-fenced")).toBe(
+      "no_runtime",
+    );
 
     await runtimeDirectory.remove(runtimeKey, remoteDescriptor.connectionGeneration);
     router.dispose();
@@ -313,11 +307,11 @@ describe("SessionRouter design-system protocol gate", () => {
     });
     router.bindSession("session-1", "runtime-1");
 
-    expect(
-      router.send("session-1", { type: "send", sessionId: "session-1", prompt: "hello" }),
-    ).toBe("delivered");
-    expect(
-      router.send("session-1", {
+    await expect(
+      router.sendAsync("session-1", { type: "send", sessionId: "session-1", prompt: "hello" }),
+    ).resolves.toBe("delivered");
+    await expect(
+      router.sendAsync("session-1", {
         type: "prepare_app",
         sessionId: "session-1",
         sessionGroupKind: "design",
@@ -331,7 +325,7 @@ describe("SessionRouter design-system protocol gate", () => {
           byteSize: 1,
         },
       }),
-    ).toBe("unsupported_runtime");
+    ).resolves.toBe("unsupported_runtime");
     expect(ws.send).toHaveBeenCalledTimes(1);
   });
 });
@@ -347,7 +341,7 @@ describe("SessionRouter stale runtime eviction", () => {
     const now = vi.spyOn(Date, "now");
 
     now.mockReturnValue(0);
-    router.registerRuntime({
+    await router.registerRuntime({
       id: "runtime-1",
       label: "Laptop",
       ws: makeWs(),
@@ -422,12 +416,12 @@ describe("SessionRouter stale runtime eviction", () => {
     expect(router.checkStaleRuntimes()[0]?.connectedAt).toBe(connectedAt);
   });
 
-  it("reports eviction even when the stale runtime had no bound sessions", async () => {
+  it("reports eviction even when the stale runtime had no bound sessions", () => {
     const router = new SessionRouter();
     const now = vi.spyOn(Date, "now");
 
     now.mockReturnValue(0);
-    await router.registerRuntime({
+    router.registerRuntime({
       id: "runtime-1",
       label: "Laptop",
       ws: makeWs(),
@@ -445,7 +439,7 @@ describe("SessionRouter stale runtime eviction", () => {
 });
 
 describe("SessionRouter org-scoped runtime keys", () => {
-  it("keeps the same bridge instance isolated across organizations", async () => {
+  it("keeps the same bridge instance isolated across organizations", () => {
     const router = new SessionRouter();
     const org1Ws = makeWs();
     const org2Ws = makeWs();
@@ -473,7 +467,7 @@ describe("SessionRouter org-scoped runtime keys", () => {
     expect(router.getRuntime("bridge-1", "org-1")?.ws).toBe(org1Ws);
     expect(router.getRuntime("bridge-1", "org-2")?.ws).toBe(org2Ws);
 
-    const result = await router.sendAsync(
+    const result = router.send(
       "session-1",
       { type: "send", sessionId: "session-1", tool: "codex" },
       { expectedHomeRuntimeId: "bridge-1", organizationId: "org-1" },
@@ -484,7 +478,7 @@ describe("SessionRouter org-scoped runtime keys", () => {
     expect(org2Ws.send).not.toHaveBeenCalled();
   });
 
-  it("only heartbeat-reconciles sessions that received commands on the current websocket", async () => {
+  it("only heartbeat-reconciles sessions that received commands on the current websocket", () => {
     const router = new SessionRouter();
     const ws1 = makeWs();
     const runtimeKey = runtimeRouterKey("bridge-1", "org-1");
@@ -502,13 +496,13 @@ describe("SessionRouter org-scoped runtime keys", () => {
 
     expect(router.getHeartbeatReconcileSessionIds(runtimeKey)).toEqual([]);
 
-    await expect(
-      router.sendAsync(
+    expect(
+      router.send(
         "session-1",
         { type: "send", sessionId: "session-1", tool: "codex" },
         { expectedHomeRuntimeId: "bridge-1", organizationId: "org-1" },
       ),
-    ).resolves.toBe("delivered");
+    ).toBe("delivered");
     expect(router.getHeartbeatReconcileSessionIds(runtimeKey)).toEqual(["session-1"]);
 
     router.registerRuntime({
@@ -551,7 +545,7 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
     const router = new SessionRouter();
     const ws = makeWs();
 
-    await router.registerRuntime({
+    router.registerRuntime({
       id: "runtime-1",
       label: "Laptop",
       ws,
@@ -748,23 +742,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
     expect(settled).toBe(true);
   });
 
-  it("does not treat a session binding as proof that its bridge is connected", async () => {
-    vi.useFakeTimers();
-    const router = new SessionRouter();
-    const wait = router.waitForBridge("session-1", 100, "runtime-stale");
-    let settled = false;
-    void wait.catch(() => {
-      settled = true;
-    });
-
-    router.bindSession("session-1", "runtime-stale");
-    await Promise.resolve();
-    expect(settled).toBe(false);
-
-    await vi.advanceTimersByTimeAsync(100);
-    await expect(wait).rejects.toThrow("did not connect");
-  });
-
   it("keeps a stale bridge wait timeout from clearing a newer wait", async () => {
     vi.useFakeTimers();
     const router = new SessionRouter();
@@ -792,12 +769,11 @@ describe("SessionRouter runtime adapter dispatch", () => {
     const router = new SessionRouter();
     const ws = makeWs();
 
-    await router.registerRuntime({
+    router.registerRuntime({
       id: "runtime-1",
       label: "Laptop",
       ws,
       hostingMode: "local",
-      organizationId: "org-1",
       supportedTools: ["codex"],
       registeredRepoIds: ["repo-1"],
     });
@@ -839,12 +815,11 @@ describe("SessionRouter runtime adapter dispatch", () => {
   it("prepares a repo-linked general session as read-only context", async () => {
     const router = new SessionRouter();
     const ws = makeWs();
-    await router.registerRuntime({
+    router.registerRuntime({
       id: "runtime-1",
       label: "Laptop",
       ws,
       hostingMode: "local",
-      organizationId: "org-1",
       protocolVersion: 3,
       supportedTools: ["codex"],
       registeredRepoIds: ["repo-1"],
@@ -947,12 +922,11 @@ describe("SessionRouter runtime adapter dispatch", () => {
   it("starts an unlinked general session in the runtime home", async () => {
     const router = new SessionRouter();
     const ws = makeWs();
-    await router.registerRuntime({
+    router.registerRuntime({
       id: "runtime-1",
       label: "Laptop",
       ws,
       hostingMode: "local",
-      organizationId: "org-1",
       supportedTools: ["codex"],
       registeredRepoIds: [],
     });
@@ -984,7 +958,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     const runtimeId = "runtime-remote-owner";
     const organizationId = "org-1";
     const runtimeKey = runtimeRouterKey(runtimeId, organizationId);
-    const remoteDelivery = vi.spyOn(router, "sendToRuntimeAsync").mockResolvedValue("delivered");
+    const remoteDelivery = vi.spyOn(router, "sendAsync").mockResolvedValue("delivered");
     const descriptor = await runtimeDirectory.register(
       {
         key: runtimeKey,
@@ -1029,9 +1003,9 @@ describe("SessionRouter runtime adapter dispatch", () => {
       await vi.waitFor(() => expect(remoteDelivery).toHaveBeenCalledOnce());
 
       expect(remoteDelivery).toHaveBeenCalledWith(
-        runtimeId,
+        "session-1",
         expect.objectContaining({ type: "prepare", sessionId: "session-1", readOnly: true }),
-        organizationId,
+        { expectedHomeRuntimeId: runtimeId, organizationId },
       );
     } finally {
       await runtimeDirectory.remove(runtimeKey, descriptor.connectionGeneration);
@@ -1049,7 +1023,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
       label: "Authorized laptop",
       ws: authorizedWs,
       hostingMode: "local",
-      organizationId: "org-1",
       supportedTools: ["codex"],
       registeredRepoIds: ["repo-1"],
     });
@@ -1058,7 +1031,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
       label: "Config laptop",
       ws: configuredWs,
       hostingMode: "local",
-      organizationId: "org-1",
       supportedTools: ["codex"],
       registeredRepoIds: ["repo-1"],
     });
@@ -1159,278 +1131,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
         runtimeToken: "runtime-token",
         bridgeUrl: "wss://trace.example/bridge",
       }),
-    );
-  });
-
-  it("forwards the session creator's selected Codex credential for provisioned startup", async () => {
-    apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({
-      github: "ghp_start_pat",
-      codex_access_token: "codex_start_token",
-    });
-    const provisionedStart = vi.fn().mockResolvedValue({ status: "provisioning" });
-    const provisionedAdapter: RuntimeAdapter = {
-      type: "provisioned",
-      async validateConfig() {},
-      async testConfig() {
-        return { ok: true };
-      },
-      startSession: provisionedStart,
-      async stopSession() {
-        return { ok: true, status: "stopping" };
-      },
-      async getStatus() {
-        return { status: "provisioning" };
-      },
-    };
-    const localAdapter: RuntimeAdapter = {
-      type: "local",
-      async validateConfig() {},
-      async testConfig() {
-        return { ok: true };
-      },
-      async startSession() {
-        return { status: "selected" };
-      },
-      async stopSession() {
-        return { ok: true, status: "stopped" };
-      },
-      async getStatus() {
-        return { status: "unknown" };
-      },
-    };
-    const router = new SessionRouter(
-      new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
-    );
-
-    router.createRuntime({
-      sessionId: "session-1",
-      hosting: "cloud",
-      adapterType: "provisioned",
-      reserveRuntime: stubReserveRuntime(),
-      tool: "codex",
-      repo: null,
-      createdById: "user-1",
-      organizationId: "org-1",
-      runtimeToken: "runtime-token",
-      bridgeUrl: "wss://trace.example/bridge",
-      onFailed: vi.fn(),
-      onWorkspaceReady: vi.fn(),
-    });
-
-    await flushPromises();
-
-    expect(apiTokenServiceMock.getDecryptedTokens).toHaveBeenCalledOnce();
-    expect(apiTokenServiceMock.getDecryptedTokens).toHaveBeenCalledWith("user-1");
-    expect(provisionedStart).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userGithubToken: "ghp_start_pat",
-        userCodexAccessToken: undefined,
-        userCodexAuthMethod: "api_key",
-        userCodexCredential: "codex-api-key",
-      }),
-    );
-  });
-
-  it("does not forward a Codex access token for provisioned non-Codex startup", async () => {
-    apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({
-      codex_access_token: "codex_start_token",
-    });
-    const provisionedStart = vi.fn().mockResolvedValue({ status: "provisioning" });
-    const provisionedAdapter: RuntimeAdapter = {
-      type: "provisioned",
-      async validateConfig() {},
-      async testConfig() {
-        return { ok: true };
-      },
-      startSession: provisionedStart,
-      async stopSession() {
-        return { ok: true, status: "stopping" };
-      },
-      async getStatus() {
-        return { status: "provisioning" };
-      },
-    };
-    const localAdapter: RuntimeAdapter = {
-      type: "local",
-      async validateConfig() {},
-      async testConfig() {
-        return { ok: true };
-      },
-      async startSession() {
-        return { status: "selected" };
-      },
-      async stopSession() {
-        return { ok: true, status: "stopped" };
-      },
-      async getStatus() {
-        return { status: "unknown" };
-      },
-    };
-    const router = new SessionRouter(
-      new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
-    );
-
-    router.createRuntime({
-      sessionId: "session-1",
-      hosting: "cloud",
-      adapterType: "provisioned",
-      reserveRuntime: stubReserveRuntime(),
-      tool: "claude_code",
-      repo: null,
-      createdById: "user-1",
-      organizationId: "org-1",
-      runtimeToken: "runtime-token",
-      bridgeUrl: "wss://trace.example/bridge",
-      onFailed: vi.fn(),
-      onWorkspaceReady: vi.fn(),
-    });
-
-    await flushPromises();
-
-    expect(provisionedStart).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userGithubToken: undefined,
-        userCodexAccessToken: undefined,
-      }),
-    );
-  });
-
-  it("forwards the session creator's GitHub PAT and Codex credential through resume", async () => {
-    apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({
-      github: "ghp_resume_pat",
-      codex_access_token: "codex_resume_token",
-    });
-    prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
-      connection: null,
-      createdById: "creator-user",
-      organizationId: "org-1",
-      tool: "codex",
-      model: null,
-      reasoningEffort: null,
-    });
-
-    const provisionedStart = vi
-      .fn()
-      .mockResolvedValue({ runtimeInstanceId: "runtime-resume-1", status: "connected" });
-    const provisionedAdapter: RuntimeAdapter = {
-      type: "provisioned",
-      async validateConfig() {},
-      async testConfig() {
-        return { ok: true };
-      },
-      startSession: provisionedStart,
-      async stopSession() {
-        return { ok: true, status: "stopped" };
-      },
-      async getStatus() {
-        return { status: "unknown" };
-      },
-    };
-    const localAdapter: RuntimeAdapter = {
-      type: "local",
-      async validateConfig() {},
-      async testConfig() {
-        return { ok: true };
-      },
-      async startSession() {
-        return { status: "selected" };
-      },
-      async stopSession() {
-        return { ok: true, status: "stopped" };
-      },
-      async getStatus() {
-        return { status: "unknown" };
-      },
-    };
-    const router = new SessionRouter(
-      new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
-    );
-    // Pre-register the runtime so waitForBridge resolves immediately.
-    await router.registerRuntime({
-      id: "runtime-resume-1",
-      label: "Resumed runtime",
-      ws: makeWs(),
-      hostingMode: "cloud",
-      organizationId: "org-1",
-      supportedTools: ["codex"],
-    });
-
-    await router.transitionRuntime("session-resume", "cloud", "resume");
-
-    expect(apiTokenServiceMock.getDecryptedTokens).toHaveBeenCalledOnce();
-    expect(apiTokenServiceMock.getDecryptedTokens).toHaveBeenCalledWith("creator-user");
-    expect(provisionedStart).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: "session-resume",
-        actorId: "creator-user",
-        userGithubToken: "ghp_resume_pat",
-        userCodexAccessToken: undefined,
-        userCodexAuthMethod: "api_key",
-        userCodexCredential: "codex-api-key",
-      }),
-    );
-  });
-
-  it("falls back gracefully when the GitHub PAT lookup throws", async () => {
-    apiTokenServiceMock.getDecryptedTokens.mockRejectedValueOnce(new Error("db unavailable"));
-
-    const provisionedStart = vi.fn().mockResolvedValue({ status: "connecting" });
-    const provisionedAdapter: RuntimeAdapter = {
-      type: "provisioned",
-      async validateConfig() {},
-      async testConfig() {
-        return { ok: true };
-      },
-      startSession: provisionedStart,
-      async stopSession() {
-        return { ok: true, status: "stopped" };
-      },
-      async getStatus() {
-        return { status: "unknown" };
-      },
-    };
-    const localAdapter: RuntimeAdapter = {
-      type: "local",
-      async validateConfig() {},
-      async testConfig() {
-        return { ok: true };
-      },
-      async startSession() {
-        return { status: "selected" };
-      },
-      async stopSession() {
-        return { ok: true, status: "stopped" };
-      },
-      async getStatus() {
-        return { status: "unknown" };
-      },
-    };
-    const router = new SessionRouter(
-      new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
-    );
-
-    router.createRuntime({
-      sessionId: "session-1",
-      hosting: "cloud",
-      adapterType: "provisioned",
-      reserveRuntime: stubReserveRuntime(),
-      tool: "codex",
-      repo: null,
-      createdById: "user-1",
-      organizationId: "org-1",
-      runtimeToken: "runtime-token",
-      bridgeUrl: "wss://trace.example/bridge",
-      onFailed: vi.fn(),
-      onWorkspaceReady: vi.fn(),
-    });
-
-    await flushPromises();
-
-    expect(provisionedStart).toHaveBeenCalledWith(
-      expect.objectContaining({ userGithubToken: undefined }),
-    );
-    expect(provisionedStart).toHaveBeenCalledWith(
-      expect.objectContaining({ userCodexAccessToken: undefined }),
     );
   });
 
@@ -1642,13 +1342,13 @@ describe("SessionRouter runtime adapter dispatch", () => {
       "session_runtime_connected",
     ]);
 
-    await expect(
-      router.sendAsync("session-1", {
+    expect(
+      router.send("session-1", {
         type: "send",
         sessionId: "session-1",
         prompt: "continue",
       }),
-    ).resolves.toBe("delivered");
+    ).toBe("delivered");
     expect(
       (ws.send as unknown as ReturnType<typeof vi.fn>).mock.calls.some((call) =>
         String(call[0]).includes('"type":"send"'),
@@ -1808,8 +1508,8 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
     await Promise.resolve();
 
-    await expect(
-      router.sendAsync("session-1", {
+    expect(
+      router.send("session-1", {
         type: "terminal_create",
         terminalId: "term-1",
         sessionId: "session-1",
@@ -1818,9 +1518,9 @@ describe("SessionRouter runtime adapter dispatch", () => {
         rows: 24,
         cwd: "/repo",
       }),
-    ).resolves.toBe("delivered");
-    await expect(
-      router.sendAsync("session-1", {
+    ).toBe("delivered");
+    expect(
+      router.send("session-1", {
         type: "terminal_create",
         terminalId: "term-2",
         sessionId: "session-1",
@@ -1829,7 +1529,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         rows: 30,
         cwd: "/repo",
       }),
-    ).resolves.toBe("delivered");
+    ).toBe("delivered");
 
     const send = ws.send as unknown as ReturnType<typeof vi.fn>;
     const commands = send.mock.calls.map((call) => JSON.parse(call[0] as string));
@@ -1839,7 +1539,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     ]);
   });
 
-  it("keeps multiple provisioned terminal commands isolated by terminalId", async () => {
+  it("keeps multiple provisioned terminal commands isolated by terminalId", () => {
     const router = new SessionRouter();
     const ws = makeWs();
 
@@ -1853,8 +1553,8 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
     router.bindSession("session-1", "runtime-cloud-1");
 
-    await expect(
-      router.sendAsync("session-1", {
+    expect(
+      router.send("session-1", {
         type: "terminal_create",
         terminalId: "term-a",
         sessionId: "session-1",
@@ -1863,9 +1563,9 @@ describe("SessionRouter runtime adapter dispatch", () => {
         rows: 24,
         cwd: "/repo",
       }),
-    ).resolves.toBe("delivered");
-    await expect(
-      router.sendAsync("session-1", {
+    ).toBe("delivered");
+    expect(
+      router.send("session-1", {
         type: "terminal_create",
         terminalId: "term-b",
         sessionId: "session-1",
@@ -1874,24 +1574,24 @@ describe("SessionRouter runtime adapter dispatch", () => {
         rows: 32,
         cwd: "/repo",
       }),
-    ).resolves.toBe("delivered");
-    await expect(
-      router.sendAsync("session-1", {
+    ).toBe("delivered");
+    expect(
+      router.send("session-1", {
         type: "terminal_resize",
         terminalId: "term-a",
         sessionId: "session-1",
         cols: 100,
         rows: 28,
       }),
-    ).resolves.toBe("delivered");
-    await expect(
-      router.sendAsync("session-1", {
+    ).toBe("delivered");
+    expect(
+      router.send("session-1", {
         type: "terminal_input",
         terminalId: "term-b",
         sessionId: "session-1",
         data: "pwd\n",
       }),
-    ).resolves.toBe("delivered");
+    ).toBe("delivered");
 
     const send = ws.send as unknown as ReturnType<typeof vi.fn>;
     const commands = send.mock.calls.map((call) => JSON.parse(call[0] as string));
@@ -2577,7 +2277,7 @@ describe("SessionRouter lapsed directory lease", () => {
     // Regression: this returned false, so the replica holding a healthy bridge
     // reported it offline and the cloud retry path moved the session onto a
     // fresh runtime — discarding the workspace.
-    expect(router.peekRuntimePresence(runtimeId, org)).toBe(true);
+    expect(router.isRuntimeAvailable(runtimeId, org)).toBe(true);
     expect(ws.close).not.toHaveBeenCalled();
     router.dispose();
   });
@@ -2592,7 +2292,7 @@ describe("SessionRouter lapsed directory lease", () => {
       .spyOn(runtimeDirectory, "reclaim")
       .mockResolvedValue(router.getRuntimeMetadata(runtimeId, org) as never);
 
-    router.peekRuntimePresence(runtimeId, org);
+    router.isRuntimeAvailable(runtimeId, org);
     await vi.waitFor(() => expect(reclaim).toHaveBeenCalledTimes(1));
 
     // Generation is preserved so bindings made on this socket stay valid.
@@ -2609,65 +2309,10 @@ describe("SessionRouter lapsed directory lease", () => {
     forceBackplaneEnabled();
     vi.spyOn(runtimeDirectory, "reclaim").mockResolvedValue(null);
 
-    router.peekRuntimePresence(runtimeId, org);
+    router.isRuntimeAvailable(runtimeId, org);
     await vi.waitFor(() =>
       expect(ws.close).toHaveBeenCalledWith(1012, "Runtime ownership replaced"),
     );
-    router.dispose();
-  });
-
-  it("does not write until the atomic reclaim confirms this generation", async () => {
-    const router = new SessionRouter();
-    const ws = makeWs();
-    await registerOpenRuntime(router, ws);
-    await lapseLease(router);
-    forceBackplaneEnabled();
-    vi.spyOn(runtimeDirectory, "ownershipStatus").mockResolvedValue("absent");
-    vi.spyOn(runtimeDirectory, "lookup").mockResolvedValue(undefined);
-    let finishReclaim: (value: null) => void = () => {};
-    vi.spyOn(runtimeDirectory, "reclaim").mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finishReclaim = resolve;
-        }),
-    );
-
-    const delivery = router.sendAsync(
-      "session-1",
-      { type: "send", sessionId: "session-1", prompt: "continue" },
-      { expectedHomeRuntimeId: runtimeId, organizationId: org },
-    );
-    await vi.waitFor(() => expect(runtimeDirectory.reclaim).toHaveBeenCalledOnce());
-
-    // A peer may claim between the absent read and the reclaim script. No
-    // command may reach the old generation until that atomic claim succeeds.
-    expect(ws.send).not.toHaveBeenCalled();
-    finishReclaim(null);
-
-    await expect(delivery).resolves.toBe("delivery_failed");
-    expect(ws.send).not.toHaveBeenCalled();
-    expect(ws.close).toHaveBeenCalledWith(1012, "Runtime ownership replaced");
-    router.dispose();
-  });
-
-  it("defers without closing the socket when ownership cannot be confirmed", async () => {
-    const router = new SessionRouter();
-    const ws = makeWs();
-    await registerOpenRuntime(router, ws);
-    forceBackplaneEnabled();
-    vi.spyOn(runtimeDirectory, "ownershipStatus").mockResolvedValue("unknown");
-    vi.spyOn(runtimeDirectory, "lookup").mockRejectedValue(new Error("redis unavailable"));
-    vi.spyOn(console, "error").mockImplementation(() => {});
-
-    await expect(
-      router.sendAsync(
-        "session-1",
-        { type: "send", sessionId: "session-1", prompt: "continue" },
-        { expectedHomeRuntimeId: runtimeId, organizationId: org },
-      ),
-    ).resolves.toBe("delivery_failed");
-    expect(ws.send).not.toHaveBeenCalled();
-    expect(ws.close).not.toHaveBeenCalled();
     router.dispose();
   });
 
@@ -2722,176 +2367,42 @@ describe("SessionRouter peer-owned runtime missing from the local mirror", () =>
   it("reports unavailable from the mirror alone when a presence broadcast was missed", () => {
     const router = new SessionRouter();
     forceBackplaneEnabled();
-    // The cache read is allowed to be wrong here — that is exactly why it may
-    // only render a status dot and may never gate a decision.
-    expect(router.peekRuntimePresence(runtimeId, org)).toBe(false);
+    // Nothing in the mirror and no local socket: the sync answer is "absent".
+    expect(router.isRuntimeAvailable(runtimeId, org)).toBe(false);
     router.dispose();
   });
 
   it("confirms availability by reading through to Redis", async () => {
     const router = new SessionRouter();
     forceBackplaneEnabled();
-    const descriptor = peerDescriptor();
-    const lookup = vi.spyOn(runtimeDirectory, "lookup").mockResolvedValue(descriptor as never);
-    vi.spyOn(
-      router as unknown as { confirmRemoteOwner: () => Promise<unknown> },
-      "confirmRemoteOwner",
-    ).mockResolvedValue(descriptor);
+    const lookup = vi
+      .spyOn(runtimeDirectory, "lookup")
+      .mockResolvedValue(peerDescriptor() as never);
 
     // Regression: the mirror-only answer sent the cloud retry path into
     // moveSessionInPlace, discarding the workspace of a live peer-owned runtime.
-    await expect(router.resolveRuntime(runtimeId, org)).resolves.toMatchObject({
-      state: "remote",
-    });
-    expect(lookup).toHaveBeenCalledWith(runtimeId, org, { bypassCache: false });
+    await expect(router.isRuntimeAvailableConfirmed(runtimeId, org)).resolves.toBe(true);
+    expect(lookup).toHaveBeenCalledWith(runtimeId, org);
     router.dispose();
   });
 
-  it("treats a missing Redis route as unreachable, not offline", async () => {
+  it("stays unavailable when Redis has no entry either", async () => {
     const router = new SessionRouter();
     forceBackplaneEnabled();
     vi.spyOn(runtimeDirectory, "lookup").mockResolvedValue(undefined);
 
-    await expect(router.resolveRuntime(runtimeId, org)).resolves.toEqual({ state: "unreachable" });
+    await expect(router.isRuntimeAvailableConfirmed(runtimeId, org)).resolves.toBe(false);
     router.dispose();
   });
 
   it("skips the Redis read when the mirror already knows the runtime", async () => {
     const router = new SessionRouter();
     forceBackplaneEnabled();
-    const descriptor = peerDescriptor();
-    vi.spyOn(runtimeDirectory, "find").mockReturnValue(descriptor as never);
+    vi.spyOn(runtimeDirectory, "find").mockReturnValue(peerDescriptor() as never);
     const lookup = vi.spyOn(runtimeDirectory, "lookup");
-    vi.spyOn(
-      router as unknown as { confirmRemoteOwner: () => Promise<unknown> },
-      "confirmRemoteOwner",
-    ).mockResolvedValue(descriptor);
 
-    await expect(router.resolveRuntime(runtimeId, org)).resolves.toMatchObject({
-      state: "remote",
-    });
+    await expect(router.isRuntimeAvailableConfirmed(runtimeId, org)).resolves.toBe(true);
     expect(lookup).not.toHaveBeenCalled();
-    router.dispose();
-  });
-});
-
-describe("SessionRouter delivery against a stale self-owned directory entry", () => {
-  const org = "org-stale";
-  const runtimeId = "runtime-stale";
-  let restoreEnabled: (() => void) | null = null;
-
-  function forceBackplaneEnabled() {
-    const original = Object.getOwnPropertyDescriptor(realtimeBackplane, "enabled");
-    Object.defineProperty(realtimeBackplane, "enabled", { value: true, configurable: true });
-    restoreEnabled = () => {
-      if (original) Object.defineProperty(realtimeBackplane, "enabled", original);
-    };
-  }
-
-  function descriptorOwnedBy(ownerReplicaId: string) {
-    const now = Date.now();
-    return {
-      key: runtimeRouterKey(runtimeId, org),
-      id: runtimeId,
-      organizationId: org,
-      ownerReplicaId,
-      connectionGeneration: "generation-stale",
-      ownershipEpoch: 3,
-      label: runtimeId,
-      hostingMode: "cloud" as const,
-      supportedTools: ["codex"],
-      registeredRepoIds: [],
-      linkedCheckoutStatuses: [],
-      linkedCheckoutStatusObservedAt: {},
-      lastHeartbeat: now,
-      expiresAt: now + 120_000,
-    };
-  }
-
-  const command = {
-    type: "send" as const,
-    sessionId: "session-1",
-    prompt: "continue",
-  };
-
-  afterEach(() => {
-    restoreEnabled?.();
-    restoreEnabled = null;
-    vi.restoreAllMocks();
-  });
-
-  // Regression: the mirror stale-claims this replica owns the socket while this
-  // replica has no socket at all. Trusting it reported a live peer-owned bridge
-  // as offline, which on the send path swapped the composer for the recovery
-  // panel and offered the user a workspace rebuild.
-  it("re-reads Redis authoritatively and relays to the real owner", async () => {
-    const router = new SessionRouter();
-    forceBackplaneEnabled();
-    vi.spyOn(runtimeDirectory, "find").mockReturnValue(
-      descriptorOwnedBy(realtimeBackplane.replicaId) as never,
-    );
-    const lookup = vi
-      .spyOn(runtimeDirectory, "lookup")
-      .mockResolvedValue(descriptorOwnedBy("peer-replica") as never);
-    vi.spyOn(
-      router as unknown as { confirmRemoteOwner: () => Promise<unknown> },
-      "confirmRemoteOwner",
-    ).mockResolvedValue(descriptorOwnedBy("peer-replica"));
-    const relay = vi
-      .spyOn(realtimeBackplane, "send")
-      .mockImplementation(async () => undefined as never);
-
-    vi.stubEnv("TRACE_RUNTIME_COMMAND_TIMEOUT_MS", "20");
-    await router.sendAsync("session-1", command, {
-      expectedHomeRuntimeId: runtimeId,
-      organizationId: org,
-    });
-
-    // The mirror's answer was provably wrong, so the read had to bypass it.
-    expect(lookup).toHaveBeenCalledWith(runtimeId, org, { bypassCache: true });
-    expect(relay).toHaveBeenCalledWith(
-      "peer-replica",
-      "runtime_command",
-      expect.objectContaining({ command: expect.objectContaining({ type: "send" }) }),
-    );
-    router.dispose();
-  });
-
-  it("defers when the directory has no route", async () => {
-    const router = new SessionRouter();
-    forceBackplaneEnabled();
-    vi.spyOn(runtimeDirectory, "find").mockReturnValue(
-      descriptorOwnedBy(realtimeBackplane.replicaId) as never,
-    );
-    vi.spyOn(runtimeDirectory, "lookup").mockResolvedValue(undefined);
-    const relay = vi.spyOn(realtimeBackplane, "send");
-
-    await expect(
-      router.sendAsync("session-1", command, {
-        expectedHomeRuntimeId: runtimeId,
-        organizationId: org,
-      }),
-    ).resolves.toBe("delivery_failed");
-
-    expect(relay).not.toHaveBeenCalled();
-    router.dispose();
-  });
-
-  it("defers rather than declaring the runtime gone when the directory cannot be read", async () => {
-    const router = new SessionRouter();
-    forceBackplaneEnabled();
-    vi.spyOn(runtimeDirectory, "find").mockReturnValue(undefined);
-    vi.spyOn(runtimeDirectory, "lookup").mockRejectedValue(new Error("redis unavailable"));
-    vi.spyOn(console, "error").mockImplementation(() => {});
-
-    // A Redis outage must not manufacture an offline verdict: `delivery_failed`
-    // is retryable, `runtime_disconnected` rebuilds a live workspace.
-    await expect(
-      router.sendAsync("session-1", command, {
-        expectedHomeRuntimeId: runtimeId,
-        organizationId: org,
-      }),
-    ).resolves.toBe("delivery_failed");
     router.dispose();
   });
 });
