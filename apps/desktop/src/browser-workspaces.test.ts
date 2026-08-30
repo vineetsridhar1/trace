@@ -370,7 +370,7 @@ describe("BrowserWorkspaceManager", () => {
     expect(window.contentView.removeChildView).toHaveBeenCalledTimes(2);
   });
 
-  it("closes DevTools before freezing and restores them after activation", async () => {
+  it("keeps a hidden browser active while muting its audio", async () => {
     const manager = new BrowserWorkspaceManager({ snapshotStore: new MemorySnapshotStore() });
     manager.setWindow(createWindow());
 
@@ -379,19 +379,14 @@ describe("BrowserWorkspaceManager", () => {
     await manager.toggleDevTools("group-a");
     await manager.hide("group-a");
 
-    expect(contents.operations).toContain("devtools:close");
-    expect(contents.operations.indexOf("devtools:close")).toBeLessThan(
-      contents.operations.lastIndexOf("lifecycle:frozen"),
-    );
+    expect(contents.operations).not.toContain("devtools:close");
+    expect(contents.operations).not.toContain("lifecycle:frozen");
     expect(contents.audioMuted).toBe(true);
 
     const state = await manager.activate("group-a");
     expect(state.suspensionState).toBe("active");
     expect(contents.audioMuted).toBe(false);
     expect(contents.isDevToolsOpened()).toBe(true);
-    expect(contents.operations.lastIndexOf("lifecycle:active")).toBeLessThan(
-      contents.operations.lastIndexOf("devtools:open"),
-    );
   });
 
   it("denies dangerous permissions and caches explicit per-origin decisions", async () => {

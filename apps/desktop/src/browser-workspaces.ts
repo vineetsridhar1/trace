@@ -154,7 +154,10 @@ export class BrowserWorkspaceManager {
       this.window.contentView.removeChildView(workspace.view);
     }
     this.visibleWorkspaceIds.delete(key);
-    workspace.state.suspensionState = await this.setFrozen(workspace, true);
+    // Detaching the view should not suspend Chromium: a page can still be
+    // loading when the user switches to another session.
+    workspace.view.webContents.setAudioMuted(true);
+    workspace.state.suspensionState = "muted";
     this.persistWorkspace(workspace);
     await this.flushPersistence();
     this.publish(workspace);
