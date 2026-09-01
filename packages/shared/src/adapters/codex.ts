@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
+import { CODEX_CONFIGURED_DEFAULT_MODEL } from "../models.js";
 import type { CodingToolAdapter, RunOptions, ToolOutput, TokenUsage } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
 
@@ -132,7 +133,7 @@ export class CodexAdapter implements CodingToolAdapter {
     const args = this.threadId
       ? ["exec", "resume", "--json", "--dangerously-bypass-approvals-and-sandbox"]
       : ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox"];
-    if (model) {
+    if (model && model !== CODEX_CONFIGURED_DEFAULT_MODEL) {
       args.push("--model", model);
     }
     if (reasoningEffort) {

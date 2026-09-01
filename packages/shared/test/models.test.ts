@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL,
+  CODEX_CONFIGURED_DEFAULT_MODEL,
   getDefaultModel,
   getDefaultReasoningEffort,
   getModelProviderForModel,
@@ -31,6 +32,10 @@ describe("model catalog", () => {
   it("exposes GPT-5.6 Sol as the default Codex model", () => {
     expect(getDefaultModel("codex")).toBe("gpt-5.6-sol");
     expect(getModelsForTool("codex")).toContainEqual({
+      value: CODEX_CONFIGURED_DEFAULT_MODEL,
+      label: "Configured default",
+    });
+    expect(getModelsForTool("codex")).toContainEqual({
       value: "gpt-5.6-sol",
       label: "GPT-5.6 Sol",
     });
@@ -43,6 +48,7 @@ describe("model catalog", () => {
       label: "GPT-5.6 Luna",
     });
     expect(isSupportedModel("codex", "gpt-5.6-sol")).toBe(true);
+    expect(isSupportedModel("codex", CODEX_CONFIGURED_DEFAULT_MODEL)).toBe(true);
     expect(isSupportedModel("codex", "gpt-5.5")).toBe(true);
     expect(isSupportedModel("codex", "gpt-5.4")).toBe(false);
   });

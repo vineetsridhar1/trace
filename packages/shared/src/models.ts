@@ -17,6 +17,8 @@ export interface ReasoningEffortOption {
   label: string;
 }
 
+export const CODEX_CONFIGURED_DEFAULT_MODEL = "__configured_default__";
+
 const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
   { value: CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL, label: "Configured default" },
   { value: "claude-fable-5", label: "Fable 5" },
@@ -26,6 +28,7 @@ const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
 ];
 
 const CODEX_MODELS: readonly ModelOption[] = [
+  { value: CODEX_CONFIGURED_DEFAULT_MODEL, label: "Configured default" },
   { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
   { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
   { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },

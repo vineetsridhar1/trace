@@ -6,7 +6,10 @@ import { AntigravityAdapter } from "../src/adapters/antigravity.js";
 import { ClaudeCodeAdapter } from "../src/adapters/claude-code.js";
 import { CodexAdapter } from "../src/adapters/codex.js";
 import { PiAdapter } from "../src/adapters/pi.js";
-import { CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL } from "../src/models.js";
+import {
+  CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL,
+  CODEX_CONFIGURED_DEFAULT_MODEL,
+} from "../src/models.js";
 
 class FakeChildProcess extends EventEmitter {
   stdin = new PassThrough();
@@ -55,6 +58,24 @@ describe("coding tool adapter process exit fallback", () => {
     vi.advanceTimersByTime(1);
     expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "success" });
     expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets Codex resolve its configured default model", () => {
+    const adapter = new CodexAdapter();
+
+    adapter.run({
+      prompt: "use configured model",
+      cwd: "/tmp",
+      model: CODEX_CONFIGURED_DEFAULT_MODEL,
+      onOutput: vi.fn(),
+      onComplete: vi.fn(),
+    });
+
+    expect(spawn).toHaveBeenCalledWith(
+      "codex",
+      ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "-"],
+      expect.objectContaining({ cwd: "/tmp", stdio: ["pipe", "pipe", "pipe"] }),
+    );
   });
 
   it("emits Codex turn usage without ending the run", () => {
