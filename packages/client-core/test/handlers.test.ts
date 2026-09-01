@@ -917,6 +917,55 @@ describe("handleOrgEvent", () => {
     });
   });
 
+  // One tab failing to route a command says nothing about its siblings, and the
+  // group fan-out stamps the initiating session's per-session `version` onto
+  // every tab — so a deferred delivery must not travel through it.
+  it("keeps a deferred delivery scoped to the session that hit it", () => {
+    useEntityStore.setState({
+      sessions: {
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          connection: { state: "connected", version: 4 },
+        } as never,
+        "session-2": {
+          id: "session-2",
+          sessionGroupId: "group-1",
+          connection: { state: "connected", version: 9 },
+        } as never,
+      },
+      sessionGroups: { "group-1": { id: "group-1" } as never },
+      _sessionIdsByGroup: { "group-1": ["session-1", "session-2"] },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_output",
+        scopeId: "session-1",
+        timestamp: "2026-08-27T15:43:51.300Z",
+        payload: {
+          type: "delivery_deferred",
+          reason: "runtime_disconnected",
+          operation: "send",
+          connection: {
+            state: "connected",
+            version: 5,
+            lastDeliveryFailureAt: "2026-08-27T15:43:51.346Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessions["session-1"].connection).toMatchObject({
+      state: "connected",
+      lastDeliveryFailureAt: "2026-08-27T15:43:51.346Z",
+    });
+    expect(useEntityStore.getState().sessions["session-2"].connection).toEqual({
+      state: "connected",
+      version: 9,
+    });
+  });
+
   it("routes session-scoped usage_updated into session totals", () => {
     useEntityStore.setState({
       sessions: { "session-1": { id: "session-1", sessionGroupId: "group-1" } as never },

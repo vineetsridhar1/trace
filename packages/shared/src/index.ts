@@ -223,6 +223,7 @@ export {
   hasAttachmentKeys,
   hasVisibleUserSessionContent,
 } from "./session-content.js";
+export { DELIVERY_DEFERRED_OUTPUT_TYPE, deferredDeliveryMessage } from "./delivery-deferred.js";
 export { PROVISIONED_RUNTIME_PREFIX, isProvisionedRuntimeId } from "./runtime-ids.js";
 export { APP_DEPLOYMENT_JOB_VERSION } from "./app-deployment.js";
 export type { AppDeploymentJob, AppDeploymentSpec, AppDeploymentTarget } from "./app-deployment.js";

@@ -863,7 +863,7 @@ export class TerminalRelay {
       rows: entry.rows,
       connected:
         !entry.terminated &&
-        sessionRouter.isRuntimeAvailable(entry.runtimeInstanceId, entry.organizationId),
+        sessionRouter.peekRuntimePresence(entry.runtimeInstanceId, entry.organizationId),
       closed: entry.terminated,
     };
   }
@@ -891,7 +891,7 @@ export class TerminalRelay {
       closed: entry.terminated,
       connected:
         !entry.terminated &&
-        sessionRouter.isRuntimeAvailable(entry.runtimeInstanceId, entry.organizationId),
+        sessionRouter.peekRuntimePresence(entry.runtimeInstanceId, entry.organizationId),
     };
   }
 

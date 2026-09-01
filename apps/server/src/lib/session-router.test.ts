@@ -307,11 +307,11 @@ describe("SessionRouter design-system protocol gate", () => {
     });
     router.bindSession("session-1", "runtime-1");
 
-    expect(
-      router.send("session-1", { type: "send", sessionId: "session-1", prompt: "hello" }),
-    ).toBe("delivered");
-    expect(
-      router.send("session-1", {
+    await expect(
+      router.sendAsync("session-1", { type: "send", sessionId: "session-1", prompt: "hello" }),
+    ).resolves.toBe("delivered");
+    await expect(
+      router.sendAsync("session-1", {
         type: "prepare_app",
         sessionId: "session-1",
         sessionGroupKind: "design",
@@ -325,7 +325,7 @@ describe("SessionRouter design-system protocol gate", () => {
           byteSize: 1,
         },
       }),
-    ).toBe("unsupported_runtime");
+    ).resolves.toBe("unsupported_runtime");
     expect(ws.send).toHaveBeenCalledTimes(1);
   });
 });
@@ -958,7 +958,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     const runtimeId = "runtime-remote-owner";
     const organizationId = "org-1";
     const runtimeKey = runtimeRouterKey(runtimeId, organizationId);
-    const remoteDelivery = vi.spyOn(router, "sendToRuntimeAsync").mockResolvedValue("delivered");
+    const remoteDelivery = vi.spyOn(router, "sendAsync").mockResolvedValue("delivered");
     const descriptor = await runtimeDirectory.register(
       {
         key: runtimeKey,
@@ -1003,9 +1003,9 @@ describe("SessionRouter runtime adapter dispatch", () => {
       await vi.waitFor(() => expect(remoteDelivery).toHaveBeenCalledOnce());
 
       expect(remoteDelivery).toHaveBeenCalledWith(
-        runtimeId,
+        "session-1",
         expect.objectContaining({ type: "prepare", sessionId: "session-1", readOnly: true }),
-        organizationId,
+        { expectedHomeRuntimeId: runtimeId, organizationId },
       );
     } finally {
       await runtimeDirectory.remove(runtimeKey, descriptor.connectionGeneration);

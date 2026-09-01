@@ -26,7 +26,7 @@ import { designSystemService } from "./design-system.js";
 import { animationCommitPreviewUrl } from "../lib/animation-preview-url.js";
 import { designCommitPreviewUrl } from "../lib/design-preview-url.js";
 
-async function sendSessionCommand(...args: Parameters<typeof sessionRouter.send>) {
+async function sendSessionCommand(...args: Parameters<typeof sessionRouter.sendAsync>) {
   return sessionRouter.sendAsync(...args);
 }
 

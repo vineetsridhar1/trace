@@ -36,7 +36,8 @@ vi.mock("../lib/session-router.js", () => ({
     getRuntimeForSession: vi.fn(),
     getRuntime: vi.fn(),
     getRuntimeMetadata: vi.fn(),
-    isRuntimeAvailable: vi.fn(),
+    peekRuntimePresence: vi.fn(),
+    resolveRuntime: vi.fn().mockResolvedValue({ state: "local" }),
     getLinkedCheckoutStatus: vi.fn(),
   },
 }));
@@ -93,6 +94,10 @@ describe("TerminalService", () => {
     sessionRouterMock.getRuntimeMetadata.mockImplementation((...args: unknown[]) =>
       sessionRouterMock.getRuntime(...args),
     );
+    sessionRouterMock.resolveRuntime.mockImplementation(async (...args: unknown[]) => {
+      const runtime = sessionRouterMock.getRuntime(...args);
+      return runtime ? { state: "local", runtime } : { state: "unreachable" };
+    });
     terminalRelayMock.getTerminalAuthContext.mockImplementation((terminalId: string) => ({
       kind: "session",
       sessionId: terminalRelayMock.getSessionId(terminalId) ?? "session-1",
@@ -624,7 +629,7 @@ describe("TerminalService", () => {
           connection: { runtimeInstanceId: "runtime-1" },
         },
       ]);
-      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      sessionRouterMock.peekRuntimePresence.mockReturnValue(true);
 
       const result = await terminalService.listForSession({
         sessionId: "session-1",
@@ -1122,7 +1127,7 @@ describe("TerminalService", () => {
         hostingMode: "local",
         registeredRepoIds: ["repo-1"],
       });
-      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      sessionRouterMock.peekRuntimePresence.mockReturnValue(true);
       sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValue({
         repoPath: "/home/user/projects/my-repo",
       });
@@ -1172,6 +1177,16 @@ describe("TerminalService", () => {
         hostingMode: "local",
         registeredRepoIds: ["repo-1"],
       });
+      sessionRouterMock.resolveRuntime.mockResolvedValueOnce({
+        state: "remote",
+        descriptor: {
+          key: "org-1:runtime-1",
+          id: "runtime-1",
+          organizationId: "org-1",
+          hostingMode: "local",
+          registeredRepoIds: ["repo-1"],
+        },
+      });
 
       await expect(
         terminalService.createForChannel({
@@ -1219,7 +1234,7 @@ describe("TerminalService", () => {
         hostingMode: "local",
         registeredRepoIds: [], // repo-1 not registered
       });
-      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      sessionRouterMock.peekRuntimePresence.mockReturnValue(true);
 
       await expect(
         terminalService.createForChannel({
@@ -1247,7 +1262,7 @@ describe("TerminalService", () => {
         hostingMode: "local",
         registeredRepoIds: ["repo-1"],
       });
-      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      sessionRouterMock.peekRuntimePresence.mockReturnValue(true);
       runtimeAccessServiceMock.assertAccess.mockRejectedValueOnce(
         new Error("Access denied: you do not have permission to use this local bridge"),
       );
@@ -1278,7 +1293,7 @@ describe("TerminalService", () => {
         hostingMode: "local",
         registeredRepoIds: ["repo-1"],
       });
-      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      sessionRouterMock.peekRuntimePresence.mockReturnValue(true);
       sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValue({ repoPath: null });
 
       await expect(
@@ -1309,7 +1324,7 @@ describe("TerminalService", () => {
         hostingMode: "local",
         registeredRepoIds: ["repo-1"],
       });
-      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      sessionRouterMock.peekRuntimePresence.mockReturnValue(true);
       terminalRelayMock.getTerminalsForChannel.mockReturnValueOnce(["term-a", "term-b"]);
 
       const result = await terminalService.listForChannel({
@@ -1334,7 +1349,7 @@ describe("TerminalService", () => {
         hostingMode: "local",
         registeredRepoIds: ["repo-1"],
       });
-      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      sessionRouterMock.peekRuntimePresence.mockReturnValue(true);
       terminalRelayMock.getTerminalsForChannel.mockReturnValueOnce([]);
       terminalDirectoryMock.listForScope.mockResolvedValueOnce([
         {
@@ -1390,7 +1405,7 @@ describe("TerminalService", () => {
         hostingMode: "local",
         registeredRepoIds: ["repo-1"],
       });
-      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      sessionRouterMock.peekRuntimePresence.mockReturnValue(true);
       terminalRelayMock.getTerminalsForChannel.mockReturnValueOnce([]);
 
       const result = await terminalService.listForChannel({

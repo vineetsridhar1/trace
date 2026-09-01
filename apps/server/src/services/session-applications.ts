@@ -18,7 +18,7 @@ import { createEndpointPreviewToken, safeEndpointRedirectPath } from "./endpoint
 
 import type { RepoEnvVar } from "@trace/gql";
 
-async function sendRuntimeCommand(...args: Parameters<typeof sessionRouter.sendToRuntime>) {
+async function sendRuntimeCommand(...args: Parameters<typeof sessionRouter.sendToRuntimeAsync>) {
   return sessionRouter.sendToRuntimeAsync(...args);
 }
 
@@ -1383,10 +1383,11 @@ export class SessionApplicationService {
     if (!session) throw new ValidationError("Session group does not have a connected runtime");
     const runtimeId = connectionRuntimeInstanceId(session.connection);
     if (!runtimeId) throw new ValidationError("Session group does not have a connected runtime");
-    const runtime = sessionRouter.getRuntimeMetadata(runtimeId, organizationId);
-    if (!runtime || !sessionRouter.isRuntimeAvailable(runtime.id, organizationId)) {
-      throw new ValidationError("Session group runtime is not connected");
+    const resolution = await sessionRouter.resolveRuntime(runtimeId, organizationId);
+    if (resolution.state === "unreachable") {
+      throw new Error("Runtime routing is temporarily unavailable");
     }
+    const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
     if (runtime.hostingMode !== "cloud") {
       throw new ValidationError(
         "Application forwarding is currently only available for cloud sessions",
