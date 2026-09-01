@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL,
   getDefaultModel,
   getDefaultReasoningEffort,
   getModelProviderForModel,
@@ -15,11 +16,13 @@ describe("model catalog", () => {
   it("exposes Fable 5 as an option while defaulting Claude Code to Opus 5 (1M)", () => {
     expect(getDefaultModel("claude_code")).toBe("claude-opus-5[1m]");
     expect(getModelsForTool("claude_code")).toEqual([
+      { value: CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL, label: "Configured default" },
       { value: "claude-fable-5", label: "Fable 5" },
       { value: "claude-sonnet-5", label: "Sonnet 5" },
       { value: "claude-opus-5", label: "Opus 5" },
       { value: "claude-opus-5[1m]", label: "Opus 5 (1M)" },
     ]);
+    expect(isSupportedModel("claude_code", CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL)).toBe(true);
     expect(isSupportedModel("claude_code", "claude-fable-5")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-opus-5[1m]")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-opus-unknown")).toBe(false);

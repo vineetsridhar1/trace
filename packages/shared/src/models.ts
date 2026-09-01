@@ -1,3 +1,5 @@
+export const CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL = "__claude_code_configured_default__";
+
 export interface ModelOption {
   value: string;
   label: string;
@@ -16,6 +18,7 @@ export interface ReasoningEffortOption {
 }
 
 const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
+  { value: CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL, label: "Configured default" },
   { value: "claude-fable-5", label: "Fable 5" },
   { value: "claude-sonnet-5", label: "Sonnet 5" },
   { value: "claude-opus-5", label: "Opus 5" },

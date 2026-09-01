@@ -11,6 +11,7 @@ import type {
 } from "./coding-tool.js";
 import { parseQuestion } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
+import { CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL } from "../models.js";
 
 /** Types we drop entirely — not relevant to the frontend */
 const SKIP_TYPES = new Set(["system", "rate_limit_event", "stderr"]);
@@ -77,7 +78,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     }
 
     const args = ["-p", "--input-format", "text", "--output-format", "stream-json", "--verbose"];
-    if (model) {
+    if (model && model !== CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL) {
       args.push("--model", model);
     }
     if (reasoningEffort && reasoningEffort !== "auto") {

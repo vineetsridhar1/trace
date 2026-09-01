@@ -6,6 +6,7 @@ import { AntigravityAdapter } from "../src/adapters/antigravity.js";
 import { ClaudeCodeAdapter } from "../src/adapters/claude-code.js";
 import { CodexAdapter } from "../src/adapters/codex.js";
 import { PiAdapter } from "../src/adapters/pi.js";
+import { CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL } from "../src/models.js";
 
 class FakeChildProcess extends EventEmitter {
   stdin = new PassThrough();
@@ -761,6 +762,30 @@ describe("coding tool adapter process exit fallback", () => {
       expect.objectContaining({ cwd: "/tmp", stdio: ["pipe", "pipe", "pipe"] }),
     );
     expect(spawnedChildren[2].stdin.read()?.toString()).toBe("- fix this bug");
+  });
+
+  it("lets Claude Code use its configured default model", () => {
+    new ClaudeCodeAdapter().run({
+      prompt: "use the configured model",
+      cwd: "/tmp",
+      model: CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL,
+      onOutput: vi.fn(),
+      onComplete: vi.fn(),
+    });
+
+    expect(spawn).toHaveBeenLastCalledWith(
+      "claude",
+      [
+        "-p",
+        "--input-format",
+        "text",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--dangerously-skip-permissions",
+      ],
+      expect.objectContaining({ cwd: "/tmp", stdio: ["pipe", "pipe", "pipe"] }),
+    );
   });
 
   it("marks Pi runs as failed when assistant events report an error stop reason", () => {
