@@ -28,6 +28,7 @@ import type {
   BridgeLinkedCheckoutStatus,
   BridgeLinkedCheckoutActionResultPayload,
   BridgeSessionGitSyncStatus,
+  BridgeResolveSessionGitChangesCommand,
   BridgeListWorkspaceSlugsCommand,
   BridgeRepoWorktree,
   BridgePdfExportCommand,
@@ -87,6 +88,7 @@ export type SessionCommand =
   | BridgeAnimationExportCommand
   | BridgeDesignSystemExportCommand
   | { type: "session_git_sync_status"; requestId: string; sessionId: string; workdirHint?: string }
+  | BridgeResolveSessionGitChangesCommand
   | BridgeSessionCurrentBranchCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
@@ -549,6 +551,14 @@ export class SessionRouter {
   >();
   /** Pending session git-sync-status requests: requestId → resolve/reject */
   private pendingSessionGitSyncStatusRequests = new Map<
+    string,
+    {
+      runtimeId: string;
+      resolve: (status: BridgeSessionGitSyncStatus) => void;
+      reject: (err: Error) => void;
+    }
+  >();
+  private pendingSessionGitChangeResolutionRequests = new Map<
     string,
     {
       runtimeId: string;
@@ -2502,6 +2512,48 @@ export class SessionRouter {
     this.pendingSessionGitSyncStatusRequests.delete(requestId);
     if (error || !status) {
       pending.reject(new Error(error ?? "Missing session git sync status"));
+    } else {
+      pending.resolve(status);
+    }
+  }
+
+  resolveSessionGitChanges(
+    runtimeId: string,
+    input: {
+      sessionId: string;
+      workdirHint?: string | null;
+      strategy: "commit" | "discard";
+      commitMessage?: string | null;
+    },
+    timeoutMs = 90_000,
+  ): Promise<BridgeSessionGitSyncStatus> {
+    return this.requestRuntimeResponse(
+      runtimeId,
+      {
+        type: "resolve_session_git_changes",
+        sessionId: input.sessionId,
+        workdirHint: input.workdirHint ?? undefined,
+        strategy: input.strategy,
+        commitMessage: input.commitMessage ?? undefined,
+      },
+      this.pendingSessionGitChangeResolutionRequests,
+      timeoutMs,
+      "Session git change resolution request timed out",
+    );
+  }
+
+  resolveSessionGitChangesRequest(
+    requestId: string,
+    status?: BridgeSessionGitSyncStatus,
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
+    const pending = this.pendingSessionGitChangeResolutionRequests.get(requestId);
+    if (!pending) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
+    this.pendingSessionGitChangeResolutionRequests.delete(requestId);
+    if (error || !status) {
+      pending.reject(new Error(error ?? "Missing resolved session git status"));
     } else {
       pending.resolve(status);
     }
