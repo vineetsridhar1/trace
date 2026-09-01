@@ -596,6 +596,25 @@ function isRuntimeComputeGone(conn: SessionConnectionData): boolean {
   return conn.state === "disconnected" && conn.deprovisionedAt != null;
 }
 
+/** True once the provider has returned a handle for real compute. */
+function hasProvisionedCompute(conn: SessionConnectionData): boolean {
+  return Boolean(conn.providerRuntimeId);
+}
+
+/**
+ * True when a start failed before the provider ever returned a handle, so no
+ * compute was created and there is nothing to stop.
+ *
+ * Deliberately narrower than `isRuntimeComputeGone`, which excludes `failed`
+ * on purpose so idle cleanup still reaps compute a failed start may have
+ * leaked. That concern only applies once `providerRuntimeId` exists;
+ * `runtimeInstanceId` is reserved ahead of provisioning, so on its own it is a
+ * name rather than evidence of a container.
+ */
+function isRuntimeStartAborted(conn: SessionConnectionData): boolean {
+  return conn.state === "failed" && !hasProvisionedCompute(conn);
+}
+
 /**
  * True while the deprovision reconciler owns a runtime teardown. The idle
  * sweep must not retry these states: doing so refreshes their teardown
@@ -9054,8 +9073,13 @@ export class SessionService {
     await this.publishSessionMoveEvents(params, prepared, moved.sessions);
 
     const failedSession = await this.activateMovedSession(params, prepared, movedSession);
-    if (failedSession) return failedSession;
 
+    // Runs even when activation failed. The source runtime is already unbound
+    // from every moved session by this point, so returning early leaves its
+    // container with no owner — running until the idle reaper notices hours
+    // later. This is also the teardown `stopSessionMoveSources` defers to when
+    // the source bridge is unreachable, so it must not be conditional on the
+    // replacement coming up cleanly.
     if (prepared.sourceCloudRuntimeSession) {
       await this.destroyMovedSourceCloudRuntime(
         movedSession.id,
@@ -9064,7 +9088,7 @@ export class SessionService {
       );
     }
 
-    return movedSession;
+    return failedSession ?? movedSession;
   }
 
   private async prepareSessionMove(params: SessionMoveParams): Promise<PreparedSessionMove> {
@@ -9230,14 +9254,21 @@ export class SessionService {
   }
 
   private async stopSessionMoveSources(sessions: SessionWithInclude[]): Promise<void> {
-    // Stop every source not already declared disconnected by its socket owner
-    // before committing the shared target binding. Routing uncertainty aborts
-    // the move instead of leaving an old process attached to the workspace.
+    // Ask every reachable source to stop before committing the shared target
+    // binding, so an old agent cannot keep acting on the workspace.
+    //
+    // A failure to deliver that request is not evidence the source is alive —
+    // it is the same unroutable dispatch that says nothing either way. Aborting
+    // on it strands the user: Move is the recovery path, so refusing to run it
+    // because something is already broken leaves no way out. Abort only when
+    // losing this request would genuinely leave a process we cannot reach by
+    // any other means.
     for (const session of sessions) {
       const connection = this.parseConnection(session.connection);
       if (
         connection.state === "disconnected" ||
         isRuntimeComputeGone(connection) ||
+        isRuntimeStartAborted(connection) ||
         !connection.runtimeInstanceId
       ) {
         continue;
@@ -9247,10 +9278,39 @@ export class SessionService {
         session.hosting as "cloud" | "local",
         "terminate",
       );
-      if (result !== "delivered") {
-        throw new Error(`Cannot move session: source teardown was deferred (${result})`);
+      if (result === "delivered") continue;
+
+      // Provisioned cloud compute is deleted through the provider API after the
+      // move (`destroyMovedSourceCloudRuntime`), which needs no bridge socket.
+      // That path is authoritative, so a missed graceful stop costs a clean
+      // shutdown, not a stranded container.
+      if (this.canDestroySourceWithoutBridge(session, connection)) {
+        logAgentEnvironmentTelemetry("runtime.move_source_stop_deferred", {
+          sessionId: session.id,
+          organizationId: session.organizationId,
+          runtimeInstanceId: connection.runtimeInstanceId,
+          providerRuntimeId: connection.providerRuntimeId ?? null,
+          deliveryResult: result,
+        });
+        continue;
       }
+
+      // No provider fallback: a local bridge we cannot reach owns a process we
+      // cannot kill, so moving would leave it running against the workspace.
+      throw new Error(`Cannot move session: source teardown was deferred (${result})`);
     }
+  }
+
+  /** True when the provider can delete this source's compute without its bridge. */
+  private canDestroySourceWithoutBridge(
+    session: SessionWithInclude,
+    connection: SessionConnectionData,
+  ): boolean {
+    return (
+      session.hosting === "cloud" &&
+      connection.adapterType === "provisioned" &&
+      hasProvisionedCompute(connection)
+    );
   }
 
   private destroySessionMoveTerminals(session: SessionWithInclude): void {

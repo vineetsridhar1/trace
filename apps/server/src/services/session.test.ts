@@ -11106,6 +11106,195 @@ describe("SessionService", () => {
       expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
     });
 
+    // A start that failed before the provider returned a handle never created
+    // compute, but `runtimeInstanceId` is reserved up front — so the source
+    // looked live, teardown was attempted against nothing, and the session
+    // became permanently unmovable.
+    it("does not try to tear down a source whose provisioning never produced compute", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          repoId: null,
+          repo: null,
+          workdir: null,
+          connection: {
+            state: "failed",
+            adapterType: "provisioned",
+            runtimeInstanceId: "runtime_never_started",
+            lastError: "Provisioned start request failed with HTTP 500",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          hosting: "local",
+          sessionGroupId: "group-1",
+          connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+        }),
+      );
+      const targetRuntime = {
+        key: "org-1:runtime-1",
+        id: "runtime-1",
+        label: "Local Dev",
+        hostingMode: "local",
+        organizationId: "org-1",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      };
+      sessionRouterMock.getRuntime
+        .mockReturnValueOnce(
+          targetRuntime as unknown as ReturnType<typeof sessionRouterMock.getRuntime>,
+        )
+        .mockReturnValueOnce(
+          targetRuntime as unknown as ReturnType<typeof sessionRouterMock.getRuntime>,
+        );
+
+      await service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1");
+
+      expect(sessionRouterMock.transitionRuntime).not.toHaveBeenCalled();
+    });
+
+    // The provider deletes provisioned compute after the move without needing a
+    // bridge socket, so an undelivered graceful stop costs a clean shutdown —
+    // not a stranded container. Aborting here would strand the user instead.
+    it("moves a provisioned cloud source whose graceful stop cannot be delivered", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          repoId: null,
+          repo: null,
+          workdir: null,
+          connection: {
+            state: "connected",
+            adapterType: "provisioned",
+            runtimeInstanceId: "runtime-source",
+            providerRuntimeId: "trace-runtime-runtime-source-abc123",
+            runtimeLabel: "Cloud",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          hosting: "local",
+          sessionGroupId: "group-1",
+          connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+        }),
+      );
+      const targetRuntime = {
+        key: "org-1:runtime-1",
+        id: "runtime-1",
+        label: "Local Dev",
+        hostingMode: "local",
+        organizationId: "org-1",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      };
+      sessionRouterMock.getRuntime
+        .mockReturnValueOnce(
+          targetRuntime as unknown as ReturnType<typeof sessionRouterMock.getRuntime>,
+        )
+        .mockReturnValueOnce(
+          targetRuntime as unknown as ReturnType<typeof sessionRouterMock.getRuntime>,
+        );
+      sessionRouterMock.transitionRuntime.mockResolvedValueOnce("delivery_failed");
+
+      await service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1");
+
+      expect(sessionRouterMock.transitionRuntime).toHaveBeenCalled();
+      // The provider-side teardown is what actually reclaims the container.
+      expect(sessionRouterMock.destroyRuntime).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.anything(),
+        expect.objectContaining({ skipBridgeDelete: true }),
+      );
+    });
+
+    // The source runtime is unbound from every moved session before activation
+    // runs, so returning early on a failed replacement left its container with
+    // no owner until the idle reaper noticed hours later. It is also the
+    // teardown that stopSessionMoveSources now defers to.
+    it("reclaims the source container even when the replacement fails to activate", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          repoId: null,
+          repo: null,
+          workdir: null,
+          pendingRun: { type: "run", prompt: "keep going" },
+          connection: {
+            state: "connected",
+            adapterType: "provisioned",
+            runtimeInstanceId: "runtime-source",
+            providerRuntimeId: "trace-runtime-runtime-source-abc123",
+            runtimeLabel: "Cloud",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          hosting: "local",
+          repoId: null,
+          repo: null,
+          sessionGroupId: "group-1",
+          pendingRun: { type: "run", prompt: "keep going" },
+          connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+        }),
+      );
+      const targetRuntime = {
+        key: "org-1:runtime-1",
+        id: "runtime-1",
+        label: "Local Dev",
+        hostingMode: "local",
+        organizationId: "org-1",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: [],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      };
+      sessionRouterMock.getRuntime
+        .mockReturnValueOnce(
+          targetRuntime as unknown as ReturnType<typeof sessionRouterMock.getRuntime>,
+        )
+        .mockReturnValueOnce(
+          targetRuntime as unknown as ReturnType<typeof sessionRouterMock.getRuntime>,
+        );
+      // persistConnectionFailure + the failed-session reload both read it back.
+      prismaMock.session.findUnique.mockResolvedValue(
+        makeSession({ id: "session-1", repoId: null, repo: null, hosting: "local" }),
+      );
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(
+        makeSession({ id: "session-1", repoId: null, repo: null, hosting: "local" }),
+      );
+      // The replacement never takes the queued run, so activation returns the
+      // failed session instead of the moved one.
+      sessionRouterMock.sendAsync.mockResolvedValue("runtime_disconnected");
+      sessionRouterMock.send.mockReturnValue("runtime_disconnected");
+
+      await service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1");
+
+      expect(sessionRouterMock.destroyRuntime).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.anything(),
+        expect.objectContaining({ skipBridgeDelete: true }),
+      );
+    });
+
     it("rebinds the same session inside the same group", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({
