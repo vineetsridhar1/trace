@@ -13,7 +13,7 @@ import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvi
 import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { TraceLoader } from "../ui/trace-loader";
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
-import { SessionMoveChangesDialog } from "./SessionMoveChangesDialog";
+import { isSessionMoveChangesError, SessionMoveChangesDialog } from "./SessionMoveChangesDialog";
 
 interface RuntimeInstance {
   id: string;
@@ -26,14 +26,6 @@ interface RuntimeInstance {
 }
 
 type MoveResolution = { strategy: "COMMIT" | "DISCARD"; commitMessage?: string };
-
-function hasSessionMoveChangesError(error: {
-  graphQLErrors: readonly { extensions: Record<string, unknown> }[];
-}) {
-  return error.graphQLErrors.some(
-    (graphQLError) => graphQLError.extensions.code === "SESSION_MOVE_LOCAL_CHANGES",
-  );
-}
 
 export function SessionRuntimePicker({
   sessionId,
@@ -94,7 +86,7 @@ export function SessionRuntimePicker({
           })
           .toPromise();
         if (result.error) {
-          if (hasSessionMoveChangesError(result.error)) {
+          if (isSessionMoveChangesError(result.error)) {
             setConflictTarget(runtimeInstanceId);
             return;
           }
@@ -137,7 +129,7 @@ export function SessionRuntimePicker({
           })
           .toPromise();
         if (result.error) {
-          if (hasSessionMoveChangesError(result.error)) {
+          if (isSessionMoveChangesError(result.error)) {
             setConflictTarget("cloud");
             return;
           }

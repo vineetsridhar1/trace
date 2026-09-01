@@ -4,6 +4,14 @@ import { Button } from "../ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Textarea } from "../ui/textarea";
 
+export function isSessionMoveChangesError(error: {
+  graphQLErrors: readonly { extensions: Record<string, unknown> }[];
+}) {
+  return error.graphQLErrors.some(
+    (graphQLError) => graphQLError.extensions.code === "SESSION_MOVE_LOCAL_CHANGES",
+  );
+}
+
 export function SessionMoveChangesDialog({
   open,
   pending,
@@ -16,10 +24,14 @@ export function SessionMoveChangesDialog({
   onResolve: (input: { strategy: "COMMIT" | "DISCARD"; commitMessage?: string }) => Promise<void>;
 }) {
   const [commitMessage, setCommitMessage] = useState("Save session changes before moving");
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const trimmedCommitMessage = commitMessage.trim();
 
   useEffect(() => {
-    if (open) setCommitMessage("Save session changes before moving");
+    if (open) {
+      setCommitMessage("Save session changes before moving");
+      setConfirmDiscard(false);
+    }
   }, [open]);
 
   return (
@@ -46,7 +58,13 @@ export function SessionMoveChangesDialog({
               Save the changes on the session branch, push them when applicable, then move the
               session.
             </p>
+            <label htmlFor="session-move-commit-message" className="sr-only">
+              Commit message
+            </label>
             <Textarea
+              id="session-move-commit-message"
+              name="session-move-commit-message"
+              autoComplete="off"
               className="mt-3 min-h-20"
               value={commitMessage}
               onChange={(event) => setCommitMessage(event.target.value)}
@@ -69,18 +87,45 @@ export function SessionMoveChangesDialog({
               <RefreshCw size={14} className="text-muted-foreground" />
               Discard All Changes
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Permanently discard all uncommitted and untracked changes, then move the session.
-            </p>
-            <div className="mt-3 flex justify-end">
-              <Button
-                variant="destructive"
-                disabled={pending}
-                onClick={() => void onResolve({ strategy: "DISCARD" })}
-              >
-                Discard And Move
-              </Button>
-            </div>
+            {confirmDiscard ? (
+              <>
+                <p className="mt-1 text-xs text-destructive">
+                  This permanently deletes all uncommitted and untracked changes. This cannot be
+                  undone.
+                </p>
+                <div className="mt-3 flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => setConfirmDiscard(false)}
+                  >
+                    Keep Changes
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    disabled={pending}
+                    onClick={() => void onResolve({ strategy: "DISCARD" })}
+                  >
+                    Confirm Discard And Move
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Permanently discard all uncommitted and untracked changes, then move the session.
+                </p>
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    variant="destructive"
+                    disabled={pending}
+                    onClick={() => setConfirmDiscard(true)}
+                  >
+                    Discard And Move
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </DialogContent>
