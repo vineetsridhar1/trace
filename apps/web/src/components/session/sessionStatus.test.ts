@@ -4,6 +4,7 @@ import {
   getDisplaySessionStatus,
   getSessionGroupAgentStatus,
   getSessionGroupDisplayStatus,
+  isRestartableCloudRuntime,
 } from "./sessionStatus";
 
 describe("getSessionGroupDisplayStatus", () => {
@@ -53,5 +54,25 @@ describe("getSessionGroupDisplayStatus", () => {
     expect(getDisplayAgentStatus("not_started", "in_progress", null, preparation)).toBe(
       "preparing",
     );
+  });
+});
+
+describe("isRestartableCloudRuntime", () => {
+  it("allows a cloud workspace stopped by idle cleanup to restart on send", () => {
+    expect(
+      isRestartableCloudRuntime("cloud", {
+        state: "disconnected",
+        deprovisionedAt: "2026-09-01T06:07:11.627Z",
+      }),
+    ).toBe(true);
+  });
+
+  it("does not treat a dropped local bridge as restartable cloud compute", () => {
+    expect(
+      isRestartableCloudRuntime("local", {
+        state: "disconnected",
+        deprovisionedAt: "2026-09-01T06:07:11.627Z",
+      }),
+    ).toBe(false);
   });
 });

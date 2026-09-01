@@ -7297,6 +7297,80 @@ describe("SessionService", () => {
       );
     });
 
+    it("restarts idle-cleaned cloud compute when messaging a completed sibling", async () => {
+      const idleGroupConnection = {
+        state: "disconnected",
+        adapterType: "provisioned",
+        runtimeInstanceId: "runtime-old",
+        deprovisionedAt: "2026-09-01T06:07:11.627Z",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+      };
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        hosting: "cloud",
+        workdir: "/workspaces/ladybug",
+        toolSessionId: "tool-session-1",
+        connection: {
+          state: "disconnected",
+          adapterType: "provisioned",
+          runtimeInstanceId: "runtime-old",
+          lastError: "runtime_disconnected",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+        sessionGroup: makeSessionGroup({
+          workdir: "/workspaces/ladybug",
+          connection: idleGroupConnection,
+        }),
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(session);
+      prismaMock.session.update.mockResolvedValueOnce({ ...session, agentStatus: "active" });
+      prismaMock.session.findUnique.mockResolvedValueOnce({ connection: session.connection });
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "continue in the existing conversation",
+        actorType: "user",
+        actorId: "user-1",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(sessionRouterMock.send).not.toHaveBeenCalled();
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          sessionGroupId: "group-1",
+          hosting: "cloud",
+          adapterType: "provisioned",
+        }),
+      );
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: expect.objectContaining({
+            agentStatus: "active",
+            pendingRun: expect.objectContaining({
+              type: "send",
+              prompt: "continue in the existing conversation",
+            }),
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "message_sent",
+          payload: expect.objectContaining({
+            agentStatus: "active",
+            deliveryStatus: "pending_runtime",
+          }),
+        }),
+      );
+    });
+
     it("does not auto-retry when the home runtime does not support the session tool", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
         makeSession({

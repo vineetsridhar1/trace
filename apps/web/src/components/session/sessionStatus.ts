@@ -169,6 +169,16 @@ export function isDisconnected(connection: Record<string, unknown> | null | unde
   );
 }
 
+/** Whether sending a message can relaunch cloud compute reclaimed by idle cleanup. */
+export function isRestartableCloudRuntime(
+  hosting: string | null | undefined,
+  connection: Record<string, unknown> | null | undefined,
+): boolean {
+  if (hosting !== "cloud" || !connection) return false;
+  if (connection.state === "stopped" || connection.state === "deprovisioned") return true;
+  return connection.state === "disconnected" && connection.deprovisionedAt != null;
+}
+
 /** Whether the session has reached a final state and cannot accept further input. */
 export function isTerminalStatus(
   agentStatus: string | undefined,

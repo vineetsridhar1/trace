@@ -713,6 +713,16 @@ function isRuntimeComputeGone(conn: SessionConnectionData): boolean {
   return conn.state === "disconnected" && conn.deprovisionedAt != null;
 }
 
+function shouldProvisionRuntimeForCommand(
+  agentStatus: AgentStatus,
+  hosting: string,
+  conn: SessionConnectionData,
+): boolean {
+  if (isRuntimeStartupState(conn.state)) return false;
+  if (agentStatus === "not_started") return true;
+  return hosting === "cloud" && isRuntimeComputeGone(conn);
+}
+
 /**
  * True while the deprovision reconciler owns a runtime teardown. The idle
  * sweep must not retry these states: doing so refreshes their teardown
@@ -5644,7 +5654,8 @@ export class SessionService {
         throw new AuthorizationError("Not authorized for this session");
       }
     }
-    const conn = this.parseConnection(session.connection);
+    const workspaceSession = this.withIdleCleanedCloudGroupRuntimeState(session);
+    const conn = this.parseConnection(workspaceSession.connection);
 
     const startMeta =
       !prompt ||
@@ -5665,7 +5676,7 @@ export class SessionService {
           hosting: session.hosting,
           tool: session.tool,
           repoId: session.repoId,
-          connection: session.connection,
+          connection: workspaceSession.connection,
         })
       : {
           runtimeId: conn.runtimeInstanceId ?? null,
@@ -5695,7 +5706,7 @@ export class SessionService {
     // Keep the command durable until a managed workspace is ready. A failed or
     // reconnecting session can have a stale workdir, so path presence alone is
     // not sufficient admission.
-    if (!this.workspaceIsReady(session)) {
+    if (!this.workspaceIsReady(workspaceSession)) {
       const pendingCommand: PendingSessionCommand = {
         type: "run",
         prompt: prompt ?? null,
@@ -5705,8 +5716,11 @@ export class SessionService {
       };
       const commands = this.parsePendingCommands(session.pendingRun);
       assertCloudRepoRemoteAvailable(session.hosting, session.repo);
-      const alreadyProvisioning = isRuntimeStartupState(conn.state);
-      const shouldProvision = session.agentStatus === "not_started" && !alreadyProvisioning;
+      const shouldProvision = shouldProvisionRuntimeForCommand(
+        session.agentStatus,
+        session.hosting,
+        conn,
+      );
       const updated = await prisma.session.update({
         where: { id },
         data: {
@@ -7277,6 +7291,7 @@ export class SessionService {
             slug: true,
             connection: true,
             workdir: true,
+            repoId: true,
             designSystemVersion: {
               select: {
                 version: true,
@@ -7305,7 +7320,8 @@ export class SessionService {
       );
     }
     validateUploadKeysForOrganization(imageKeys, session.organizationId);
-    const conn = this.parseConnection(session.connection);
+    const workspaceSession = this.withIdleCleanedCloudGroupRuntimeState(session);
+    const conn = this.parseConnection(workspaceSession.connection);
     const allowToolFallback =
       actorType === "user" &&
       !session.toolChangedAt &&
@@ -7324,7 +7340,7 @@ export class SessionService {
             tool: session.tool,
             allowToolFallback,
             repoId: session.repoId,
-            connection: session.connection,
+            connection: workspaceSession.connection,
           })
         : {
             runtimeId: conn.runtimeInstanceId ?? null,
@@ -7376,7 +7392,7 @@ export class SessionService {
 
     // The service owns undelivered commands. Never hand a managed command to a
     // bridge until workspace_ready establishes both its path and connection.
-    if (!this.workspaceIsReady(session)) {
+    if (!this.workspaceIsReady(workspaceSession)) {
       assertCloudRepoRemoteAvailable(session.hosting, session.repo);
       const pendingSessionStatus = getRunningSessionStatus(session.sessionStatus);
       const pendingCommand: PendingSessionCommand = {
@@ -7387,8 +7403,11 @@ export class SessionService {
         ...(imageKeys?.length ? { imageKeys } : {}),
         ...(designAttachments?.length ? { designAttachments } : {}),
       };
-      const alreadyStarting = isRuntimeStartupState(conn.state);
-      const shouldProvision = session.agentStatus === "not_started" && !alreadyStarting;
+      const shouldProvision = shouldProvisionRuntimeForCommand(
+        session.agentStatus,
+        session.hosting,
+        conn,
+      );
       await this.storePendingCommand(
         sessionId,
         pendingCommand,
@@ -12265,6 +12284,31 @@ export class SessionService {
       return hasReadyWorkspace(session.sessionGroup.connection, session.sessionGroup.workdir);
     }
     return hasReadyWorkspace(session.connection, session.workdir);
+  }
+
+  private withIdleCleanedCloudGroupRuntimeState<
+    T extends {
+      hosting: string;
+      workdir?: string | null;
+      repoId?: string | null;
+      connection: unknown;
+      sessionGroup?: {
+        workdir?: string | null;
+        repoId?: string | null;
+        connection?: unknown;
+      } | null;
+    },
+  >(session: T): T {
+    const group = session.sessionGroup;
+    if (session.hosting !== "cloud" || !group?.connection) return session;
+    if (!isRuntimeComputeGone(this.parseConnection(group.connection))) return session;
+
+    return {
+      ...session,
+      workdir: group.workdir ?? session.workdir,
+      repoId: group.repoId ?? session.repoId,
+      connection: group.connection,
+    };
   }
 
   private parsePendingCommand(raw: unknown): PendingSessionCommand | null {

@@ -13,7 +13,12 @@ import { QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { type InteractionMode, MODE_CYCLE, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
-import { isDisconnected, canSendMessage, canQueueMessage } from "./sessionStatus";
+import {
+  isDisconnected,
+  canSendMessage,
+  canQueueMessage,
+  isRestartableCloudRuntime,
+} from "./sessionStatus";
 import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
 import { getModelLabel } from "./modelOptions";
 import { getToolLabel } from "./picker/pickerShared";
@@ -69,6 +74,10 @@ export function SessionInput({
     | null
     | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
+  const groupConnection = useEntityField("sessionGroups", sessionGroupId ?? "", "connection") as
+    | Record<string, unknown>
+    | null
+    | undefined;
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
     | string
     | undefined;
@@ -109,6 +118,7 @@ export function SessionInput({
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
+  const restartableCloudRuntime = isRestartableCloudRuntime(hosting, groupConnection ?? connection);
   const preparing =
     isSessionPreparing({
       agentStatus,
@@ -128,7 +138,10 @@ export function SessionInput({
   const canSend =
     bridgeInteractionAllowed &&
     !isOptimistic &&
-    (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted) || canQueue);
+    (isNotStarted ||
+      restartableCloudRuntime ||
+      canSendMessage(agentStatus, connection, worktreeDeleted) ||
+      canQueue);
   const displayModel = model ? getModelLabel(model) : getToolLabel(tool ?? "claude_code");
 
   const lastUserMessageAt = isActive ? (rawLastUserMessageAt ?? undefined) : undefined;
@@ -329,8 +342,8 @@ export function SessionInput({
         }
 
         let rollbackStartupPatch: (() => void) | null = null;
-        const startsDeferredRuntime = isNotStarted && hosting === "cloud";
-        if (startsDeferredRuntime) {
+        const startsCloudRuntime = hosting === "cloud" && (isNotStarted || restartableCloudRuntime);
+        if (startsCloudRuntime) {
           const previous = useEntityStore.getState().sessions[sessionId];
           useEntityStore.getState().patch("sessions", sessionId, {
             agentStatus: "active",
@@ -356,7 +369,7 @@ export function SessionInput({
           imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
           imagePreviewUrls: imageKeys.length > 0 ? imagePreviewUrls : undefined,
           interactionMode: mode === "code" ? undefined : mode,
-          deliveryStatus: startsDeferredRuntime ? "pending_runtime" : undefined,
+          deliveryStatus: startsCloudRuntime ? "pending_runtime" : undefined,
         });
         useComposerStore.getState().requestScrollToBottom(sessionId);
 
@@ -392,6 +405,7 @@ export function SessionInput({
       canQueue,
       images,
       isNotStarted,
+      restartableCloudRuntime,
       hosting,
       connection,
       tool,
@@ -407,7 +421,7 @@ export function SessionInput({
   // belongs to the recovery panel — not the permission prompt. Non-owners
   // without access always see the permission prompt so they can request
   // access, whether the bridge is online or offline.
-  if (bridgeInteractionAllowed && disconnected && !isNotStarted) {
+  if (bridgeInteractionAllowed && disconnected && !isNotStarted && !restartableCloudRuntime) {
     return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
   }
 

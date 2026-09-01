@@ -29,7 +29,7 @@ import { useUIStore, type UIState } from "../../stores/ui";
 import { AlertCircle, Cloud, RefreshCw, ArrowRightLeft } from "lucide-react";
 import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
 import { buildSessionNodes } from "./groupReadGlob";
-import { isDisconnected, isTerminalStatus } from "./sessionStatus";
+import { isDisconnected, isRestartableCloudRuntime, isTerminalStatus } from "./sessionStatus";
 import { QueuedMessagesList } from "./QueuedMessagesList";
 import { Skeleton } from "../ui/skeleton";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
@@ -638,6 +638,7 @@ export function SessionDetailView({
   // (read-only worktree). The recovery/notice cases match SessionInput's own
   // early returns: disconnected with access -> recovery panel; no access -> notice.
   const isNotStarted = agentStatus === "not_started";
+  const restartableCloudRuntime = isRestartableCloudRuntime(hosting, groupConnection ?? connection);
   const composerActive =
     !runtimeLifecycleState &&
     bridgeInteractionAllowed &&
@@ -645,7 +646,7 @@ export function SessionDetailView({
     !activePlan &&
     !visiblePlanArtifact &&
     !worktreeDeleted &&
-    !(isDisconnected(connection) && !isNotStarted);
+    !(isDisconnected(connection) && !isNotStarted && !restartableCloudRuntime);
   const centeredComposer =
     composerActive && !condensed && !initialEventsLoading && listNodes.length === 0;
 
