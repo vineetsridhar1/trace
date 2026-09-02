@@ -1,5 +1,6 @@
 import { setOrgEventUIBindings } from "@trace/client-core";
 import { navigateToSession, useUIStore } from "../stores/ui";
+import { buildPath } from "../stores/ui-navigation";
 
 setOrgEventUIBindings({
   getActiveChannelId: () => useUIStore.getState().activeChannelId,
@@ -16,6 +17,23 @@ setOrgEventUIBindings({
     useUIStore.getState().hideSessionTab(groupId, sessionId, hiddenAt),
   restoreSessionTab: (groupId, sessionId) =>
     useUIStore.getState().restoreSessionTab(groupId, sessionId),
+  reconcileSessionGroupMove: (channelId, sessionGroupId) => {
+    const state = useUIStore.getState();
+    const sessionId = state.activeSessionGroupId === sessionGroupId ? state.activeSessionId : null;
+    state._restoreNav(channelId, sessionGroupId, sessionId, "main", null, null);
+    history.replaceState(
+      {
+        channelId,
+        sessionGroupId,
+        sessionId,
+        page: "main",
+        chatId: null,
+        channelSubPage: null,
+      },
+      "",
+      buildPath(channelId, sessionGroupId, sessionId),
+    );
+  },
   navigateToSession: (channelId, sessionGroupId, sessionId) =>
     navigateToSession(channelId, sessionGroupId, sessionId),
 });

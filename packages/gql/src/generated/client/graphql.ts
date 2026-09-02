@@ -833,6 +833,7 @@ export type EventType =
   | "session_endpoint_rotated"
   | "session_endpoint_traffic_capture_updated"
   | "session_group_archived"
+  | "session_group_moved"
   | "session_group_renamed"
   | "session_group_visibility_updated"
   | "session_output"
@@ -1099,6 +1100,7 @@ export type Mutation = {
   linkSessionPullRequest: SessionGroup;
   linkTicket: Ticket;
   moveChannel: Channel;
+  moveSessionGroup: SessionGroup;
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
@@ -1471,6 +1473,11 @@ export type MutationLinkTicketArgs = {
 
 export type MutationMoveChannelArgs = {
   input: MoveChannelInput;
+};
+
+export type MutationMoveSessionGroupArgs = {
+  destinationChannelId: Scalars["ID"]["input"];
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationMoveSessionToCloudArgs = {
@@ -3537,27 +3544,12 @@ export type HomeCreationsQuery = {
   __typename?: "Query";
   appSessionGroups: Array<
     { __typename?: "SessionGroup" } & {
-      " $fragmentRefs"?: { CreationGroupFragment: CreationGroupFragment };
-    }
-  >;
-  designSessionGroups: Array<
-    { __typename?: "SessionGroup" } & {
-      " $fragmentRefs"?: { CreationGroupFragment: CreationGroupFragment };
-    }
-  >;
-  pdfSessionGroups: Array<
-    { __typename?: "SessionGroup" } & {
-      " $fragmentRefs"?: { CreationGroupFragment: CreationGroupFragment };
-    }
-  >;
-  animationSessionGroups: Array<
-    { __typename?: "SessionGroup" } & {
-      " $fragmentRefs"?: { CreationGroupFragment: CreationGroupFragment };
+      " $fragmentRefs"?: { BaseCreationGroupFragment: BaseCreationGroupFragment };
     }
   >;
 };
 
-export type CreationGroupFragment = {
+export type BaseCreationGroupFragment = {
   __typename?: "SessionGroup";
   id: string;
   name: string;
@@ -3566,8 +3558,6 @@ export type CreationGroupFragment = {
   status: SessionGroupStatus;
   visibility: SessionGroupVisibility;
   archivedAt?: string | null;
-  designPreviewUrl?: string | null;
-  animationPreviewUrl?: string | null;
   createdAt: string;
   updatedAt: string;
   owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
@@ -3586,7 +3576,50 @@ export type CreationGroupFragment = {
     updatedAt: string;
     createdAt: string;
   }>;
-} & { " $fragmentName"?: "CreationGroupFragment" };
+} & { " $fragmentName"?: "BaseCreationGroupFragment" };
+
+export type HomeDesignsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type HomeDesignsQuery = {
+  __typename?: "Query";
+  designSessionGroups: Array<
+    { __typename?: "SessionGroup" } & {
+      " $fragmentRefs"?: { DesignCreationGroupFragment: DesignCreationGroupFragment };
+    }
+  >;
+};
+
+export type DesignCreationGroupFragment = {
+  __typename?: "SessionGroup";
+  id: string;
+  name: string;
+  slug?: string | null;
+  kind: SessionGroupKind;
+  status: SessionGroupStatus;
+  visibility: SessionGroupVisibility;
+  archivedAt?: string | null;
+  designPreviewUrl?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
+  connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
+  sessions: Array<{
+    __typename?: "Session";
+    id: string;
+    sessionGroupId?: string | null;
+    createdById: string;
+    agentStatus: AgentStatus;
+    sessionStatus: SessionStatus;
+    prUrl?: string | null;
+    worktreeDeleted: boolean;
+    lastMessageAt?: string | null;
+    lastUserMessageAt?: string | null;
+    updatedAt: string;
+    createdAt: string;
+  }>;
+} & { " $fragmentName"?: "DesignCreationGroupFragment" };
 
 export type SessionGroupBranchDiffQueryVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
@@ -5881,12 +5914,12 @@ export type OnboardingSessionsQuery = {
   sessions: Array<{ __typename?: "Session"; id: string }>;
 };
 
-export const CreationGroupFragmentDoc = {
+export const BaseCreationGroupFragmentDoc = {
   kind: "Document",
   definitions: [
     {
       kind: "FragmentDefinition",
-      name: { kind: "Name", value: "CreationGroup" },
+      name: { kind: "Name", value: "BaseCreationGroup" },
       typeCondition: { kind: "NamedType", name: { kind: "Name", value: "SessionGroup" } },
       selectionSet: {
         kind: "SelectionSet",
@@ -5898,8 +5931,6 @@ export const CreationGroupFragmentDoc = {
           { kind: "Field", name: { kind: "Name", value: "status" } },
           { kind: "Field", name: { kind: "Name", value: "visibility" } },
           { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
-          { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
-          { kind: "Field", name: { kind: "Name", value: "animationPreviewUrl" } },
           { kind: "Field", name: { kind: "Name", value: "createdAt" } },
           { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
           {
@@ -5946,7 +5977,72 @@ export const CreationGroupFragmentDoc = {
       },
     },
   ],
-} as unknown as DocumentNode<CreationGroupFragment, unknown>;
+} as unknown as DocumentNode<BaseCreationGroupFragment, unknown>;
+export const DesignCreationGroupFragmentDoc = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "DesignCreationGroup" },
+      typeCondition: { kind: "NamedType", name: { kind: "Name", value: "SessionGroup" } },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "name" } },
+          { kind: "Field", name: { kind: "Name", value: "slug" } },
+          { kind: "Field", name: { kind: "Name", value: "kind" } },
+          { kind: "Field", name: { kind: "Name", value: "status" } },
+          { kind: "Field", name: { kind: "Name", value: "visibility" } },
+          { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+          { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "owner" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "connection" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessions" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DesignCreationGroupFragment, unknown>;
 export const SessionGroupArtifactsDocument = {
   kind: "Document",
   definitions: [
@@ -7050,73 +7146,7 @@ export const HomeCreationsDocument = {
             selectionSet: {
               kind: "SelectionSet",
               selections: [
-                { kind: "FragmentSpread", name: { kind: "Name", value: "CreationGroup" } },
-              ],
-            },
-          },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "designSessionGroups" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "includeArchived" },
-                value: { kind: "BooleanValue", value: true },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "FragmentSpread", name: { kind: "Name", value: "CreationGroup" } },
-              ],
-            },
-          },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "pdfSessionGroups" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "includeArchived" },
-                value: { kind: "BooleanValue", value: true },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "FragmentSpread", name: { kind: "Name", value: "CreationGroup" } },
-              ],
-            },
-          },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "animationSessionGroups" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "includeArchived" },
-                value: { kind: "BooleanValue", value: true },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "FragmentSpread", name: { kind: "Name", value: "CreationGroup" } },
+                { kind: "FragmentSpread", name: { kind: "Name", value: "BaseCreationGroup" } },
               ],
             },
           },
@@ -7125,7 +7155,7 @@ export const HomeCreationsDocument = {
     },
     {
       kind: "FragmentDefinition",
-      name: { kind: "Name", value: "CreationGroup" },
+      name: { kind: "Name", value: "BaseCreationGroup" },
       typeCondition: { kind: "NamedType", name: { kind: "Name", value: "SessionGroup" } },
       selectionSet: {
         kind: "SelectionSet",
@@ -7137,8 +7167,6 @@ export const HomeCreationsDocument = {
           { kind: "Field", name: { kind: "Name", value: "status" } },
           { kind: "Field", name: { kind: "Name", value: "visibility" } },
           { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
-          { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
-          { kind: "Field", name: { kind: "Name", value: "animationPreviewUrl" } },
           { kind: "Field", name: { kind: "Name", value: "createdAt" } },
           { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
           {
@@ -7186,6 +7214,113 @@ export const HomeCreationsDocument = {
     },
   ],
 } as unknown as DocumentNode<HomeCreationsQuery, HomeCreationsQueryVariables>;
+export const HomeDesignsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "HomeDesigns" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "includeArchived" },
+                value: { kind: "BooleanValue", value: true },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "FragmentSpread", name: { kind: "Name", value: "DesignCreationGroup" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "DesignCreationGroup" },
+      typeCondition: { kind: "NamedType", name: { kind: "Name", value: "SessionGroup" } },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "name" } },
+          { kind: "Field", name: { kind: "Name", value: "slug" } },
+          { kind: "Field", name: { kind: "Name", value: "kind" } },
+          { kind: "Field", name: { kind: "Name", value: "status" } },
+          { kind: "Field", name: { kind: "Name", value: "visibility" } },
+          { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+          { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "owner" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "connection" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessions" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<HomeDesignsQuery, HomeDesignsQueryVariables>;
 export const SessionGroupBranchDiffDocument = {
   kind: "Document",
   definitions: [

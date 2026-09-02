@@ -3670,6 +3670,108 @@ export class SessionService {
     return result.sessionGroup;
   }
 
+  async moveGroup(
+    groupId: string,
+    destinationChannelId: string,
+    organizationId: string,
+    actorType: ActorType = "system",
+    actorId: string = "system",
+  ) {
+    if (actorId !== "system") {
+      await assertSessionGroupAccess(groupId, actorId, organizationId);
+    }
+
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.$queryRaw`SELECT "id" FROM "SessionGroup" WHERE "id" = ${groupId} FOR UPDATE`;
+      const group = await tx.sessionGroup.findFirst({
+        where: { id: groupId, organizationId },
+        select: {
+          id: true,
+          channelId: true,
+          channel: { select: { id: true, repoId: true, baseBranch: true } },
+          sessions: {
+            select: { id: true },
+            orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          },
+        },
+      });
+      if (!group) throw new Error("Session group not found");
+      if (!group.channelId || !group.channel) {
+        throw new ValidationError("Workspace is not attached to a project");
+      }
+      if (group.channelId === destinationChannelId) {
+        const sessionGroup = await this.loadSessionGroupSnapshot(groupId, tx);
+        if (!sessionGroup) throw new Error("Session group not found");
+        return { sessionGroup, event: null };
+      }
+
+      const destination = await tx.channel.findFirst({
+        where: {
+          id: destinationChannelId,
+          organizationId,
+          ...(actorId === "system"
+            ? {}
+            : { members: { some: { userId: actorId, leftAt: null } } }),
+        },
+        select: { id: true, repoId: true, baseBranch: true },
+      });
+      if (!destination) {
+        throw new ValidationError("Destination project is not available");
+      }
+      if (
+        !group.channel.repoId ||
+        destination.repoId !== group.channel.repoId ||
+        destination.baseBranch !== group.channel.baseBranch
+      ) {
+        throw new ValidationError(
+          "Workspaces can only move between projects with the same repository and base branch",
+        );
+      }
+
+      await tx.sessionGroup.update({
+        where: { id: groupId },
+        data: { channelId: destination.id },
+      });
+      await tx.session.updateMany({
+        where: { sessionGroupId: groupId },
+        data: { channelId: destination.id },
+      });
+
+      const sessionGroup = await this.loadSessionGroupSnapshot(groupId, tx);
+      if (!sessionGroup) throw new Error("Session group not found");
+      const sessions = await tx.session.findMany({
+        where: { sessionGroupId: groupId },
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        include: SESSION_INCLUDE,
+      });
+      const event = await eventService.create(
+        {
+          organizationId,
+          scopeType: "session",
+          scopeId: group.sessions[0]?.id ?? groupId,
+          eventType: "session_group_moved",
+          payload: eventJson({
+            sessionGroupId: groupId,
+            sourceChannelId: group.channelId,
+            destinationChannelId: destination.id,
+            channelId: destination.id,
+            sessionGroup,
+            sessions: sessions.map(serializeSession),
+          }),
+          actorType,
+          actorId,
+          deferPublish: true,
+        },
+        tx,
+      );
+
+      return { sessionGroup, event };
+    });
+
+    if (result.event) eventService.publishCreated(result.event);
+    return result.sessionGroup;
+  }
+
   /**
    * Convert the current work unit without creating a second conversation.
    *

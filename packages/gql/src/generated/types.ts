@@ -831,6 +831,7 @@ export type EventType =
   | "session_endpoint_rotated"
   | "session_endpoint_traffic_capture_updated"
   | "session_group_archived"
+  | "session_group_moved"
   | "session_group_renamed"
   | "session_group_visibility_updated"
   | "session_output"
@@ -1097,6 +1098,7 @@ export type Mutation = {
   linkSessionPullRequest: SessionGroup;
   linkTicket: Ticket;
   moveChannel: Channel;
+  moveSessionGroup: SessionGroup;
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
@@ -1469,6 +1471,11 @@ export type MutationLinkTicketArgs = {
 
 export type MutationMoveChannelArgs = {
   input: MoveChannelInput;
+};
+
+export type MutationMoveSessionGroupArgs = {
+  destinationChannelId: Scalars["ID"]["input"];
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationMoveSessionToCloudArgs = {

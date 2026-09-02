@@ -533,6 +533,19 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
+  moveSessionGroup: (
+    _: unknown,
+    args: { id: string; destinationChannelId: string },
+    ctx: Context,
+  ) => {
+    return sessionService.moveGroup(
+      args.id,
+      args.destinationChannelId,
+      requireOrgContext(ctx),
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
   updateSessionGroupVisibility: (
     _: unknown,
     args: { id: string; visibility: "public" | "private" },

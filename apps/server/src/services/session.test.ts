@@ -10774,6 +10774,117 @@ describe("SessionService", () => {
     });
   });
 
+  describe("moveGroup", () => {
+    it("moves the group and its sessions and records a complete move event", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        visibility: "public",
+        ownerUserId: "user-1",
+      });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        channelId: "channel-1",
+        channel: { id: "channel-1", repoId: "repo-1", baseBranch: "main" },
+        sessions: [{ id: "session-1" }],
+      });
+      prismaMock.channel.findFirst.mockResolvedValueOnce({
+        id: "channel-2",
+        repoId: "repo-1",
+        baseBranch: "main",
+      });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup({ channelId: "channel-2", channel: { id: "channel-2" } }),
+        sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        makeSession({
+          channelId: "channel-2",
+          channel: { id: "channel-2", name: "Frontend" },
+          sessionGroup: makeSessionGroup({
+            channelId: "channel-2",
+            channel: { id: "channel-2", name: "Frontend" },
+          }),
+        }),
+      ]);
+
+      const result = await service.moveGroup(
+        "group-1",
+        "channel-2",
+        "org-1",
+        "user",
+        "user-1",
+      );
+
+      expect(result.channel).toMatchObject({ id: "channel-2" });
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith({
+        where: { id: "group-1" },
+        data: { channelId: "channel-2" },
+      });
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { sessionGroupId: "group-1" },
+        data: { channelId: "channel-2" },
+      });
+      expect(prismaMock.channel.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: "channel-2",
+            organizationId: "org-1",
+            members: { some: { userId: "user-1", leftAt: null } },
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_group_moved",
+          deferPublish: true,
+          payload: expect.objectContaining({
+            sessionGroupId: "group-1",
+            sourceChannelId: "channel-1",
+            destinationChannelId: "channel-2",
+            channelId: "channel-2",
+            sessionGroup: expect.objectContaining({
+              id: "group-1",
+              channel: expect.objectContaining({ id: "channel-2" }),
+            }),
+            sessions: [
+              expect.objectContaining({
+                id: "session-1",
+                channel: expect.objectContaining({ id: "channel-2" }),
+              }),
+            ],
+          }),
+        }),
+        prismaMock,
+      );
+      expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "event-1" });
+    });
+
+    it.each([
+      ["another repository", "repo-2", "main"],
+      ["another base branch", "repo-1", "release"],
+    ])("rejects a destination with %s", async (_label, repoId, baseBranch) => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        channelId: "channel-1",
+        channel: { id: "channel-1", repoId: "repo-1", baseBranch: "main" },
+        sessions: [{ id: "session-1" }],
+      });
+      prismaMock.channel.findFirst.mockResolvedValueOnce({
+        id: "channel-2",
+        repoId,
+        baseBranch,
+      });
+
+      await expect(
+        service.moveGroup("group-1", "channel-2", "org-1"),
+      ).rejects.toThrow("same repository and base branch");
+
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe("updateGroupVisibility", () => {
     it("updates visibility and records events atomically", async () => {
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({

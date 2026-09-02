@@ -20,6 +20,14 @@ export const IMPORT_WORKTREE_MUTATION = gql`
   }
 `;
 
+export const MOVE_SESSION_GROUP_MUTATION = gql`
+  mutation MoveSessionGroup($id: ID!, $destinationChannelId: ID!) {
+    moveSessionGroup(id: $id, destinationChannelId: $destinationChannelId) {
+      id
+    }
+  }
+`;
+
 export const FORK_SESSION_MUTATION = gql`
   mutation ForkSession($eventId: ID!) {
     forkSession(eventId: $eventId) {

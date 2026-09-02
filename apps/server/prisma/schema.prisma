@@ -232,6 +232,7 @@ enum EventType {
   session_pr_closed
   session_group_archived
   session_group_renamed
+  session_group_moved
   design_preview_updated
   pdf_export_updated
   animation_preview_updated

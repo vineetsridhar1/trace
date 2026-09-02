@@ -32,6 +32,7 @@ import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog"
 import { PrivateSessionLock } from "../session/PrivateSessionLock";
 import { SessionApplicationRunningIndicator } from "../session/SessionApplicationRunningIndicator";
 import { SpotlightBridgeIndicator } from "../session/SpotlightBridgeIndicator";
+import { SessionGroupMoveSubmenu } from "./SessionGroupMoveSubmenu";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -367,6 +368,10 @@ function OwnedSessionGroupItem({
             <Archive size={14} className="mr-1.5" />
             Archive workspace
           </ContextMenuItem>
+          <SessionGroupMoveSubmenu
+            sessionGroupId={record.id}
+            sourceChannelId={channelId}
+          />
           {record.row.visibility === "public" && isOwner && (
             <ContextMenuItem onClick={() => handleUpdateVisibility("private")}>
               <Lock size={14} className="mr-1.5" />

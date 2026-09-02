@@ -58,6 +58,7 @@ interface BindingsHarness {
   setActiveSessionGroupId: ReturnType<typeof vi.fn>;
   openSessionTab: ReturnType<typeof vi.fn>;
   navigateToSession: ReturnType<typeof vi.fn>;
+  reconcileSessionGroupMove: ReturnType<typeof vi.fn>;
 }
 
 function installBindings(initial: Partial<BindingsHarness["state"]> = {}): BindingsHarness {
@@ -82,6 +83,7 @@ function installBindings(initial: Partial<BindingsHarness["state"]> = {}): Bindi
     }),
     openSessionTab: vi.fn(),
     navigateToSession: vi.fn(),
+    reconcileSessionGroupMove: vi.fn(),
     bindings: {
       getActiveChannelId: () => state.activeChannelId,
       getActiveSessionId: () => state.activeSessionId,
@@ -93,6 +95,8 @@ function installBindings(initial: Partial<BindingsHarness["state"]> = {}): Bindi
       markSessionDone: (id) => harness.markSessionDone(id),
       markSessionGroupDone: (id) => harness.markSessionGroupDone(id),
       openSessionTab: (groupId, sessionId) => harness.openSessionTab(groupId, sessionId),
+      reconcileSessionGroupMove: (channelId, groupId) =>
+        harness.reconcileSessionGroupMove(channelId, groupId),
       navigateToSession: (channelId, groupId, sessionId) =>
         harness.navigateToSession(channelId, groupId, sessionId),
     },
@@ -139,6 +143,50 @@ beforeEach(() => {
 });
 
 describe("handleOrgEvent", () => {
+  it("moves a session group between project lists and reconciles active navigation", () => {
+    const harness = installBindings({
+      activeChannelId: "channel-1",
+      activeSessionGroupId: "group-1",
+      activeSessionId: "session-1",
+    });
+    useEntityStore.setState({
+      sessionGroups: {
+        "group-1": { id: "group-1", channel: { id: "channel-1" } } as never,
+      },
+      sessions: {
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          channel: { id: "channel-1" },
+        } as never,
+      },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_group_moved",
+        scopeId: "session-1",
+        payload: {
+          sessionGroupId: "group-1",
+          sourceChannelId: "channel-1",
+          destinationChannelId: "channel-2",
+          sessionGroup: { id: "group-1", channel: { id: "channel-2" } },
+          sessions: [
+            { id: "session-1", sessionGroupId: "group-1", channel: { id: "channel-2" } },
+          ],
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionGroups["group-1"]?.channel).toMatchObject({
+      id: "channel-2",
+    });
+    expect(useEntityStore.getState().sessions["session-1"]?.channel).toMatchObject({
+      id: "channel-2",
+    });
+    expect(harness.reconcileSessionGroupMove).toHaveBeenCalledWith("channel-2", "group-1");
+  });
+
   it("hydrates a design system authoring group from its creation event", () => {
     handleOrgEvent(
       makeEvent({

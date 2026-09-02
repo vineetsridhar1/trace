@@ -349,6 +349,7 @@ enum EventType {
   session_pr_closed
   session_group_archived
   session_group_renamed
+  session_group_moved
   design_preview_updated
   pdf_export_updated
   animation_preview_updated
@@ -2110,6 +2111,7 @@ type Mutation {
   archiveSessionGroup(id: ID!): SessionGroup
   linkSessionPullRequest(sessionId: ID!, prUrl: String!): SessionGroup!
   renameSessionGroup(id: ID!, name: String!): SessionGroup!
+  moveSessionGroup(id: ID!, destinationChannelId: ID!): SessionGroup!
   updateSessionGroupVisibility(id: ID!, visibility: SessionGroupVisibility!): SessionGroup!
   deleteSessionGroup(id: ID!): Boolean!
   updateSessionConfig(

@@ -826,6 +826,32 @@ export function handleOrgEvent(event: Event): void {
     }
   }
 
+  if (event.eventType === "session_group_moved") {
+    const sessionGroupId =
+      typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
+    const destinationChannelId =
+      typeof payload.destinationChannelId === "string" ? payload.destinationChannelId : null;
+    if (sessionGroupId && destinationChannelId) {
+      upsertSessionGroupFromPayload({
+        batch,
+        payload,
+        timestamp: event.timestamp,
+        bumpSort: false,
+      });
+      if (Array.isArray(payload.sessions)) {
+        for (const item of payload.sessions) {
+          const session = asJsonObject(item);
+          if (session && typeof session.id === "string") {
+            batch.upsert("sessions", session.id, session as unknown as SessionEntity);
+          }
+        }
+      }
+      if (ui.getActiveSessionGroupId() === sessionGroupId) {
+        ui.reconcileSessionGroupMove(destinationChannelId, sessionGroupId);
+      }
+    }
+  }
+
   // Route session status events
   if (
     SESSION_STATUS_EVENTS.has(event.eventType) &&
