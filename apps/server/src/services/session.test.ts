@@ -6670,7 +6670,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
         "session-1",
         expect.objectContaining({
-          prompt: expect.stringContaining("Only call it working on success."),
+          prompt: expect.stringContaining("make its endpoint public with the managed port controls"),
         }),
         expect.any(Object),
       );
