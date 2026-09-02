@@ -489,7 +489,7 @@ export function useSidebarData() {
     }
   }, [channelsLoading, allChannelIds]);
 
-  const groupIds = useEntityIds("channelGroups", undefined, (a, b) => {
+  const allGroupIds = useEntityIds("channelGroups", undefined, (a, b) => {
     const ag = a as EntityTableMap["channelGroups"];
     const bg = b as EntityTableMap["channelGroups"];
     return (ag.position ?? 0) - (bg.position ?? 0);
@@ -508,7 +508,7 @@ export function useSidebarData() {
 
   const groupPositions = useEntityStore(
     useShallow((s: { channelGroups: Record<string, ChannelGroup> }) =>
-      groupIds.map((id) => s.channelGroups[id]?.position ?? 0),
+      allGroupIds.map((id) => s.channelGroups[id]?.position ?? 0),
     ),
   );
 
@@ -531,8 +531,11 @@ export function useSidebarData() {
       }
     }
 
-    for (let i = 0; i < groupIds.length; i++) {
-      items.push({ kind: "group", id: groupIds[i], position: groupPositions[i] });
+    for (let i = 0; i < allGroupIds.length; i++) {
+      const groupId = allGroupIds[i];
+      if (byGroup[groupId]?.length) {
+        items.push({ kind: "group", id: groupId, position: groupPositions[i] });
+      }
     }
 
     items.sort((a, b) => {
@@ -542,7 +545,12 @@ export function useSidebarData() {
     });
 
     return { channelIdsByGroup: byGroup, topLevelItems: items };
-  }, [allChannelIds, groupIds, channelGroupIdAndPosition, groupPositions]);
+  }, [allChannelIds, allGroupIds, channelGroupIdAndPosition, groupPositions]);
+
+  const groupIds = useMemo(
+    () => topLevelItems.filter((item) => item.kind === "group").map((item) => item.id),
+    [topLevelItems],
+  );
 
   // Full maps returned for DnD consumers — these subscribe broadly but only
   // child components that destructure them will re-render.
