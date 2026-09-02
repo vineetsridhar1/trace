@@ -96,7 +96,11 @@ function mockGroup() {
         id: "session-1",
         hosting: "cloud",
         workdir: "/workspace",
-        connection: { runtimeInstanceId: "runtime-1" },
+        connection: {
+          state: "connected",
+          workspaceState: "ready",
+          runtimeInstanceId: "runtime-1",
+        },
       },
     ],
   });
@@ -181,6 +185,35 @@ describe("SessionApplicationService", () => {
     ).rejects.toThrow("Application forwarding is currently only available for cloud sessions");
   });
 
+  it("does not start processes before the cloud workspace is ready", async () => {
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
+      id: "group-1",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+      visibility: "public",
+      repoId: "repo-1",
+      workdir: "/workspace",
+      repo: null,
+      sessions: [
+        {
+          id: "session-1",
+          hosting: "cloud",
+          workdir: "/workspace",
+          connection: {
+            state: "connecting",
+            workspaceState: "preparing",
+            runtimeInstanceId: "runtime-1",
+          },
+        },
+      ],
+    });
+
+    await expect(
+      new SessionApplicationService().startProcess("group-1", "web", "dev", "org-1", "user-1"),
+    ).rejects.toThrow("Session workspace is not ready yet");
+    expect(prismaMock.sessionApplicationProcess.upsert).not.toHaveBeenCalled();
+  });
+
   it("rejects arbitrary port forwarding for non-cloud runtimes", async () => {
     sessionRouterMock.getRuntime.mockReturnValueOnce({
       key: "runtime-1",
@@ -258,7 +291,11 @@ describe("SessionApplicationService", () => {
           id: "session-1",
           hosting: "cloud",
           workdir: "/workspace",
-          connection: { runtimeInstanceId: "runtime-1" },
+          connection: {
+            state: "connected",
+            workspaceState: "ready",
+            runtimeInstanceId: "runtime-1",
+          },
         },
       ],
     });
@@ -370,7 +407,11 @@ describe("SessionApplicationService", () => {
           id: "session-1",
           hosting: "cloud",
           workdir: "/workspace",
-          connection: { runtimeInstanceId: "runtime-1" },
+          connection: {
+            state: "connected",
+            workspaceState: "ready",
+            runtimeInstanceId: "runtime-1",
+          },
         },
       ],
     });

@@ -107,6 +107,15 @@ function connectionRuntimeInstanceId(connection: Prisma.JsonValue): string | nul
     : null;
 }
 
+function connectionHasReadyWorkspace(
+  connection: Prisma.JsonValue,
+  workdir: string | null,
+): boolean {
+  if (!workdir) return false;
+  const record = connectionRecord(connection);
+  if (record.workspaceState === "preparing" || record.workspaceState === "failed") return false;
+  return record.state === "connected";
+}
 function publicProcess(process: PrismaSessionApplicationProcess) {
   return {
     id: process.id,
@@ -1377,10 +1386,14 @@ export class SessionApplicationService {
         "Application forwarding is currently only available for cloud sessions",
       );
     }
-    const session = group.sessions.find((candidate) =>
-      connectionRuntimeInstanceId(candidate.connection),
+    const session = group.sessions.find(
+      (candidate) =>
+        connectionRuntimeInstanceId(candidate.connection) &&
+        connectionHasReadyWorkspace(candidate.connection, candidate.workdir ?? group.workdir),
     );
-    if (!session) throw new ValidationError("Session group does not have a connected runtime");
+    if (!session) {
+      throw new ValidationError("Session workspace is not ready yet");
+    }
     const runtimeId = connectionRuntimeInstanceId(session.connection);
     if (!runtimeId) throw new ValidationError("Session group does not have a connected runtime");
     const resolution = await sessionRouter.resolveRuntime(runtimeId, organizationId);
