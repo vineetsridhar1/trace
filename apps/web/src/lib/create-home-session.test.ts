@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Channel, Repo } from "@trace/gql";
-import { buildHomeStartInput } from "./create-home-session";
+import { buildHomeStartInput, isUnsupportedDesignSessionInputError } from "./create-home-session";
 
 const repo = { id: "repo-1", name: "trace" } as Repo;
 const channel = { id: "channel-1", name: "Trace", type: "coding", repo } as Channel;
@@ -134,5 +134,16 @@ describe("buildHomeStartInput", () => {
       hosting: "cloud",
       designSystemVersionId: "version-2",
     });
+  });
+
+  it("recognizes only legacy-server schema errors for design session inputs", () => {
+    expect(
+      isUnsupportedDesignSessionInputError(
+        'Variable "$input" got invalid value; Field "designSessionGroupId" is not defined by type "StartSessionInput".',
+      ),
+    ).toBe(true);
+    expect(
+      isUnsupportedDesignSessionInputError("Selected designSessionGroupId is unavailable"),
+    ).toBe(false);
   });
 });

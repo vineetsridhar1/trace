@@ -52,6 +52,28 @@ export function buildHomeStartInput(input: CreateHomeSessionInput) {
   };
 }
 
+type HomeStartInput = ReturnType<typeof buildHomeStartInput>;
+
+function hasDesignSessionInput(input: HomeStartInput): boolean {
+  return "designSystemVersionId" in input || "designSessionGroupId" in input;
+}
+
+export function isUnsupportedDesignSessionInputError(message: string): boolean {
+  return (
+    /\b(designSystemVersionId|designSessionGroupId)\b/.test(message) &&
+    /unknown (?:argument|field)|not defined by type|cannot query field/i.test(message)
+  );
+}
+
+function withoutDesignSessionInput(input: HomeStartInput) {
+  const {
+    designSystemVersionId: _designSystemVersionId,
+    designSessionGroupId: _designSessionGroupId,
+    ...rest
+  } = input;
+  return rest;
+}
+
 export async function createHomeSession({
   prompt,
   attachmentKeys,
@@ -71,25 +93,35 @@ export async function createHomeSession({
   if (!normalizedPrompt) return false;
 
   try {
-    const result = await client
-      .mutation(START_SESSION_MUTATION, {
-        input: buildHomeStartInput({
-          prompt: normalizedPrompt,
-          attachmentKeys,
-          kind,
-          tool,
-          model,
-          reasoningEffort,
-          interactionMode,
-          channel,
-          projectId,
-          repoId,
-          runtimeInstanceId,
-          designSystemVersionId,
-          designSessionGroupId,
-        }),
-      })
-      .toPromise();
+    const startInput = buildHomeStartInput({
+      prompt: normalizedPrompt,
+      attachmentKeys,
+      kind,
+      tool,
+      model,
+      reasoningEffort,
+      interactionMode,
+      channel,
+      projectId,
+      repoId,
+      runtimeInstanceId,
+      designSystemVersionId,
+      designSessionGroupId,
+    });
+    const start = (input: HomeStartInput) =>
+      client.mutation(START_SESSION_MUTATION, { input }).toPromise();
+    let result = await start(startInput);
+
+    // Older Trace servers predate design-system and design-attachment input
+    // fields. Retrying only their schema-validation error keeps ordinary
+    // session creation working without hiding current-server validation errors.
+    if (
+      result.error &&
+      hasDesignSessionInput(startInput) &&
+      isUnsupportedDesignSessionInputError(result.error.message)
+    ) {
+      result = await start(withoutDesignSessionInput(startInput));
+    }
 
     if (result.error) {
       toast.error("Could not start session", { description: result.error.message });
