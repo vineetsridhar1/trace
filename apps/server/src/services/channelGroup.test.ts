@@ -26,24 +26,21 @@ describe("ChannelGroupService", () => {
     vi.clearAllMocks();
   });
 
-  it("filters included channels to channels visible to the viewer", async () => {
+  it("only returns groups containing projects the viewer has joined", async () => {
     prismaMock.channelGroup.findMany.mockResolvedValueOnce([]);
 
     const service = new ChannelGroupService();
     await service.list("org-1", "user-1");
 
     expect(prismaMock.channelGroup.findMany).toHaveBeenCalledWith({
-      where: { organizationId: "org-1" },
+      where: {
+        organizationId: "org-1",
+        channels: { some: { members: { some: { userId: "user-1", leftAt: null } } } },
+      },
       orderBy: { position: "asc" },
       include: {
         channels: {
-          where: {
-            OR: [
-              { visibility: "public" },
-              { ownerId: "user-1" },
-              { members: { some: { userId: "user-1", leftAt: null } } },
-            ],
-          },
+          where: { members: { some: { userId: "user-1", leftAt: null } } },
           orderBy: { position: "asc" },
         },
       },

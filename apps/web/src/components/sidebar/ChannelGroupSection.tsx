@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { ChevronRight, Plus, Trash2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSortable, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -13,6 +13,13 @@ import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { groupContainerId, groupSortableIds } from "../../hooks/useChannelDnd";
 import { sidebarRootLeftEdgeRowClass } from "./sidebarItemStyles";
 import type { SidebarSessionScope } from "./ChannelOwnedSessions";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "../ui/context-menu";
+import { RenameProjectGroupDialog } from "./RenameProjectGroupDialog";
 
 const UPDATE_GROUP_MUTATION = gql`
   mutation UpdateChannelGroupCollapse($id: ID!, $input: UpdateChannelGroupInput!) {
@@ -50,6 +57,7 @@ export function ChannelGroupSection({
 }: ChannelGroupSectionProps) {
   const name = useEntityField("channelGroups", id, "name");
   const collapsed = useEntityField("channelGroups", id, "isCollapsed") ?? false;
+  const [renameOpen, setRenameOpen] = useState(false);
 
   const toggleCollapse = useCallback(() => {
     const next = !collapsed;
@@ -94,45 +102,57 @@ export function ChannelGroupSection({
 
   return (
     <div ref={setSortableRef} style={style} className="ml-3 rounded-md transition-colors">
-      <div
-        className={cn(
-          "flex items-center justify-between rounded-md pr-1 transition-colors hover:bg-white/10 group/group-header",
-          sidebarRootLeftEdgeRowClass,
-        )}
-        {...attributes}
-        {...listeners}
-      >
-        <button
-          className="flex flex-1 cursor-pointer items-center gap-1 rounded-md px-0 py-1 pl-2 text-xs font-semibold uppercase tracking-wider text-foreground transition-colors"
-          onClick={toggleCollapse}
-          onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-        >
-          <ChevronRight
-            size={14}
-            className={cn("shrink-0 transition-transform duration-200", !collapsed && "rotate-90")}
-          />
-          <span className="truncate">{name}</span>
-        </button>
-        <div
-          className="flex items-center gap-0.5 opacity-0 group-hover/group-header:opacity-100 transition-opacity"
-          onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-        >
-          <button
-            className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-foreground transition-colors hover:bg-white/10"
-            title="Add channel to group"
-            onClick={() => onAddChannel(id)}
+      <ContextMenu>
+        <ContextMenuTrigger render={<div />}>
+          <div
+            className={cn(
+              "flex items-center justify-between rounded-md pr-1 transition-colors hover:bg-white/10 group/group-header",
+              sidebarRootLeftEdgeRowClass,
+            )}
+            {...attributes}
+            {...listeners}
           >
-            <Plus size={14} />
-          </button>
-          <button
-            className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-foreground transition-colors hover:bg-white/10 hover:text-destructive"
-            title="Delete group"
-            onClick={() => onDeleteGroup(id)}
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      </div>
+            <button
+              className="flex flex-1 cursor-pointer items-center gap-1 rounded-md px-0 py-1 pl-2 text-xs font-semibold uppercase tracking-wider text-foreground transition-colors"
+              onClick={toggleCollapse}
+              onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+            >
+              <ChevronRight
+                size={14}
+                className={cn(
+                  "shrink-0 transition-transform duration-200",
+                  !collapsed && "rotate-90",
+                )}
+              />
+              <span className="truncate">{name}</span>
+            </button>
+            <div
+              className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/group-header:opacity-100"
+              onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+            >
+              <button
+                className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-foreground transition-colors hover:bg-white/10"
+                title="Add channel to group"
+                onClick={() => onAddChannel(id)}
+              >
+                <Plus size={14} />
+              </button>
+              <button
+                className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-foreground transition-colors hover:bg-white/10 hover:text-destructive"
+                title="Delete group"
+                onClick={() => onDeleteGroup(id)}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem onClick={() => setRenameOpen(true)}>
+            Rename project group
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
       <AnimatePresence initial={false}>
         {!collapsed && (
           <motion.div
@@ -173,6 +193,12 @@ export function ChannelGroupSection({
           </motion.div>
         )}
       </AnimatePresence>
+      <RenameProjectGroupDialog
+        groupId={id}
+        groupName={name ?? ""}
+        open={renameOpen}
+        onOpenChange={setRenameOpen}
+      />
     </div>
   );
 }

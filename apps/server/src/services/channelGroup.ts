@@ -8,11 +8,14 @@ import { visibleChannelWhere } from "./access.js";
 export class ChannelGroupService {
   async list(organizationId: string, userId: string) {
     return prisma.channelGroup.findMany({
-      where: { organizationId },
+      where: {
+        organizationId,
+        channels: { some: { members: { some: { userId, leftAt: null } } } },
+      },
       orderBy: { position: "asc" },
       include: {
         channels: {
-          where: visibleChannelWhere(userId),
+          where: { members: { some: { userId, leftAt: null } } },
           orderBy: { position: "asc" },
         },
       },
