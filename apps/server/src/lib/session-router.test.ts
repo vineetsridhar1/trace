@@ -971,7 +971,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
     router.bindSession("session-1", "runtime-1");
 
-    const onWorkspaceReady = vi.fn();
     const onFailed = vi.fn();
     router.createRuntime({
       sessionId: "session-1",
@@ -983,16 +982,14 @@ describe("SessionRouter runtime adapter dispatch", () => {
       repo: null,
       createdById: "user-1",
       organizationId: "org-1",
-      onWorkspaceReady,
       onFailed,
     });
 
     await vi.waitFor(() =>
       expect(onFailed).toHaveBeenCalledWith(
-        "This Trace runtime is too old to start general sessions in the correct directory. Upgrade it before retrying this session.",
+        "This Trace runtime is too old to prepare this session workspace. Upgrade it before retrying this session.",
       ),
     );
-    expect(onWorkspaceReady).not.toHaveBeenCalled();
     expect(ws.send).not.toHaveBeenCalled();
   });
 
@@ -1147,7 +1144,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
       runtimeToken: "runtime-token",
       bridgeUrl: "wss://trace.example/bridge",
       onFailed: vi.fn(),
-      onWorkspaceReady: vi.fn(),
     });
 
     await flushPromises();
@@ -1218,7 +1214,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
       runtimeToken: "runtime-token",
       bridgeUrl: "wss://trace.example/bridge",
       onFailed: vi.fn(),
-      onWorkspaceReady: vi.fn(),
     });
 
     await flushPromises();
@@ -1286,7 +1281,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
       runtimeToken: "runtime-token",
       bridgeUrl: "wss://trace.example/bridge",
       onFailed: vi.fn(),
-      onWorkspaceReady: vi.fn(),
     });
 
     await flushPromises();
@@ -1425,7 +1419,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
       runtimeToken: "runtime-token",
       bridgeUrl: "wss://trace.example/bridge",
       onFailed: vi.fn(),
-      onWorkspaceReady: vi.fn(),
     });
 
     await flushPromises();
@@ -1617,7 +1610,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     );
   });
 
-  it("runs a provisioned launcher start, bridge delivery, and stop with stable idempotency", async () => {
+  it("runs a repo-less provisioned coding session through the bridge workspace handshake", async () => {
     vi.stubGlobal(
       "fetch",
       vi
@@ -1665,12 +1658,12 @@ describe("SessionRouter runtime adapter dispatch", () => {
       new RuntimeAdapterRegistry([localAdapter, new ProvisionedRuntimeAdapter()]),
     );
     const lifecycleEvents: Array<{ eventType: string; runtimeInstanceId?: string }> = [];
-    const workspaceReady = vi.fn();
     const onFailed = vi.fn();
 
     router.createRuntime({
       sessionId: "session-1",
       sessionGroupId: "group-1",
+      sessionGroupKind: "coding",
       hosting: "cloud",
       adapterType: "provisioned",
       reserveRuntime: stubReserveRuntime(),
@@ -1684,7 +1677,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
       onLifecycle: (eventType, update) => {
         lifecycleEvents.push({ eventType, runtimeInstanceId: update?.runtimeInstanceId });
       },
-      onWorkspaceReady: workspaceReady,
       onFailed,
     });
 
@@ -1707,19 +1699,26 @@ describe("SessionRouter runtime adapter dispatch", () => {
     const runtimeInstanceId = startBody.runtimeInstanceId as string;
 
     const ws = makeWs();
-    router.registerRuntime({
+    await router.registerRuntime({
       id: runtimeInstanceId,
       label: "Launcher runtime",
       ws,
       hostingMode: "cloud",
+      organizationId: "org-1",
+      protocolVersion: 6,
       supportedTools: ["codex"],
       registeredRepoIds: [],
     });
     router.bindSession("session-1", runtimeInstanceId);
 
-    await vi.waitFor(() => {
-      expect(workspaceReady).toHaveBeenCalledWith("/home/coder");
-    });
+    await vi.waitFor(() => expect(ws.send).toHaveBeenCalledOnce());
+    expect(JSON.parse((ws.send as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0])).toEqual(
+      {
+        type: "prepare_general",
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+      },
+    );
     expect(onFailed).not.toHaveBeenCalled();
     expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
       "session_runtime_provisioning",

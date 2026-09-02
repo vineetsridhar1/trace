@@ -2525,7 +2525,6 @@ export class SessionRouter {
     options: SessionAdapterCreateOptions & {
       hosting: string;
       onFailed: (error: string) => void;
-      onWorkspaceReady?: (workdir: string) => void;
       /**
        * Claim this session's next runtime generation and return the runtime
        * instance id the claim created. `null` means a live runtime already owns
@@ -2695,9 +2694,14 @@ export class SessionRouter {
           return;
         }
 
-        // General sessions use the runtime home by default. A linked repository
-        // is context, so resolve its existing root without allocating a worktree.
-        if (options.sessionGroupKind === "general") {
+        // General sessions use a runtime-root workspace, optionally resolved to
+        // a linked repository. Repo-less provisioned sessions use that same
+        // explicit handshake regardless of kind: the server must never claim a
+        // cloud workspace is ready before the bridge has registered its path.
+        if (
+          options.sessionGroupKind === "general" ||
+          (adapterType === "provisioned" && !options.repo)
+        ) {
           const runtimeId = expectedHomeRuntimeId ?? this.sessionRuntime.get(options.sessionId);
           const resolution = runtimeId
             ? await this.resolveRuntime(runtimeId, options.organizationId)
@@ -2709,7 +2713,7 @@ export class SessionRouter {
           const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
           if ((runtime?.protocolVersion ?? 1) < GENERAL_WORKSPACE_PROTOCOL_VERSION) {
             options.onFailed(
-              "This Trace runtime is too old to start general sessions in the correct directory. Upgrade it before retrying this session.",
+              "This Trace runtime is too old to prepare this session workspace. Upgrade it before retrying this session.",
             );
             return;
           }
@@ -2764,9 +2768,6 @@ export class SessionRouter {
           return;
         }
 
-        if (adapterType === "provisioned") {
-          options.onWorkspaceReady?.("/home/coder");
-        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[runtime-adapter] failed to start ${options.sessionId}:`, message);

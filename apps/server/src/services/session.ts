@@ -1777,7 +1777,6 @@ export class SessionService {
           await this.recordSessionGroupRuntimeLifecycle(params.sessionId, eventType, update);
         },
         onFailed: (error) => this.workspaceFailed(params.sessionId, error),
-        onWorkspaceReady: (workdir) => this.workspaceReady(params.sessionId, workdir),
       });
     })().catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
