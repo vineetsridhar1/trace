@@ -6670,7 +6670,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
         "session-1",
         expect.objectContaining({
-          prompt: expect.stringContaining("make its endpoint public with the managed port controls"),
+          prompt: expect.stringContaining("must be publicly accessible"),
         }),
         expect.any(Object),
       );
