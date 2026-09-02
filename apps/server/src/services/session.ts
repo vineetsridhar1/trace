@@ -1123,7 +1123,7 @@ When the request involves discovering, creating, messaging, running, stopping, m
 
 /** Make the CLI a self-describing platform surface instead of requiring one skill per capability. */
 const TRACE_CLI_DISCOVERY_INSTRUCTION = `\n\n<system-instruction>
-When you need a Trace platform capability, first run \`"$TRACE_CLI" --help --json\`, then inspect the relevant group and leaf help with \`"$TRACE_CLI" <group> --help --json\` and \`"$TRACE_CLI" <group> <command> --help --json\`. Follow the returned workflow, effects, output, and next-step guidance. Invoke the managed CLI using \`"$TRACE_CLI"\` exactly; do not call a bare \`trace\` command, call Trace GraphQL directly, or print $TRACE_INVOCATION_TOKEN.
+When you need a Trace capability, run \`"$TRACE_CLI" --help --json\`, then the relevant group and leaf help; follow its guidance. Use \`"$TRACE_CLI"\`, never bare \`trace\` or direct GraphQL, and never print $TRACE_INVOCATION_TOKEN. Every Trace preview, app, or forwarded-port URL you give a user must be publicly accessible. Before sharing one, make its endpoint public with the managed port controls, then fetch that exact public URL with \`curl -fsSL --max-time 10 <url>\`. Verify its response contains the expected information. Only share the URL after that succeeds; fix failures first.
 </system-instruction>`;
 
 const GENERAL_SESSION_INSTRUCTION = `\n\n<system-instruction>
