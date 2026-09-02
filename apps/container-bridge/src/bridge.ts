@@ -34,6 +34,7 @@ import {
   BridgeOutbox,
   BRIDGE_PROTOCOL_VERSION,
   resolveBridgeWorkdir,
+  WorkspaceRegistry,
 } from "@trace/shared";
 import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
@@ -114,7 +115,7 @@ export class ContainerBridge implements IBridgeClient {
   private consecutiveFailures = 0;
   /** Max consecutive connection failures before the process exits, allowing the machine to stop. */
   private static MAX_RECONNECT_FAILURES = 20;
-  private sessionWorkdirs = new Map<string, string>();
+  private workspaces = new WorkspaceRegistry();
   private workspacePreparations = new WorkspacePreparationBarrier();
   /** Fences late completions from superseded prepare commands. */
   private workspacePrepareVersions = new Map<string, number>();
@@ -162,7 +163,7 @@ export class ContainerBridge implements IBridgeClient {
         this.send({ type: "terminal_exit", terminalId, exitCode });
       },
     });
-    this.managedProcessManager = new ManagedProcessManager(this.sessionWorkdirs, (message) =>
+    this.managedProcessManager = new ManagedProcessManager(this.workspaces, (message) =>
       this.send(message),
     );
   }
@@ -333,23 +334,33 @@ export class ContainerBridge implements IBridgeClient {
     this.activeRuns.delete(sessionId);
   }
 
-  private beginWorkspacePreparation(sessionId: string): number {
+  private beginWorkspacePreparation(sessionId: string, sessionGroupId?: string | null): number {
+    this.workspaces.bind(sessionId, sessionGroupId);
+    const workspaceKey = this.workspaces.workspaceKey(sessionId);
     const version = ++this.nextWorkspacePrepareVersion;
-    this.workspacePrepareVersions.set(sessionId, version);
-    this.sessionWorkdirs.delete(sessionId);
+    this.workspacePrepareVersions.set(workspaceKey, version);
+    this.workspaces.deleteWorkspace(sessionId);
     return version;
   }
 
   private isCurrentWorkspacePreparation(sessionId: string, version: number): boolean {
-    return this.workspacePrepareVersions.get(sessionId) === version;
+    return this.workspacePrepareVersions.get(this.workspaces.workspaceKey(sessionId)) === version;
+  }
+
+  private trackWorkspacePreparation(sessionId: string, preparation: Promise<void>): void {
+    this.workspacePreparations.track(this.workspaces.workspaceKey(sessionId), preparation);
+  }
+
+  private waitForWorkspacePreparation(sessionId: string): Promise<boolean> {
+    return this.workspacePreparations.wait(this.workspaces.workspaceKey(sessionId));
   }
 
   private async runAfterWorkspacePreparation(cmd: BridgeRunCommand | BridgeSendCommand) {
-    if (!(await this.workspacePreparations.wait(cmd.sessionId))) return;
+    if (!(await this.waitForWorkspacePreparation(cmd.sessionId))) return;
     const workdir = resolveBridgeWorkdir({
       workspaceMode: cmd.workspaceMode,
       cwd: cmd.cwd,
-      preparedWorkdir: this.sessionWorkdirs.get(cmd.sessionId),
+      preparedWorkdir: this.workspaces.get(cmd.sessionId),
       homeDir: os.homedir(),
     });
     if (!workdir) {
@@ -377,7 +388,7 @@ export class ContainerBridge implements IBridgeClient {
   }
 
   private async createTerminalAfterWorkspacePreparation(cmd: BridgeTerminalCreateCommand) {
-    if (!(await this.workspacePreparations.wait(cmd.sessionId))) {
+    if (!(await this.waitForWorkspacePreparation(cmd.sessionId))) {
       this.send({
         type: "terminal_error",
         terminalId: cmd.terminalId,
@@ -385,7 +396,7 @@ export class ContainerBridge implements IBridgeClient {
       });
       return;
     }
-    const workdir = this.sessionWorkdirs.get(cmd.sessionId) ?? cmd.cwd;
+    const workdir = this.workspaces.get(cmd.sessionId) ?? cmd.cwd;
     if (!workdir) {
       this.send({
         type: "terminal_error",
@@ -415,7 +426,7 @@ export class ContainerBridge implements IBridgeClient {
     run: () => void,
     fail: () => void,
   ) {
-    if (await this.workspacePreparations.wait(sessionId)) {
+    if (await this.waitForWorkspacePreparation(sessionId)) {
       run();
     } else {
       fail();
@@ -505,7 +516,7 @@ export class ContainerBridge implements IBridgeClient {
           baseCommitSha,
           readOnly,
         } = cmd;
-        const prepareVersion = this.beginWorkspacePreparation(sessionId);
+        const prepareVersion = this.beginWorkspacePreparation(sessionId, sessionGroupId);
 
         const preparation = (async () => {
           try {
@@ -518,7 +529,7 @@ export class ContainerBridge implements IBridgeClient {
               const workdir = getRepoPath(repoId);
               if (!workdir) throw new Error(`Repo path not found after ensureRepo for ${repoId}`);
               if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
-              this.sessionWorkdirs.set(sessionId, workdir);
+              this.workspaces.set(sessionId, workdir);
               this.readOnlySessions.add(sessionId);
               this.send({ type: "register_session", sessionId });
               this.send({
@@ -549,7 +560,7 @@ export class ContainerBridge implements IBridgeClient {
               }
               const { workdir, branch: worktreeBranch, slug: worktreeSlug } = await worktreePromise;
               if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
-              this.sessionWorkdirs.set(sessionId, workdir);
+              this.workspaces.set(sessionId, workdir);
               this.send({ type: "register_session", sessionId });
               this.send({
                 type: "workspace_ready",
@@ -568,31 +579,17 @@ export class ContainerBridge implements IBridgeClient {
             throw err;
           }
         })();
-        this.workspacePreparations.track(sessionId, preparation);
+        this.trackWorkspacePreparation(sessionId, preparation);
         break;
       }
 
       case "prepare_general": {
-        const prepareVersion = this.beginWorkspacePreparation(cmd.sessionId);
+        const prepareVersion = this.beginWorkspacePreparation(cmd.sessionId, cmd.sessionGroupId);
         const preparation = (async () => {
           try {
-            let workdir = os.homedir();
-            if (cmd.repoId) {
-              if (!cmd.defaultBranch) {
-                throw new Error(`Missing default branch for repo ${cmd.repoId}`);
-              }
-              const repoResult = await ensureRepo(
-                cmd.repoId,
-                cmd.repoRemoteUrl ?? null,
-                cmd.branch,
-                cmd.defaultBranch,
-              );
-              if (!this.isCurrentWorkspacePreparation(cmd.sessionId, prepareVersion)) return;
-              this.send({ type: "repo_linked", repoId: cmd.repoId });
-              workdir = repoResult.repoPath;
-            }
+            const workdir = os.homedir();
             if (!this.isCurrentWorkspacePreparation(cmd.sessionId, prepareVersion)) return;
-            this.sessionWorkdirs.set(cmd.sessionId, workdir);
+            this.workspaces.set(cmd.sessionId, workdir);
             this.send({ type: "register_session", sessionId: cmd.sessionId });
             this.send({ type: "workspace_ready", sessionId: cmd.sessionId, workdir });
           } catch (err) {
@@ -602,7 +599,7 @@ export class ContainerBridge implements IBridgeClient {
             throw err;
           }
         })();
-        this.workspacePreparations.track(cmd.sessionId, preparation);
+        this.trackWorkspacePreparation(cmd.sessionId, preparation);
         break;
       }
 
@@ -628,9 +625,9 @@ export class ContainerBridge implements IBridgeClient {
         // sibling session in the same group.
         // Supersede any in-flight prepare so its late completion cannot
         // overwrite the path the server just named.
-        this.beginWorkspacePreparation(cmd.sessionId);
-        this.workspacePreparations.clear(cmd.sessionId);
-        this.sessionWorkdirs.set(cmd.sessionId, cmd.workdir);
+        this.beginWorkspacePreparation(cmd.sessionId, cmd.sessionGroupId);
+        this.workspacePreparations.clear(this.workspaces.workspaceKey(cmd.sessionId));
+        this.workspaces.set(cmd.sessionId, cmd.workdir);
         if (cmd.readOnly) {
           this.readOnlySessions.add(cmd.sessionId);
         } else {
@@ -671,7 +668,7 @@ export class ContainerBridge implements IBridgeClient {
           designSystemPackage,
           sourceRepository,
         } = cmd;
-        const prepareVersion = this.beginWorkspacePreparation(sessionId);
+        const prepareVersion = this.beginWorkspacePreparation(sessionId, sessionGroupId);
         const preparation = (async () => {
           try {
             const { workdir, slug: workspaceSlug } = await createAppWorkspace({
@@ -704,7 +701,7 @@ export class ContainerBridge implements IBridgeClient {
               );
             }
             if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
-            this.sessionWorkdirs.set(sessionId, workdir);
+            this.workspaces.set(sessionId, workdir);
             this.send({ type: "register_session", sessionId });
             this.send({
               type: "workspace_ready",
@@ -722,7 +719,7 @@ export class ContainerBridge implements IBridgeClient {
             throw err;
           }
         })();
-        this.workspacePreparations.track(sessionId, preparation);
+        this.trackWorkspacePreparation(sessionId, preparation);
         break;
       }
 
@@ -737,7 +734,7 @@ export class ContainerBridge implements IBridgeClient {
           branch,
           preserveBranchName,
         } = cmd;
-        const prepareVersion = this.beginWorkspacePreparation(sessionId);
+        const prepareVersion = this.beginWorkspacePreparation(sessionId, sessionGroupId);
 
         const preparation = (async () => {
           try {
@@ -758,7 +755,7 @@ export class ContainerBridge implements IBridgeClient {
               slug,
             });
             if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
-            this.sessionWorkdirs.set(sessionId, workdir);
+            this.workspaces.set(sessionId, workdir);
             this.readOnlySessions.delete(sessionId);
             this.send({
               type: "workspace_ready",
@@ -776,7 +773,7 @@ export class ContainerBridge implements IBridgeClient {
             throw err;
           }
         })();
-        this.workspacePreparations.track(sessionId, preparation);
+        this.trackWorkspacePreparation(sessionId, preparation);
         break;
       }
 
@@ -823,11 +820,12 @@ export class ContainerBridge implements IBridgeClient {
         // workspace lives at this path (a slug dir under WORKSPACES_DIR).
         const appWorkdir =
           (typeof cmd.workdir === "string" ? cmd.workdir : null) ??
-          this.sessionWorkdirs.get(cmd.sessionId) ??
+          this.workspaces.get(cmd.sessionId) ??
           null;
-        this.sessionWorkdirs.delete(cmd.sessionId);
-        this.workspacePreparations.clear(cmd.sessionId);
-        this.workspacePrepareVersions.delete(cmd.sessionId);
+        const workspaceKey = this.workspaces.workspaceKey(cmd.sessionId);
+        this.workspaces.deleteSession(cmd.sessionId);
+        this.workspacePreparations.clear(workspaceKey);
+        this.workspacePrepareVersions.delete(workspaceKey);
         this.terminalManager.destroyForSession(cmd.sessionId);
 
         // App sessions run managed dev-server processes (keyed by
@@ -913,7 +911,7 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "pdf_export": {
-        const workdir = this.sessionWorkdirs.get(cmd.sessionId);
+        const workdir = this.workspaces.get(cmd.sessionId);
         if (!workdir) {
           this.send({
             type: "pdf_export_result",
@@ -949,7 +947,7 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "animation_export": {
-        const workdir = this.sessionWorkdirs.get(cmd.sessionId);
+        const workdir = this.workspaces.get(cmd.sessionId);
         if (!workdir) {
           this.send({
             type: "animation_export_result",
@@ -985,7 +983,7 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "design_system_export": {
-        const workdir = this.sessionWorkdirs.get(cmd.sessionId);
+        const workdir = this.workspaces.get(cmd.sessionId);
         if (!workdir) {
           this.send({
             type: "design_system_export_result",
@@ -1082,7 +1080,7 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "session_current_branch": {
-        const workdir = this.sessionWorkdirs.get(cmd.sessionId) ?? cmd.workdirHint;
+        const workdir = this.workspaces.get(cmd.sessionId) ?? cmd.workdirHint;
         if (!workdir) {
           this.send({
             type: "session_current_branch_result",
@@ -1116,7 +1114,7 @@ export class ContainerBridge implements IBridgeClient {
         break;
       }
       case "session_git_sync_status": {
-        const workdir = this.sessionWorkdirs.get(cmd.sessionId) ?? cmd.workdirHint;
+        const workdir = this.workspaces.get(cmd.sessionId) ?? cmd.workdirHint;
         if (!workdir) {
           this.send({
             type: "session_git_sync_status_result",
@@ -1151,7 +1149,7 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "list_files": {
-        handleListFiles(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
+        handleListFiles(cmd, this.workspaces, (msg) => this.send(msg), {
           gitLsFiles: (cwd, cb) =>
             execFile(
               "git",
@@ -1169,19 +1167,19 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "read_file": {
-        handleReadFile(cmd, this.sessionWorkdirs, (msg) => this.send(msg), { fs, path });
+        handleReadFile(cmd, this.workspaces, (msg) => this.send(msg), { fs, path });
         break;
       }
 
       case "write_file":
       case "write_file_guarded": {
-        handleWriteFile(cmd, this.sessionWorkdirs, (msg) => this.send(msg), { fs, path });
+        handleWriteFile(cmd, this.workspaces, (msg) => this.send(msg), { fs, path });
         break;
       }
 
       case "commit_file_changes":
       case "commit_scoped_file_changes": {
-        void handleCommitFileChanges(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
+        void handleCommitFileChanges(cmd, this.workspaces, (msg) => this.send(msg), {
           fs,
           path,
           gitExec: this.gitExec,
@@ -1190,7 +1188,7 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "worktree_changes": {
-        void handleWorktreeChanges(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
+        void handleWorktreeChanges(cmd, this.workspaces, (msg) => this.send(msg), {
           fs,
           path,
           gitExec: this.gitExec,
@@ -1199,7 +1197,7 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "revert_worktree_file": {
-        void handleRevertWorktreeFile(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
+        void handleRevertWorktreeFile(cmd, this.workspaces, (msg) => this.send(msg), {
           fs,
           path,
           gitExec: this.gitExec,
@@ -1208,17 +1206,17 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "branch_diff": {
-        void handleBranchDiff(cmd, this.sessionWorkdirs, (msg) => this.send(msg), this.gitExec);
+        void handleBranchDiff(cmd, this.workspaces, (msg) => this.send(msg), this.gitExec);
         break;
       }
 
       case "file_at_ref": {
-        void handleFileAtRef(cmd, this.sessionWorkdirs, (msg) => this.send(msg), this.gitExec);
+        void handleFileAtRef(cmd, this.workspaces, (msg) => this.send(msg), this.gitExec);
         break;
       }
 
       case "list_skills": {
-        void handleListSkills(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
+        void handleListSkills(cmd, this.workspaces, (msg) => this.send(msg), {
           userSkillsDirs: [],
           fs,
           path,

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import os from "node:os";
-import type { BridgeCommand, BridgeMessage } from "@trace/shared";
+import { WorkspaceRegistry, type BridgeCommand, type BridgeMessage } from "@trace/shared";
 import { WorkspacePreparationBarrier } from "./workspace-preparation.js";
 
 vi.mock("ws", async () => {
@@ -46,7 +46,7 @@ import { ContainerBridge } from "./bridge.js";
 
 type BridgeHarness = {
   handleCommand: (command: BridgeCommand) => void;
-  sessionWorkdirs: Map<string, string>;
+  workspaces: WorkspaceRegistry;
   workspacePreparations: WorkspacePreparationBarrier;
   runPrompt: ReturnType<typeof vi.fn>;
   sent: BridgeMessage[];
@@ -56,7 +56,7 @@ function createHarness(): BridgeHarness {
   const bridge = new ContainerBridge("ws://trace.test", "token", "runtime-1", "codex", false);
   const internals = bridge as unknown as {
     handleCommand: (command: BridgeCommand) => void;
-    sessionWorkdirs: Map<string, string>;
+    workspaces: WorkspaceRegistry;
     workspacePreparations: WorkspacePreparationBarrier;
     runPrompt: ReturnType<typeof vi.fn>;
     send: (message: BridgeMessage) => void;
@@ -66,7 +66,7 @@ function createHarness(): BridgeHarness {
   internals.send = (message) => sent.push(message);
   return {
     handleCommand: internals.handleCommand.bind(bridge),
-    sessionWorkdirs: internals.sessionWorkdirs,
+    workspaces: internals.workspaces,
     workspacePreparations: internals.workspacePreparations,
     runPrompt: internals.runPrompt,
     sent,
@@ -82,7 +82,7 @@ describe("ContainerBridge workspace preparation", () => {
     const preparation = new Promise<void>((resolve) => {
       finish = resolve;
     });
-    harness.workspacePreparations.track("session-1", preparation);
+    harness.workspacePreparations.track("session:session-1", preparation);
 
     harness.handleCommand({
       type: "run",
@@ -93,7 +93,7 @@ describe("ContainerBridge workspace preparation", () => {
     await Promise.resolve();
     expect(harness.runPrompt).not.toHaveBeenCalled();
 
-    harness.sessionWorkdirs.set("session-1", "/workspaces/ibex-2");
+    harness.workspaces.set("session-1", "/workspaces/ibex-2");
     finish();
 
     await vi.waitFor(() => expect(harness.runPrompt).toHaveBeenCalledTimes(1));
@@ -116,6 +116,6 @@ describe("ContainerBridge workspace preparation", () => {
         error: expect.stringContaining("no longer exists"),
       }),
     );
-    expect(harness.sessionWorkdirs.has("session-1")).toBe(false);
+    expect(harness.workspaces.has("session-1")).toBe(false);
   });
 });

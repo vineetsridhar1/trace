@@ -7275,6 +7275,8 @@ export class SessionService {
           select: {
             kind: true,
             slug: true,
+            connection: true,
+            workdir: true,
             designSystemVersion: {
               select: {
                 version: true,
@@ -8426,6 +8428,18 @@ export class SessionService {
       },
       { workdirRuntimeInstanceId },
     );
+    // The workspace is group-owned. Bind every sibling to that shared path
+    // before any queued or future session command can reach the bridge.
+    // WebSocket command ordering makes these bindings visible before replays.
+    const trackedSiblings =
+      session.sessionGroupId && workdirRuntimeInstanceId
+        ? await this.trackGroupWorkspaceSessions(
+            session.id,
+            session.sessionGroupId,
+            workdirRuntimeInstanceId,
+            workdir,
+          )
+        : [];
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
@@ -8592,24 +8606,19 @@ export class SessionService {
       }
     }
     if (session.sessionGroupId && workdirRuntimeInstanceId) {
-      await this.replayGroupPendingCommands(
-        session.id,
-        session.sessionGroupId,
-        workdirRuntimeInstanceId,
-      );
+      await this.replayGroupPendingCommands(workdirRuntimeInstanceId, trackedSiblings);
     }
   }
 
   private async replayGroupPendingCommands(
-    readySessionId: string,
-    sessionGroupId: string,
     runtimeInstanceId: string,
+    siblings: ReadonlyArray<{
+      id: string;
+      organizationId: string;
+      connection: unknown;
+      pendingRun: unknown;
+    }>,
   ): Promise<void> {
-    const siblings = await prisma.session.findMany({
-      where: { sessionGroupId, id: { not: readySessionId } },
-      select: { id: true, organizationId: true, connection: true, pendingRun: true },
-    });
-
     for (const sibling of siblings) {
       if (
         this.getConnectionRuntimeInstanceId(sibling.connection) !== runtimeInstanceId ||
@@ -8627,6 +8636,53 @@ export class SessionService {
         );
       }
     }
+  }
+
+  private async trackGroupWorkspaceSessions(
+    readySessionId: string,
+    sessionGroupId: string,
+    runtimeInstanceId: string,
+    workdir: string,
+  ): Promise<
+    Array<{
+      id: string;
+      organizationId: string;
+      connection: Prisma.JsonValue;
+      pendingRun: Prisma.JsonValue | null;
+    }>
+  > {
+    const siblings = await prisma.session.findMany({
+      where: { sessionGroupId, id: { not: readySessionId } },
+      select: {
+        id: true,
+        organizationId: true,
+        connection: true,
+        readOnlyWorkspace: true,
+        pendingRun: true,
+      },
+    });
+
+    const trackedSiblings: typeof siblings = [];
+    await Promise.all(
+      siblings.map(async (sibling) => {
+        if (this.getConnectionRuntimeInstanceId(sibling.connection) !== runtimeInstanceId) return;
+        const result = await sendRuntimeCommand(
+          runtimeInstanceId,
+          {
+            type: "track_session",
+            sessionId: sibling.id,
+            sessionGroupId,
+            workdir,
+            readOnly: sibling.readOnlyWorkspace,
+          },
+          sibling.organizationId,
+        );
+        if (result !== "delivered") {
+          console.warn(`[session] failed to bind group workspace for ${sibling.id}: ${result}`);
+        } else trackedSiblings.push(sibling);
+      }),
+    );
+    return trackedSiblings;
   }
 
   async workspaceFailed(sessionId: string, error: string) {
@@ -9186,6 +9242,8 @@ export class SessionService {
         sessionGroup: {
           select: {
             kind: true,
+            connection: true,
+            workdir: true,
             designSystemVersion: {
               select: {
                 version: true,
@@ -12193,9 +12251,19 @@ export class SessionService {
     repoId?: string | null;
     workdir?: string | null;
     connection: unknown;
-    sessionGroup?: { kind?: SessionGroupKind | null } | null;
+    sessionGroup?: {
+      kind?: SessionGroupKind | null;
+      connection?: unknown;
+      workdir?: string | null;
+    } | null;
   }): boolean {
     if (!this.requiresPreparedWorkspace(session)) return true;
+    if (
+      session.sessionGroup &&
+      (session.sessionGroup.workdir || workspaceState(session.sessionGroup.connection))
+    ) {
+      return hasReadyWorkspace(session.sessionGroup.connection, session.sessionGroup.workdir);
+    }
     return hasReadyWorkspace(session.connection, session.workdir);
   }
 
@@ -12360,6 +12428,8 @@ export class SessionService {
         sessionGroup: {
           select: {
             kind: true,
+            connection: true,
+            workdir: true,
             designSystemVersion: {
               select: {
                 version: true,

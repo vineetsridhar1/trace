@@ -444,7 +444,11 @@ describe("SessionApplicationService", () => {
           id: "session-1",
           hosting: "cloud",
           workdir: "/workspace",
-          connection: { runtimeInstanceId: "runtime-1" },
+          connection: {
+            state: "connected",
+            workspaceState: "ready",
+            runtimeInstanceId: "runtime-1",
+          },
         },
       ],
     });
@@ -477,7 +481,11 @@ describe("SessionApplicationService", () => {
           id: "session-1",
           hosting: "cloud",
           workdir: "/workspace",
-          connection: { runtimeInstanceId: "runtime-1" },
+          connection: {
+            state: "connected",
+            workspaceState: "ready",
+            runtimeInstanceId: "runtime-1",
+          },
         },
       ],
     });

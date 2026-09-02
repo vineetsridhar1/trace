@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { BridgeMessage } from "@trace/shared";
+import os from "node:os";
+import { WorkspaceRegistry, type BridgeMessage } from "@trace/shared";
 
 const { createWorktreeMock } = vi.hoisted(() => ({ createWorktreeMock: vi.fn() }));
 
@@ -90,7 +91,7 @@ function createHarness(): Harness {
   const runPrompt = vi.fn().mockResolvedValue(undefined);
 
   Object.assign(client as unknown as Record<string, unknown>, {
-    sessionWorkdirs: new Map<string, string>(),
+    sessionWorkdirs: new WorkspaceRegistry(),
     sessionGroupIds: new Map<string, string | null>(),
     pendingWorktrees: new Map(),
     sessionPrepares: new Map(),

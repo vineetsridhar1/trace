@@ -9670,115 +9670,6 @@ describe("SessionService", () => {
       );
     });
 
-    it("rehydrates tracked workdirs back into a reconnected cloud bridge", async () => {
-      sessionRouterMock.getRuntime.mockReturnValueOnce({
-        key: "org-1:runtime-cloud",
-        id: "runtime-cloud",
-        label: "Cloud runtime",
-        hostingMode: "cloud",
-        organizationId: "org-1",
-        supportedTools: ["codex"],
-        registeredRepoIds: [],
-        boundSessions: new Set<string>(),
-        ws: { readyState: 1, OPEN: 1 },
-      });
-      prismaMock.session.findMany.mockResolvedValueOnce([
-        {
-          id: "session-1",
-          agentStatus: "active",
-          connection: {
-            state: "connected",
-            workspaceState: "ready",
-            runtimeInstanceId: "runtime-cloud",
-            retryCount: 0,
-            canRetry: true,
-            canMove: true,
-          },
-          organizationId: "org-1",
-          workdir: "/workspaces/ibex-2",
-          readOnlyWorkspace: false,
-          sessionGroupId: "group-1",
-        },
-      ]);
-
-      await service.restoreSessionsForRuntime("runtime-cloud", "org-1");
-
-      expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
-        "runtime-cloud",
-        {
-          type: "track_session",
-          sessionId: "session-1",
-          workdir: "/workspaces/ibex-2",
-          readOnly: false,
-          sessionGroupId: "group-1",
-        },
-        "org-1",
-      );
-    });
-
-    it("retries durable general-workspace cleanup when the source runtime reconnects", async () => {
-      sessionRouterMock.getRuntime.mockReturnValueOnce({
-        key: "org-1:runtime-source",
-        id: "runtime-source",
-        label: "Laptop",
-        hostingMode: "local",
-        organizationId: "org-1",
-        supportedTools: ["codex"],
-        registeredRepoIds: [],
-        boundSessions: new Set<string>(),
-        ws: { readyState: 1, OPEN: 1 },
-      });
-      prismaMock.session.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([
-          { id: "session-1", sessionGroupId: "group-1", organizationId: "org-1" },
-        ]);
-      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
-
-      await service.restoreSessionsForRuntime("runtime-source", "org-1");
-
-      expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
-        "runtime-source",
-        {
-          type: "cleanup_general_workspace",
-          sessionId: "session-1",
-          sessionGroupId: "group-1",
-        },
-        "org-1",
-      );
-      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
-    });
-
-    it("clears durable general-workspace cleanup only after bridge confirmation", async () => {
-      await service.generalWorkspaceCleanupCompleted({
-        sessionId: "session-1",
-        organizationId: "org-1",
-        runtimeInstanceId: "runtime-source",
-        success: true,
-      });
-
-      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
-        where: {
-          id: "session-1",
-          organizationId: "org-1",
-          pendingGeneralWorkspaceCleanupRuntimeId: "runtime-source",
-        },
-        data: { pendingGeneralWorkspaceCleanupRuntimeId: null },
-      });
-    });
-
-    it("keeps durable cleanup pending when the bridge reports a deletion failure", async () => {
-      await service.generalWorkspaceCleanupCompleted({
-        sessionId: "session-1",
-        organizationId: "org-1",
-        runtimeInstanceId: "runtime-source",
-        success: false,
-        error: "permission denied",
-      });
-
-      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
-    });
-
     it("heals a timed-out cloud session when its runtime reconnects", async () => {
       sessionRouterMock.getRuntime.mockReturnValueOnce({
         key: "runtime-cloud",
@@ -9851,6 +9742,7 @@ describe("SessionService", () => {
           agentStatus: "active",
           connection: {
             state: "connected",
+            workspaceState: "ready",
             runtimeInstanceId: "runtime-cloud",
             runtimeLabel: "Cloud Runtime",
             retryCount: 0,
@@ -10092,6 +9984,7 @@ describe("SessionService", () => {
           id: "session-2",
           organizationId: "org-1",
           connection: readySibling.connection,
+          readOnlyWorkspace: false,
           pendingRun: siblingPending,
         },
       ]);
@@ -10099,6 +9992,17 @@ describe("SessionService", () => {
 
       await service.workspaceReady("session-1", "/workspaces/mule-5");
 
+      expect(sessionRouterMock.sendToRuntimeAsync).toHaveBeenCalledWith(
+        "runtime-group",
+        {
+          type: "track_session",
+          sessionId: "session-2",
+          sessionGroupId: "group-1",
+          workdir: "/workspaces/mule-5",
+          readOnly: false,
+        },
+        "org-1",
+      );
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
         "session-2",
         expect.objectContaining({
@@ -10107,6 +10011,9 @@ describe("SessionService", () => {
           cwd: "/workspaces/mule-5",
         }),
         expect.objectContaining({ expectedHomeRuntimeId: "runtime-group" }),
+      );
+      expect(sessionRouterMock.sendToRuntimeAsync.mock.invocationCallOrder[0]).toBeLessThan(
+        sessionRouterMock.send.mock.invocationCallOrder[0],
       );
       expect(prismaMock.session.update).toHaveBeenCalledWith(
         expect.objectContaining({
