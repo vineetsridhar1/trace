@@ -25,6 +25,7 @@ import {
   type BridgeRepoWorktree,
   type BridgePrepareGeneralCommand,
 } from "@trace/shared";
+import { hasReadyWorkspace, workspaceState, type WorkspaceState } from "./workspace-readiness.js";
 import { generateAnimalSlug } from "@trace/shared/animal-names";
 import { isLegacyGeneralWorkspacePath } from "@trace/shared/general-workspace";
 import { prisma } from "../lib/db.js";
@@ -307,6 +308,8 @@ export type SessionConnectionData = {
     | "deprovision_failed";
   environmentId?: string;
   adapterType?: "local" | "provisioned";
+  /** Runtime connectivity and workspace preparation are independent phases. */
+  workspaceState?: WorkspaceState;
   toolSource?: "default" | "explicit";
   runtimeInstanceId?: string;
   /**
@@ -2231,6 +2234,7 @@ export class SessionService {
     adapterType: RuntimeAdapterType | null,
   ): Partial<SessionConnectionData> {
     const now = new Date().toISOString();
+    const currentWorkspaceState = workspaceState(conn);
     const runtimePatch: Partial<SessionConnectionData> = {
       ...(update.runtimeInstanceId && { runtimeInstanceId: update.runtimeInstanceId }),
       ...(update.runtimeLabel && { runtimeLabel: update.runtimeLabel }),
@@ -2302,14 +2306,19 @@ export class SessionService {
       case "session_runtime_connected":
         return {
           ...runtimePatch,
-          state: "connected",
+          state:
+            currentWorkspaceState === "preparing"
+              ? "connecting"
+              : currentWorkspaceState === "failed"
+                ? "failed"
+                : "connected",
           connectedAt: now,
           lastSeen: now,
-          lastError: undefined,
+          lastError: currentWorkspaceState === "failed" ? conn.lastError : undefined,
           retryCount: 0,
           canRetry: true,
           canMove: true,
-          autoRetryable: true,
+          autoRetryable: currentWorkspaceState === "failed" ? false : true,
         };
       case "session_runtime_start_failed":
         return {
@@ -4730,6 +4739,7 @@ export class SessionService {
       : connJson(
           defaultConnection({
             ...(deferRuntimeSelection && { state: "pending" }),
+            ...(needsRuntimeProvisioning && !deferRuntimeSelection && { state: "connecting" }),
             toolSource: hasExplicitTool ? "explicit" : "default",
             ...(requestedEnvironment && {
               environmentId: requestedEnvironment.id,
@@ -4737,6 +4747,7 @@ export class SessionService {
             }),
             ...(requestedRuntimeInstanceId && { runtimeInstanceId: requestedRuntimeInstanceId }),
             ...(runtimeLabel && { runtimeLabel }),
+            ...(needsRuntimeProvisioning && { workspaceState: "preparing" }),
           }),
         );
 
@@ -5281,6 +5292,7 @@ export class SessionService {
           sessionStatus: getRunningSessionStatus(session.sessionStatus),
           connection: this.mergeConnection(session.connection, {
             state: "connecting",
+            workspaceState: "preparing",
             runtimeInstanceId: input.runtimeInstanceId,
             runtimeLabel:
               runtimeMetadata(input.runtimeInstanceId, session.organizationId)?.label ??
@@ -5394,17 +5406,17 @@ export class SessionService {
           pendingRun: pendingRunValue([...commands, pendingCommand]),
           ...(shouldProvision ? { agentStatus: "active" } : {}),
           sessionStatus: getRunningSessionStatus(session.sessionStatus),
-          ...(shouldProvision &&
-            session.hosting === "local" && {
-              connection: this.mergeConnection(session.connection, {
-                state: "connecting",
-                ...(runtimeBinding.runtimeId &&
-                  !conn.runtimeInstanceId && {
-                    runtimeInstanceId: runtimeBinding.runtimeId,
-                    runtimeLabel: runtimeBinding.runtimeLabel ?? undefined,
-                  }),
-              }),
+          ...(shouldProvision && {
+            connection: this.mergeConnection(session.connection, {
+              state: "connecting",
+              workspaceState: "preparing",
+              ...(runtimeBinding.runtimeId &&
+                !conn.runtimeInstanceId && {
+                  runtimeInstanceId: runtimeBinding.runtimeId,
+                  runtimeLabel: runtimeBinding.runtimeLabel ?? undefined,
+                }),
             }),
+          }),
         },
         include: SESSION_INCLUDE,
       });
@@ -6051,7 +6063,10 @@ export class SessionService {
       data.hosting = newHosting;
       data.connection = connJson(
         defaultConnection({
-          ...(shouldProvisionPendingRun && { state: "connecting" }),
+          ...(shouldProvisionPendingRun && {
+            state: "connecting",
+            workspaceState: "preparing",
+          }),
           ...(requestedEnvironment && {
             environmentId: requestedEnvironment.id,
             adapterType: requestedEnvironment.adapterType,
@@ -6706,7 +6721,7 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         sessionGroupId: true,
-        sessionGroup: { select: { kind: true, slug: true } },
+        sessionGroup: { select: { kind: true, slug: true, connection: true, workdir: true } },
         channel: { select: { baseBranch: true } },
         connection: true,
         pendingRun: true,
@@ -6830,17 +6845,17 @@ export class SessionService {
           sessionStatus: pendingSessionStatus,
           lastMessageAt: new Date(),
           ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
-          ...(shouldProvision &&
-            session.hosting === "local" && {
-              connection: this.mergeConnection(session.connection, {
-                state: "connecting",
-                ...(runtimeBinding.runtimeId &&
-                  !conn.runtimeInstanceId && {
-                    runtimeInstanceId: runtimeBinding.runtimeId,
-                    runtimeLabel: runtimeBinding.runtimeLabel ?? undefined,
-                  }),
-              }),
+          ...(shouldProvision && {
+            connection: this.mergeConnection(session.connection, {
+              state: "connecting",
+              workspaceState: "preparing",
+              ...(runtimeBinding.runtimeId &&
+                !conn.runtimeInstanceId && {
+                  runtimeInstanceId: runtimeBinding.runtimeId,
+                  runtimeLabel: runtimeBinding.runtimeLabel ?? undefined,
+                }),
             }),
+          }),
         },
         session.pendingRun,
       );
@@ -7639,6 +7654,7 @@ export class SessionService {
         const readyConnection = connJson({
           ...previousConnection,
           state: "connected",
+          workspaceState: "ready",
           lastSeen: new Date().toISOString(),
           lastError: undefined,
           failedAt: undefined,
@@ -7696,6 +7712,18 @@ export class SessionService {
       },
       { workdirRuntimeInstanceId },
     );
+    // The workspace is group-owned. Bind every sibling to that shared path
+    // before any queued or future session command can reach the bridge.
+    // WebSocket command ordering makes these bindings visible before replays.
+    const trackedSiblings =
+      session.sessionGroupId && workdirRuntimeInstanceId
+        ? await this.trackGroupWorkspaceSessions(
+            session.id,
+            session.sessionGroupId,
+            workdirRuntimeInstanceId,
+            workdir,
+          )
+        : [];
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
@@ -7790,11 +7818,7 @@ export class SessionService {
     }
 
     if (session.sessionGroupId && workdirRuntimeInstanceId) {
-      await this.replayGroupPendingCommands(
-        session.id,
-        session.sessionGroupId,
-        workdirRuntimeInstanceId,
-      );
+      await this.replayGroupPendingCommands(workdirRuntimeInstanceId, trackedSiblings);
     }
 
     const applications =
@@ -7829,15 +7853,14 @@ export class SessionService {
   }
 
   private async replayGroupPendingCommands(
-    readySessionId: string,
-    sessionGroupId: string,
     runtimeInstanceId: string,
+    siblings: ReadonlyArray<{
+      id: string;
+      organizationId: string;
+      connection: unknown;
+      pendingRun: unknown;
+    }>,
   ): Promise<void> {
-    const siblings = await prisma.session.findMany({
-      where: { sessionGroupId, id: { not: readySessionId } },
-      select: { id: true, organizationId: true, connection: true, pendingRun: true },
-    });
-
     for (const sibling of siblings) {
       if (
         this.getConnectionRuntimeInstanceId(sibling.connection) !== runtimeInstanceId ||
@@ -7857,6 +7880,53 @@ export class SessionService {
     }
   }
 
+  private async trackGroupWorkspaceSessions(
+    readySessionId: string,
+    sessionGroupId: string,
+    runtimeInstanceId: string,
+    workdir: string,
+  ): Promise<
+    Array<{
+      id: string;
+      organizationId: string;
+      connection: Prisma.JsonValue;
+      pendingRun: Prisma.JsonValue | null;
+    }>
+  > {
+    const siblings = await prisma.session.findMany({
+      where: { sessionGroupId, id: { not: readySessionId } },
+      select: {
+        id: true,
+        organizationId: true,
+        connection: true,
+        readOnlyWorkspace: true,
+        pendingRun: true,
+      },
+    });
+
+    const trackedSiblings: typeof siblings = [];
+    await Promise.all(
+      siblings.map(async (sibling) => {
+        if (this.getConnectionRuntimeInstanceId(sibling.connection) !== runtimeInstanceId) return;
+        const result = await sendRuntimeCommand(
+          runtimeInstanceId,
+          {
+            type: "track_session",
+            sessionId: sibling.id,
+            sessionGroupId,
+            workdir,
+            readOnly: sibling.readOnlyWorkspace,
+          },
+          sibling.organizationId,
+        );
+        if (result !== "delivered") {
+          console.warn(`[session] failed to bind group workspace for ${sibling.id}: ${result}`);
+        } else trackedSiblings.push(sibling);
+      }),
+    );
+    return trackedSiblings;
+  }
+
   async workspaceFailed(sessionId: string, error: string) {
     const prev = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
@@ -7870,6 +7940,7 @@ export class SessionService {
     const nextConnection = connJson({
       ...conn,
       state: failedState,
+      workspaceState: "failed",
       lastError: error,
       canRetry: true,
       canMove: true,
@@ -7952,6 +8023,12 @@ export class SessionService {
     const targetSession = group.sessions[0];
     if (!targetSession) {
       throw new Error("Cannot retry setup without a session");
+    }
+    if (
+      !hasReadyWorkspace(group.connection, group.workdir) &&
+      !hasReadyWorkspace(targetSession.connection, group.workdir)
+    ) {
+      throw new Error("Cannot retry setup until the workspace is ready");
     }
 
     const runtimeInstanceId =
@@ -8167,17 +8244,23 @@ export class SessionService {
       // method runs. Repeat that fence at the write boundary so a reconnect
       // racing with Move cannot reclaim a superseded generation.
       if (conn.runtimeInstanceId !== runtimeInstanceId) return null;
+      const currentWorkspaceState = workspaceState(conn);
       return {
         ...conn,
-        state: "connected",
+        state:
+          currentWorkspaceState === "preparing"
+            ? "connecting"
+            : currentWorkspaceState === "failed"
+              ? "failed"
+              : "connected",
         runtimeLabel:
           runtimeMetadata(runtimeInstanceId, session.organizationId)?.label ?? conn.runtimeLabel,
         connectedAt: restoredAt,
         lastSeen: restoredAt,
-        lastError: undefined,
+        lastError: currentWorkspaceState === "failed" ? conn.lastError : undefined,
         canRetry: true,
         canMove: true,
-        autoRetryable: true,
+        autoRetryable: currentWorkspaceState === "failed" ? false : true,
       };
     });
     if (!result) return;
@@ -8296,7 +8379,8 @@ export class SessionService {
     for (const session of sessions) {
       sessionRouter.bindSession(session.id, runtime.key);
 
-      if (runtime.hostingMode === "local" && session.workdir) {
+      const conn = this.parseConnection(session.connection);
+      if (hasReadyWorkspace(conn, session.workdir)) {
         void sendRuntimeCommand(
           runtime.id,
           {
@@ -8320,7 +8404,6 @@ export class SessionService {
       // the state the incident session was in — and leaving it reading
       // `disconnected` against a live runtime is what sends the next user
       // action down the destructive retry path.
-      const conn = this.parseConnection(session.connection);
       if (conn.state === "disconnected" || conn.state === "timed_out") {
         // A disconnect this runtime immediately reversed means the fence lost
         // its race — the generation stamp landed after the close callback's
@@ -8432,7 +8515,7 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         sessionGroupId: true,
-        sessionGroup: { select: { kind: true } },
+        sessionGroup: { select: { kind: true, connection: true, workdir: true } },
         connection: true,
       },
     });
@@ -8725,6 +8808,7 @@ export class SessionService {
       return {
         ...current,
         state: needsWorkspacePreparation ? "connecting" : "connected",
+        workspaceState: needsWorkspacePreparation ? "preparing" : current.workspaceState,
         runtimeInstanceId: runtime.id,
         runtimeLabel: runtime.label,
         connectedAt: restoredAt,
@@ -8753,10 +8837,7 @@ export class SessionService {
       // checkout is essential: creating a new worktree for the same branch is
       // rejected by Git. Only recover an unambiguous, Trace-managed match.
       const recoveredWorkspaceSlug =
-        session.hosting === "local" &&
-        session.repo &&
-        session.branch &&
-        !session.sessionGroup?.slug
+        session.hosting === "local" && session.repo && session.branch && !session.sessionGroup?.slug
           ? await sessionRouter
               .listRepoWorktrees(runtime.key, session.repo.id)
               .then((worktrees) => {
@@ -9236,13 +9317,16 @@ export class SessionService {
     const nextConnectionBase = reuseCloudRuntime
       ? {
           ...sourceConnection,
-          state: "connected" as const,
+          state: "connecting" as const,
+          workspaceState: "preparing" as const,
           adapterType: "provisioned" as const,
           runtimeInstanceId: reuseCloudRuntime.id,
           runtimeLabel: reuseCloudRuntime.label,
         }
       : targetHosting === "local"
         ? defaultConnection({
+            state: "connecting",
+            workspaceState: "preparing",
             runtimeInstanceId: targetRuntimeInstanceId ?? undefined,
             runtimeLabel: targetRuntimeLabel ?? undefined,
           })
@@ -9250,6 +9334,7 @@ export class SessionService {
             adapterType: "provisioned",
             environmentId: targetEnvironment?.id ?? sourceConnection.environmentId,
             state: "requested",
+            workspaceState: "preparing",
             requestedAt: replacementRequestedAt,
           });
 
@@ -11135,12 +11220,20 @@ export class SessionService {
     repoId?: string | null;
     workdir?: string | null;
     connection: unknown;
-    sessionGroup?: { kind?: SessionGroupKind | null } | null;
+    sessionGroup?: {
+      kind?: SessionGroupKind | null;
+      connection?: unknown;
+      workdir?: string | null;
+    } | null;
   }): boolean {
     if (!this.requiresPreparedWorkspace(session)) return true;
-    return (
-      Boolean(session.workdir) && this.parseConnection(session.connection).state === "connected"
-    );
+    if (
+      session.sessionGroup &&
+      (session.sessionGroup.workdir || workspaceState(session.sessionGroup.connection))
+    ) {
+      return hasReadyWorkspace(session.sessionGroup.connection, session.sessionGroup.workdir);
+    }
+    return hasReadyWorkspace(session.connection, session.workdir);
   }
 
   private parsePendingCommand(raw: unknown): PendingSessionCommand | null {
@@ -11296,7 +11389,7 @@ export class SessionService {
         repoId: true,
         connection: true,
         sessionGroupId: true,
-        sessionGroup: { select: { kind: true } },
+        sessionGroup: { select: { kind: true, connection: true, workdir: true } },
       },
     });
 

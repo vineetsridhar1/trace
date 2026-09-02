@@ -7,6 +7,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@trace/shared/animal-names": `${sharedSrc}animal-names.ts`,
+      "@trace/shared/general-workspace": `${sharedSrc}general-workspace.ts`,
+      "@trace/shared/trace-invocation-env": `${sharedSrc}trace-invocation-env.ts`,
+      "@trace/shared/trace-runtime": `${sharedSrc}trace-runtime.ts`,
       "@trace/shared": `${sharedSrc}index.ts`,
     },
   },

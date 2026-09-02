@@ -26,6 +26,7 @@ import {
   type AppEnvVar,
 } from "../config/hardcoded-applications.js";
 import { createEndpointPreviewToken } from "./endpoint-preview-auth.js";
+import { hasReadyWorkspace } from "./workspace-readiness.js";
 
 async function sendRuntimeCommand(...args: Parameters<typeof sessionRouter.sendToRuntimeAsync>) {
   return sessionRouter.sendToRuntimeAsync(...args);
@@ -47,6 +48,7 @@ type ManagedSessionGroup = {
   visibility: string;
   repoId: string | null;
   workdir: string | null;
+  connection: Prisma.JsonValue;
   sessions: Array<{
     id: string;
     hosting: string;
@@ -1573,6 +1575,7 @@ export class SessionApplicationService {
         visibility: true,
         repoId: true,
         workdir: true,
+        connection: true,
         repo: { select: { id: true, name: true, remoteUrl: true, setupConfig: true } },
         sessions: {
           select: { id: true, hosting: true, workdir: true, connection: true },
@@ -1591,12 +1594,27 @@ export class SessionApplicationService {
         "Application forwarding is currently only available for cloud sessions",
       );
     }
-    const session = group.sessions.find((candidate) =>
-      connectionRuntimeInstanceId(candidate.connection),
-    );
-    if (!session) throw new ValidationError("Session group does not have a connected runtime");
-    const runtimeId = connectionRuntimeInstanceId(session.connection);
-    if (!runtimeId) throw new ValidationError("Session group does not have a connected runtime");
+    const groupRuntimeId = connectionRuntimeInstanceId(group.connection);
+    const session = groupRuntimeId
+      ? group.sessions.find(
+          (candidate) =>
+            candidate.hosting === "cloud" &&
+            connectionRuntimeInstanceId(candidate.connection) === groupRuntimeId,
+        )
+      : group.sessions.find(
+          (candidate) =>
+            candidate.hosting === "cloud" &&
+            hasReadyWorkspace(candidate.connection, candidate.workdir),
+        );
+    const runtimeId = groupRuntimeId ?? connectionRuntimeInstanceId(session?.connection ?? null);
+    const readinessConnection = groupRuntimeId ? group.connection : session?.connection;
+    if (
+      !session ||
+      !runtimeId ||
+      !hasReadyWorkspace(readinessConnection, group.workdir ?? session.workdir)
+    ) {
+      throw new ValidationError("Session workspace is not ready yet");
+    }
     const resolution = await sessionRouter.resolveRuntime(runtimeId, organizationId);
     if (resolution.state === "unreachable") {
       throw new Error("Runtime routing is temporarily unavailable");

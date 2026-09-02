@@ -1138,7 +1138,7 @@ function isLikelyBinaryFile(buffer: Buffer): boolean {
  */
 export function handleListFiles(
   cmd: BridgeListFilesCommand,
-  sessionWorkdirs: Map<string, string>,
+  sessionWorkdirs: ReadonlyMap<string, string>,
   send: (msg: BridgeMessage) => void,
   deps: { gitLsFiles: GitLsFilesFn; fs: BridgeFsLike; path: BridgePathLike },
 ): void {
@@ -1171,7 +1171,7 @@ export function handleListFiles(
  */
 export function handleReadFile(
   cmd: BridgeReadFileCommand,
-  sessionWorkdirs: Map<string, string>,
+  sessionWorkdirs: ReadonlyMap<string, string>,
   send: (msg: BridgeMessage) => void,
   deps: { fs: BridgeFsLike; path: BridgePathLike },
 ): void {
@@ -1256,7 +1256,7 @@ export function handleReadFile(
  */
 export function handleWriteFile(
   cmd: BridgeWriteFileCommand,
-  sessionWorkdirs: Map<string, string>,
+  sessionWorkdirs: ReadonlyMap<string, string>,
   send: (msg: BridgeMessage) => void,
   deps: { fs: BridgeFsLike; path: BridgePathLike },
 ): void {
@@ -1318,7 +1318,7 @@ export function handleWriteFile(
  */
 export async function handleCommitFileChanges(
   cmd: BridgeCommitFileChangesCommand,
-  sessionWorkdirs: Map<string, string>,
+  sessionWorkdirs: ReadonlyMap<string, string>,
   send: (msg: BridgeMessage) => void,
   deps: { fs: BridgeFsLike; path: BridgePathLike; gitExec: GitExecFn },
 ): Promise<void> {
@@ -1358,7 +1358,7 @@ export async function handleCommitFileChanges(
 
 export async function handleWorktreeChanges(
   cmd: BridgeWorktreeChangesCommand,
-  sessionWorkdirs: Map<string, string>,
+  sessionWorkdirs: ReadonlyMap<string, string>,
   send: (msg: BridgeMessage) => void,
   deps: { fs: BridgeFsLike; path: BridgePathLike; gitExec: GitExecFn },
 ): Promise<void> {
@@ -1413,7 +1413,7 @@ export async function handleWorktreeChanges(
 
 export async function handleRevertWorktreeFile(
   cmd: BridgeRevertWorktreeFileCommand,
-  sessionWorkdirs: Map<string, string>,
+  sessionWorkdirs: ReadonlyMap<string, string>,
   send: (msg: BridgeMessage) => void,
   deps: { fs: BridgeFsLike; path: BridgePathLike; gitExec: GitExecFn },
 ): Promise<void> {
@@ -1600,7 +1600,7 @@ function hasInvalidGitRef(ref: string): boolean {
  */
 export async function handleBranchDiff(
   cmd: BridgeBranchDiffCommand,
-  sessionWorkdirs: Map<string, string>,
+  sessionWorkdirs: ReadonlyMap<string, string>,
   send: (msg: BridgeMessage) => void,
   gitExec: GitExecFn,
 ): Promise<void> {
@@ -1669,7 +1669,7 @@ export async function handleBranchDiff(
  */
 export async function handleFileAtRef(
   cmd: BridgeFileAtRefCommand,
-  sessionWorkdirs: Map<string, string>,
+  sessionWorkdirs: ReadonlyMap<string, string>,
   send: (msg: BridgeMessage) => void,
   gitExec: GitExecFn,
 ): Promise<void> {
@@ -1717,7 +1717,7 @@ export async function handleFileAtRef(
  */
 export async function handleListSkills(
   cmd: BridgeListSkillsCommand,
-  sessionWorkdirs: Map<string, string>,
+  sessionWorkdirs: ReadonlyMap<string, string>,
   send: (msg: BridgeMessage) => void,
   deps: {
     userSkillsDirs: string[];

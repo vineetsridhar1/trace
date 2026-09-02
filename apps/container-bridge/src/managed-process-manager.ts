@@ -202,7 +202,7 @@ export class ManagedProcessManager {
   private readonly endpointForwarder: EndpointForwarder;
 
   constructor(
-    private readonly sessionWorkdirs: Map<string, string>,
+    private readonly sessionWorkdirs: ReadonlyMap<string, string>,
     private readonly send: SendFn,
   ) {
     this.endpointForwarder = new EndpointForwarder(send);
