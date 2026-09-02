@@ -1123,7 +1123,7 @@ When the request involves discovering, creating, messaging, running, stopping, m
 
 /** Make the CLI a self-describing platform surface instead of requiring one skill per capability. */
 const TRACE_CLI_DISCOVERY_INSTRUCTION = `\n\n<system-instruction>
-When you need a Trace platform capability, first run \`"$TRACE_CLI" --help --json\`, then inspect the relevant group and leaf help with \`"$TRACE_CLI" <group> --help --json\` and \`"$TRACE_CLI" <group> <command> --help --json\`. Follow the returned workflow, effects, output, and next-step guidance. Invoke the managed CLI using \`"$TRACE_CLI"\` exactly; do not call a bare \`trace\` command, call Trace GraphQL directly, or print $TRACE_INVOCATION_TOKEN.
+When you need a Trace capability, run \`"$TRACE_CLI" --help --json\`, then the relevant group and leaf help; follow its guidance. Use \`"$TRACE_CLI"\`, never bare \`trace\` or direct GraphQL, and never print $TRACE_INVOCATION_TOKEN. Before sharing a Trace preview, app, or forwarded-port URL, run \`curl -fsS --max-time 10 -o /dev/null <url>\` against that exact public URL. Only call it working on success. A 401/403 means it is private: disclose that the recipient needs Trace access.
 </system-instruction>`;
 
 const GENERAL_SESSION_INSTRUCTION = `\n\n<system-instruction>

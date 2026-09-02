@@ -6670,6 +6670,13 @@ describe("SessionService", () => {
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
         "session-1",
         expect.objectContaining({
+          prompt: expect.stringContaining("Only call it working on success."),
+        }),
+        expect.any(Object),
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
           prompt: expect.stringContaining("$TRACE_SKILLS_DIR/trace-session/SKILL.md completely"),
         }),
         expect.any(Object),
