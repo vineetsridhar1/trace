@@ -40,6 +40,7 @@ export type {
   BridgeRunCommand,
   BridgeSendCommand,
   BridgePrepareCommand,
+  BridgePrepareGeneralCommand,
   BridgePrepareAppCommand,
   BridgeTerminateCommand,
   BridgePauseCommand,

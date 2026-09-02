@@ -3,8 +3,8 @@
  * Defines the wire protocol between bridge clients and the server's /bridge WebSocket.
  */
 
-export const BRIDGE_PROTOCOL_VERSION = 5;
-export const GENERAL_WORKSPACE_PROTOCOL_VERSION = 3;
+export const BRIDGE_PROTOCOL_VERSION = 6;
+export const GENERAL_WORKSPACE_PROTOCOL_VERSION = 6;
 
 /**
  * Resolve the only directory a bridge may use to start an agent. Missing
@@ -91,6 +91,12 @@ export interface BridgePrepareGeneralCommand {
   type: "prepare_general";
   sessionId: string;
   sessionGroupId?: string;
+  /** When present, start the general session in this repository's root. */
+  repoId?: string;
+  repoName?: string;
+  repoRemoteUrl?: string | null;
+  defaultBranch?: string;
+  branch?: string;
 }
 
 export interface BridgeCleanupGeneralWorkspaceCommand {

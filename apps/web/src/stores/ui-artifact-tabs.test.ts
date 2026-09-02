@@ -16,6 +16,8 @@ describe("artifact tabs", () => {
     useUIStore.setState({
       openArtifactTabsByGroup: {},
       activeArtifactIdsByGroup: {},
+      openFileTabsByGroup: {},
+      activeFilePathsByGroup: {},
       openSessionTabsByGroup: {},
       hiddenSessionTabsByGroup: {},
       activeChannelId: null,
@@ -50,6 +52,38 @@ describe("artifact tabs", () => {
 
     expect(useUIStore.getState().openArtifactTabsByGroup.group_1).toEqual(["artifact_1"]);
     expect(useUIStore.getState().activeArtifactIdsByGroup.group_1).toBe("artifact_1");
+  });
+
+  it("keeps open files and their active file scoped to a session group", () => {
+    const state = useUIStore.getState();
+    state.openFileTab("group_1", { filePath: "src/one.ts", fileName: "one.ts" });
+    state.openFileTab("group_1", { filePath: "src/two.ts", fileName: "two.ts" });
+    state.openFileTab("group_2", { filePath: "src/three.ts", fileName: "three.ts" });
+
+    expect(useUIStore.getState().openFileTabsByGroup).toEqual({
+      group_1: [
+        { filePath: "src/one.ts", fileName: "one.ts" },
+        { filePath: "src/two.ts", fileName: "two.ts" },
+      ],
+      group_2: [{ filePath: "src/three.ts", fileName: "three.ts" }],
+    });
+    expect(useUIStore.getState().activeFilePathsByGroup).toEqual({
+      group_1: "src/two.ts",
+      group_2: "src/three.ts",
+    });
+  });
+
+  it("clears only the active file when closing an active tab", () => {
+    const state = useUIStore.getState();
+    state.openFileTab("group_1", { filePath: "src/one.ts", fileName: "one.ts" });
+    state.openFileTab("group_1", { filePath: "src/two.ts", fileName: "two.ts" });
+
+    state.closeFileTab("group_1", "src/two.ts");
+
+    expect(useUIStore.getState().openFileTabsByGroup.group_1).toEqual([
+      { filePath: "src/one.ts", fileName: "one.ts" },
+    ]);
+    expect(useUIStore.getState().activeFilePathsByGroup.group_1).toBeNull();
   });
 
   it("keeps the group open when its final session tab is hidden", () => {

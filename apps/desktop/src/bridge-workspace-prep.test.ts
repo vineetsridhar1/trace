@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import os from "node:os";
 import type { BridgeMessage } from "@trace/shared";
 
 const { createWorktreeMock } = vi.hoisted(() => ({ createWorktreeMock: vi.fn() }));
@@ -222,5 +223,33 @@ describe("BridgeClient workspace prep gating", () => {
     const args = runPrompt.mock.calls[0][0] as RunPromptArgs;
     expect(args.cwd).toBeTruthy();
     expect(args.cwd).not.toBe("/stale/workdir");
+  });
+
+  it("prepares a repo-less general session in the home directory", async () => {
+    const { handleCommand, sent } = createHarness();
+    handleCommand({ type: "prepare_general", sessionId: "session-1", sessionGroupId: "group-1" });
+
+    await vi.waitFor(() =>
+      expect(sent).toContainEqual(
+        expect.objectContaining({ type: "workspace_ready", workdir: os.homedir() }),
+      ),
+    );
+  });
+
+  it("prepares a repo-linked general session in the configured repository root", async () => {
+    const { handleCommand, sent } = createHarness();
+    handleCommand({
+      type: "prepare_general",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      repoId: "repo-1",
+      repoName: "mortgages",
+    });
+
+    await vi.waitFor(() =>
+      expect(sent).toContainEqual(
+        expect.objectContaining({ type: "workspace_ready", workdir: "/tmp/repo" }),
+      ),
+    );
   });
 });

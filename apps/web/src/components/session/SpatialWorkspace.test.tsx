@@ -6,6 +6,7 @@ import { useAuthStore } from "@trace/client-core";
 import { SpatialWorkspace } from "./SpatialWorkspace";
 import { createSpatialLayout, dockSpatialTab } from "./spatial-workspace-layout";
 import { useWorkspaceTabRequests } from "./useWorkspaceTabRequests";
+import { useCommandRegistryStore } from "../../stores/command-registry";
 import {
   reconcileWorkspaceRequestEvent,
   useWorkspaceRequestStore,
@@ -100,6 +101,7 @@ describe("SpatialWorkspace", () => {
 
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    useCommandRegistryStore.setState({ commandsByToken: {} });
   });
 
   afterEach(async () => {
@@ -125,6 +127,40 @@ describe("SpatialWorkspace", () => {
 
     if (!renderer) throw new Error("Expected the workspace to mount");
     expect(renderer.toJSON()).not.toBeNull();
+  });
+
+  it("marks only the active workspace tab for type-to-compose", async () => {
+    await act(async () => {
+      renderer = create(
+        <SpatialWorkspace
+          persistenceKey="spatial-workspace-capture-typing-test"
+          tabs={[
+            { id: "session:agent", label: "Agent", icon: null },
+            { id: "terminal:shell", label: "Terminal", icon: null },
+          ]}
+          preferredActiveTabId="session:agent"
+          onActivateTab={() => undefined}
+          onCloseTab={() => undefined}
+          onNewTab={() => "draft:new"}
+          renderTab={(tabId, _compact, captureTyping) => (
+            <div data-rendered-tab={tabId} data-capture-typing={captureTyping} />
+          )}
+        />,
+      );
+    });
+
+    if (!renderer) throw new Error("Expected the workspace to mount");
+    expect(renderer.root.findByProps({ "data-rendered-tab": "session:agent" }).props[
+      "data-capture-typing"
+    ]).toBe(true);
+
+    await act(async () => {
+      renderer?.root.findByProps({ title: "Terminal" }).props.onClick();
+    });
+
+    expect(renderer.root.findByProps({ "data-rendered-tab": "terminal:shell" }).props[
+      "data-capture-typing"
+    ]).toBe(true);
   });
 
   it("keeps a newly created tab active when its tab entry is added", async () => {
@@ -159,6 +195,35 @@ describe("SpatialWorkspace", () => {
     });
 
     expect(renderer.root.findByProps({ "data-rendered-tab": "browser" })).toBeDefined();
+  });
+
+  it("closes the focused workspace tab with Cmd+W", async () => {
+    const onCloseTab = vi.fn();
+    await act(async () => {
+      renderer = create(
+        <SpatialWorkspace
+          persistenceKey="spatial-workspace-close-tab-test"
+          tabs={[
+            { id: "chat", label: "Chat", icon: null },
+            { id: "draft:browser", label: "Browser", icon: null },
+          ]}
+          preferredActiveTabId="chat"
+          foregroundTabId="draft:browser"
+          onActivateTab={() => undefined}
+          onCloseTab={onCloseTab}
+          onNewTab={() => "draft:new"}
+          renderTab={(tabId) => <div data-rendered-tab={tabId} />}
+        />,
+      );
+    });
+
+    const closeCommand = Object.values(useCommandRegistryStore.getState().commandsByToken)
+      .flat()
+      .find((command) => command.id === "session.close-tab");
+    expect(closeCommand?.shortcut).toEqual({ key: "w", mod: true });
+
+    await act(async () => closeCommand?.run());
+    expect(onCloseTab).toHaveBeenCalledWith("draft:browser");
   });
 
   it("foregrounds a browser tab created from a workspace request event", async () => {

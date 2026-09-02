@@ -2,7 +2,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { generalWorkspacePath, removeGeneralWorkspace } from "../src/general-workspace.js";
+import {
+  generalWorkspacePath,
+  isLegacyGeneralWorkspacePath,
+  removeGeneralWorkspace,
+} from "../src/general-workspace.js";
 
 const tempDirs: string[] = [];
 
@@ -53,5 +57,18 @@ describe("removeGeneralWorkspace", () => {
 
     await expect(removeGeneralWorkspace(outside, "../outside", home)).resolves.toBe(false);
     await expect(fs.promises.stat(outside)).resolves.toBeDefined();
+  });
+});
+
+describe("isLegacyGeneralWorkspacePath", () => {
+  it("recognizes only legacy scratch paths for the matching session", () => {
+    expect(
+      isLegacyGeneralWorkspacePath("/home/coder/trace/general-sessions/group-1", "group-1"),
+    ).toBe(true);
+    expect(
+      isLegacyGeneralWorkspacePath("C:\\Users\\me\\trace\\general-sessions\\group-1", "group-1"),
+    ).toBe(true);
+    expect(isLegacyGeneralWorkspacePath("/home/coder", "group-1")).toBe(false);
+    expect(isLegacyGeneralWorkspacePath("/repos/repo-1", "group-1")).toBe(false);
   });
 });

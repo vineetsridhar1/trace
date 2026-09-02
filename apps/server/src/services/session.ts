@@ -8,6 +8,7 @@ import type { AgentStatus, SessionStatus, CodingTool, SessionGroupKind } from "@
 import type { EventType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
+import path from "path";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
@@ -22,8 +23,10 @@ import {
   type BridgeSessionGitSyncStatus,
   type BridgeWorkspaceWarning,
   type BridgeRepoWorktree,
+  type BridgePrepareGeneralCommand,
 } from "@trace/shared";
 import { generateAnimalSlug } from "@trace/shared/animal-names";
+import { isLegacyGeneralWorkspacePath } from "@trace/shared/general-workspace";
 import { prisma } from "../lib/db.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
 import {
@@ -217,6 +220,33 @@ function assertCloudRepoRemoteAvailable(
   if (hosting === "cloud" && repo && !repo.remoteUrl) {
     throw new ValidationError("Cloud sessions require the repo to have a remote URL.");
   }
+}
+
+function generalWorkspacePreparationCommand(session: {
+  id: string;
+  sessionGroupId?: string | null;
+  branch?: string | null;
+  repo?: {
+    id: string;
+    name: string;
+    remoteUrl: string | null;
+    defaultBranch: string;
+  } | null;
+}): BridgePrepareGeneralCommand {
+  return {
+    type: "prepare_general",
+    sessionId: session.id,
+    sessionGroupId: session.sessionGroupId ?? undefined,
+    ...(session.repo
+      ? {
+          repoId: session.repo.id,
+          repoName: session.repo.name,
+          repoRemoteUrl: session.repo.remoteUrl,
+          defaultBranch: session.repo.defaultBranch,
+          branch: session.branch ?? undefined,
+        }
+      : {}),
+  };
 }
 
 function getAssistantBlocks(data: Record<string, unknown>): Record<string, unknown>[] | null {
@@ -1003,7 +1033,7 @@ When the request involves discovering, creating, messaging, running, stopping, m
 
 /** Make the CLI a self-describing platform surface instead of requiring one skill per capability. */
 const TRACE_CLI_DISCOVERY_INSTRUCTION = `\n\n<system-instruction>
-When you need a Trace platform capability, first run \`"$TRACE_CLI" --help --json\`, then inspect the relevant group and leaf help with \`"$TRACE_CLI" <group> --help --json\` and \`"$TRACE_CLI" <group> <command> --help --json\`. Follow the returned workflow, effects, output, and next-step guidance. Invoke the managed CLI using \`"$TRACE_CLI"\` exactly; do not call a bare \`trace\` command, call Trace GraphQL directly, or print $TRACE_INVOCATION_TOKEN.
+When you need a Trace capability, run \`"$TRACE_CLI" --help --json\`, then the relevant group and leaf help; follow its guidance. Use \`"$TRACE_CLI"\`, never bare \`trace\` or direct GraphQL, and never print $TRACE_INVOCATION_TOKEN. Every Trace preview, app, or forwarded-port URL you give a user must be publicly accessible. Before sharing one, make its endpoint public with the managed port controls, then fetch that exact public URL with \`curl -fsSL --max-time 10 <url>\`. Verify its response contains the expected information. Only share the URL after that succeeds; fix failures first.
 </system-instruction>`;
 
 const GENERAL_SESSION_INSTRUCTION = `\n\n<system-instruction>
@@ -3788,11 +3818,9 @@ export class SessionService {
 
     eventService.publishCreated(result.event);
 
-    // Replace the disposable general scratch directory with the repository
-    // worktree the converted session now claims to work in — otherwise the
-    // session would keep running outside a checkout while carrying
-    // repo-backed coding instructions. An agent-initiated conversion is a
-    // handoff rather than the end of the user's request, so it also resumes
+    // Replace the general session's home/repository-root cwd with the isolated
+    // worktree the converted session now claims to work in. An agent-initiated
+    // conversion is a handoff rather than the end of the user's request, so it also resumes
     // the same tool conversation there: workspaceReady atomically consumes
     // that pending run, and the bridge aborts the old general-workspace
     // process before starting it in the new cwd.
@@ -8719,6 +8747,31 @@ export class SessionService {
 
     if (needsWorkspacePreparation) {
       const isGeneratedProject = session.sessionGroup?.kind === "app";
+      // A legacy session can have a Trace-managed worktree on its home bridge
+      // without a persisted group slug (for example, when its original bridge
+      // disconnected before `workspace_ready` was recorded). Reusing that
+      // checkout is essential: creating a new worktree for the same branch is
+      // rejected by Git. Only recover an unambiguous, Trace-managed match.
+      const recoveredWorkspaceSlug =
+        session.hosting === "local" &&
+        session.repo &&
+        session.branch &&
+        !session.sessionGroup?.slug
+          ? await sessionRouter
+              .listRepoWorktrees(runtime.key, session.repo.id)
+              .then((worktrees) => {
+                const matches = worktrees.filter(
+                  (worktree) =>
+                    worktree.isTraceManaged &&
+                    !worktree.isMain &&
+                    worktree.branch === session.branch,
+                );
+                if (matches.length !== 1) return undefined;
+                const slug = path.basename(matches[0]!.path);
+                return slug && slug !== "." ? slug : undefined;
+              })
+              .catch(() => undefined)
+          : undefined;
 
       // Managed-git credentials are bound to a connected runtime. A retry used
       // to send a regular `prepare` command with the unauthenticated remote,
@@ -8726,11 +8779,7 @@ export class SessionService {
       // Use the generated-project preparation path that refreshes origin.
       const retryPreparation =
         session.sessionGroup?.kind === "general"
-          ? {
-              type: "prepare_general" as const,
-              sessionId,
-              sessionGroupId: session.sessionGroupId ?? undefined,
-            }
+          ? generalWorkspacePreparationCommand(session)
           : isGeneratedProject && session.repo
             ? {
                 type: "prepare_app" as const,
@@ -8752,7 +8801,7 @@ export class SessionService {
                   type: "prepare" as const,
                   sessionId,
                   sessionGroupId: session.sessionGroupId ?? undefined,
-                  slug: session.sessionGroup?.slug ?? undefined,
+                  slug: recoveredWorkspaceSlug ?? session.sessionGroup?.slug ?? undefined,
                   preserveBranchName: shouldPreserveWorkspaceBranchName({
                     slug: session.sessionGroup?.slug,
                     branch: session.branch,
@@ -9174,8 +9223,11 @@ export class SessionService {
         : null;
     const sourceBranch = conversion?.branch ?? sourceGitStatus?.branch ?? session.branch ?? null;
     const sourceConnection = this.parseConnection(session.connection);
+    const generalWorkspaceKey = session.sessionGroupId ?? session.id;
     const shouldCleanupGeneralWorkspace =
-      session.hosting === "local" && currentSessionGroup?.kind === "general";
+      session.hosting === "local" &&
+      currentSessionGroup?.kind === "general" &&
+      isLegacyGeneralWorkspacePath(session.workdir, generalWorkspaceKey);
     // Mark a cloud replacement as starting before any post-move events or
     // adapter work. `provisionRuntime` will reserve the concrete runtime id
     // shortly afterward, but idle cleanup can run in between; persisting the

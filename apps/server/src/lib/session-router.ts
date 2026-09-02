@@ -7,6 +7,7 @@ import type {
   BridgeTerminalInputCommand,
   BridgeTerminalResizeCommand,
   BridgeTerminalDestroyCommand,
+  BridgePrepareGeneralCommand,
   BridgePrepareAppCommand,
   BridgeListFilesCommand,
   BridgeReadFileCommand,
@@ -69,6 +70,7 @@ interface BaseSessionCommand {
 
 export type SessionCommand =
   | BaseSessionCommand
+  | BridgePrepareGeneralCommand
   | BridgePrepareAppCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
@@ -2693,9 +2695,8 @@ export class SessionRouter {
           return;
         }
 
-        // A linked repository is context for a general session, not permission
-        // to place the agent in a writable checkout. General sessions always
-        // start in their disposable scratch directory and convert before coding.
+        // General sessions use the runtime home by default. A linked repository
+        // is context, so resolve its existing root without allocating a worktree.
         if (options.sessionGroupKind === "general") {
           const runtimeId = expectedHomeRuntimeId ?? this.sessionRuntime.get(options.sessionId);
           const resolution = runtimeId
@@ -2708,7 +2709,7 @@ export class SessionRouter {
           const runtime = resolution.state === "local" ? resolution.runtime : resolution.descriptor;
           if ((runtime?.protocolVersion ?? 1) < GENERAL_WORKSPACE_PROTOCOL_VERSION) {
             options.onFailed(
-              "This Trace runtime is too old to create an isolated workspace. Upgrade it before retrying this session.",
+              "This Trace runtime is too old to start general sessions in the correct directory. Upgrade it before retrying this session.",
             );
             return;
           }
@@ -2718,6 +2719,15 @@ export class SessionRouter {
               type: "prepare_general",
               sessionId: options.sessionId,
               sessionGroupId: options.sessionGroupId,
+              ...(options.repo
+                ? {
+                    repoId: options.repo.id,
+                    repoName: options.repo.name,
+                    repoRemoteUrl: options.repo.remoteUrl,
+                    defaultBranch: options.repo.defaultBranch,
+                    branch: options.branch,
+                  }
+                : {}),
             },
             {
               expectedHomeRuntimeId,

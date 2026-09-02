@@ -28,6 +28,7 @@ interface SpatialWorkspaceControllerOptions {
   foregroundTabId?: string | null;
   tabReplacements: Record<string, string>;
   onActivateTab: (tabId: string) => void;
+  onCloseTab: (tabId: string) => void;
   onNewTab: (groupId: string) => string;
   onOverlayVisibilityChange?: (visible: boolean) => void;
   onTabReplacementsApplied?: (sourceTabIds: string[]) => void;
@@ -40,6 +41,7 @@ export function useSpatialWorkspaceController({
   foregroundTabId,
   tabReplacements,
   onActivateTab,
+  onCloseTab,
   onNewTab,
   onOverlayVisibilityChange,
   onTabReplacementsApplied,
@@ -55,6 +57,7 @@ export function useSpatialWorkspaceController({
   );
   const layoutRef = useRef(layout);
   const activeGroupIdRef = useRef<string | null>(null);
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [resizingSplitId, setResizingSplitId] = useState<string | null>(null);
   const previousPreferredActiveTabIdRef = useRef(preferredActiveTabId);
   const previousForegroundTabIdRef = useRef<string | null>(null);
@@ -113,6 +116,7 @@ export function useSpatialWorkspaceController({
     (groupId: string, tabId: string) => {
       setLayout((current) => activateSpatialTab(current, groupId, tabId));
       activeGroupIdRef.current = groupId;
+      setActiveGroupId(groupId);
       onActivateTab(tabId);
     },
     [onActivateTab],
@@ -123,12 +127,14 @@ export function useSpatialWorkspaceController({
   }, []);
   const handleFocusPanel = useCallback((groupId: string) => {
     activeGroupIdRef.current = groupId;
+    setActiveGroupId(groupId);
     setLayout((current) =>
       current.focusedGroupId ? focusSpatialGroup(current, groupId) : current,
     );
   }, []);
   const handleTogglePanelFocus = useCallback((groupId: string) => {
     activeGroupIdRef.current = groupId;
+    setActiveGroupId(groupId);
     setLayout((current) =>
       current.focusedGroupId ? balanceSpatialGroups(current) : focusSpatialGroup(current, groupId),
     );
@@ -138,6 +144,7 @@ export function useSpatialWorkspaceController({
       const tabId = onNewTab(groupId);
       setLayout((current) => insertSpatialTab(current, tabId, groupId));
       activeGroupIdRef.current = groupId;
+      setActiveGroupId(groupId);
     },
     [onNewTab],
   );
@@ -193,6 +200,19 @@ export function useSpatialWorkspaceController({
 
   const workspaceCommands = useMemo<RegisteredCommand[]>(
     () => [
+      {
+        id: "session.close-tab",
+        title: "Close tab",
+        group: "Workspace",
+        run: () => {
+          const tabId = getActiveGroup(
+            layoutRef.current,
+            activeGroupIdRef.current,
+          )?.activeTabId;
+          if (tabId) onCloseTab(tabId);
+        },
+        shortcut: { key: "w", mod: true },
+      },
       {
         id: "workspace.new-tab",
         title: "New workspace tab",
@@ -255,6 +275,7 @@ export function useSpatialWorkspaceController({
     ],
     [
       handleCycleTab,
+      onCloseTab,
       handleFocusActiveBrowserAddress,
       handleFocusGroup,
       handleJoin,
@@ -286,6 +307,7 @@ export function useSpatialWorkspaceController({
     sensors: drag.sensors,
     setResizingSplitId,
     tabById,
+    activeTabId: getActiveGroup(layout, activeGroupId)?.activeTabId ?? null,
   };
 }
 

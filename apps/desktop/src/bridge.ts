@@ -67,7 +67,7 @@ import {
   type CreatedWorktree,
 } from "./worktree.js";
 import { runtimeDebug } from "./runtime-debug.js";
-import { generalWorkspacePath, removeGeneralWorkspace } from "@trace/shared/general-workspace";
+import { removeGeneralWorkspace } from "@trace/shared/general-workspace";
 import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
 import { TerminalManager } from "@trace/shared/adapters";
@@ -1265,11 +1265,15 @@ export class BridgeClient implements IBridgeClient {
       }
       case "prepare_general": {
         const { sessionId, sessionGroupId } = cmd;
-        const workdir = generalWorkspacePath(sessionGroupId ?? sessionId);
         const prepareVersion = this.beginWorkspacePreparation(sessionId);
-        const prepared = fs.promises
-          .mkdir(workdir, { recursive: true })
+        const prepared = Promise.resolve()
           .then(() => {
+            const workdir = cmd.repoId ? getRepoConfig(cmd.repoId)?.path : os.homedir();
+            if (!workdir) {
+              throw new Error(
+                `No local path configured for repo "${cmd.repoName ?? cmd.repoId}" (${cmd.repoId}). Configure it in Settings.`,
+              );
+            }
             this.markWorkspaceReady(sessionId, workdir, prepareVersion);
             if (!this.isCurrentWorkspacePreparation(sessionId, prepareVersion)) return;
             this.sessionGroupIds.set(sessionId, sessionGroupId ?? null);

@@ -648,7 +648,7 @@ describe("SessionService", () => {
         sessionGroup: convertedGroup,
         repoId: "repo-1",
         readOnlyWorkspace: true,
-        workdir: "/tmp/trace-general/group-general",
+        workdir: "/home/user",
         hosting: "local",
         channelId: "channel-1",
         channel: { id: "channel-1", name: "Backend" },
@@ -666,7 +666,7 @@ describe("SessionService", () => {
               sessionGroup: sourceGroup,
               repoId: null,
               repo: null,
-              workdir: "/tmp/trace-general/group-general",
+              workdir: "/home/user",
               hosting: "local",
               channelId: null,
               channel: null,
@@ -764,8 +764,7 @@ describe("SessionService", () => {
       });
 
       // One update for the conversion itself: a user conversion must not queue
-      // a pending run, but it still has to leave the general scratch directory
-      // for the repository worktree.
+      // a pending run, but it still has to switch to the repository worktree.
       expect(prismaMock.session.update).toHaveBeenCalledTimes(1);
       expect(prismaMock.session.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -793,7 +792,7 @@ describe("SessionService", () => {
           repoId: null,
           repo: null,
           branch: null,
-          workdir: "/tmp/trace-general/group-general",
+          workdir: "/home/user",
         });
         const managedRepo = await managedGitServiceMock.createManagedRepo({
           organizationId: "org-1",
@@ -911,7 +910,7 @@ describe("SessionService", () => {
               repoId: managedRepo.id,
               readOnlyWorkspace: false,
               projects: { deleteMany: {} },
-              pendingGeneralWorkspaceCleanupRuntimeId: "runtime-local",
+              pendingGeneralWorkspaceCleanupRuntimeId: null,
               pendingRun: expect.objectContaining({
                 prompt: `Continue the user's request in the newly prepared ${kind} workspace.`,
               }),
@@ -1004,7 +1003,7 @@ describe("SessionService", () => {
         organizationId: "org-1",
         ownerUserId: "user-1",
         supportedTools: ["codex"],
-        protocolVersion: 5,
+        protocolVersion: 6,
         registeredRepoIds: [],
         boundSessions: new Set([sourceSession.id]),
         ws: { readyState: 1, OPEN: 1 },
@@ -5600,6 +5599,13 @@ describe("SessionService", () => {
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
         "session-1",
         expect.objectContaining({
+          prompt: expect.stringContaining("must be publicly accessible"),
+        }),
+        expect.any(Object),
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
           prompt: expect.stringContaining("$TRACE_SKILLS_DIR/trace-session/SKILL.md completely"),
         }),
         expect.any(Object),
@@ -5707,7 +5713,7 @@ describe("SessionService", () => {
       const command = sessionRouterMock.send.mock.calls.at(-1)?.[1];
       expect(command).toEqual(
         expect.objectContaining({
-          prompt: expect.stringContaining('"$TRACE_CLI" <group> --help --json'),
+          prompt: expect.stringContaining('"$TRACE_CLI" --help --json'),
         }),
       );
       expect(command?.appendSystemPrompt).not.toContain("trace-integrations/SKILL.md");
@@ -7193,6 +7199,97 @@ describe("SessionService", () => {
         expect.objectContaining({
           type: "prepare",
           readOnly: true,
+        }),
+        { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
+      );
+    });
+
+    it("reuses an unrecorded managed worktree when retrying a local session", async () => {
+      const recoveredSession = makeSession({
+        hosting: "local",
+        branch: "trace-marten-artifact-open",
+        sessionGroup: makeSessionGroup({ slug: null }),
+        connection: {
+          state: "disconnected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(recoveredSession);
+      prismaMock.session.findUnique.mockResolvedValue(recoveredSession);
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(recoveredSession);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-a",
+        key: "org-1:runtime-a",
+        label: "Laptop A",
+        hostingMode: "local",
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      sessionRouterMock.listRepoWorktrees.mockResolvedValueOnce([
+        {
+          path: "/Users/vineet/trace/sessions/repo-1/marten",
+          branch: "trace-marten-artifact-open",
+          isMain: false,
+          isTraceManaged: true,
+          head: "abc123",
+        },
+      ]);
+
+      await service.retryConnection("session-1", "org-1", "user", "user-1");
+
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({ type: "prepare", slug: "marten" }),
+        { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
+      );
+    });
+
+    it("re-prepares a general session with its repository context", async () => {
+      const repo = {
+        id: "repo-1",
+        name: "Trace",
+        remoteUrl: "https://github.com/acme/trace.git",
+        defaultBranch: "main",
+      };
+      const generalSession = makeSession({
+        branch: "feature",
+        repoId: repo.id,
+        repo,
+        sessionGroup: makeSessionGroup({ kind: "general", repoId: repo.id, repo }),
+        connection: {
+          state: "disconnected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(generalSession);
+      prismaMock.session.findUnique.mockResolvedValue(generalSession);
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(generalSession);
+      sessionRouterMock.peekRuntimePresence.mockReturnValue(true);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-a",
+        label: "Laptop A",
+        hostingMode: "local",
+        ws: { readyState: 1, OPEN: 1 },
+      });
+
+      await service.retryConnection("session-1", "org-1", "user", "user-1");
+
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          type: "prepare_general",
+          repoId: "repo-1",
+          repoName: "Trace",
+          repoRemoteUrl: "https://github.com/acme/trace.git",
+          defaultBranch: "main",
+          branch: "feature",
         }),
         { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
       );

@@ -120,6 +120,16 @@ const electronMocks = vi.hoisted(() => {
       return this.loading;
     }
 
+    startLoading() {
+      this.loading = true;
+      this.emit("did-start-loading");
+    }
+
+    stopLoading() {
+      this.loading = false;
+      this.emit("did-stop-loading");
+    }
+
     isDevToolsOpened() {
       return this.devToolsOpen;
     }
@@ -370,28 +380,24 @@ describe("BrowserWorkspaceManager", () => {
     expect(window.contentView.removeChildView).toHaveBeenCalledTimes(2);
   });
 
-  it("closes DevTools before freezing and restores them after activation", async () => {
+  it("keeps a hidden browser active until its current load finishes", async () => {
     const manager = new BrowserWorkspaceManager({ snapshotStore: new MemorySnapshotStore() });
     manager.setWindow(createWindow());
 
     await manager.activate("group-a");
     const contents = latestContents();
-    await manager.toggleDevTools("group-a");
+    contents.startLoading();
     await manager.hide("group-a");
 
-    expect(contents.operations).toContain("devtools:close");
-    expect(contents.operations.indexOf("devtools:close")).toBeLessThan(
-      contents.operations.lastIndexOf("lifecycle:frozen"),
-    );
+    expect(contents.operations).not.toContain("lifecycle:frozen");
     expect(contents.audioMuted).toBe(true);
+
+    contents.stopLoading();
+    await vi.waitFor(() => expect(contents.operations).toContain("lifecycle:frozen"));
 
     const state = await manager.activate("group-a");
     expect(state.suspensionState).toBe("active");
     expect(contents.audioMuted).toBe(false);
-    expect(contents.isDevToolsOpened()).toBe(true);
-    expect(contents.operations.lastIndexOf("lifecycle:active")).toBeLessThan(
-      contents.operations.lastIndexOf("devtools:open"),
-    );
   });
 
   it("denies dangerous permissions and caches explicit per-origin decisions", async () => {

@@ -6,6 +6,16 @@ export function generalWorkspacePath(sessionKey: string, homeDir = os.homedir())
   return path.join(homeDir, "trace", "general-sessions", sessionKey);
 }
 
+/** Recognize scratch paths created before general sessions used home/repo roots. */
+export function isLegacyGeneralWorkspacePath(
+  workdir: string | null | undefined,
+  sessionKey: string,
+): boolean {
+  if (!workdir || !sessionKey || /[/\\]/.test(sessionKey)) return false;
+  const normalized = workdir.replaceAll("\\", "/").replace(/\/+$/, "");
+  return normalized.endsWith(`/trace/general-sessions/${sessionKey}`);
+}
+
 export async function removeGeneralWorkspace(
   workdir: string | undefined,
   sessionKey: string,

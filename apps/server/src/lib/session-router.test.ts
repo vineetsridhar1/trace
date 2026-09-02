@@ -807,7 +807,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
   });
 
-  it("prepares a repo-linked general session in scratch space instead of its repo", async () => {
+  it("starts a repo-linked general session in the repository root", async () => {
     const router = new SessionRouter();
     const ws = makeWs();
     await router.registerRuntime({
@@ -816,7 +816,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       ws,
       hostingMode: "local",
       organizationId: "org-1",
-      protocolVersion: 3,
+      protocolVersion: 6,
       supportedTools: ["codex"],
       registeredRepoIds: ["repo-1"],
     });
@@ -848,10 +848,14 @@ describe("SessionRouter runtime adapter dispatch", () => {
       type: "prepare_general",
       sessionId: "session-1",
       sessionGroupId: "group-1",
+      repoId: "repo-1",
+      repoName: "repo",
+      repoRemoteUrl: "https://github.com/acme/repo.git",
+      defaultBranch: "main",
     });
   });
 
-  it("prepares a provisioned general session in cloud scratch space", async () => {
+  it("starts a provisioned general session in the repository root", async () => {
     const provisionedAdapter: RuntimeAdapter = {
       type: "provisioned",
       async validateConfig() {},
@@ -876,7 +880,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       ws,
       hostingMode: "cloud",
       organizationId: "org-1",
-      protocolVersion: 3,
+      protocolVersion: 6,
       supportedTools: ["codex"],
       registeredRepoIds: ["repo-1"],
     });
@@ -908,7 +912,49 @@ describe("SessionRouter runtime adapter dispatch", () => {
       type: "prepare_general",
       sessionId: "session-1",
       sessionGroupId: "group-1",
+      repoId: "repo-1",
+      repoName: "repo",
+      repoRemoteUrl: "https://github.com/acme/repo.git",
+      defaultBranch: "main",
     });
+  });
+
+  it("starts a repo-less general session in the runtime home", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+    await router.registerRuntime({
+      id: "runtime-1",
+      label: "Laptop",
+      ws,
+      hostingMode: "local",
+      organizationId: "org-1",
+      protocolVersion: 6,
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    router.bindSession("session-1", "runtime-1");
+
+    router.createRuntime({
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      sessionGroupKind: "general",
+      hosting: "local",
+      adapterType: "local",
+      tool: "codex",
+      repo: null,
+      createdById: "user-1",
+      organizationId: "org-1",
+      onFailed: vi.fn(),
+    });
+
+    await vi.waitFor(() => expect(ws.send).toHaveBeenCalledOnce());
+    expect(JSON.parse((ws.send as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0])).toEqual(
+      {
+        type: "prepare_general",
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+      },
+    );
   });
 
   it("refuses to run a general session from home on an older local bridge", async () => {
@@ -943,7 +989,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
     await vi.waitFor(() =>
       expect(onFailed).toHaveBeenCalledWith(
-        "This Trace runtime is too old to create an isolated workspace. Upgrade it before retrying this session.",
+        "This Trace runtime is too old to start general sessions in the correct directory. Upgrade it before retrying this session.",
       ),
     );
     expect(onWorkspaceReady).not.toHaveBeenCalled();

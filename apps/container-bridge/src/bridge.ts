@@ -34,7 +34,7 @@ import {
 } from "@trace/shared";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
 import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
-import { generalWorkspacePath, removeGeneralWorkspace } from "@trace/shared/general-workspace";
+import { removeGeneralWorkspace } from "@trace/shared/general-workspace";
 import type { GitExecFn } from "@trace/shared";
 import {
   AntigravityAdapter,
@@ -509,20 +509,34 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "prepare_general": {
-        const workdir = generalWorkspacePath(cmd.sessionGroupId ?? cmd.sessionId);
         const prepareVersion = this.beginWorkspacePreparation(cmd.sessionId);
-        fs.promises
-          .mkdir(workdir, { recursive: true })
-          .then(() => {
+        void (async () => {
+          try {
+            let workdir = os.homedir();
+            if (cmd.repoId) {
+              if (!cmd.defaultBranch) {
+                throw new Error(`Missing default branch for repo ${cmd.repoId}`);
+              }
+              const repoResult = await ensureRepo(
+                cmd.repoId,
+                cmd.repoRemoteUrl ?? null,
+                cmd.branch,
+                cmd.defaultBranch,
+              );
+              if (!this.isCurrentWorkspacePreparation(cmd.sessionId, prepareVersion)) return;
+              this.send({ type: "repo_linked", repoId: cmd.repoId });
+              workdir = repoResult.repoPath;
+            }
             if (!this.isCurrentWorkspacePreparation(cmd.sessionId, prepareVersion)) return;
             this.sessionWorkdirs.set(cmd.sessionId, workdir);
             this.send({ type: "register_session", sessionId: cmd.sessionId });
             this.send({ type: "workspace_ready", sessionId: cmd.sessionId, workdir });
-          })
-          .catch((err: Error) => {
+          } catch (err) {
             if (!this.isCurrentWorkspacePreparation(cmd.sessionId, prepareVersion)) return;
-            this.send({ type: "workspace_failed", sessionId: cmd.sessionId, error: err.message });
-          });
+            const message = err instanceof Error ? err.message : String(err);
+            this.send({ type: "workspace_failed", sessionId: cmd.sessionId, error: message });
+          }
+        })();
         break;
       }
 

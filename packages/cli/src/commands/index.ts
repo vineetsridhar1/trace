@@ -122,15 +122,14 @@ export const commandGroups: readonly CommandGroupDefinition[] = [
   },
   {
     name: "artifact",
-    description: "Validate and upload immutable Trace artifacts",
+    description: "Upload immutable Trace artifacts",
     workflow: [
-      "Use the required artifact skill to prepare and validate the source file or directory.",
       'Run "$TRACE_CLI" artifact push <type> <file-or-directory> --json once the artifact is ready.',
       "Keep the returned idempotency key for a safe retry if the upload fails.",
     ],
     examples: ['"$TRACE_CLI" artifact push video output/demo.mp4 --json'],
     notes: [
-      "Artifact types can impose additional validation; use the relevant artifact skill when instructed.",
+      "Any non-empty type is accepted. Visual plans, images, and videos receive additional type-specific validation.",
     ],
   },
 ];

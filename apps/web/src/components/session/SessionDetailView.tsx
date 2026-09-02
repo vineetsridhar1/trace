@@ -201,6 +201,7 @@ export function SessionDetailView({
   onScrollComplete,
   onForkSession,
   canForkSession = false,
+  captureTyping = false,
 }: {
   key?: React.Key;
   sessionId: string;
@@ -210,6 +211,7 @@ export function SessionDetailView({
   onScrollComplete?: () => void;
   onForkSession?: (eventId: string) => void;
   canForkSession?: boolean;
+  captureTyping?: boolean;
 }) {
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const {
@@ -772,6 +774,7 @@ export function SessionDetailView({
                       sessionGroupId={sessionGroupId ?? null}
                       onAccessRequested={refreshBridgeAccess}
                       centered={centeredComposer}
+                      captureTyping={captureTyping}
                     />
                   </>
                 ) : null}
@@ -800,6 +803,7 @@ export function SessionDetailView({
                   sessionGroupId={sessionGroupId ?? null}
                   onAccessRequested={refreshBridgeAccess}
                   centered={centeredComposer}
+                  captureTyping={captureTyping}
                 />
               </>
             )}
