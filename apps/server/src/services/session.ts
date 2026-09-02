@@ -26,6 +26,7 @@ import {
   type BridgeWorkspaceWarning,
   type BridgeRepoWorktree,
 } from "@trace/shared";
+import { hasReadyWorkspace, workspaceState, type WorkspaceState } from "./workspace-readiness.js";
 import { generateAnimalSlug } from "@trace/shared/animal-names";
 import { prisma } from "../lib/db.js";
 import {
@@ -329,7 +330,7 @@ export type SessionConnectionData = {
   environmentId?: string;
   adapterType?: "local" | "provisioned";
   /** Runtime connectivity and workspace preparation are independent phases. */
-  workspaceState?: "preparing" | "ready" | "failed";
+  workspaceState?: WorkspaceState;
   toolSource?: "default" | "explicit";
   runtimeInstanceId?: string;
   /**
@@ -2439,6 +2440,7 @@ export class SessionService {
     adapterType: RuntimeAdapterType | null,
   ): Partial<SessionConnectionData> {
     const now = new Date().toISOString();
+    const currentWorkspaceState = workspaceState(conn);
     const runtimePatch: Partial<SessionConnectionData> = {
       ...(update.runtimeInstanceId && { runtimeInstanceId: update.runtimeInstanceId }),
       ...(update.runtimeLabel && { runtimeLabel: update.runtimeLabel }),
@@ -2458,7 +2460,6 @@ export class SessionService {
         return {
           ...runtimePatch,
           state: "requested",
-          workspaceState: "preparing",
           requestedAt: now,
           // A start request is a new runtime generation. Do not carry provider
           // identity or teardown evidence from the prior generation into it:
@@ -2511,20 +2512,24 @@ export class SessionService {
       case "session_runtime_connected":
         return {
           ...runtimePatch,
-          state: conn.workspaceState === "preparing" ? "connecting" : "connected",
+          state:
+            currentWorkspaceState === "preparing"
+              ? "connecting"
+              : currentWorkspaceState === "failed"
+                ? "failed"
+                : "connected",
           connectedAt: now,
           lastSeen: now,
-          lastError: undefined,
+          lastError: currentWorkspaceState === "failed" ? conn.lastError : undefined,
           retryCount: 0,
           canRetry: true,
           canMove: true,
-          autoRetryable: true,
+          autoRetryable: currentWorkspaceState === "failed" ? false : true,
         };
       case "session_runtime_start_failed":
         return {
           ...runtimePatch,
           state: "failed",
-          workspaceState: "failed",
           failedAt: now,
           lastError: update.error ?? "Runtime failed to start",
           canRetry: true,
@@ -5861,7 +5866,6 @@ export class SessionService {
         sessionStatus: getRunningSessionStatus(session.sessionStatus),
         connection: this.mergeConnection(session.connection, {
           state: "connected",
-          workspaceState: this.requiresPreparedWorkspace(session) ? "ready" : conn.workspaceState,
           lastSeen: new Date().toISOString(),
           autoRetryable: true,
           ...(boundRuntime && {
@@ -7635,7 +7639,6 @@ export class SessionService {
         sessionStatus: resumedSessionStatus,
         connection: this.mergeConnection(session.connection, {
           state: "connected",
-          workspaceState: this.requiresPreparedWorkspace(session) ? "ready" : conn.workspaceState,
           lastSeen: new Date().toISOString(),
           autoRetryable: true,
           ...(boundRuntime && {
@@ -8719,17 +8722,15 @@ export class SessionService {
     if (group.worktreeDeleted || !group.workdir) {
       throw new Error("Cannot retry setup without an active workspace");
     }
-    const groupConnection = this.parseConnection(group.connection);
-    if (
-      groupConnection.state !== "connected" ||
-      groupConnection.workspaceState === "preparing" ||
-      groupConnection.workspaceState === "failed"
-    ) {
-      throw new Error("Cannot retry setup until the workspace is ready");
-    }
     const targetSession = group.sessions[0];
     if (!targetSession) {
       throw new Error("Cannot retry setup without a session");
+    }
+    if (
+      !hasReadyWorkspace(group.connection, group.workdir) &&
+      !hasReadyWorkspace(targetSession.connection, group.workdir)
+    ) {
+      throw new Error("Cannot retry setup until the workspace is ready");
     }
 
     const runtimeInstanceId =
@@ -8945,17 +8946,23 @@ export class SessionService {
       // method runs. Repeat that fence at the write boundary so a reconnect
       // racing with Move cannot reclaim a superseded generation.
       if (conn.runtimeInstanceId !== runtimeInstanceId) return null;
+      const currentWorkspaceState = workspaceState(conn);
       return {
         ...conn,
-        state: conn.workspaceState === "preparing" ? "connecting" : "connected",
+        state:
+          currentWorkspaceState === "preparing"
+            ? "connecting"
+            : currentWorkspaceState === "failed"
+              ? "failed"
+              : "connected",
         runtimeLabel:
           runtimeMetadata(runtimeInstanceId, session.organizationId)?.label ?? conn.runtimeLabel,
         connectedAt: restoredAt,
         lastSeen: restoredAt,
-        lastError: undefined,
+        lastError: currentWorkspaceState === "failed" ? conn.lastError : undefined,
         canRetry: true,
         canMove: true,
-        autoRetryable: true,
+        autoRetryable: currentWorkspaceState === "failed" ? false : true,
       };
     });
     if (!result) return;
@@ -9100,11 +9107,7 @@ export class SessionService {
       sessionRouter.bindSession(session.id, runtime.key);
 
       const conn = this.parseConnection(session.connection);
-      if (
-        session.workdir &&
-        conn.workspaceState !== "preparing" &&
-        conn.workspaceState !== "failed"
-      ) {
+      if (hasReadyWorkspace(conn, session.workdir)) {
         void sendRuntimeCommand(
           runtime.id,
           {
@@ -12193,11 +12196,7 @@ export class SessionService {
     sessionGroup?: { kind?: SessionGroupKind | null } | null;
   }): boolean {
     if (!this.requiresPreparedWorkspace(session)) return true;
-    const connection = this.parseConnection(session.connection);
-    if (connection.workspaceState === "preparing" || connection.workspaceState === "failed") {
-      return false;
-    }
-    return Boolean(session.workdir) && connection.state === "connected";
+    return hasReadyWorkspace(session.connection, session.workdir);
   }
 
   private parsePendingCommand(raw: unknown): PendingSessionCommand | null {
@@ -12521,7 +12520,6 @@ export class SessionService {
         pendingRun: pendingRunValue(remainingCommands),
         connection: this.mergeConnection(session.connection, {
           state: "connected",
-          workspaceState: this.requiresPreparedWorkspace(session) ? "ready" : conn.workspaceState,
           lastSeen: new Date().toISOString(),
           lastError: undefined,
           autoRetryable: true,

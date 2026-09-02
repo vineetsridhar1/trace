@@ -7581,7 +7581,6 @@ describe("SessionService", () => {
             lastMessageAt: expect.any(Date),
             connection: expect.objectContaining({
               state: "requested",
-              workspaceState: "preparing",
               runtimeInstanceId: "runtime-provisioned-1",
             }),
           },
@@ -7614,7 +7613,6 @@ describe("SessionService", () => {
             lifecycleState: "requested",
             connection: expect.objectContaining({
               state: "requested",
-              workspaceState: "preparing",
               runtimeInstanceId: "runtime-provisioned-1",
             }),
           }),
@@ -7653,6 +7651,46 @@ describe("SessionService", () => {
       const reserveRuntime = sessionRouterMock.createRuntime.mock.calls[0]?.[0]?.reserveRuntime;
       await expect(reserveRuntime?.()).resolves.toBe("runtime-group");
       expect(reserveGroup).toHaveBeenCalledWith("session-1", "group-1");
+    });
+
+    it("does not let runtime connectivity overwrite a workspace failure", () => {
+      const internals = service as unknown as {
+        lifecycleConnectionPatch: (
+          eventType: "session_runtime_connected",
+          connection: {
+            state: "failed";
+            workspaceState: "failed";
+            lastError: string;
+            retryCount: number;
+            canRetry: boolean;
+            canMove: boolean;
+          },
+          update: Record<string, never>,
+          adapterType: "provisioned",
+        ) => Record<string, unknown>;
+      };
+
+      expect(
+        internals.lifecycleConnectionPatch(
+          "session_runtime_connected",
+          {
+            state: "failed",
+            workspaceState: "failed",
+            lastError: "clone failed",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          {},
+          "provisioned",
+        ),
+      ).toEqual(
+        expect.objectContaining({
+          state: "failed",
+          lastError: "clone failed",
+          autoRetryable: false,
+        }),
+      );
     });
 
     it("ignores stale lifecycle events after a newer runtime binding was cleared", async () => {

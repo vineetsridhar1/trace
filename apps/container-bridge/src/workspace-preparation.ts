@@ -1,25 +1,27 @@
-export class WorkspacePreparationTracker {
-  private active = new Map<string, Promise<void>>();
+export class WorkspacePreparationBarrier {
+  private current = new Map<string, Promise<boolean>>();
 
   track(sessionId: string, preparation: Promise<void>): void {
-    this.active.set(sessionId, preparation);
+    // Convert rejection into data immediately. A preparation can fail before
+    // any command waits on it; retaining the raw rejected promise would create
+    // an unhandled rejection in that normal error path.
+    const outcome = preparation.then(
+      () => true,
+      () => false,
+    );
+    this.current.set(sessionId, outcome);
   }
 
   async wait(sessionId: string): Promise<boolean> {
     while (true) {
-      const preparation = this.active.get(sessionId);
-      if (!preparation) return true;
-      try {
-        await preparation;
-      } catch {
-        if (this.active.get(sessionId) === preparation) return false;
-      }
-      const next = this.active.get(sessionId);
-      if (!next || next === preparation) return true;
+      const outcome = this.current.get(sessionId);
+      if (!outcome) return true;
+      const succeeded = await outcome;
+      if (this.current.get(sessionId) === outcome) return succeeded;
     }
   }
 
   clear(sessionId: string): void {
-    this.active.delete(sessionId);
+    this.current.delete(sessionId);
   }
 }

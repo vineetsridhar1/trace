@@ -62,7 +62,7 @@ import { exportPdfToTarget } from "./pdf-export.js";
 import { exportSelfContainedHtmlToTarget } from "./self-contained-export.js";
 import { materializeDesignSystemPackage } from "./design-system-package.js";
 import { prepareReadOnlySourceCheckout } from "./design-system-source.js";
-import { WorkspacePreparationTracker } from "./workspace-preparation.js";
+import { WorkspacePreparationBarrier } from "./workspace-preparation.js";
 import {
   cleanupPlaywrightInvocationSession,
   createPlaywrightInvocationSession,
@@ -115,7 +115,7 @@ export class ContainerBridge implements IBridgeClient {
   /** Max consecutive connection failures before the process exits, allowing the machine to stop. */
   private static MAX_RECONNECT_FAILURES = 20;
   private sessionWorkdirs = new Map<string, string>();
-  private workspacePreparations = new WorkspacePreparationTracker();
+  private workspacePreparations = new WorkspacePreparationBarrier();
   /** Fences late completions from superseded prepare commands. */
   private workspacePrepareVersions = new Map<string, number>();
   private nextWorkspacePrepareVersion = 0;
@@ -410,9 +410,16 @@ export class ContainerBridge implements IBridgeClient {
     }
   }
 
-  private async runManagedProcessAfterWorkspacePreparation(run: () => void, sessionId: string) {
-    await this.workspacePreparations.wait(sessionId);
-    run();
+  private async runManagedProcessAfterWorkspacePreparation(
+    sessionId: string,
+    run: () => void,
+    fail: () => void,
+  ) {
+    if (await this.workspacePreparations.wait(sessionId)) {
+      run();
+    } else {
+      fail();
+    }
   }
 
   private async preparePlaywrightSession(
@@ -609,6 +616,14 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "track_session": {
+        if (!fs.existsSync(cmd.workdir)) {
+          this.send({
+            type: "workspace_failed",
+            sessionId: cmd.sessionId,
+            error: `The prepared workspace no longer exists at ${cmd.workdir}`,
+          });
+          break;
+        }
         // The server vouches for a workspace this bridge already prepared for a
         // sibling session in the same group.
         // Supersede any in-flight prepare so its late completion cannot
@@ -847,6 +862,7 @@ export class ContainerBridge implements IBridgeClient {
 
       case "setup_script_run": {
         void this.runManagedProcessAfterWorkspacePreparation(
+          cmd.sessionId,
           () =>
             this.managedProcessManager.runSetupScript({
               requestId: cmd.requestId,
@@ -855,13 +871,20 @@ export class ContainerBridge implements IBridgeClient {
               cwd: cmd.cwd,
               env: cmd.env,
             }),
-          cmd.sessionId,
+          () =>
+            this.send({
+              type: "setup_script_result",
+              requestId: cmd.requestId,
+              exitCode: 1,
+              error: "Session workspace preparation failed",
+            }),
         );
         break;
       }
 
       case "app_process_start": {
         void this.runManagedProcessAfterWorkspacePreparation(
+          cmd.sessionId,
           () =>
             this.managedProcessManager.start({
               requestId: cmd.requestId,
@@ -873,7 +896,13 @@ export class ContainerBridge implements IBridgeClient {
               env: cmd.env,
               ports: cmd.ports.map((port) => port.port),
             }),
-          cmd.sessionId,
+          () =>
+            this.send({
+              type: "app_process_error",
+              requestId: cmd.requestId,
+              processInstanceId: cmd.processInstanceId,
+              error: "Session workspace preparation failed",
+            }),
         );
         break;
       }

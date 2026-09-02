@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { WorkspacePreparationTracker } from "./workspace-preparation.js";
+import { WorkspacePreparationBarrier } from "./workspace-preparation.js";
 
-describe("WorkspacePreparationTracker", () => {
+describe("WorkspacePreparationBarrier", () => {
   it("holds a command until the active preparation completes", async () => {
-    const tracker = new WorkspacePreparationTracker();
+    const tracker = new WorkspacePreparationBarrier();
     let finish!: () => void;
     const preparation = new Promise<void>((resolve) => {
       finish = resolve;
@@ -21,7 +21,7 @@ describe("WorkspacePreparationTracker", () => {
   });
 
   it("refuses the command when preparation fails", async () => {
-    const tracker = new WorkspacePreparationTracker();
+    const tracker = new WorkspacePreparationBarrier();
     const preparation = Promise.reject(new Error("clone failed"));
     tracker.track("session-1", preparation);
 
@@ -29,7 +29,7 @@ describe("WorkspacePreparationTracker", () => {
   });
 
   it("keeps waiting when a newer preparation supersedes the active one", async () => {
-    const tracker = new WorkspacePreparationTracker();
+    const tracker = new WorkspacePreparationBarrier();
     let finishOld!: () => void;
     let finishNew!: () => void;
     const oldPreparation = new Promise<void>((resolve) => {

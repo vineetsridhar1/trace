@@ -205,13 +205,31 @@ describe("BridgeClient workspace prep gating", () => {
     handleCommand({
       type: "track_session",
       sessionId: "session-1",
-      workdir: "/tracked/workdir",
+      workdir: os.homedir(),
     });
     handleCommand(SEND);
 
     await vi.waitFor(() => expect(runPrompt).toHaveBeenCalledTimes(1));
     const args = runPrompt.mock.calls[0][0] as RunPromptArgs;
-    expect(args.cwd).toBe("/tracked/workdir");
+    expect(args.cwd).toBe(os.homedir());
+  });
+
+  it("refuses to restore a tracked workspace that no longer exists", async () => {
+    const { handleCommand, sent, runPrompt } = createHarness();
+    handleCommand({
+      type: "track_session",
+      sessionId: "session-1",
+      workdir: "/missing/trace/workspace",
+    });
+
+    expect(sent).toContainEqual(
+      expect.objectContaining({
+        type: "workspace_failed",
+        error: expect.stringContaining("no longer exists"),
+      }),
+    );
+    handleCommand(SEND);
+    await vi.waitFor(() => expect(runPrompt).not.toHaveBeenCalled());
   });
 
   it("allows home-directory execution only when the command opts in", async () => {

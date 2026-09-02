@@ -1458,6 +1458,14 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "track_session": {
+        if (!fs.existsSync(cmd.workdir)) {
+          this.send({
+            type: "workspace_failed",
+            sessionId: cmd.sessionId,
+            error: `The prepared workspace no longer exists at ${cmd.workdir}`,
+          });
+          break;
+        }
         const prepareVersion = this.beginWorkspacePreparation(cmd.sessionId);
         this.sessionPrepares.delete(cmd.sessionId);
         this.markWorkspaceReady(cmd.sessionId, cmd.workdir, prepareVersion);
