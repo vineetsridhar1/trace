@@ -57,7 +57,7 @@ export function HomeDesignPicker({
   }, [designs, query]);
 
   useEffect(() => {
-    if (disabled || !activeOrgId) return;
+    if (disabled || !activeOrgId || !open) return;
     let active = true;
     void client
       .query(
@@ -78,7 +78,7 @@ export function HomeDesignPicker({
     return () => {
       active = false;
     };
-  }, [activeOrgId, disabled, upsertMany]);
+  }, [activeOrgId, disabled, open, upsertMany]);
 
   if (disabled) return null;
 

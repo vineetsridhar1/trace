@@ -13,20 +13,52 @@ import { useHomeDataStore } from "../../stores/home-data";
 const HOME_CREATIONS_QUERY = gql`
   query HomeCreations($organizationId: ID!) {
     appSessionGroups(organizationId: $organizationId, includeArchived: true) {
-      ...CreationGroup
-    }
-    designSessionGroups(organizationId: $organizationId, includeArchived: true) {
-      ...CreationGroup
-    }
-    pdfSessionGroups(organizationId: $organizationId, includeArchived: true) {
-      ...CreationGroup
-    }
-    animationSessionGroups(organizationId: $organizationId, includeArchived: true) {
-      ...CreationGroup
+      ...BaseCreationGroup
     }
   }
 
-  fragment CreationGroup on SessionGroup {
+  fragment BaseCreationGroup on SessionGroup {
+    id
+    name
+    slug
+    kind
+    status
+    visibility
+    archivedAt
+    createdAt
+    updatedAt
+    owner {
+      id
+      name
+      avatarUrl
+    }
+    connection {
+      state
+    }
+    sessions {
+      id
+      sessionGroupId
+      createdById
+      agentStatus
+      sessionStatus
+      prUrl
+      worktreeDeleted
+      lastMessageAt
+      lastUserMessageAt
+      updatedAt
+      createdAt
+    }
+  }
+`;
+
+const HOME_DESIGNS_QUERY = gql`
+  query HomeDesigns($organizationId: ID!) {
+    designSessionGroups(organizationId: $organizationId, includeArchived: true) {
+      ...DesignCreationGroup
+    }
+  }
+
+  fragment DesignCreationGroup on SessionGroup {
     id
     name
     slug
@@ -35,7 +67,6 @@ const HOME_CREATIONS_QUERY = gql`
     visibility
     archivedAt
     designPreviewUrl
-    animationPreviewUrl
     createdAt
     updatedAt
     owner {
@@ -64,7 +95,7 @@ const HOME_CREATIONS_QUERY = gql`
 
 type CreationGroup = SessionGroup & { id: string; sessions?: Array<Session & { id: string }> };
 
-export function useHomeCreations(organizationId: string | null) {
+export function useHomeCreations(organizationId: string | null, loadDesigns = false) {
   const upsertMany = useEntityStore((state) => state.upsertMany);
   const retryRequest = useHomeDataStore((state) => state.retryRequest);
 
@@ -74,16 +105,20 @@ export function useHomeCreations(organizationId: string | null) {
     useHomeDataStore.getState().markGeneratedStatus(organizationId, "loading");
     let active = true;
 
-    void client
-      .query(HOME_CREATIONS_QUERY, { organizationId }, { requestPolicy: "cache-and-network" })
-      .toPromise()
-      .then((result) => {
+    void (async () => {
+      try {
+        const baseResult = await client
+          .query(HOME_CREATIONS_QUERY, { organizationId }, { requestPolicy: "cache-and-network" })
+          .toPromise();
+        const designResult = loadDesigns
+          ? await client
+              .query(HOME_DESIGNS_QUERY, { organizationId }, { requestPolicy: "cache-and-network" })
+              .toPromise()
+          : null;
         if (!active) return;
         const groups = [
-          ...(result.data?.appSessionGroups ?? []),
-          ...(result.data?.designSessionGroups ?? []),
-          ...(result.data?.pdfSessionGroups ?? []),
-          ...(result.data?.animationSessionGroups ?? []),
+          ...(baseResult.data?.appSessionGroups ?? []),
+          ...(designResult?.data?.designSessionGroups ?? []),
         ] as CreationGroup[];
         if (groups.length > 0) {
           const existingGroups = useEntityStore.getState().sessionGroups;
@@ -98,14 +133,17 @@ export function useHomeCreations(organizationId: string | null) {
         }
         useHomeDataStore
           .getState()
-          .markGeneratedStatus(organizationId, result.error ? "error" : "ready");
-      })
-      .catch(() => {
+          .markGeneratedStatus(
+            organizationId,
+            baseResult.error || designResult?.error ? "error" : "ready",
+          );
+      } catch {
         if (active) useHomeDataStore.getState().markGeneratedStatus(organizationId, "error");
-      });
+      }
+    })();
 
     return () => {
       active = false;
     };
-  }, [organizationId, retryRequest, upsertMany]);
+  }, [loadDesigns, organizationId, retryRequest, upsertMany]);
 }

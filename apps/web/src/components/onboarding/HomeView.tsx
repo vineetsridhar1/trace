@@ -43,10 +43,10 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
     [channels, projects],
   );
   const work = useHomeWorkData();
-  useHomeCreations(activeOrgId);
   const [selectedChannelTargetKey, setSelectedChannelTargetKey] = useState<string | null>(null);
   const [selectedBridgeId, setSelectedBridgeId] = useState<string | null>(null);
   const [selectedKind, setSelectedKind] = useState<HomeCreatableKind | null>(null);
+  useHomeCreations(activeOrgId, selectedKind === "design");
   const [bridgeLoading, setBridgeLoading] = useState(true);
   const [selectedDesignSystemVersionId, setSelectedDesignSystemVersionId] = useState<string | null>(
     null,
@@ -282,7 +282,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
             <HomeWorkLedger items={work.items} />
           ) : null}
 
-          {isCreateMode ? <HomeCreationsGrid /> : null}
+          {isCreateMode && activeKind === "design" ? <HomeCreationsGrid /> : null}
 
           <p className="mt-auto pt-8 text-center text-[11px] text-[var(--th-faint)]">
             <span className="hidden sm:inline">⌘N New session · </span>⌘K Search · ⌘J Latest session
