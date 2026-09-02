@@ -86,7 +86,7 @@ function designDefaultPackageDir(): string {
 
 // Remove a standalone generated-project workspace directory (created by createAppWorkspace).
 // Takes the actual workdir path (the server persists it as session.workdir and
-// sends it on delete; the bridge also tracks it in sessionWorkdirs) so we delete
+// sends it on delete; the bridge also tracks it in the workspace registry) so we delete
 // the real slug directory rather than guessing from the sessionGroupId. Only a
 // direct child of WORKSPACES_DIR is removed — this guards traversal and rejects
 // worktree paths (/repos/...) so it is safe to call for any session. Async so

@@ -1051,7 +1051,8 @@ describe("SessionService", () => {
           data: expect.objectContaining({
             hosting: "cloud",
             connection: expect.objectContaining({
-              state: "connected",
+              state: "connecting",
+              workspaceState: "preparing",
               runtimeInstanceId: runtime.id,
               providerRuntimeId: "machine-cloud",
               version: 5,
@@ -7652,6 +7653,46 @@ describe("SessionService", () => {
       expect(reserveGroup).toHaveBeenCalledWith("session-1", "group-1");
     });
 
+    it("does not let runtime connectivity overwrite a workspace failure", () => {
+      const internals = service as unknown as {
+        lifecycleConnectionPatch: (
+          eventType: "session_runtime_connected",
+          connection: {
+            state: "failed";
+            workspaceState: "failed";
+            lastError: string;
+            retryCount: number;
+            canRetry: boolean;
+            canMove: boolean;
+          },
+          update: Record<string, never>,
+          adapterType: "provisioned",
+        ) => Record<string, unknown>;
+      };
+
+      expect(
+        internals.lifecycleConnectionPatch(
+          "session_runtime_connected",
+          {
+            state: "failed",
+            workspaceState: "failed",
+            lastError: "clone failed",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          {},
+          "provisioned",
+        ),
+      ).toEqual(
+        expect.objectContaining({
+          state: "failed",
+          lastError: "clone failed",
+          autoRetryable: false,
+        }),
+      );
+    });
+
     it("ignores stale lifecycle events after a newer runtime binding was cleared", async () => {
       prismaMock.session.findUnique
         .mockResolvedValueOnce({
@@ -9683,7 +9724,7 @@ describe("SessionService", () => {
       );
     });
 
-    it("does not rehydrate tracked workdirs into cloud runtimes", async () => {
+    it("rehydrates tracked workdirs into cloud runtimes", async () => {
       sessionRouterMock.getRuntime.mockReturnValueOnce({
         key: "runtime-cloud",
         id: "runtime-cloud",
@@ -9701,6 +9742,7 @@ describe("SessionService", () => {
           agentStatus: "active",
           connection: {
             state: "connected",
+            workspaceState: "ready",
             runtimeInstanceId: "runtime-cloud",
             runtimeLabel: "Cloud Runtime",
             retryCount: 0,
@@ -9717,7 +9759,17 @@ describe("SessionService", () => {
       await service.restoreSessionsForRuntime("runtime-cloud", "org-1");
 
       expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "runtime-cloud");
-      expect(sessionRouterMock.sendToRuntime).not.toHaveBeenCalled();
+      expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
+        "runtime-cloud",
+        {
+          type: "track_session",
+          sessionId: "session-1",
+          workdir: "/home/coder",
+          readOnly: false,
+          sessionGroupId: "group-1",
+        },
+        "org-1",
+      );
     });
   });
 
@@ -9932,6 +9984,7 @@ describe("SessionService", () => {
           id: "session-2",
           organizationId: "org-1",
           connection: readySibling.connection,
+          readOnlyWorkspace: false,
           pendingRun: siblingPending,
         },
       ]);
@@ -9939,6 +9992,17 @@ describe("SessionService", () => {
 
       await service.workspaceReady("session-1", "/workspaces/mule-5");
 
+      expect(sessionRouterMock.sendToRuntimeAsync).toHaveBeenCalledWith(
+        "runtime-group",
+        {
+          type: "track_session",
+          sessionId: "session-2",
+          sessionGroupId: "group-1",
+          workdir: "/workspaces/mule-5",
+          readOnly: false,
+        },
+        "org-1",
+      );
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
         "session-2",
         expect.objectContaining({
@@ -9947,6 +10011,9 @@ describe("SessionService", () => {
           cwd: "/workspaces/mule-5",
         }),
         expect.objectContaining({ expectedHomeRuntimeId: "runtime-group" }),
+      );
+      expect(sessionRouterMock.sendToRuntimeAsync.mock.invocationCallOrder[0]).toBeLessThan(
+        sessionRouterMock.send.mock.invocationCallOrder[0],
       );
       expect(prismaMock.session.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -10524,7 +10591,11 @@ describe("SessionService", () => {
         workdir: "/tmp/trace/workspace",
         worktreeDeleted: false,
         setupStatus: "failed",
-        connection: { runtimeInstanceId: "runtime-1" },
+        connection: {
+          state: "connected",
+          workspaceState: "ready",
+          runtimeInstanceId: "runtime-1",
+        },
         channel: { setupScript: "pnpm install" },
         sessions: [
           {
@@ -10570,6 +10641,33 @@ describe("SessionService", () => {
           }),
         }),
       );
+    });
+
+    it("does not rerun setup while workspace preparation is still in progress", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        workdir: "/tmp/trace/workspace",
+        worktreeDeleted: false,
+        setupStatus: "failed",
+        connection: {
+          state: "connecting",
+          workspaceState: "preparing",
+          runtimeInstanceId: "runtime-1",
+        },
+        channel: { setupScript: "pnpm install" },
+        sessions: [
+          {
+            id: "session-1",
+            hosting: "cloud",
+            connection: { runtimeInstanceId: "runtime-1" },
+          },
+        ],
+      });
+
+      await expect(
+        service.retrySessionGroupSetup("group-1", "org-1", "user", "user-1"),
+      ).rejects.toThrow("Cannot retry setup until the workspace is ready");
+      expect(terminalRelayMock.executeCommand).not.toHaveBeenCalled();
     });
   });
 
