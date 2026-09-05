@@ -11,10 +11,9 @@ import {
 } from "../src/models.js";
 
 describe("model catalog", () => {
-  it("exposes Astra 5.1 and Fable 5.1 while defaulting Claude Code to Opus 5", () => {
+  it("exposes Fable 5.1 while defaulting Claude Code to Opus 5", () => {
     expect(getDefaultModel("claude_code")).toBe("claude-opus-5");
     expect(getModelsForTool("claude_code")).toEqual([
-      { value: "claude-astra-5-1", label: "Astra 5.1" },
       { value: "claude-fable-5-1", label: "Fable 5.1" },
       { value: "claude-fable-5", label: "Fable 5" },
       { value: "claude-sonnet-5", label: "Sonnet 5" },
@@ -22,15 +21,19 @@ describe("model catalog", () => {
       { value: "claude-opus-5", label: "Opus 5" },
       { value: "claude-haiku-4-5", label: "Haiku 4.5" },
     ]);
-    expect(isSupportedModel("claude_code", "claude-astra-5-1")).toBe(true);
+    expect(isSupportedModel("claude_code", "gpt-6-astra")).toBe(false);
     expect(isSupportedModel("claude_code", "claude-fable-5-1")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-fable-5")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-opus-5")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-opus-4-7")).toBe(false);
   });
 
-  it("exposes GPT-5.6 Sol as the default Codex model", () => {
+  it("exposes GPT-6 Astra while defaulting Codex to GPT-5.6 Sol", () => {
     expect(getDefaultModel("codex")).toBe("gpt-5.6-sol");
+    expect(getModelsForTool("codex")).toContainEqual({
+      value: "gpt-6-astra",
+      label: "GPT-6 Astra",
+    });
     expect(getModelsForTool("codex")).toContainEqual({
       value: "gpt-5.6-sol",
       label: "GPT-5.6 Sol",
@@ -44,6 +47,7 @@ describe("model catalog", () => {
       label: "GPT-5.6 Luna",
     });
     expect(isSupportedModel("codex", "gpt-5.6-sol")).toBe(true);
+    expect(isSupportedModel("codex", "gpt-6-astra")).toBe(true);
     expect(isSupportedModel("codex", "gpt-5.5")).toBe(true);
     expect(isSupportedModel("codex", "gpt-5.4")).toBe(false);
   });
@@ -83,14 +87,14 @@ describe("model catalog", () => {
       value: "anthropic/claude-sonnet-4-6",
       label: "Claude Sonnet 4.6",
     });
-    expect(getModelsForTool("pi")).toHaveLength(11);
+    expect(getModelsForTool("pi")).toHaveLength(9);
     expect(isSupportedModel("pi", "openai-codex/gpt-5.4-mini")).toBe(false);
     expect(isSupportedModel("pi", "openai-codex/gpt-5.6-sol")).toBe(true);
     expect(isSupportedModel("pi", "openai/gpt-5.6-sol")).toBe(false);
     expect(isSupportedModel("pi", "openai/gpt-5.5")).toBe(true);
     expect(isSupportedModel("pi", "anthropic/claude-fable-5")).toBe(true);
-    expect(isSupportedModel("pi", "anthropic/claude-astra-5-1")).toBe(true);
-    expect(isSupportedModel("pi", "anthropic/claude-fable-5-1")).toBe(true);
+    expect(isSupportedModel("pi", "anthropic/claude-astra-5-1")).toBe(false);
+    expect(isSupportedModel("pi", "anthropic/claude-fable-5-1")).toBe(false);
     expect(isSupportedReasoningEffort("pi", "high")).toBe(true);
     expect(getModelProviderGroupsForTool("pi")).toEqual([
       expect.objectContaining({
@@ -118,8 +122,6 @@ describe("model catalog", () => {
         models: [
           { value: "anthropic/claude-sonnet-5", label: "Claude Sonnet 5" },
           { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-          { value: "anthropic/claude-astra-5-1", label: "Claude Astra 5.1" },
-          { value: "anthropic/claude-fable-5-1", label: "Claude Fable 5.1" },
           { value: "anthropic/claude-fable-5", label: "Claude Fable 5" },
         ],
       }),
