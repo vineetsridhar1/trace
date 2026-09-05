@@ -16,7 +16,6 @@ export interface ReasoningEffortOption {
 }
 
 const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
-  { value: "claude-astra-5-1", label: "Astra 5.1" },
   { value: "claude-fable-5-1", label: "Fable 5.1" },
   { value: "claude-fable-5", label: "Fable 5" },
   { value: "claude-sonnet-5", label: "Sonnet 5" },
@@ -26,6 +25,7 @@ const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
 ];
 
 const CODEX_MODELS: readonly ModelOption[] = [
+  { value: "gpt-6-astra", label: "GPT-6 Astra" },
   { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
   { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
   { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
@@ -44,8 +44,6 @@ const PI_MODELS: readonly ModelOption[] = [
   { value: "openai-codex/gpt-5.4", label: "Codex GPT-5.4 (ChatGPT)" },
   { value: "anthropic/claude-sonnet-5", label: "Claude Sonnet 5" },
   { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-  { value: "anthropic/claude-astra-5-1", label: "Claude Astra 5.1" },
-  { value: "anthropic/claude-fable-5-1", label: "Claude Fable 5.1" },
   { value: "anthropic/claude-fable-5", label: "Claude Fable 5" },
 ];
 
