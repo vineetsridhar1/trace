@@ -3,11 +3,13 @@ import { AnimatePresence } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import {
   getDefaultModel,
+  getDefaultReasoningEffort,
   getModelLabel,
   getModelProviderForModel,
   getModelProviderGroupsForTool,
   getModelsForTool,
   getReasoningEffortLabel,
+  getReasoningEffortsForTool,
   type ReasoningEffortOption,
 } from "./modelOptions";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
@@ -65,6 +67,9 @@ export function ToolModelPicker({
     getModelProviderForModel(pickerTool, activeModel) ??
     providerGroups[0];
   const modelOptions = activeProvider?.models ?? getModelsForTool(pickerTool);
+  const thinkingOptions = pendingModel
+    ? getReasoningEffortsForTool(pickerTool, pendingModel)
+    : reasoningEffortOptions;
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
@@ -116,7 +121,8 @@ export function ToolModelPicker({
   }
 
   async function handleModelSelect(nextModel: string) {
-    if (compactSelectionRef.current && reasoningEffortOptions.length > 0) {
+    const nextEffortOptions = getReasoningEffortsForTool(pickerTool, nextModel);
+    if (compactSelectionRef.current && nextEffortOptions.length > 0) {
       setPendingModel(nextModel);
       setLayer("thinking");
       return;
@@ -126,6 +132,14 @@ export function ToolModelPicker({
     try {
       if (nextModel !== model) {
         await onModelChange(nextModel);
+        if (
+          onReasoningEffortChange &&
+          reasoningEffort &&
+          !nextEffortOptions.some((option) => option.value === reasoningEffort)
+        ) {
+          const nextEffort = getDefaultReasoningEffort(pickerTool);
+          if (nextEffort) await onReasoningEffortChange(nextEffort);
+        }
       }
       setOpen(false);
     } finally {
@@ -227,8 +241,8 @@ export function ToolModelPicker({
           ) : (
             <ThinkingLayer
               key="thinking"
-              effort={reasoningEffort ?? reasoningEffortOptions[0]?.value ?? ""}
-              options={reasoningEffortOptions}
+              effort={reasoningEffort ?? thinkingOptions[0]?.value ?? ""}
+              options={thinkingOptions}
               pending={pending}
               onBack={() => {
                 setPendingModel(null);

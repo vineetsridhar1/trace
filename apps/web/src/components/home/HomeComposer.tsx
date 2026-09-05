@@ -73,7 +73,7 @@ export function HomeComposer({
   const codingSetupComplete = kind !== "coding" || (!!channelTargetKey && !!bridgeId);
   const runtimeReady = kind !== "general" || !bridgeLoading;
   const canSubmit = prompt.trim().length > 0 && codingSetupComplete && runtimeReady && !submitting;
-  const effortOptions = getReasoningEffortsForTool(tool);
+  const effortOptions = getReasoningEffortsForTool(tool, model);
 
   useEffect(() => {
     editorRef.current?.focus();

@@ -141,14 +141,24 @@ const CODEX_REASONING_EFFORTS: readonly ReasoningEffortOption[] = [
   { value: "medium", label: "Medium" },
   { value: "high", label: "High" },
   { value: "xhigh", label: "Extra high" },
+  { value: "max", label: "Max" },
+  { value: "ultra", label: "Ultra" },
 ];
+
+const CODEX_REASONING_EFFORTS_THROUGH_MAX = CODEX_REASONING_EFFORTS.filter(
+  (option) => option.value !== "ultra",
+);
+
+const CODEX_REASONING_EFFORTS_THROUGH_XHIGH = CODEX_REASONING_EFFORTS_THROUGH_MAX.filter(
+  (option) => option.value !== "max",
+);
 
 const REASONING_EFFORT_OPTIONS_BY_TOOL: Readonly<Record<string, readonly ReasoningEffortOption[]>> =
   {
     claude_code: CLAUDE_CODE_REASONING_EFFORTS,
     codex: CODEX_REASONING_EFFORTS,
     cursor_composer: CURSOR_COMPOSER_REASONING_EFFORTS,
-    pi: CODEX_REASONING_EFFORTS,
+    pi: CODEX_REASONING_EFFORTS_THROUGH_XHIGH,
   };
 
 const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
@@ -203,6 +213,12 @@ export function getReasoningEffortsForTool(
   tool: string,
   model?: string | null,
 ): readonly ReasoningEffortOption[] {
+  if (tool === "codex" && model) {
+    if (model === "gpt-5.6-luna") return CODEX_REASONING_EFFORTS_THROUGH_MAX;
+    if (!["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra"].includes(model)) {
+      return CODEX_REASONING_EFFORTS_THROUGH_XHIGH;
+    }
+  }
   if (tool === "cursor_composer") {
     if (model === "auto") return [];
     if (model === "gemini-3.8-flash") return CURSOR_REASONING_EFFORTS_THROUGH_HIGH;

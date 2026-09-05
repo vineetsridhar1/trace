@@ -1092,23 +1092,30 @@ function requireSingleGeneralConversionSession<T>(
 }
 
 function resolveConversionToolSelection(
-  sourceTool: CodingTool,
+  source: Pick<SessionWithInclude, "tool" | "model" | "reasoningEffort">,
   input: Pick<ConvertSessionGroupServiceInput, "tool" | "model" | "reasoningEffort">,
 ): ConversionToolSelection {
-  const tool = input.tool ?? sourceTool;
-  const toolChanged = tool !== sourceTool;
+  const tool = input.tool ?? source.tool;
+  const toolChanged = tool !== source.tool;
+  const model =
+    input.model != null
+      ? validateModelForTool(tool, input.model)
+      : toolChanged
+        ? (getDefaultModel(tool) ?? null)
+        : undefined;
+  const effectiveModel = model ?? source.model ?? getDefaultModel(tool);
+  const effortUnsupported =
+    tool === "codex" &&
+    model !== undefined &&
+    source.reasoningEffort != null &&
+    !isSupportedReasoningEffort(tool, source.reasoningEffort, effectiveModel);
   return {
     tool,
-    model:
-      input.model != null
-        ? validateModelForTool(tool, input.model)
-        : toolChanged
-          ? (getDefaultModel(tool) ?? null)
-          : undefined,
+    model,
     reasoningEffort:
       input.reasoningEffort != null
-        ? validateReasoningEffortForTool(tool, input.reasoningEffort)
-        : toolChanged
+        ? validateReasoningEffortForTool(tool, input.reasoningEffort, effectiveModel)
+        : toolChanged || effortUnsupported
           ? (getDefaultReasoningEffort(tool) ?? null)
           : undefined,
   };
@@ -1396,12 +1403,17 @@ function validateModelForTool(tool: string, model: string): string {
   return trimmed;
 }
 
-function validateReasoningEffortForTool(tool: string, effort: string): string {
+function validateReasoningEffortForTool(
+  tool: string,
+  effort: string,
+  model: string | null | undefined,
+): string {
   const trimmed = effort.trim();
   if (!trimmed) {
     throw new Error("Reasoning effort cannot be empty");
   }
-  if (!isSupportedReasoningEffort(tool, trimmed)) {
+  const selectedModel = tool === "codex" ? (model ?? getDefaultModel(tool)) : undefined;
+  if (!isSupportedReasoningEffort(tool, trimmed, selectedModel)) {
     throw new Error(`Unsupported reasoning effort "${trimmed}" for tool "${tool}"`);
   }
   return trimmed;
@@ -1412,9 +1424,14 @@ function resolveStoredModelForTool(tool: CodingTool, model: string | null | unde
   return trimmed && isSupportedModel(tool, trimmed) ? trimmed : undefined;
 }
 
-function resolveStoredReasoningEffortForTool(tool: CodingTool, effort: string | null | undefined) {
+function resolveStoredReasoningEffortForTool(
+  tool: CodingTool,
+  effort: string | null | undefined,
+  model: string | null | undefined,
+) {
   const trimmed = effort?.trim();
-  return trimmed && isSupportedReasoningEffort(tool, trimmed) ? trimmed : undefined;
+  const selectedModel = tool === "codex" ? (model ?? getDefaultModel(tool)) : undefined;
+  return trimmed && isSupportedReasoningEffort(tool, trimmed, selectedModel) ? trimmed : undefined;
 }
 
 function selectRuntimeSupportedTool(
@@ -3486,7 +3503,7 @@ export class SessionService {
       },
     });
     const sourceSession = requireSingleGeneralConversionSession(source);
-    const target = resolveConversionToolSelection(sourceSession.tool, input);
+    const target = resolveConversionToolSelection(sourceSession, input);
     const reusableCloudRuntime = await this.resolveReusableGeneratedConversionRuntime(
       sourceSession,
       target.tool,
@@ -3748,7 +3765,7 @@ export class SessionService {
       });
       const session = requireSingleGeneralConversionSession(group);
       const generalGroup = group!;
-      const target = resolveConversionToolSelection(session.tool, input);
+      const target = resolveConversionToolSelection(session, input);
       const boundRuntime = sessionRouter.getRuntimeForSession(session.id);
       const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
       const effectiveRuntime =
@@ -4696,9 +4713,12 @@ export class SessionService {
       : (resolveStoredModelForTool(tool, userDefaults?.defaultSessionModel) ??
         getDefaultModel(tool));
     const reasoningEffort = input.reasoningEffort
-      ? validateReasoningEffortForTool(tool, input.reasoningEffort)
-      : (resolveStoredReasoningEffortForTool(tool, userDefaults?.defaultSessionReasoningEffort) ??
-        getDefaultReasoningEffort(tool));
+      ? validateReasoningEffortForTool(tool, input.reasoningEffort, model)
+      : (resolveStoredReasoningEffortForTool(
+          tool,
+          userDefaults?.defaultSessionReasoningEffort,
+          model,
+        ) ?? getDefaultReasoningEffort(tool));
 
     // Tracked so we can clean up the managed repo if the session transaction
     // below rolls back (it's created before the txn because it initializes
@@ -5946,8 +5966,12 @@ export class SessionService {
           : undefined;
     const nextReasoningEffort =
       config.reasoningEffort != null
-        ? validateReasoningEffortForTool(nextTool, config.reasoningEffort)
-        : toolChanged
+        ? validateReasoningEffortForTool(nextTool, config.reasoningEffort, nextModel ?? prev.model)
+        : toolChanged ||
+            (nextTool === "codex" &&
+              nextModel !== undefined &&
+              prev.reasoningEffort != null &&
+              !isSupportedReasoningEffort(nextTool, prev.reasoningEffort, nextModel))
           ? (getDefaultReasoningEffort(nextTool) ?? null)
           : undefined;
 
@@ -6155,7 +6179,7 @@ export class SessionService {
         : null;
       const reasoningEffort = tool
         ? input.reasoningEffort
-          ? validateReasoningEffortForTool(tool, input.reasoningEffort)
+          ? validateReasoningEffortForTool(tool, input.reasoningEffort, model)
           : (getDefaultReasoningEffort(tool) ?? null)
         : null;
 
@@ -6785,7 +6809,7 @@ export class SessionService {
         : session.model;
     const activeReasoningEffort =
       activeTool !== session.tool
-        ? (resolveStoredReasoningEffortForTool(activeTool, session.reasoningEffort) ??
+        ? (resolveStoredReasoningEffortForTool(activeTool, session.reasoningEffort, activeModel) ??
           getDefaultReasoningEffort(activeTool) ??
           null)
         : session.reasoningEffort;

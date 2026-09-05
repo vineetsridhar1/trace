@@ -2426,6 +2426,78 @@ describe("SessionService", () => {
       );
     });
 
+    it.each(["max", "ultra"])("starts an Astra session with %s reasoning", async (effort) => {
+      const catalog = await vi.importActual<typeof import("@trace/shared")>("@trace/shared");
+      isSupportedReasoningEffortMock.mockImplementationOnce(catalog.isSupportedReasoningEffort);
+      const sessionGroup = makeSessionGroup();
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(
+        makeSession({ sessionGroup, tool: "codex", model: "gpt-6-astra", reasoningEffort: effort }),
+      );
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "codex",
+        model: "gpt-6-astra",
+        reasoningEffort: effort,
+      } as unknown as StartSessionServiceInput);
+
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tool: "codex",
+            model: "gpt-6-astra",
+            reasoningEffort: effort,
+          }),
+        }),
+      );
+    });
+
+    it("rejects Astra-only reasoning on an older Codex model", async () => {
+      const catalog = await vi.importActual<typeof import("@trace/shared")>("@trace/shared");
+      isSupportedReasoningEffortMock.mockImplementationOnce(catalog.isSupportedReasoningEffort);
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          tool: "codex",
+          model: "gpt-5.5",
+          reasoningEffort: "ultra",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow('Unsupported reasoning effort "ultra" for tool "codex"');
+
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+    });
+
+    it("drops an inherited Astra effort when starting a different model", async () => {
+      const catalog = await vi.importActual<typeof import("@trace/shared")>("@trace/shared");
+      isSupportedReasoningEffortMock.mockImplementationOnce(catalog.isSupportedReasoningEffort);
+      getDefaultReasoningEffortMock.mockReturnValueOnce("medium");
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        defaultSessionTool: "codex",
+        defaultSessionModel: "gpt-6-astra",
+        defaultSessionReasoningEffort: "ultra",
+      });
+      const sessionGroup = makeSessionGroup();
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(makeSession({ sessionGroup }));
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "codex",
+        model: "gpt-5.5",
+      } as unknown as StartSessionServiceInput);
+
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ model: "gpt-5.5", reasoningEffort: "medium" }),
+        }),
+      );
+    });
+
     it("rejects an unsupported reasoning effort on start", async () => {
       isSupportedReasoningEffortMock.mockReturnValueOnce(false);
 
@@ -7459,6 +7531,68 @@ describe("SessionService", () => {
   });
 
   describe("updateConfig", () => {
+    it.each(["max", "ultra"])("updates Astra to %s reasoning", async (effort) => {
+      const catalog = await vi.importActual<typeof import("@trace/shared")>("@trace/shared");
+      isSupportedReasoningEffortMock.mockImplementationOnce(catalog.isSupportedReasoningEffort);
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({ tool: "codex", model: "gpt-6-astra" }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({ tool: "codex", model: "gpt-6-astra", reasoningEffort: effort }),
+      );
+
+      await service.updateConfig(
+        "session-1",
+        "org-1",
+        { reasoningEffort: effort },
+        "user",
+        "user-1",
+      );
+
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ type: "config_changed", reasoningEffort: effort }),
+        }),
+      );
+    });
+
+    it("resets an unsupported effort when switching away from Astra", async () => {
+      const catalog = await vi.importActual<typeof import("@trace/shared")>("@trace/shared");
+      isSupportedReasoningEffortMock.mockImplementationOnce(catalog.isSupportedReasoningEffort);
+      getDefaultReasoningEffortMock.mockReturnValueOnce("medium");
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({ tool: "codex", model: "gpt-6-astra", reasoningEffort: "ultra" }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({ tool: "codex", model: "gpt-5.5", reasoningEffort: "medium" }),
+      );
+
+      await service.updateConfig("session-1", "org-1", { model: "gpt-5.5" }, "user", "user-1");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ model: "gpt-5.5", reasoningEffort: "medium" }),
+        }),
+      );
+    });
+
+    it("preserves a supported effort when switching from Astra to Sol", async () => {
+      const catalog = await vi.importActual<typeof import("@trace/shared")>("@trace/shared");
+      isSupportedReasoningEffortMock.mockImplementationOnce(catalog.isSupportedReasoningEffort);
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({ tool: "codex", model: "gpt-6-astra", reasoningEffort: "ultra" }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({ tool: "codex", model: "gpt-5.6-sol", reasoningEffort: "ultra" }),
+      );
+
+      await service.updateConfig("session-1", "org-1", { model: "gpt-5.6-sol" }, "user", "user-1");
+
+      expect(prismaMock.session.update.mock.calls[0]?.[0].data).not.toHaveProperty(
+        "reasoningEffort",
+      );
+    });
+
     it("updates reasoning effort and emits a config change", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(makeSession());
       prismaMock.session.update.mockResolvedValueOnce(makeSession({ reasoningEffort: "xhigh" }));
@@ -7561,6 +7695,41 @@ describe("SessionService", () => {
   });
 
   describe("updateDefaults", () => {
+    it.each(["max", "ultra"])("saves Astra's %s effort as a user default", async (effort) => {
+      const catalog = await vi.importActual<typeof import("@trace/shared")>("@trace/shared");
+      isSupportedReasoningEffortMock.mockImplementationOnce(catalog.isSupportedReasoningEffort);
+
+      await service.updateDefaults("user-1", {
+        tool: "codex",
+        model: "gpt-6-astra",
+        reasoningEffort: effort,
+      });
+
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: "user-1" },
+        data: {
+          defaultSessionTool: "codex",
+          defaultSessionModel: "gpt-6-astra",
+          defaultSessionReasoningEffort: effort,
+        },
+      });
+    });
+
+    it("rejects saving Ultra for a model that does not support it", async () => {
+      const catalog = await vi.importActual<typeof import("@trace/shared")>("@trace/shared");
+      isSupportedReasoningEffortMock.mockImplementationOnce(catalog.isSupportedReasoningEffort);
+
+      await expect(
+        service.updateDefaults("user-1", {
+          tool: "codex",
+          model: "gpt-5.6-luna",
+          reasoningEffort: "ultra",
+        }),
+      ).rejects.toThrow('Unsupported reasoning effort "ultra" for tool "codex"');
+
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
     it("stores explicit user session defaults", async () => {
       prismaMock.user.update.mockResolvedValueOnce({
         id: "user-1",

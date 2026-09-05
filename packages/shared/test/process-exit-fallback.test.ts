@@ -78,6 +78,47 @@ describe("coding tool adapter process exit fallback", () => {
     );
   });
 
+  it.each(["max", "ultra"])("passes Astra's %s effort to new and resumed Codex runs", (effort) => {
+    const adapter = new CodexAdapter();
+    const options = {
+      prompt: "implement feature",
+      cwd: "/tmp",
+      model: "gpt-6-astra",
+      reasoningEffort: effort,
+      onOutput: vi.fn(),
+      onComplete: vi.fn(),
+    };
+
+    adapter.run(options);
+
+    const flags = [
+      "--json",
+      "--dangerously-bypass-approvals-and-sandbox",
+      "--model",
+      "gpt-6-astra",
+      "--config",
+      `model_reasoning_effort="${effort}"`,
+    ];
+    expect(spawn).toHaveBeenLastCalledWith(
+      "codex",
+      ["exec", ...flags, "-"],
+      expect.objectContaining({ cwd: "/tmp" }),
+    );
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({ type: "thread.started", thread_id: "astra-thread" })}\n`,
+    );
+    spawnedChildren[0].emit("close", 0);
+    adapter.run({ ...options, prompt: "continue" });
+
+    expect(spawn).toHaveBeenLastCalledWith(
+      "codex",
+      ["exec", "resume", ...flags, "astra-thread", "-"],
+      expect.objectContaining({ cwd: "/tmp" }),
+    );
+    expect(spawnedChildren[1].stdin.read()?.toString()).toBe("continue");
+  });
+
   it("emits Codex turn usage without ending the run", () => {
     const adapter = new CodexAdapter();
     const onOutput = vi.fn();

@@ -105,7 +105,7 @@ export function SpatialNewTab({
   );
   const { attachments, addAttachments, removeAttachment, setUploading, clearAttachments } =
     useHomeComposerAttachments();
-  const effortOptions = getReasoningEffortsForTool(tool);
+  const effortOptions = getReasoningEffortsForTool(tool, model);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => editorRef.current?.focus());

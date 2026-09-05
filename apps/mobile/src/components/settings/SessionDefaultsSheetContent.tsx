@@ -126,6 +126,16 @@ export function SessionDefaultsSheetContent() {
     }
   }
 
+  function handleModelChange(model: string) {
+    if (!selectedTool) return;
+    const reasoningEffort = getReasoningEffortsForTool(selectedTool, model).some(
+      (option) => option.value === selectedReasoningEffort,
+    )
+      ? selectedReasoningEffort
+      : (getDefaultReasoningEffort(selectedTool) ?? null);
+    void handleSave({ tool: selectedTool, model, reasoningEffort });
+  }
+
   return (
     <ScrollView
       showsVerticalScrollIndicator={false}
@@ -175,16 +185,7 @@ export function SessionDefaultsSheetContent() {
                     <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
                   ) : undefined
                 }
-                onPress={
-                  selectedTool
-                    ? () =>
-                        void handleSave({
-                          tool: selectedTool,
-                          model: option.value,
-                          reasoningEffort: selectedReasoningEffort,
-                        })
-                    : undefined
-                }
+                onPress={selectedTool ? () => handleModelChange(option.value) : undefined}
                 haptic={selectedModel === option.value ? "none" : "selection"}
                 separator={index < group.models.length - 1}
                 style={pending || !selectedTool ? styles.disabledRow : undefined}
@@ -203,16 +204,7 @@ export function SessionDefaultsSheetContent() {
                   <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
                 ) : undefined
               }
-              onPress={
-                selectedTool
-                  ? () =>
-                      void handleSave({
-                        tool: selectedTool,
-                        model: option.value,
-                        reasoningEffort: selectedReasoningEffort,
-                      })
-                  : undefined
-              }
+              onPress={selectedTool ? () => handleModelChange(option.value) : undefined}
               haptic={selectedModel === option.value ? "none" : "selection"}
               separator={index < modelOptions.length - 1}
               style={pending || !selectedTool ? styles.disabledRow : undefined}

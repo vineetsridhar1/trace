@@ -7,6 +7,7 @@ import {
   getModelProviderForModel,
   getModelProviderGroupsForTool,
   getModelsForTool,
+  getReasoningEffortLabel,
   getReasoningEffortsForTool,
   isSupportedModel,
   isSupportedReasoningEffort,
@@ -59,6 +60,40 @@ describe("model catalog", () => {
     expect(isSupportedModel("codex", CODEX_CONFIGURED_DEFAULT_MODEL)).toBe(true);
     expect(isSupportedModel("codex", "gpt-5.5")).toBe(true);
     expect(isSupportedModel("codex", "gpt-5.4")).toBe(false);
+  });
+
+  it("exposes Astra's Max and Ultra reasoning levels with display labels", () => {
+    expect(getReasoningEffortsForTool("codex", "gpt-6-astra")).toEqual([
+      { value: "low", label: "Low" },
+      { value: "medium", label: "Medium" },
+      { value: "high", label: "High" },
+      { value: "xhigh", label: "Extra high" },
+      { value: "max", label: "Max" },
+      { value: "ultra", label: "Ultra" },
+    ]);
+    expect(isSupportedReasoningEffort("codex", "max", "gpt-6-astra")).toBe(true);
+    expect(isSupportedReasoningEffort("codex", "ultra", "gpt-6-astra")).toBe(true);
+    expect(getReasoningEffortLabel("max")).toBe("Max");
+    expect(getReasoningEffortLabel("ultra")).toBe("Ultra");
+    expect(getDefaultReasoningEffort("codex")).toBe("medium");
+  });
+
+  it.each([
+    ["gpt-5.6-sol", true, true],
+    ["gpt-5.6-terra", true, true],
+    ["gpt-5.6-luna", true, false],
+    ["gpt-5.5", false, false],
+    [CODEX_CONFIGURED_DEFAULT_MODEL, false, false],
+    ["unknown-model", false, false],
+  ])("limits Codex reasoning levels for %s", (model, supportsMax, supportsUltra) => {
+    expect(isSupportedReasoningEffort("codex", "max", model)).toBe(supportsMax);
+    expect(isSupportedReasoningEffort("codex", "ultra", model)).toBe(supportsUltra);
+    expect(isSupportedReasoningEffort("codex", "xhigh", model)).toBe(true);
+  });
+
+  it("keeps Codex-only reasoning levels out of Pi", () => {
+    expect(isSupportedReasoningEffort("pi", "max", "openai/gpt-5.5")).toBe(false);
+    expect(isSupportedReasoningEffort("pi", "ultra", "openai/gpt-5.5")).toBe(false);
   });
 
   it("exposes Pi-backed OpenAI API models and defaults to GPT-5.5", () => {

@@ -246,7 +246,8 @@ function validateSlackSessionConfig(input: {
   if (model && !isSupportedModel(input.tool, model)) {
     throw new Error(`Unsupported model "${model}" for ${input.tool}`);
   }
-  if (reasoningEffort && !isSupportedReasoningEffort(input.tool, reasoningEffort)) {
+  const selectedModel = input.tool === "codex" ? (model ?? getDefaultModel(input.tool)) : undefined;
+  if (reasoningEffort && !isSupportedReasoningEffort(input.tool, reasoningEffort, selectedModel)) {
     throw new Error(`Unsupported thinking level "${reasoningEffort}" for ${input.tool}`);
   }
 
@@ -1736,14 +1737,15 @@ async function getTraceDefaults(userId: string): Promise<{
     },
   });
   const tool = user?.defaultSessionTool ?? "claude_code";
+  const model =
+    resolveStoredModelForToolForSlack(tool, user?.defaultSessionModel) ??
+    getDefaultModel(tool) ??
+    "";
   return {
     tool,
-    model:
-      resolveStoredModelForToolForSlack(tool, user?.defaultSessionModel) ??
-      getDefaultModel(tool) ??
-      "",
+    model,
     reasoningEffort:
-      resolveStoredReasoningForToolForSlack(tool, user?.defaultSessionReasoningEffort) ??
+      resolveStoredReasoningForToolForSlack(tool, user?.defaultSessionReasoningEffort, model) ??
       getDefaultReasoningEffort(tool) ??
       "",
   };
@@ -1756,8 +1758,10 @@ function resolveStoredModelForToolForSlack(tool: CodingTool, model?: string | nu
 function resolveStoredReasoningForToolForSlack(
   tool: CodingTool,
   reasoningEffort?: string | null,
+  model?: string | null,
 ): string | null {
-  return reasoningEffort && isSupportedReasoningEffort(tool, reasoningEffort)
+  return reasoningEffort &&
+    isSupportedReasoningEffort(tool, reasoningEffort, tool === "codex" ? model : undefined)
     ? reasoningEffort
     : null;
 }

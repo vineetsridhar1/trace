@@ -92,7 +92,11 @@ export function SessionDefaultsSection() {
       await saveDefaults({
         tool: defaultTool,
         model: value,
-        reasoningEffort: defaultReasoningEffort,
+        reasoningEffort: getReasoningEffortsForTool(defaultTool, value).some(
+          (option) => option.value === defaultReasoningEffort,
+        )
+          ? defaultReasoningEffort
+          : (getDefaultReasoningEffort(defaultTool) ?? null),
       });
     } catch (error) {
       toast.error("Failed to update session defaults", {
