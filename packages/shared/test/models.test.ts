@@ -11,15 +11,19 @@ import {
 } from "../src/models.js";
 
 describe("model catalog", () => {
-  it("exposes Fable 5 as an option while defaulting Claude Code to Opus 5", () => {
+  it("exposes Astra 5.1 and Fable 5.1 while defaulting Claude Code to Opus 5", () => {
     expect(getDefaultModel("claude_code")).toBe("claude-opus-5");
     expect(getModelsForTool("claude_code")).toEqual([
+      { value: "claude-astra-5-1", label: "Astra 5.1" },
+      { value: "claude-fable-5-1", label: "Fable 5.1" },
       { value: "claude-fable-5", label: "Fable 5" },
       { value: "claude-sonnet-5", label: "Sonnet 5" },
       { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
       { value: "claude-opus-5", label: "Opus 5" },
       { value: "claude-haiku-4-5", label: "Haiku 4.5" },
     ]);
+    expect(isSupportedModel("claude_code", "claude-astra-5-1")).toBe(true);
+    expect(isSupportedModel("claude_code", "claude-fable-5-1")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-fable-5")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-opus-5")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-opus-4-7")).toBe(false);
@@ -79,12 +83,14 @@ describe("model catalog", () => {
       value: "anthropic/claude-sonnet-4-6",
       label: "Claude Sonnet 4.6",
     });
-    expect(getModelsForTool("pi")).toHaveLength(9);
+    expect(getModelsForTool("pi")).toHaveLength(11);
     expect(isSupportedModel("pi", "openai-codex/gpt-5.4-mini")).toBe(false);
     expect(isSupportedModel("pi", "openai-codex/gpt-5.6-sol")).toBe(true);
     expect(isSupportedModel("pi", "openai/gpt-5.6-sol")).toBe(false);
     expect(isSupportedModel("pi", "openai/gpt-5.5")).toBe(true);
     expect(isSupportedModel("pi", "anthropic/claude-fable-5")).toBe(true);
+    expect(isSupportedModel("pi", "anthropic/claude-astra-5-1")).toBe(true);
+    expect(isSupportedModel("pi", "anthropic/claude-fable-5-1")).toBe(true);
     expect(isSupportedReasoningEffort("pi", "high")).toBe(true);
     expect(getModelProviderGroupsForTool("pi")).toEqual([
       expect.objectContaining({
@@ -112,6 +118,8 @@ describe("model catalog", () => {
         models: [
           { value: "anthropic/claude-sonnet-5", label: "Claude Sonnet 5" },
           { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+          { value: "anthropic/claude-astra-5-1", label: "Claude Astra 5.1" },
+          { value: "anthropic/claude-fable-5-1", label: "Claude Fable 5.1" },
           { value: "anthropic/claude-fable-5", label: "Claude Fable 5" },
         ],
       }),
