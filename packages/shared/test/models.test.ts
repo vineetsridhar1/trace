@@ -14,26 +14,33 @@ import {
 } from "../src/models.js";
 
 describe("model catalog", () => {
-  it("exposes Fable 5 as an option while defaulting Claude Code to Opus 5 (1M)", () => {
+  it("exposes Fable 5.1 while defaulting Claude Code to Opus 5 (1M)", () => {
     expect(getDefaultModel("claude_code")).toBe("claude-opus-5[1m]");
     expect(getModelsForTool("claude_code")).toEqual([
       { value: CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL, label: "Configured default" },
+      { value: "claude-fable-5-1", label: "Fable 5.1" },
       { value: "claude-fable-5", label: "Fable 5" },
       { value: "claude-sonnet-5", label: "Sonnet 5" },
       { value: "claude-opus-5", label: "Opus 5" },
       { value: "claude-opus-5[1m]", label: "Opus 5 (1M)" },
     ]);
     expect(isSupportedModel("claude_code", CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL)).toBe(true);
+    expect(isSupportedModel("claude_code", "claude-astra-5-1")).toBe(false);
+    expect(isSupportedModel("claude_code", "claude-fable-5-1")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-fable-5")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-opus-5[1m]")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-opus-unknown")).toBe(false);
   });
 
-  it("exposes GPT-5.6 Sol as the default Codex model", () => {
-    expect(getDefaultModel("codex")).toBe("gpt-5.6-sol");
+  it("exposes GPT-6 Astra as the default Codex model", () => {
+    expect(getDefaultModel("codex")).toBe("gpt-6-astra");
     expect(getModelsForTool("codex")).toContainEqual({
       value: CODEX_CONFIGURED_DEFAULT_MODEL,
       label: "Configured default",
+    });
+    expect(getModelsForTool("codex")).toContainEqual({
+      value: "gpt-6-astra",
+      label: "GPT-6 Astra",
     });
     expect(getModelsForTool("codex")).toContainEqual({
       value: "gpt-5.6-sol",
@@ -47,6 +54,7 @@ describe("model catalog", () => {
       value: "gpt-5.6-luna",
       label: "GPT-5.6 Luna",
     });
+    expect(isSupportedModel("codex", "gpt-6-astra")).toBe(true);
     expect(isSupportedModel("codex", "gpt-5.6-sol")).toBe(true);
     expect(isSupportedModel("codex", CODEX_CONFIGURED_DEFAULT_MODEL)).toBe(true);
     expect(isSupportedModel("codex", "gpt-5.5")).toBe(true);
@@ -81,20 +89,34 @@ describe("model catalog", () => {
       }),
     ]);
     expect(getModelProviderForModel("pi", "openai-codex/gpt-5.6-terra")).toBeUndefined();
-    expect(getModelProviderForModel("pi", "openai/gpt-5.5")?.value).toBe(
-      "openai",
-    );
+    expect(getModelProviderForModel("pi", "openai/gpt-5.5")?.value).toBe("openai");
   });
 
-  it("limits Grok 4.5 effort options to the levels Cursor exposes", () => {
-    expect(getReasoningEffortsForTool("cursor_composer", "grok-4.5")).toEqual([
+  it("limits Cursor to frontier model families with their supported effort levels", () => {
+    expect(getModelsForTool("cursor_composer")).toEqual([
+      { value: "auto", label: "Auto" },
+      { value: "grok-4.6", label: "Grok 4.6" },
+      { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
+      { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
+      { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
+      { value: "opus-5", label: "Opus 5" },
+      { value: "sonnet-5", label: "Sonnet 5" },
+      { value: "fable-5-1", label: "Fable 5.1" },
+      { value: "gemini-3.8-flash", label: "Gemini 3.8 Flash" },
+    ]);
+    expect(isSupportedModel("cursor_composer", "gpt-5.3-codex")).toBe(false);
+    expect(isSupportedModel("cursor_composer", "gpt-5.2")).toBe(false);
+    expect(isSupportedModel("cursor_composer", "composer-2.5")).toBe(false);
+    expect(getReasoningEffortsForTool("cursor_composer", "grok-4.6")).toEqual([
       { value: "low", label: "Low" },
       { value: "medium", label: "Medium" },
       { value: "high", label: "High" },
+      { value: "xhigh", label: "Extra high" },
     ]);
-    expect(isSupportedReasoningEffort("cursor_composer", "low", "grok-4.5")).toBe(true);
-    expect(isSupportedReasoningEffort("cursor_composer", "medium", "grok-4.5")).toBe(true);
-    expect(isSupportedReasoningEffort("cursor_composer", "max", "grok-4.5")).toBe(false);
+    expect(getReasoningEffortsForTool("cursor_composer", "gemini-3.8-flash")).toHaveLength(3);
+    expect(getReasoningEffortsForTool("cursor_composer", "auto")).toEqual([]);
+    expect(isSupportedReasoningEffort("cursor_composer", "xhigh", "grok-4.6")).toBe(true);
+    expect(isSupportedReasoningEffort("cursor_composer", "max", "grok-4.6")).toBe(false);
   });
 });
 
@@ -108,6 +130,9 @@ describe("resolveCursorComposerModel", () => {
     expect(resolveCursorComposerModel("opus-5", "low")).toBe("claude-opus-5-thinking-low");
     expect(resolveCursorComposerModel("opus-5", "max")).toBe("claude-opus-5-thinking-max");
     expect(resolveCursorComposerModel("sonnet-5", "high")).toBe("claude-sonnet-5-thinking-high");
+    expect(resolveCursorComposerModel("fable-5-1", "xhigh")).toBe(
+      "claude-fable-5-1-thinking-xhigh",
+    );
   });
 
   it("folds the thinking level into GPT-5.6 model ids as a plain suffix", () => {
@@ -120,12 +145,11 @@ describe("resolveCursorComposerModel", () => {
     expect(resolveCursorComposerModel("gpt-5.6-luna", "max")).toBe("gpt-5.6-luna-max");
   });
 
-  it("maps Grok 4.5 levels to the Cursor ids that exist", () => {
-    expect(resolveCursorComposerModel("grok-4.5", "low")).toBe("cursor-grok-4.5-low");
-    expect(resolveCursorComposerModel("grok-4.5", "medium")).toBe("cursor-grok-4.5-medium");
-    expect(resolveCursorComposerModel("grok-4.5", "high")).toBe("cursor-grok-4.5-high");
-    expect(resolveCursorComposerModel("grok-4.5", "xhigh")).toBe("cursor-grok-4.5-high");
-    expect(resolveCursorComposerModel("grok-4.5", "max")).toBe("cursor-grok-4.5-high");
+  it("maps Cursor-specific families to concrete catalog ids", () => {
+    expect(resolveCursorComposerModel("grok-4.6", "low")).toBe("cursor-grok-4.6-low");
+    expect(resolveCursorComposerModel("grok-4.6", "xhigh")).toBe("cursor-grok-4.6-xhigh");
+    expect(resolveCursorComposerModel("grok-4.6", "max")).toBe("cursor-grok-4.6-xhigh");
+    expect(resolveCursorComposerModel("gemini-3.8-flash", "high")).toBe("gemini-3.8-flash-high");
   });
 
   it("clamps gpt-5.5 to extra-high for xhigh/max instead of emitting rejected ids", () => {
@@ -136,11 +160,7 @@ describe("resolveCursorComposerModel", () => {
   });
 
   it("defaults to medium when the level is missing or foreign", () => {
-    expect(resolveCursorComposerModel("opus-5", undefined)).toBe(
-      "claude-opus-5-thinking-medium",
-    );
-    expect(resolveCursorComposerModel("opus-5", "auto")).toBe(
-      "claude-opus-5-thinking-medium",
-    );
+    expect(resolveCursorComposerModel("opus-5", undefined)).toBe("claude-opus-5-thinking-medium");
+    expect(resolveCursorComposerModel("opus-5", "auto")).toBe("claude-opus-5-thinking-medium");
   });
 });

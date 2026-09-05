@@ -21,6 +21,7 @@ export const CODEX_CONFIGURED_DEFAULT_MODEL = "__configured_default__";
 
 const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
   { value: CLAUDE_CODE_CONFIGURED_DEFAULT_MODEL, label: "Configured default" },
+  { value: "claude-fable-5-1", label: "Fable 5.1" },
   { value: "claude-fable-5", label: "Fable 5" },
   { value: "claude-sonnet-5", label: "Sonnet 5" },
   { value: "claude-opus-5", label: "Opus 5" },
@@ -29,6 +30,7 @@ const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
 
 const CODEX_MODELS: readonly ModelOption[] = [
   { value: CODEX_CONFIGURED_DEFAULT_MODEL, label: "Configured default" },
+  { value: "gpt-6-astra", label: "GPT-6 Astra" },
   { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
   { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
   { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
@@ -42,12 +44,14 @@ const PI_MODELS: readonly ModelOption[] = [
 
 const CURSOR_COMPOSER_MODELS: readonly ModelOption[] = [
   { value: "auto", label: "Auto" },
+  { value: "grok-4.6", label: "Grok 4.6" },
   { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
   { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
   { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
   { value: "opus-5", label: "Opus 5" },
   { value: "sonnet-5", label: "Sonnet 5" },
-  { value: "grok-4.5", label: "Grok 4.5" },
+  { value: "fable-5-1", label: "Fable 5.1" },
+  { value: "gemini-3.8-flash", label: "Gemini 3.8 Flash" },
 ];
 
 // Cursor encodes the thinking level in the model id (e.g. gpt-5.6-sol-high,
@@ -61,9 +65,12 @@ const CURSOR_COMPOSER_REASONING_EFFORTS: readonly ReasoningEffortOption[] = [
   { value: "max", label: "Max" },
 ];
 
-const CURSOR_GROK_4_5_REASONING_EFFORTS: readonly ReasoningEffortOption[] =
+const CURSOR_REASONING_EFFORTS_THROUGH_XHIGH: readonly ReasoningEffortOption[] =
+  CURSOR_COMPOSER_REASONING_EFFORTS.filter((option) => option.value !== "max");
+
+const CURSOR_REASONING_EFFORTS_THROUGH_HIGH: readonly ReasoningEffortOption[] =
   CURSOR_COMPOSER_REASONING_EFFORTS.filter(
-    (option) => option.value === "low" || option.value === "medium" || option.value === "high",
+    (option) => option.value !== "xhigh" && option.value !== "max",
   );
 
 /**
@@ -91,12 +98,16 @@ export function resolveCursorComposerModel(
   if (/^gpt-5\.\d+(-[a-z]+)?$/.test(model)) {
     return `${model}-${level}`;
   }
-  if (model === "grok-4.5") {
-    const grokLevel = level === "xhigh" || level === "max" ? "high" : level;
-    return `cursor-grok-4.5-${grokLevel}`;
+  if (model === "grok-4.6") {
+    return `cursor-grok-4.6-${level === "max" ? "xhigh" : level}`;
   }
   if (model === "opus-5") return `claude-opus-5-thinking-${level}`;
   if (model === "sonnet-5") return `claude-sonnet-5-thinking-${level}`;
+  if (model === "fable-5-1") return `claude-fable-5-1-thinking-${level}`;
+  if (model === "gemini-3.8-flash") {
+    const geminiLevel = level === "xhigh" || level === "max" ? "high" : level;
+    return `gemini-3.8-flash-${geminiLevel}`;
+  }
   return model;
 }
 
@@ -133,16 +144,16 @@ const CODEX_REASONING_EFFORTS: readonly ReasoningEffortOption[] = [
 ];
 
 const REASONING_EFFORT_OPTIONS_BY_TOOL: Readonly<Record<string, readonly ReasoningEffortOption[]>> =
-{
-  claude_code: CLAUDE_CODE_REASONING_EFFORTS,
-  codex: CODEX_REASONING_EFFORTS,
-  cursor_composer: CURSOR_COMPOSER_REASONING_EFFORTS,
-  pi: CODEX_REASONING_EFFORTS,
-};
+  {
+    claude_code: CLAUDE_CODE_REASONING_EFFORTS,
+    codex: CODEX_REASONING_EFFORTS,
+    cursor_composer: CURSOR_COMPOSER_REASONING_EFFORTS,
+    pi: CODEX_REASONING_EFFORTS,
+  };
 
 const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
   claude_code: "claude-opus-5[1m]",
-  codex: "gpt-5.6-sol",
+  codex: "gpt-6-astra",
   cursor_composer: "auto",
   pi: "openai/gpt-5.5",
 };
@@ -188,16 +199,14 @@ export function getDefaultModel(tool: string): string | undefined {
   return DEFAULT_MODEL_BY_TOOL[tool];
 }
 
-function isCursorGrokModel(model: string | null | undefined): boolean {
-  return model === "grok-4.5" || model?.startsWith("grok-4.5-") === true;
-}
-
 export function getReasoningEffortsForTool(
   tool: string,
   model?: string | null,
 ): readonly ReasoningEffortOption[] {
-  if (tool === "cursor_composer" && isCursorGrokModel(model)) {
-    return CURSOR_GROK_4_5_REASONING_EFFORTS;
+  if (tool === "cursor_composer") {
+    if (model === "auto") return [];
+    if (model === "gemini-3.8-flash") return CURSOR_REASONING_EFFORTS_THROUGH_HIGH;
+    if (model === "grok-4.6") return CURSOR_REASONING_EFFORTS_THROUGH_XHIGH;
   }
   return REASONING_EFFORT_OPTIONS_BY_TOOL[tool] ?? [];
 }
