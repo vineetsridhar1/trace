@@ -448,6 +448,7 @@ export const sessionMutations = {
       reasoningEffort?: string | null;
       hosting?: string | null;
       runtimeInstanceId?: string | null;
+      designSystemVersionId?: string | null;
     },
     ctx: Context,
   ) => {

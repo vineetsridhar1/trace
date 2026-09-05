@@ -1776,6 +1776,10 @@ type Mutation {
     reasoningEffort: String
     hosting: HostingMode
     runtimeInstanceId: ID
+    """
+    Legacy mobile compatibility; design systems are not supported by this server.
+    """
+    designSystemVersionId: ID
   ): Session!
   updateSessionDefaults(input: UpdateSessionDefaultsInput!): User!
   hideSessionTab(sessionId: ID!): HiddenSessionTab!
