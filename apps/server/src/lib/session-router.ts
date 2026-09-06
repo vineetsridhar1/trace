@@ -1242,10 +1242,17 @@ export class SessionRouter {
         return this.writeToRuntime(resolution.runtime, command, sessionId);
       }
       if (resolution.state === "remote") {
-        return this.relayToOwner(
+        const result = await this.relayToOwner(
           resolution.descriptor,
           command as unknown as Record<string, unknown>,
         );
+        if (result === "delivered") {
+          // The persisted home is authoritative even when its socket lives on
+          // another replica. Replace any stale local route left behind by a
+          // move handled on a different API replica.
+          this.bindSession(sessionId, resolution.descriptor.key);
+        }
+        return result;
       }
       return "delivery_failed";
     }

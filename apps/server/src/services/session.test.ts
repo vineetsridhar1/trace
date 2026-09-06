@@ -350,6 +350,10 @@ describe("SessionService", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    getDefaultModelMock.mockReset().mockReturnValue("claude-sonnet-5");
+    getDefaultReasoningEffortMock.mockReset().mockReturnValue("auto");
+    isSupportedModelMock.mockReset().mockReturnValue(true);
+    isSupportedReasoningEffortMock.mockReset().mockReturnValue(true);
     service = new SessionService();
     eventServiceMock.create.mockResolvedValue({ id: "event-1" });
     runtimeAccessServiceMock.assertAccess.mockResolvedValue(undefined);
@@ -1022,8 +1026,14 @@ describe("SessionService", () => {
       // The request landed on a replica with no socket and a cold metadata
       // mirror. Authoritative resolution still finds the peer-owned runtime,
       // so conversion must reuse it rather than rebuilding the workspace.
-      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce(null);
-      sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce(null);
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-stale",
+        label: "Old laptop",
+        hostingMode: "local",
+        supportedTools: ["codex"],
+        registeredRepoIds: [],
+      });
+      sessionRouterMock.getRuntimeMetadata.mockReturnValue(null);
       sessionRouterMock.resolveRuntime.mockResolvedValueOnce({
         state: "remote",
         descriptor: runtime,
@@ -1038,6 +1048,7 @@ describe("SessionService", () => {
       });
 
       expect(result).toBe(convertedSession);
+      expect(sessionRouterMock.resolveRuntime).toHaveBeenCalledWith("runtime-cloud", "org-1");
       expect(prismaMock.agentEnvironment.findFirst).not.toHaveBeenCalled();
       expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
       expect(sessionRouterMock.transitionRuntime).toHaveBeenCalledWith(
@@ -1111,7 +1122,7 @@ describe("SessionService", () => {
       prismaMock.sessionGroup.findFirst
         .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
         .mockResolvedValueOnce({ ...sourceGroup, sessions: [sourceSession] });
-      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce(
+      sessionRouterMock.getRuntimeForSession.mockReturnValue(
         incompatibleRuntime as unknown as ReturnType<typeof sessionRouterMock.getRuntimeForSession>,
       );
       sessionRouterMock.resolveRuntime.mockResolvedValueOnce({
@@ -1330,6 +1341,7 @@ describe("SessionService", () => {
         sessionGroup: sourceGroup,
         hosting: "local",
         tool: "claude_code",
+        connection: { state: "connected" },
       });
       prismaMock.sessionGroup.findFirst
         .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
@@ -1399,6 +1411,7 @@ describe("SessionService", () => {
         sessionGroupId: sourceGroup.id,
         sessionGroup: sourceGroup,
         hosting: "local",
+        connection: { state: "connected" },
       });
       prismaMock.sessionGroup.findFirst
         .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
@@ -1922,7 +1935,7 @@ describe("SessionService", () => {
       prismaMock.session.findUnique.mockResolvedValue({
         connection: { runtimeInstanceId: "runtime-b" },
       } as never);
-      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce(undefined);
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({ id: "runtime-stale" });
       sessionRouterMock.listWorkspaceSlugs.mockResolvedValueOnce(["otter", "panda"]);
 
       const workspaceSlugs = await (
@@ -4043,9 +4056,15 @@ describe("SessionService", () => {
       sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValueOnce(
         makeGitSyncStatus({ headCommitSha: "committed-head", hasUncommittedChanges: true }),
       );
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({ id: "runtime-stale" });
 
       await expect(resolver.resolveForkBaseCommitSha(sourceSession)).resolves.toBe(
         "committed-head",
+      );
+      expect(sessionRouterMock.inspectSessionGitSyncStatus).toHaveBeenCalledWith(
+        "runtime-1",
+        expect.objectContaining({ sessionId: sourceSession.id }),
+        expect.any(Number),
       );
     });
   });
@@ -4710,7 +4729,7 @@ describe("SessionService", () => {
         workdir: "/workspaces/session-1",
         connection: { runtimeInstanceId: "runtime-1" },
       });
-      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce({ key: "runtime-1" });
+      sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce({ key: "runtime-1" });
       sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValueOnce(branch);
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
         organizationId: "org-1",
@@ -4764,7 +4783,8 @@ describe("SessionService", () => {
         workdir: "/workspaces/session-1",
         connection: { runtimeInstanceId: "runtime-1" },
       });
-      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce({ key: "runtime-1" });
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({ key: "runtime-stale" });
+      sessionRouterMock.getRuntimeMetadata.mockReturnValueOnce({ key: "runtime-1" });
       sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValueOnce("actual-session-branch");
 
       await service.recordOutput("session-1", data as Record<string, unknown>);
@@ -5961,6 +5981,56 @@ describe("SessionService", () => {
         return arg?.eventType === "session_resumed";
       });
       expect(resumedCalls.length).toBe(1);
+    });
+
+    it("does not persist a stale local binding after pinned cloud delivery", async () => {
+      const session = makeSession({
+        hosting: "cloud",
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        workdir: "/workspaces/session-1",
+        toolSessionId: "tool-sess-1",
+        connection: {
+          state: "connected",
+          adapterType: "provisioned",
+          runtimeInstanceId: "runtime-cloud",
+          runtimeLabel: "Cloud runtime",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
+      prismaMock.session.update.mockResolvedValue(session);
+      sessionRouterMock.getRuntimeMetadata.mockImplementation((runtimeId: string) =>
+        runtimeId === "runtime-cloud"
+          ? { id: "runtime-cloud", label: "Cloud runtime", supportedTools: ["codex"] }
+          : null,
+      );
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-local",
+        label: "Old laptop",
+      });
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "continue in cloud",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: expect.objectContaining({
+            connection: expect.objectContaining({
+              adapterType: "provisioned",
+              runtimeInstanceId: "runtime-cloud",
+              runtimeLabel: "Cloud runtime",
+            }),
+          }),
+        }),
+      );
     });
 
     it("keeps a non-archived merged session merged when sending another message", async () => {

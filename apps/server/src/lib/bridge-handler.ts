@@ -350,10 +350,13 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           sessionId,
           boundRuntimeId: runtime.id,
         });
+        return null;
       }
-      return allowed ? sessionId : null;
     }
 
+    // A replica-local binding is only a routing hint. A session move handled
+    // by another replica can leave it pointing at the old runtime, so durable
+    // ownership must authorize every inbound session-scoped bridge message.
     const persisted = await prisma.session.findFirst({
       where: {
         id: sessionId,
@@ -365,14 +368,14 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       select: { id: true, connection: true },
     });
     if (!persisted || isTerminalConnectionState(persisted.connection)) {
-      runtimeDebug("bridge ignored message for unbound session", {
+      runtimeDebug("bridge ignored message for unowned session", {
         runtimeId,
         sessionId,
       });
       return null;
     }
 
-    sessionRouter.bindSession(sessionId, runtimeKey);
+    if (!runtime) sessionRouter.bindSession(sessionId, runtimeKey);
     return sessionId;
   }
 
@@ -380,12 +383,11 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     sessionId: unknown,
     fn: (boundSessionId: string) => Promise<void>,
   ): void {
-    void (async () => {
+    if (typeof sessionId !== "string" || !sessionId) return;
+    enqueueEvent(sessionId, async () => {
       const boundSessionId = await resolveSessionBoundToThisRuntime(sessionId);
       if (!boundSessionId) return;
-      enqueueEvent(boundSessionId, () => fn(boundSessionId));
-    })().catch((err: unknown) => {
-      console.error("[bridge] error authorizing session-scoped message:", err);
+      await fn(boundSessionId);
     });
   }
 

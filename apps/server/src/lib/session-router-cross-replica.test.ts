@@ -301,6 +301,47 @@ describe("SessionRouter cross-replica delivery", () => {
     routerB.dispose();
   });
 
+  it("replaces a stale local binding after pinned delivery to a peer-owned runtime", async () => {
+    const { ws: cloudWs, routerA, routerB } = await twoReplicas();
+    const staleWs = makeWs();
+    await asReplica("replica-b", () =>
+      routerB.registerRuntime({
+        key: runtimeRouterKey("runtime-stale", ORG),
+        id: "runtime-stale",
+        organizationId: ORG,
+        label: "Old laptop",
+        ws: staleWs,
+        hostingMode: "local",
+        supportedTools: ["codex"],
+      }),
+    );
+    asReplica("replica-b", () =>
+      routerB.bindSession("session-1", runtimeRouterKey("runtime-stale", ORG)),
+    );
+
+    const pinnedResult = await asReplica("replica-b", () =>
+      routerB.sendAsync(
+        "session-1",
+        { type: "send", sessionId: "session-1", prompt: "after move" },
+        { expectedHomeRuntimeId: RUNTIME_ID, organizationId: ORG },
+      ),
+    );
+    const followUpResult = await asReplica("replica-b", () =>
+      routerB.sendAsync("session-1", {
+        type: "send",
+        sessionId: "session-1",
+        prompt: "follow up",
+      }),
+    );
+
+    expect(pinnedResult).toBe("delivered");
+    expect(followUpResult).toBe("delivered");
+    expect(sentCommandTypes(cloudWs)).toEqual(["send", "send"]);
+    expect(sentCommandTypes(staleWs)).toEqual([]);
+    routerA.dispose();
+    routerB.dispose();
+  });
+
   it("delivers a direct runtime command across replicas with a cold mirror", async () => {
     const { ws, routerA, routerB } = await twoReplicas();
 

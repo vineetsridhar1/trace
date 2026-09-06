@@ -1446,6 +1446,32 @@ function runtimeMetadata(...args: Parameters<typeof sessionRouter.getRuntimeMeta
   return sessionRouter.getRuntimeMetadata(...args);
 }
 
+/**
+ * Runtime fields to persist after a successful command delivery.
+ *
+ * A pinned runtime is authoritative. The router's in-memory session binding is
+ * replica-local and may still point at the source runtime when another replica
+ * handled a workspace move.
+ */
+function deliveredRuntimePatch(
+  sessionId: string,
+  expectedRuntimeId: string | null | undefined,
+  organizationId: string,
+): Partial<SessionConnectionData> {
+  if (expectedRuntimeId) {
+    const expectedRuntime = runtimeMetadata(expectedRuntimeId, organizationId);
+    return {
+      runtimeInstanceId: expectedRuntimeId,
+      ...(expectedRuntime ? { runtimeLabel: expectedRuntime.label } : {}),
+    };
+  }
+
+  const boundRuntime = sessionRouter.getRuntimeForSession(sessionId);
+  return boundRuntime
+    ? { runtimeInstanceId: boundRuntime.id, runtimeLabel: boundRuntime.label }
+    : {};
+}
+
 function listRuntimeMetadata(filter?: { hostingMode?: string }) {
   return sessionRouter.listRuntimeMetadata(filter);
 }
@@ -1897,15 +1923,13 @@ export class SessionService {
     repoId: string;
   }): Promise<string[]> {
     if (params.hosting !== "local") return [];
-    const localRuntime = sessionRouter.getRuntimeForSession(params.sessionId);
-    const session = localRuntime
-      ? null
-      : await prisma.session.findUnique({
-          where: { id: params.sessionId },
-          select: { connection: true },
-        });
+    const session = await prisma.session.findUnique({
+      where: { id: params.sessionId },
+      select: { connection: true },
+    });
     const runtimeInstanceId =
-      localRuntime?.id ?? this.getConnectionRuntimeInstanceId(session?.connection);
+      this.getConnectionRuntimeInstanceId(session?.connection) ??
+      sessionRouter.getRuntimeForSession(params.sessionId)?.id;
     if (!runtimeInstanceId) {
       throw new Error("Cannot allocate a local workspace slug before selecting a runtime");
     }
@@ -3600,9 +3624,8 @@ export class SessionService {
     tool: CodingTool,
   ): Promise<RuntimeMetadata | null> {
     if (session.hosting !== "cloud") return null;
-    const boundRuntime = sessionRouter.getRuntimeForSession(session.id);
     const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
-    const runtimeId = boundRuntime?.id ?? persistedRuntimeId;
+    const runtimeId = persistedRuntimeId ?? sessionRouter.getRuntimeForSession(session.id)?.id;
     if (!runtimeId) return null;
     const resolution = await sessionRouter.resolveRuntime(runtimeId, session.organizationId);
     if (resolution.state === "unreachable") {
@@ -3766,13 +3789,10 @@ export class SessionService {
       const session = requireSingleGeneralConversionSession(group);
       const generalGroup = group!;
       const target = resolveConversionToolSelection(session, input);
-      const boundRuntime = sessionRouter.getRuntimeForSession(session.id);
       const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
-      const effectiveRuntime =
-        boundRuntime ??
-        (persistedRuntimeId
-          ? runtimeMetadata(persistedRuntimeId, input.organizationId)
-          : undefined);
+      const effectiveRuntime = persistedRuntimeId
+        ? runtimeMetadata(persistedRuntimeId, input.organizationId)
+        : sessionRouter.getRuntimeForSession(session.id);
       if (effectiveRuntime && !effectiveRuntime.supportedTools.includes(target.tool)) {
         throw new ToolNotInstalledError(target.tool, effectiveRuntime.label ?? null);
       }
@@ -5174,9 +5194,9 @@ export class SessionService {
 
     const workdir = sourceSession.workdir ?? sourceSession.sessionGroup?.workdir;
     const runtimeId =
-      sessionRouter.getRuntimeForSession(sourceSession.id)?.id ??
       this.getConnectionRuntimeInstanceId(sourceSession.connection) ??
-      this.getConnectionRuntimeInstanceId(sourceSession.sessionGroup?.connection);
+      this.getConnectionRuntimeInstanceId(sourceSession.sessionGroup?.connection) ??
+      sessionRouter.getRuntimeForSession(sourceSession.id)?.id;
     if (!workdir || !runtimeId) {
       // Older and fully unloaded sessions may retain their repo and branch but
       // no longer have a live workspace to inspect. In that case the new
@@ -5563,9 +5583,6 @@ export class SessionService {
     // Only transition to active after successful delivery
     // Persist the runtime binding so restoreSessionsForRuntime can recover it after restart
     const expectedRuntimeId = runtimeBinding.runtimeId ?? conn.runtimeInstanceId;
-    const boundRuntime =
-      sessionRouter.getRuntimeForSession(id) ??
-      (expectedRuntimeId ? runtimeMetadata(expectedRuntimeId, session.organizationId) : undefined);
     const updated = await prisma.session.update({
       where: { id },
       data: {
@@ -5575,10 +5592,7 @@ export class SessionService {
           state: "connected",
           lastSeen: new Date().toISOString(),
           autoRetryable: true,
-          ...(boundRuntime && {
-            runtimeInstanceId: boundRuntime.id,
-            runtimeLabel: boundRuntime.label,
-          }),
+          ...deliveredRuntimePatch(id, expectedRuntimeId, session.organizationId),
         }),
       },
       include: SESSION_INCLUDE,
@@ -6522,11 +6536,9 @@ export class SessionService {
     session: { organizationId: string; workdir: string | null; connection: unknown },
   ): Promise<void> {
     const connection = this.parseConnection(session.connection);
-    const runtime =
-      sessionRouter.getRuntimeForSession(sessionId) ??
-      (connection.runtimeInstanceId
-        ? runtimeMetadata(connection.runtimeInstanceId, session.organizationId)
-        : undefined);
+    const runtime = connection.runtimeInstanceId
+      ? runtimeMetadata(connection.runtimeInstanceId, session.organizationId)
+      : sessionRouter.getRuntimeForSession(sessionId);
     if (!runtime || !session.workdir) {
       console.warn(
         `[session] ignoring branch report for ${sessionId}: active workspace is unavailable`,
@@ -7094,9 +7106,6 @@ export class SessionService {
 
     // Only mark active after successful delivery
     // Persist the runtime binding so restoreSessionsForRuntime can recover it after restart
-    const boundRuntime =
-      sessionRouter.getRuntimeForSession(sessionId) ??
-      (expectedRuntimeId ? runtimeMetadata(expectedRuntimeId, session.organizationId) : undefined);
     const updatedSession = await prisma.session.update({
       where: { id: sessionId },
       data: {
@@ -7106,10 +7115,7 @@ export class SessionService {
           state: "connected",
           lastSeen: new Date().toISOString(),
           autoRetryable: true,
-          ...(boundRuntime && {
-            runtimeInstanceId: boundRuntime.id,
-            runtimeLabel: boundRuntime.label,
-          }),
+          ...deliveredRuntimePatch(sessionId, expectedRuntimeId, session.organizationId),
         }),
         pendingRun: Prisma.DbNull,
         lastMessageAt: new Date(),
@@ -11495,9 +11501,6 @@ export class SessionService {
     }
 
     const expectedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
-    const boundRuntime =
-      sessionRouter.getRuntimeForSession(sessionId) ??
-      (expectedRuntimeId ? runtimeMetadata(expectedRuntimeId, session.organizationId) : undefined);
     const resumedSessionStatus = getRunningSessionStatus(session.sessionStatus);
     const updatedSession = await prisma.session.update({
       where: { id: sessionId },
@@ -11510,10 +11513,7 @@ export class SessionService {
           lastSeen: new Date().toISOString(),
           lastError: undefined,
           autoRetryable: true,
-          ...(boundRuntime && {
-            runtimeInstanceId: boundRuntime.id,
-            runtimeLabel: boundRuntime.label,
-          }),
+          ...deliveredRuntimePatch(sessionId, expectedRuntimeId, session.organizationId),
         }),
       },
       include: SESSION_INCLUDE,

@@ -958,6 +958,53 @@ describe("bridge handler auth", () => {
     expect(mocks.recordOutput).not.toHaveBeenCalled();
   });
 
+  it("ignores late output when a stale local binding disagrees with persisted ownership", async () => {
+    const ws = createMockWs();
+    mocks.registerLocalRuntimeConnection.mockResolvedValue({
+      connectedAt: new Date(),
+      label: "Old laptop",
+    });
+    mocks.getRuntimeForSession.mockReturnValue({
+      id: "runtime_old",
+      key: "org-1:runtime_old",
+      organizationId: "org-1",
+      ws,
+    });
+    mocks.sessionFindFirst.mockResolvedValue(null);
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "local",
+        instanceId: "runtime_old",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "runtime_old",
+      hostingMode: "local",
+    });
+    await vi.waitFor(() => expect(mocks.registerRuntime).toHaveBeenCalled());
+    ws.emitMessage({
+      type: "session_output",
+      sessionId: "session-moved-to-cloud",
+      data: { type: "assistant", message: "late local output" },
+    });
+
+    await vi.waitFor(() =>
+      expect(mocks.sessionFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: "session-moved-to-cloud",
+            connection: { path: ["runtimeInstanceId"], equals: "runtime_old" },
+          }),
+        }),
+      ),
+    );
+    expect(mocks.recordOutput).not.toHaveBeenCalled();
+  });
+
   it("accepts session output when persisted session ownership matches this runtime", async () => {
     const ws = createMockWs();
     mocks.sessionFindFirst.mockResolvedValue({
@@ -1237,6 +1284,10 @@ describe("bridge handler auth", () => {
       id: "bridge-owned",
       ws,
       organizationId: "org-1",
+    });
+    mocks.sessionFindFirst.mockResolvedValue({
+      id: "session-1",
+      connection: { state: "connected", runtimeInstanceId: "bridge-owned" },
     });
 
     ws.emitMessage({
