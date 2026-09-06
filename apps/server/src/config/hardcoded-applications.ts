@@ -95,11 +95,41 @@ const MORTGAGES_BASE_ENV: AppEnvVar[] = [
   { key: "DB_PORT", value: "5432" },
   { key: "PGUSER", value: "postgres" },
   { key: "REDIS_URL", value: "redis://127.0.0.1:6379/0" },
+  { key: "PLAID_ENV", value: "sandbox" },
+  { key: "TRUV_ENV", value: "sandbox" },
+  { key: "PYLON_SYNC_ENABLED", value: "true" },
+  {
+    key: "WEB_API_URL",
+    value: "http://web-internal-api-http-server-nginx-vpn-http.apps-staging.internal.opendoor.com",
+  },
+  { key: "ALLOWED_ORIGINS", value: "http://localhost:3000" },
+  { key: "AI_CHAT_ENABLED", value: "true" },
+  { key: "AI_DOCUMENT_VERIFICATION_ENABLED", value: "true" },
+  { key: "AI_QUESTION_SUGGESTIONS_ENABLED", value: "true" },
+  { key: "AI_CHAT_AOPS_ENABLED", value: "true" },
+  { key: "AI_CHAT_AOP_INJECTION_ENABLED", value: "true" },
+  { key: "AI_CHAT_WIKI_TOOLS_ENABLED", value: "true" },
+  { key: "AI_VERIFICATION_GUIDELINE_ASSISTANT_ENABLED", value: "true" },
+  { key: "LOX_GENERATION_ENABLED", value: "true" },
+  { key: "PATHS_TO_QUALIFY_ENABLED", value: "true" },
+  { key: "PATHS_TO_QUALIFY_ROLLOUT_MODE", value: "all" },
+  { key: "OPENDOOR_MIOS_DATA_ENABLED", value: "true" },
+  { key: "AI_SERVICE_URL", value: "http://localhost:3100" },
+  { key: "MOS_AGENT_URL", value: "http://localhost:3100" },
+  { key: "MOS_AGENT_ENABLED", value: "true" },
+  { key: "MORTGAGE_OS_ASSISTANT_MODEL", value: "gpt-5.6-sol" },
+  { key: "MORTGAGE_OS_ASSISTANT_REASONING_EFFORT", value: "medium" },
+  { key: "WORKFLOW_AGENT_CHECKPOINTS_ENABLED", value: "true" },
+  { key: "RAILS_INTERNAL_URL", value: "http://localhost:3000" },
+  { key: "AI_EMBEDDING_MODEL", value: "text-embedding-3-small" },
+  { key: "AI_EMBEDDING_DIMENSIONS", value: "1536" },
+  { key: "AI_QUESTION_SUGGESTIONS_MODEL", value: "claude-sonnet-4-6" },
 ];
 
 // Secrets are provisioned as org secrets and referenced by name. These are the
-// minimum required for the app to boot; integration creds (Pylon/Plaid/Truv)
-// can be added here as additional secret refs if a flow needs them.
+// full local-development set from mortgages/bin/development/fetch_secrets.rb.
+// Requiring the set here makes app setup fail before any process starts instead
+// of leaving the coding agent to fetch credentials after the session boots.
 const MORTGAGES_SECRET_ENV: AppEnvVar[] = [
   { key: "SECRET_KEY_BASE", secretName: "MORTGAGES_SECRET_KEY_BASE" },
   {
@@ -114,6 +144,43 @@ const MORTGAGES_SECRET_ENV: AppEnvVar[] = [
     key: "ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT",
     secretName: "MORTGAGES_AR_ENCRYPTION_KEY_DERIVATION_SALT",
   },
+  { key: "PYLON_AUTH_DOMAIN", secretName: "PYLON_AUTH_DOMAIN" },
+  { key: "PYLON_AUTH_CLIENT_ID", secretName: "PYLON_AUTH_CLIENT_ID" },
+  { key: "PYLON_AUTH_CLIENT_SECRET", secretName: "PYLON_AUTH_CLIENT_SECRET" },
+  { key: "PYLON_AUTH_AUDIENCE", secretName: "PYLON_AUTH_AUDIENCE" },
+  { key: "PYLON_GRAPHQL_API", secretName: "PYLON_GRAPHQL_API" },
+  { key: "PLAID_CLIENT_ID", secretName: "PLAID_CLIENT_ID" },
+  { key: "PLAID_SECRET", secretName: "PLAID_SECRET" },
+  { key: "PLAID_TEMPLATE_ID", secretName: "PLAID_TEMPLATE_ID" },
+  { key: "TRUV_CLIENT_ID", secretName: "TRUV_CLIENT_ID" },
+  { key: "TRUV_CLIENT_SECRET", secretName: "TRUV_CLIENT_SECRET" },
+  { key: "SENTRY_DSN", secretName: "SENTRY_DSN" },
+  { key: "FRONTEND_SENTRY_DSN", secretName: "FRONTEND_SENTRY_DSN" },
+  { key: "SLACK_ACCESS_TOKEN", secretName: "SLACK_ACCESS_TOKEN" },
+  { key: "GRPC_SERVICE_TOKEN", secretName: "GRPC_SERVICE_TOKEN" },
+  { key: "AWS_ACCESS_KEY_ID", secretName: "AWS_ACCESS_KEY_ID" },
+  { key: "AWS_SECRET_ACCESS_KEY", secretName: "AWS_SECRET_ACCESS_KEY" },
+  { key: "OPENAI_API_KEY", secretName: "OPENAI_API_KEY" },
+  { key: "ANTHROPIC_API_KEY", secretName: "ANTHROPIC_API_KEY" },
+  { key: "AI_SERVICE_TOKEN", secretName: "AI_SERVICE_TOKEN" },
+  { key: "MOS_AGENT_SHARED_SECRET", secretName: "AI_SERVICE_TOKEN" },
+  { key: "MORTGAGE_RATES_API_TOKEN", secretName: "MORTGAGE_RATES_API_TOKEN" },
+];
+
+const MORTGAGES_AI_SERVICE_ENV: AppEnvVar[] = [
+  { key: "AI_SERVICE_PORT", value: "3100" },
+  { key: "RAILS_INTERNAL_URL", value: "http://localhost:3000" },
+  { key: "MORTGAGE_GRAPHQL_URL", value: "http://localhost:3000/graphql/v1" },
+  { key: "VERIFICATION_ALLOWED_FILE_HOSTS", value: "http://localhost:3000" },
+  { key: "AI_TRANSCRIBE_MODEL", value: "whisper-1" },
+  { key: "AI_EMBEDDING_MODEL", value: "text-embedding-3-small" },
+  { key: "ANTHROPIC_OPUS_MODEL", value: "claude-opus-4-7" },
+  { key: "ANTHROPIC_VERIFICATION_MODEL", value: "claude-opus-5" },
+  { key: "ANTHROPIC_QUESTION_SUGGESTIONS_MODEL", value: "claude-sonnet-4-6" },
+  { key: "ANTHROPIC_AOP_SELECTOR_MODEL", value: "claude-haiku-4-5" },
+  { key: "OPENAI_API_KEY", secretName: "OPENAI_API_KEY" },
+  { key: "ANTHROPIC_API_KEY", secretName: "ANTHROPIC_API_KEY" },
+  { key: "AI_SERVICE_TOKEN", secretName: "AI_SERVICE_TOKEN" },
 ];
 
 const MORTGAGES_VITE_PORT_ENV: AppEnvVar = { key: "VITE_RUBY_PORT", value: "3036" };
@@ -154,7 +221,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
       name: "Install JS deps (pnpm install)",
       // Private @opendoor packages resolve with NPM_TOKEN auth via the repo's
       // committed .npmrc (mirrors the app's deploy build).
-      command: "pnpm install --frozen-lockfile --filter mortgages-rails",
+      command: "pnpm install --frozen-lockfile --filter mortgages-rails --filter ai-service",
       workingDirectory: ".",
       dependsOn: [],
       env: [...MORTGAGES_NPM_ENV],
@@ -255,10 +322,31 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
           name: "Sidekiq worker",
           command: "bundle exec sidekiq -C config/sidekiq.yml",
           workingDirectory: ".",
-          required: false,
+          // Pylon inbound/outbound syncs are Sidekiq queues, so the app is not
+          // fully running when this process is absent.
+          required: true,
           dependsOn: ["db-seed"],
           env: [...MORTGAGES_BASE_ENV, ...MORTGAGES_SECRET_ENV, MORTGAGES_JEMALLOC_ENV],
           ports: [],
+        },
+        {
+          id: "ai-service",
+          name: "AI service",
+          command: "pnpm --filter ai-service dev",
+          workingDirectory: ".",
+          required: true,
+          dependsOn: ["pnpm-install"],
+          env: MORTGAGES_AI_SERVICE_ENV,
+          ports: [
+            {
+              id: "ai-service",
+              label: "AI service",
+              port: 3100,
+              protocol: "http",
+              defaultForwardingEnabled: false,
+              healthPath: "/health",
+            },
+          ],
         },
       ],
     },
