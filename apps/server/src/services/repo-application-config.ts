@@ -12,7 +12,7 @@ import type {
 import { ValidationError } from "../lib/errors.js";
 import {
   getHardcodedApplicationConfig,
-  isLiteralEnv,
+  isSecretEnv,
   type AppEnvVar,
   type HardcodedApplicationConfig,
 } from "../config/hardcoded-applications.js";
@@ -24,9 +24,9 @@ type RepoIdentity = {
 };
 
 function toPublicEnv(env: AppEnvVar[]): RepoEnvVar[] {
-  // The GraphQL RepoEnvVar only models secret references, so literal env
-  // values (hardcoded non-secret settings) are omitted from the public view.
-  return env.filter((entry): entry is RepoEnvVar => !isLiteralEnv(entry));
+  // The GraphQL RepoEnvVar only models secret references, so hardcoded literal
+  // and session-derived values are omitted from the public view.
+  return env.filter(isSecretEnv);
 }
 
 type JsonRecord = Record<string, unknown>;

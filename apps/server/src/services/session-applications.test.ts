@@ -56,6 +56,7 @@ function mockGroup() {
     id: "group-1",
     organizationId: "org-1",
     ownerUserId: "user-1",
+    ownerUser: { email: "owner@opendoor.com" },
     visibility: "public",
     repoId: "repo-1",
     workdir: "/workspace",
@@ -467,6 +468,48 @@ describe("SessionApplicationService", () => {
     );
   });
 
+  it("resolves session-owner values into process env", async () => {
+    vi.spyOn(repoApplicationConfigService, "resolveApplicationConfig").mockReturnValueOnce({
+      setupScripts: [],
+      runScripts: [],
+      applications: [
+        {
+          id: "web",
+          name: "Web",
+          processes: [
+            {
+              id: "dev",
+              name: "Dev",
+              command: "pnpm dev",
+              workingDirectory: ".",
+              required: true,
+              dependsOn: [],
+              env: [
+                { key: "CURRENT_USER_EMAIL", sessionValue: "ownerEmail" },
+                { key: "ODFE_CURRENT_USER_EMAIL", sessionValue: "ownerEmail" },
+              ],
+              ports: [],
+            },
+          ],
+        },
+      ],
+    });
+
+    await new SessionApplicationService().startProcess("group-1", "web", "dev", "org-1", "user-1");
+
+    expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
+      "runtime-1",
+      expect.objectContaining({
+        type: "app_process_start",
+        env: expect.objectContaining({
+          CURRENT_USER_EMAIL: "owner@opendoor.com",
+          ODFE_CURRENT_USER_EMAIL: "owner@opendoor.com",
+        }),
+      }),
+      "org-1",
+    );
+  });
+
   it("creates host-mode endpoints and injects the sub URL pattern", async () => {
     mockHostModeConfig();
     prismaMock.sessionEndpoint.findMany.mockResolvedValueOnce([
@@ -534,6 +577,7 @@ describe("SessionApplicationService", () => {
       kind: "app",
       organizationId: "org-1",
       ownerUserId: "user-1",
+      ownerUser: { email: "owner@opendoor.com" },
       visibility: "public",
       repoId: null,
       repo: null,

@@ -143,6 +143,8 @@ describe("code monorepo application config", () => {
               { key: "PGHOST", value: "127.0.0.1" },
               { key: "PGPORT", value: "5432" },
               { key: "PGDATABASE", value: "postgres" },
+              { key: "CURRENT_USER_EMAIL", sessionValue: "ownerEmail" },
+              { key: "ODFE_CURRENT_USER_EMAIL", sessionValue: "ownerEmail" },
             ],
             ports: [
               expect.objectContaining({

@@ -227,9 +227,7 @@ describe("repoApplicationConfigService", () => {
             {
               id: "web",
               name: "Web",
-              processes: [
-                { id: "dev", name: "Dev", command: "pnpm dev", ports: [] },
-              ],
+              processes: [{ id: "dev", name: "Dev", command: "pnpm dev", ports: [] }],
             },
           ],
         },
@@ -248,9 +246,7 @@ describe("repoApplicationConfigService", () => {
     });
     const publicConfig = repoApplicationConfigService.toPublicConfig(resolved);
 
-    const web = publicConfig.applications[0].processes.find(
-      (candidate) => candidate.id === "web",
-    );
+    const web = publicConfig.applications[0].processes.find((candidate) => candidate.id === "web");
     expect(web?.env).toContainEqual({
       key: "SECRET_KEY_BASE",
       secretName: "MORTGAGES_SECRET_KEY_BASE",
@@ -259,6 +255,21 @@ describe("repoApplicationConfigService", () => {
       expect(entry).toHaveProperty("secretName");
       expect(entry).not.toHaveProperty("value");
     }
+  });
+
+  it("drops session-derived env from the public projection", () => {
+    const resolved = repoApplicationConfigService.resolveApplicationConfig({
+      name: "code",
+      remoteUrl: "git@github.com:opendoor-labs/code.git",
+      setupConfig: {},
+    });
+    const publicConfig = repoApplicationConfigService.toPublicConfig(resolved);
+    const process = publicConfig.applications[0].processes[0];
+
+    expect(process.env).not.toContainEqual(expect.objectContaining({ key: "CURRENT_USER_EMAIL" }));
+    expect(process.env).not.toContainEqual(
+      expect.objectContaining({ key: "ODFE_CURRENT_USER_EMAIL" }),
+    );
   });
 
   it("rejects forwarding system ports", () => {

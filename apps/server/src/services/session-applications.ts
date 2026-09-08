@@ -23,6 +23,7 @@ import {
 import {
   DEFAULT_APP_SESSION_CONFIG,
   isLiteralEnv,
+  isSessionEnv,
   type AppEnvVar,
 } from "../config/hardcoded-applications.js";
 import { createEndpointPreviewToken } from "./endpoint-preview-auth.js";
@@ -45,6 +46,7 @@ type ManagedSessionGroup = {
   kind: string;
   organizationId: string;
   ownerUserId: string;
+  ownerUser: { email: string };
   visibility: string;
   repoId: string | null;
   workdir: string | null;
@@ -362,7 +364,7 @@ export class SessionApplicationService {
       actorType: "user",
       actorId: userId,
     });
-    const env = await this.resolveEnv(organizationId, script.env);
+    const env = await this.resolveEnv(organizationId, script.env, group.ownerUser.email);
     const delivery = await sendRuntimeCommand(
       runtimeId,
       {
@@ -489,7 +491,7 @@ export class SessionApplicationService {
     const processConfig = app.processes.find((candidate) => candidate.id === processConfigId);
     if (!processConfig) throw new ValidationError("Process not found");
 
-    const env = await this.resolveEnv(organizationId, processConfig.env);
+    const env = await this.resolveEnv(organizationId, processConfig.env, group.ownerUser.email);
     const workflowRunId = options?.workflowRunId ?? null;
 
     const process = await prisma.$transaction(async (tx) => {
@@ -1516,13 +1518,13 @@ export class SessionApplicationService {
     throw new Error("Could not generate unique endpoint key");
   }
 
-  // Env vars are either literal values (hardcoded non-secret settings) or
-  // references to org secrets resolved by name. Secret plaintext is never stored
-  // in the config — resolve everything here, right before handing the process
-  // off to the runtime.
+  // Env vars are literal values, session-derived values, or references to org
+  // secrets resolved by name. Secret plaintext is never stored in the config —
+  // resolve everything here, right before handing the process to the runtime.
   private async resolveEnv(
     organizationId: string,
     env: AppEnvVar[] | null | undefined,
+    sessionOwnerEmail: string,
   ): Promise<Record<string, string> | undefined> {
     if (!env || env.length === 0) return undefined;
     const resolved: Record<string, string> = {};
@@ -1530,6 +1532,10 @@ export class SessionApplicationService {
     for (const entry of env) {
       if (isLiteralEnv(entry)) {
         resolved[entry.key] = entry.value;
+        continue;
+      }
+      if (isSessionEnv(entry)) {
+        resolved[entry.key] = sessionOwnerEmail;
         continue;
       }
       const value = await orgSecretService.getDecryptedValueByName(
@@ -1572,6 +1578,7 @@ export class SessionApplicationService {
         kind: true,
         organizationId: true,
         ownerUserId: true,
+        ownerUser: { select: { email: true } },
         visibility: true,
         repoId: true,
         workdir: true,

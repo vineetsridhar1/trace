@@ -9,9 +9,12 @@ import type {
 
 // Internal fork: application configs are hardcoded here instead of being
 // configured through the UI. Unlike the GraphQL RepoEnvVar (secret refs only),
-// hardcoded env vars may also carry literal values for non-secret settings
-// (ports, RAILS_ENV, local service URLs, etc.).
-export type AppEnvVar = { key: string; value: string } | RepoEnvVar;
+// hardcoded env vars may also carry literal values for non-secret settings or
+// values derived from the active session (ports, owner identity, service URLs).
+export type AppEnvVar =
+  | { key: string; value: string }
+  | RepoEnvVar
+  | { key: string; sessionValue: "ownerEmail" };
 
 // `dependsOn` lists the step IDs a step waits on: a step only runs once every
 // dependency has succeeded. The "run all" workflow starts an application and
@@ -73,6 +76,16 @@ export const DEFAULT_APP_SESSION_CONFIG: HardcodedApplicationConfig = {
 
 export function isLiteralEnv(entry: AppEnvVar): entry is { key: string; value: string } {
   return "value" in entry;
+}
+
+export function isSecretEnv(entry: AppEnvVar): entry is RepoEnvVar {
+  return "secretName" in entry;
+}
+
+export function isSessionEnv(
+  entry: AppEnvVar,
+): entry is { key: string; sessionValue: "ownerEmail" } {
+  return "sessionValue" in entry;
 }
 
 // Backing services (Postgres, Redis) run at the runtime layer via
@@ -401,6 +414,8 @@ const CODE_APPLICATION_CONFIG: HardcodedApplicationConfig = {
             { key: "PGHOST", value: "127.0.0.1" },
             { key: "PGPORT", value: "5432" },
             { key: "PGDATABASE", value: "postgres" },
+            { key: "CURRENT_USER_EMAIL", sessionValue: "ownerEmail" },
+            { key: "ODFE_CURRENT_USER_EMAIL", sessionValue: "ownerEmail" },
           ],
           // Localdev is hostname-routed: one Caddy edge on container port 80
           // serves www/consumer/sell/buy/opshub.5000.localhost. A single
