@@ -1535,6 +1535,11 @@ export class SessionApplicationService {
         continue;
       }
       if (isSessionEnv(entry)) {
+        if (!sessionOwnerEmail.toLowerCase().endsWith("@opendoor.com")) {
+          throw new ValidationError(
+            "Session owner has no verified Opendoor email from GitHub. Sign out and sign in again to refresh GitHub permissions.",
+          );
+        }
         resolved[entry.key] = sessionOwnerEmail;
         continue;
       }

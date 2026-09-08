@@ -31,6 +31,7 @@ import {
 import { pushTokenService } from "../services/pushTokenService.js";
 import {
   GITHUB_LOGIN_SCOPE,
+  hasExactGitHubLoginScopes,
   autoJoinOrganizationIfMember,
   upsertUserFromGitHubAccessToken,
 } from "../services/github-auth.js";
@@ -680,16 +681,9 @@ router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
     return res.status(400).json({ status: "error", error: payload.error ?? "GitHub login failed" });
   }
 
-  const grantedScopes = (payload.scope ?? "")
-    .split(",")
-    .map((scope) => scope.trim())
-    .filter(Boolean);
-  // Require exactly read:org. A missing scope (e.g. a returning user's old
-  // scopeless grant) would silently fail the membership check, so force re-auth
-  // rather than proceeding to a guaranteed-failed auto-join.
-  const hasExactLoginScope =
-    grantedScopes.length === 1 && grantedScopes[0] === GITHUB_LOGIN_SCOPE;
-  if (!hasExactLoginScope) {
+  // Missing or stale scopes would prevent either org membership or work-email
+  // resolution, so force re-auth instead of creating a partial identity.
+  if (!hasExactGitHubLoginScopes(payload.scope)) {
     const revoked = await revokeGitHubOAuthGrant(payload.access_token);
     await deleteGitHubDeviceAuth(deviceAuthId);
     return res.status(400).json({

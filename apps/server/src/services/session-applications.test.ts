@@ -51,12 +51,12 @@ const eventServiceMock = eventService as unknown as {
   publishEphemeral: ReturnType<typeof vi.fn>;
 };
 
-function mockGroup() {
+function mockGroup(ownerEmail = "owner@opendoor.com") {
   prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValue({
     id: "group-1",
     organizationId: "org-1",
     ownerUserId: "user-1",
-    ownerUser: { email: "owner@opendoor.com" },
+    ownerUser: { email: ownerEmail },
     visibility: "public",
     repoId: "repo-1",
     workdir: "/workspace",
@@ -508,6 +508,39 @@ describe("SessionApplicationService", () => {
       }),
       "org-1",
     );
+  });
+
+  it("rejects session-owner env when GitHub has not supplied a verified work email", async () => {
+    mockGroup("github-42@trace.local");
+    vi.spyOn(repoApplicationConfigService, "resolveApplicationConfig").mockReturnValueOnce({
+      setupScripts: [],
+      runScripts: [],
+      applications: [
+        {
+          id: "web",
+          name: "Web",
+          processes: [
+            {
+              id: "dev",
+              name: "Dev",
+              command: "pnpm dev",
+              workingDirectory: ".",
+              required: true,
+              dependsOn: [],
+              env: [{ key: "CURRENT_USER_EMAIL", sessionValue: "ownerEmail" }],
+              ports: [],
+            },
+          ],
+        },
+      ],
+    });
+
+    await expect(
+      new SessionApplicationService().startProcess("group-1", "web", "dev", "org-1", "user-1"),
+    ).rejects.toThrow(
+      "Session owner has no verified Opendoor email from GitHub. Sign out and sign in again to refresh GitHub permissions.",
+    );
+    expect(sessionRouterMock.sendToRuntime).not.toHaveBeenCalled();
   });
 
   it("creates host-mode endpoints and injects the sub URL pattern", async () => {

@@ -1,6 +1,6 @@
 /**
- * GitHub sign-in mints a synthetic address (`github-<id>@trace.local`) that
- * identifies nobody, so people pickers show a GitHub label instead of it.
+ * GitHub sign-in uses a verified Opendoor email when available. This synthetic
+ * fallback identifies nobody, so people pickers show a GitHub label instead.
  */
 const SYNTHETIC_GITHUB_EMAIL = /^github-\d+@trace\.local$/;
 

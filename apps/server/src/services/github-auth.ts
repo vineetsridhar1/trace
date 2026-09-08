@@ -2,9 +2,11 @@ import { prisma } from "../lib/db.js";
 import { AUTO_JOIN_GITHUB_ORG, isGitHubOrgMember } from "../lib/github-org.js";
 import { orgMemberService } from "./org-member.js";
 
-// Trace is hosted only for opendoor, so login requests read:org to detect
-// membership of AUTO_JOIN_GITHUB_ORG and auto-add those users to the organization.
-export const GITHUB_LOGIN_SCOPE = "read:org";
+// Trace is hosted only for Opendoor. read:org verifies organization membership;
+// user:email lets Trace capture the verified work email needed by shared-backend
+// local development without passing the OAuth token into a runtime.
+export const GITHUB_LOGIN_SCOPES = ["read:org", "user:email"] as const;
+export const GITHUB_LOGIN_SCOPE = GITHUB_LOGIN_SCOPES.join(" ");
 
 type GitHubAccessTokenResponse = { access_token?: string; error?: string; scope?: string };
 type GitHubUserResponse = {
@@ -13,6 +15,11 @@ type GitHubUserResponse = {
   email: string | null;
   avatar_url: string;
   name: string | null;
+};
+type GitHubEmailResponse = {
+  email: string;
+  primary: boolean;
+  verified: boolean;
 };
 
 function githubClientId(): string {
@@ -33,6 +40,48 @@ function isGitHubUserResponse(value: unknown): value is GitHubUserResponse {
   );
 }
 
+function isGitHubEmailResponse(value: unknown): value is GitHubEmailResponse {
+  if (!value || typeof value !== "object") return false;
+  const email = value as Partial<GitHubEmailResponse>;
+  return (
+    typeof email.email === "string" &&
+    typeof email.primary === "boolean" &&
+    typeof email.verified === "boolean"
+  );
+}
+
+async function getVerifiedGitHubWorkEmail(accessToken: string): Promise<string | null> {
+  const response = await fetch("https://api.github.com/user/emails?per_page=100", {
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!response.ok || !Array.isArray(payload) || !payload.every(isGitHubEmailResponse)) {
+    throw new Error("Could not read GitHub email addresses");
+  }
+
+  const workEmails = payload.filter(
+    (entry) => entry.verified && entry.email.toLowerCase().endsWith("@opendoor.com"),
+  );
+  const selected = workEmails.find((entry) => entry.primary) ?? workEmails[0];
+  return selected?.email.toLowerCase() ?? null;
+}
+
+export function hasExactGitHubLoginScopes(scope: string | undefined): boolean {
+  const granted = new Set(
+    (scope ?? "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  );
+  return (
+    granted.size === GITHUB_LOGIN_SCOPES.length &&
+    GITHUB_LOGIN_SCOPES.every((scopeName) => granted.has(scopeName))
+  );
+}
+
 export async function upsertUserFromGitHubAccessToken(accessToken: string) {
   const userRes = await fetch("https://api.github.com/user", {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -41,7 +90,8 @@ export async function upsertUserFromGitHubAccessToken(accessToken: string) {
   if (!userRes.ok || !isGitHubUserResponse(ghUser)) {
     throw new Error("Could not verify GitHub identity");
   }
-  const email = `github-${ghUser.id}@trace.local`;
+  const githubEmail = await getVerifiedGitHubWorkEmail(accessToken);
+  const email = githubEmail ?? `github-${ghUser.id}@trace.local`;
 
   let user = await prisma.user.findUnique({
     where: { githubId: ghUser.id },
@@ -51,6 +101,7 @@ export async function upsertUserFromGitHubAccessToken(accessToken: string) {
     user = await prisma.user.update({
       where: { id: user.id },
       data: {
+        email,
         githubId: ghUser.id,
         avatarUrl: ghUser.avatar_url,
         name: ghUser.name || ghUser.login,

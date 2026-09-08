@@ -1062,6 +1062,10 @@ describe("github device oauth", () => {
   let server: Server;
   let baseUrl: string;
   const realFetch = globalThis.fetch;
+  const githubEmailsResponse = (emails: unknown[] = []) =>
+    new Response(JSON.stringify(emails), {
+      headers: { "Content-Type": "application/json" },
+    });
 
   beforeEach(async () => {
     const app = express();
@@ -1076,7 +1080,7 @@ describe("github device oauth", () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: "user-1" });
     prismaMock.user.update.mockResolvedValue({
       id: "user-1",
-      email: "octo@example.com",
+      email: "octo@opendoor.com",
       name: "Octo Cat",
       githubId: 42,
       avatarUrl: "https://example.com/a.png",
@@ -1109,7 +1113,9 @@ describe("github device oauth", () => {
         if (url.startsWith("http://127.0.0.1")) {
           return realFetch(input, init);
         }
-        expect(new URLSearchParams(init?.body?.toString()).get("scope")).toBe("read:org");
+        expect(new URLSearchParams(init?.body?.toString()).get("scope")).toBe(
+          "read:org user:email",
+        );
         return new Response(
           JSON.stringify({
             device_code: "secret-device-code",
@@ -1205,9 +1211,15 @@ describe("github device oauth", () => {
           expect(init?.body?.toString()).toContain(
             "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code",
           );
-          return new Response(JSON.stringify({ access_token: "gh-access", scope: "read:org" }), {
-            headers: { "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({ access_token: "gh-access", scope: "read:org, user:email" }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.includes("/user/emails")) {
+          return githubEmailsResponse([
+            { email: "Octo@Opendoor.com", primary: true, verified: true },
+          ]);
         }
         if (url.endsWith("/user")) {
           return new Response(
@@ -1249,6 +1261,9 @@ describe("github device oauth", () => {
     expect(cookieToken).toBeTruthy();
     expect(jwt.verify(cookieToken!, JWT_SECRET)).toMatchObject({ userId: "user-1" });
     expect(prismaMock.user.findUnique).toHaveBeenCalledWith({ where: { githubId: 42 } });
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ email: "octo@opendoor.com" }) }),
+    );
     expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
   });
 
@@ -1281,10 +1296,12 @@ describe("github device oauth", () => {
           );
         }
         if (url.includes("/login/oauth/access_token")) {
-          return new Response(JSON.stringify({ access_token: "gh-access", scope: "read:org" }), {
-            headers: { "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({ access_token: "gh-access", scope: "user:email, read:org" }),
+            { headers: { "Content-Type": "application/json" } },
+          );
         }
+        if (url.includes("/user/emails")) return githubEmailsResponse();
         if (url.endsWith("/user")) {
           return new Response(
             JSON.stringify({
@@ -1352,9 +1369,15 @@ describe("github device oauth", () => {
           );
         }
         if (url.includes("/login/oauth/access_token")) {
-          return new Response(JSON.stringify({ access_token: "gh-access", scope: "read:org" }), {
-            headers: { "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({ access_token: "gh-access", scope: "read:org, user:email" }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.includes("/user/emails")) {
+          return githubEmailsResponse([
+            { email: "octo@opendoor.com", primary: false, verified: true },
+          ]);
         }
         if (url.endsWith("/user")) {
           return new Response(
@@ -1420,9 +1443,15 @@ describe("github device oauth", () => {
           );
         }
         if (url.includes("/login/oauth/access_token")) {
-          return new Response(JSON.stringify({ access_token: "gh-access", scope: "read:org" }), {
-            headers: { "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({ access_token: "gh-access", scope: "read:org, user:email" }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.includes("/user/emails")) {
+          return githubEmailsResponse([
+            { email: "octo@opendoor.com", primary: true, verified: true },
+          ]);
         }
         if (url.endsWith("/user")) {
           return new Response(
@@ -1478,9 +1507,10 @@ describe("github device oauth", () => {
           );
         }
         if (url.includes("/login/oauth/access_token")) {
-          return new Response(JSON.stringify({ access_token: "gh-access", scope: "read:org" }), {
-            headers: { "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({ access_token: "gh-access", scope: "read:org, user:email" }),
+            { headers: { "Content-Type": "application/json" } },
+          );
         }
         if (url.endsWith("/user")) {
           return new Response(JSON.stringify({ message: "Bad credentials" }), {
@@ -1511,7 +1541,7 @@ describe("github device oauth", () => {
     expect(prismaMock.user.create).not.toHaveBeenCalled();
   });
 
-  it("rejects access tokens with GitHub scopes", async () => {
+  it("rejects access tokens missing one of the required GitHub scopes", async () => {
     vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
     let revokedGrant = false;
 
@@ -1596,7 +1626,7 @@ describe("github device oauth", () => {
         }
         if (url.includes("/login/oauth/access_token")) {
           // Returning user with an old scopeless grant: GitHub hands back a token
-          // with no scope even though we requested read:org.
+          // with no scopes even though we requested the current login scopes.
           return new Response(JSON.stringify({ access_token: "gh-access", scope: "" }), {
             headers: { "Content-Type": "application/json" },
           });
