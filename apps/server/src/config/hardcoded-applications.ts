@@ -126,11 +126,9 @@ const MORTGAGES_BASE_ENV: AppEnvVar[] = [
   { key: "AI_QUESTION_SUGGESTIONS_MODEL", value: "claude-sonnet-4-6" },
 ];
 
-// Secrets are provisioned as org secrets and referenced by name. These are the
-// full local-development set from mortgages/bin/development/fetch_secrets.rb.
-// Requiring the set here makes app setup fail before any process starts instead
-// of leaving the coding agent to fetch credentials after the session boots.
-const MORTGAGES_SECRET_ENV: AppEnvVar[] = [
+// Secrets are provisioned as app-scoped org secrets and referenced by name.
+// Keep each set attached only to the processes that consume it.
+const MORTGAGES_RAILS_SECRET_ENV: AppEnvVar[] = [
   { key: "SECRET_KEY_BASE", secretName: "MORTGAGES_SECRET_KEY_BASE" },
   {
     key: "ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY",
@@ -144,27 +142,19 @@ const MORTGAGES_SECRET_ENV: AppEnvVar[] = [
     key: "ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT",
     secretName: "MORTGAGES_AR_ENCRYPTION_KEY_DERIVATION_SALT",
   },
-  { key: "PYLON_AUTH_DOMAIN", secretName: "PYLON_AUTH_DOMAIN" },
-  { key: "PYLON_AUTH_CLIENT_ID", secretName: "PYLON_AUTH_CLIENT_ID" },
-  { key: "PYLON_AUTH_CLIENT_SECRET", secretName: "PYLON_AUTH_CLIENT_SECRET" },
-  { key: "PYLON_AUTH_AUDIENCE", secretName: "PYLON_AUTH_AUDIENCE" },
-  { key: "PYLON_GRAPHQL_API", secretName: "PYLON_GRAPHQL_API" },
-  { key: "PLAID_CLIENT_ID", secretName: "PLAID_CLIENT_ID" },
-  { key: "PLAID_SECRET", secretName: "PLAID_SECRET" },
-  { key: "PLAID_TEMPLATE_ID", secretName: "PLAID_TEMPLATE_ID" },
-  { key: "TRUV_CLIENT_ID", secretName: "TRUV_CLIENT_ID" },
-  { key: "TRUV_CLIENT_SECRET", secretName: "TRUV_CLIENT_SECRET" },
-  { key: "SENTRY_DSN", secretName: "SENTRY_DSN" },
-  { key: "FRONTEND_SENTRY_DSN", secretName: "FRONTEND_SENTRY_DSN" },
-  { key: "SLACK_ACCESS_TOKEN", secretName: "SLACK_ACCESS_TOKEN" },
-  { key: "GRPC_SERVICE_TOKEN", secretName: "GRPC_SERVICE_TOKEN" },
-  { key: "AWS_ACCESS_KEY_ID", secretName: "AWS_ACCESS_KEY_ID" },
-  { key: "AWS_SECRET_ACCESS_KEY", secretName: "AWS_SECRET_ACCESS_KEY" },
-  { key: "OPENAI_API_KEY", secretName: "OPENAI_API_KEY" },
-  { key: "ANTHROPIC_API_KEY", secretName: "ANTHROPIC_API_KEY" },
-  { key: "AI_SERVICE_TOKEN", secretName: "AI_SERVICE_TOKEN" },
-  { key: "MOS_AGENT_SHARED_SECRET", secretName: "AI_SERVICE_TOKEN" },
-  { key: "MORTGAGE_RATES_API_TOKEN", secretName: "MORTGAGE_RATES_API_TOKEN" },
+];
+
+const MORTGAGES_PYLON_SECRET_ENV: AppEnvVar[] = [
+  { key: "PYLON_AUTH_DOMAIN", secretName: "MORTGAGES_PYLON_AUTH_DOMAIN" },
+  { key: "PYLON_AUTH_CLIENT_ID", secretName: "MORTGAGES_PYLON_AUTH_CLIENT_ID" },
+  { key: "PYLON_AUTH_CLIENT_SECRET", secretName: "MORTGAGES_PYLON_AUTH_CLIENT_SECRET" },
+  { key: "PYLON_AUTH_AUDIENCE", secretName: "MORTGAGES_PYLON_AUTH_AUDIENCE" },
+  { key: "PYLON_GRAPHQL_API", secretName: "MORTGAGES_PYLON_GRAPHQL_API" },
+];
+
+const MORTGAGES_RAILS_AI_SECRET_ENV: AppEnvVar[] = [
+  { key: "AI_SERVICE_TOKEN", secretName: "MORTGAGES_AI_SERVICE_TOKEN" },
+  { key: "MOS_AGENT_SHARED_SECRET", secretName: "MORTGAGES_AI_SERVICE_TOKEN" },
 ];
 
 const MORTGAGES_AI_SERVICE_ENV: AppEnvVar[] = [
@@ -178,9 +168,10 @@ const MORTGAGES_AI_SERVICE_ENV: AppEnvVar[] = [
   { key: "ANTHROPIC_VERIFICATION_MODEL", value: "claude-opus-5" },
   { key: "ANTHROPIC_QUESTION_SUGGESTIONS_MODEL", value: "claude-sonnet-4-6" },
   { key: "ANTHROPIC_AOP_SELECTOR_MODEL", value: "claude-haiku-4-5" },
-  { key: "OPENAI_API_KEY", secretName: "OPENAI_API_KEY" },
-  { key: "ANTHROPIC_API_KEY", secretName: "ANTHROPIC_API_KEY" },
-  { key: "AI_SERVICE_TOKEN", secretName: "AI_SERVICE_TOKEN" },
+  { key: "OPENAI_API_KEY", secretName: "MORTGAGES_OPENAI_API_KEY" },
+  { key: "ANTHROPIC_API_KEY", secretName: "MORTGAGES_ANTHROPIC_API_KEY" },
+  { key: "AI_SERVICE_TOKEN", secretName: "MORTGAGES_AI_SERVICE_TOKEN" },
+  { key: "MOS_AGENT_SHARED_SECRET", secretName: "MORTGAGES_AI_SERVICE_TOKEN" },
 ];
 
 const MORTGAGES_VITE_PORT_ENV: AppEnvVar = { key: "VITE_RUBY_PORT", value: "3036" };
@@ -233,7 +224,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
       workingDirectory: ".",
       // Needs gems installed to run the rails CLI.
       dependsOn: ["bundle-install"],
-      env: [...MORTGAGES_BASE_ENV, ...MORTGAGES_SECRET_ENV],
+      env: [...MORTGAGES_BASE_ENV, ...MORTGAGES_RAILS_SECRET_ENV],
     },
     {
       id: "db-seed",
@@ -242,7 +233,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
       workingDirectory: ".",
       // Seeds load into the schema created by db-setup.
       dependsOn: ["db-setup"],
-      env: [...MORTGAGES_BASE_ENV, ...MORTGAGES_SECRET_ENV],
+      env: [...MORTGAGES_BASE_ENV, ...MORTGAGES_RAILS_SECRET_ENV],
     },
     {
       id: "assets-build",
@@ -272,7 +263,9 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
           dependsOn: ["db-seed", "assets-build"],
           env: [
             ...MORTGAGES_BASE_ENV,
-            ...MORTGAGES_SECRET_ENV,
+            ...MORTGAGES_RAILS_SECRET_ENV,
+            ...MORTGAGES_PYLON_SECRET_ENV,
+            ...MORTGAGES_RAILS_AI_SECRET_ENV,
             { key: "PORT", value: "3000" },
             MORTGAGES_VITE_PORT_ENV,
             MORTGAGES_VITE_HOST_ENV,
@@ -326,7 +319,13 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
           // fully running when this process is absent.
           required: true,
           dependsOn: ["db-seed"],
-          env: [...MORTGAGES_BASE_ENV, ...MORTGAGES_SECRET_ENV, MORTGAGES_JEMALLOC_ENV],
+          env: [
+            ...MORTGAGES_BASE_ENV,
+            ...MORTGAGES_RAILS_SECRET_ENV,
+            ...MORTGAGES_PYLON_SECRET_ENV,
+            ...MORTGAGES_RAILS_AI_SECRET_ENV,
+            MORTGAGES_JEMALLOC_ENV,
+          ],
           ports: [],
         },
         {

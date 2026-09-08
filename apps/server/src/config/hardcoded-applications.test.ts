@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getHardcodedApplicationConfig } from "./hardcoded-applications.js";
+import { getHardcodedApplicationConfig, type AppEnvVar } from "./hardcoded-applications.js";
 
 describe("mortgages application config", () => {
   it("requires integration secrets and starts Pylon and AI workers", () => {
@@ -8,6 +8,8 @@ describe("mortgages application config", () => {
     });
     const application = config?.applications.find((candidate) => candidate.id === "mortgages");
     const pnpmInstall = config?.setupScripts.find((script) => script.id === "pnpm-install");
+    const dbSetup = config?.setupScripts.find((script) => script.id === "db-setup");
+    const dbSeed = config?.setupScripts.find((script) => script.id === "db-seed");
     const web = application?.processes.find((process) => process.id === "web");
     const sidekiq = application?.processes.find((process) => process.id === "sidekiq");
     const aiService = application?.processes.find((process) => process.id === "ai-service");
@@ -15,31 +17,52 @@ describe("mortgages application config", () => {
     expect(pnpmInstall?.command).toBe(
       "pnpm install --frozen-lockfile --filter mortgages-rails --filter ai-service",
     );
-    expect(web?.env.filter((entry) => "secretName" in entry).map((entry) => entry.key)).toEqual(
-      expect.arrayContaining([
-        "PYLON_AUTH_DOMAIN",
-        "PYLON_AUTH_CLIENT_ID",
-        "PYLON_AUTH_CLIENT_SECRET",
-        "PYLON_AUTH_AUDIENCE",
-        "PYLON_GRAPHQL_API",
-        "PLAID_CLIENT_ID",
-        "PLAID_SECRET",
-        "PLAID_TEMPLATE_ID",
-        "TRUV_CLIENT_ID",
-        "TRUV_CLIENT_SECRET",
-        "SENTRY_DSN",
-        "FRONTEND_SENTRY_DSN",
-        "SLACK_ACCESS_TOKEN",
-        "GRPC_SERVICE_TOKEN",
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "OPENAI_API_KEY",
-        "ANTHROPIC_API_KEY",
-        "AI_SERVICE_TOKEN",
-        "MOS_AGENT_SHARED_SECRET",
-        "MORTGAGE_RATES_API_TOKEN",
-      ]),
-    );
+    const railsSecrets = [
+      { key: "SECRET_KEY_BASE", secretName: "MORTGAGES_SECRET_KEY_BASE" },
+      {
+        key: "ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY",
+        secretName: "MORTGAGES_AR_ENCRYPTION_PRIMARY_KEY",
+      },
+      {
+        key: "ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY",
+        secretName: "MORTGAGES_AR_ENCRYPTION_DETERMINISTIC_KEY",
+      },
+      {
+        key: "ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT",
+        secretName: "MORTGAGES_AR_ENCRYPTION_KEY_DERIVATION_SALT",
+      },
+    ];
+    const pylonSecrets = [
+      { key: "PYLON_AUTH_DOMAIN", secretName: "MORTGAGES_PYLON_AUTH_DOMAIN" },
+      { key: "PYLON_AUTH_CLIENT_ID", secretName: "MORTGAGES_PYLON_AUTH_CLIENT_ID" },
+      {
+        key: "PYLON_AUTH_CLIENT_SECRET",
+        secretName: "MORTGAGES_PYLON_AUTH_CLIENT_SECRET",
+      },
+      { key: "PYLON_AUTH_AUDIENCE", secretName: "MORTGAGES_PYLON_AUTH_AUDIENCE" },
+      { key: "PYLON_GRAPHQL_API", secretName: "MORTGAGES_PYLON_GRAPHQL_API" },
+    ];
+    const railsAiSecrets = [
+      { key: "AI_SERVICE_TOKEN", secretName: "MORTGAGES_AI_SERVICE_TOKEN" },
+      { key: "MOS_AGENT_SHARED_SECRET", secretName: "MORTGAGES_AI_SERVICE_TOKEN" },
+    ];
+    const onlySecrets = (env: AppEnvVar[] | undefined) =>
+      env?.filter((entry) => "secretName" in entry);
+
+    expect(onlySecrets(dbSetup?.env)).toEqual(railsSecrets);
+    expect(onlySecrets(dbSeed?.env)).toEqual(railsSecrets);
+    expect(onlySecrets(web?.env)).toEqual([...railsSecrets, ...pylonSecrets, ...railsAiSecrets]);
+    expect(onlySecrets(sidekiq?.env)).toEqual([
+      ...railsSecrets,
+      ...pylonSecrets,
+      ...railsAiSecrets,
+    ]);
+    expect(onlySecrets(aiService?.env)).toEqual([
+      { key: "OPENAI_API_KEY", secretName: "MORTGAGES_OPENAI_API_KEY" },
+      { key: "ANTHROPIC_API_KEY", secretName: "MORTGAGES_ANTHROPIC_API_KEY" },
+      { key: "AI_SERVICE_TOKEN", secretName: "MORTGAGES_AI_SERVICE_TOKEN" },
+      { key: "MOS_AGENT_SHARED_SECRET", secretName: "MORTGAGES_AI_SERVICE_TOKEN" },
+    ]);
     expect(web?.env).toEqual(
       expect.arrayContaining([
         { key: "PYLON_SYNC_ENABLED", value: "true" },
@@ -64,9 +87,10 @@ describe("mortgages application config", () => {
         env: expect.arrayContaining([
           { key: "AI_SERVICE_PORT", value: "3100" },
           { key: "MORTGAGE_GRAPHQL_URL", value: "http://localhost:3000/graphql/v1" },
-          { key: "OPENAI_API_KEY", secretName: "OPENAI_API_KEY" },
-          { key: "ANTHROPIC_API_KEY", secretName: "ANTHROPIC_API_KEY" },
-          { key: "AI_SERVICE_TOKEN", secretName: "AI_SERVICE_TOKEN" },
+          { key: "OPENAI_API_KEY", secretName: "MORTGAGES_OPENAI_API_KEY" },
+          { key: "ANTHROPIC_API_KEY", secretName: "MORTGAGES_ANTHROPIC_API_KEY" },
+          { key: "AI_SERVICE_TOKEN", secretName: "MORTGAGES_AI_SERVICE_TOKEN" },
+          { key: "MOS_AGENT_SHARED_SECRET", secretName: "MORTGAGES_AI_SERVICE_TOKEN" },
         ]),
         ports: [expect.objectContaining({ port: 3100, healthPath: "/health" })],
       }),
