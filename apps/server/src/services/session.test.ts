@@ -3199,6 +3199,7 @@ describe("SessionService", () => {
         id: "runtime-env",
         label: "Env Laptop",
         hostingMode: "local",
+        connectionGeneration: "bridge-generation-1",
         registeredRepoIds: ["repo-1"],
         supportedTools: ["claude_code"],
         boundSessions: new Set<string>(),
@@ -3229,6 +3230,7 @@ describe("SessionService", () => {
               environmentId: "env-1",
               adapterType: "local",
               runtimeInstanceId: "runtime-env",
+              connectionGeneration: "bridge-generation-1",
               runtimeLabel: "Env Laptop",
             }),
           }),
@@ -9774,6 +9776,36 @@ describe("SessionService", () => {
   });
 
   describe("workspaceReady", () => {
+    it("ignores readiness from a superseded bridge connection", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        pendingRun: null,
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        readOnlyWorkspace: false,
+        workdir: null,
+        connection: {
+          state: "connecting",
+          workspaceState: "preparing",
+          runtimeInstanceId: "runtime-1",
+          connectionGeneration: "bridge-generation-current",
+        },
+      });
+
+      await service.workspaceReady(
+        "session-1",
+        "/workspaces/stale",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { runtimeInstanceId: "runtime-1", connectionGeneration: "bridge-generation-stale" },
+      );
+
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+
     it("auto-starts design sessions through the shared application service", async () => {
       const startApplication = vi
         .spyOn(sessionApplicationService, "startApplication")

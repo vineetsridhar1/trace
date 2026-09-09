@@ -446,6 +446,18 @@ function isSameRuntimeGeneration(
   );
 }
 
+function matchesExpectedRuntimeConnection(
+  connection: SessionConnectionData,
+  expected: { runtimeInstanceId: string; connectionGeneration?: string },
+): boolean {
+  return (
+    connection.runtimeInstanceId === expected.runtimeInstanceId &&
+    (expected.connectionGeneration === undefined ||
+      connection.connectionGeneration === undefined ||
+      connection.connectionGeneration === expected.connectionGeneration)
+  );
+}
+
 // Whether a session group is already pinned to a bridge/runtime. Keep this in
 // lockstep with `hasSelectedSessionGroupRuntime` in
 // packages/client-core/src/lib/session-group.ts — the client hides the bridge
@@ -4823,6 +4835,7 @@ export class SessionService {
       }
     }
     let runtimeLabel: string | undefined;
+    let runtimeConnectionGeneration: string | undefined;
     if (
       input.environmentId &&
       input.runtimeInstanceId &&
@@ -4919,6 +4932,7 @@ export class SessionService {
         }
         hosting = runtime.hostingMode;
         runtimeLabel = runtime.label;
+        runtimeConnectionGeneration = runtime.connectionGeneration;
         requestedRuntimeInstanceId = runtime.id;
       } else {
         requestedRuntimeInstanceId = undefined;
@@ -4953,12 +4967,17 @@ export class SessionService {
       }
       requestedRuntimeInstanceId = defaultLocalRuntime.id;
       runtimeLabel = defaultLocalRuntime.label;
+      runtimeConnectionGeneration = defaultLocalRuntime.connectionGeneration;
     }
 
-    if (requestedRuntimeInstanceId && !runtimeLabel) {
+    if (requestedRuntimeInstanceId && (!runtimeLabel || !runtimeConnectionGeneration)) {
+      const selectedRuntime = runtimeMetadata(requestedRuntimeInstanceId, input.organizationId);
       runtimeLabel =
-        runtimeMetadata(requestedRuntimeInstanceId, input.organizationId)?.label ??
+        runtimeLabel ??
+        selectedRuntime?.label ??
         this.parseConnection(sharedConnection).runtimeLabel;
+      runtimeConnectionGeneration =
+        runtimeConnectionGeneration ?? selectedRuntime?.connectionGeneration;
     }
     if (isGeneratedProjectKind(resolvedKind) && hosting !== "cloud") {
       const label = resolvedKind === "design" ? "Design" : "App";
@@ -5029,6 +5048,9 @@ export class SessionService {
               adapterType: requestedEnvironment.adapterType,
             }),
             ...(requestedRuntimeInstanceId && { runtimeInstanceId: requestedRuntimeInstanceId }),
+            ...(runtimeConnectionGeneration && {
+              connectionGeneration: runtimeConnectionGeneration,
+            }),
             ...(runtimeLabel && { runtimeLabel }),
             ...(needsRuntimeProvisioning && { workspaceState: "preparing" }),
           }),
@@ -8344,9 +8366,10 @@ export class SessionService {
     warning?: BridgeWorkspaceWarning,
     sourceWorkdir?: string,
     sourceCommitSha?: string,
+    expectedRuntime?: { runtimeInstanceId: string; connectionGeneration?: string },
   ) {
     // Read and clear pendingRun atomically in a transaction to prevent double-delivery
-    const [session, pendingRun] = await prisma.$transaction(
+    const readyResult = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
         const prev = await tx.session.findUniqueOrThrow({
           where: { id: sessionId },
@@ -8361,6 +8384,9 @@ export class SessionService {
         });
         const pendingCommand = this.parsePendingCommands(prev.pendingRun)[0] ?? null;
         const previousConnection = this.parseConnection(prev.connection);
+        if (expectedRuntime && !matchesExpectedRuntimeConnection(previousConnection, expectedRuntime)) {
+          return null;
+        }
         const readyConnection = connJson({
           ...previousConnection,
           state: "connected",
@@ -8370,6 +8396,9 @@ export class SessionService {
           failedAt: undefined,
           timedOutAt: undefined,
           autoRetryable: true,
+          ...(expectedRuntime?.connectionGeneration && {
+            connectionGeneration: expectedRuntime.connectionGeneration,
+          }),
           version: (previousConnection.version ?? 0) + 1,
         });
 
@@ -8400,6 +8429,8 @@ export class SessionService {
         return [updated, prev.pendingRun] as const;
       },
     );
+    if (!readyResult) return;
+    const [session, pendingRun] = readyResult;
     const setupScript = await this.getChannelSetupScript(session.channelId);
     const previousGroupBranch = session.sessionGroup?.branch ?? null;
     const shouldClearPrUrl =
@@ -8685,12 +8716,17 @@ export class SessionService {
     return trackedSiblings;
   }
 
-  async workspaceFailed(sessionId: string, error: string) {
+  async workspaceFailed(
+    sessionId: string,
+    error: string,
+    expectedRuntime?: { runtimeInstanceId: string; connectionGeneration?: string },
+  ) {
     const prev = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
       select: { connection: true, tool: true },
     });
     const conn = this.parseConnection(prev.connection);
+    if (expectedRuntime && !matchesExpectedRuntimeConnection(conn, expectedRuntime)) return;
     const artifact = actionRequiredArtifactForToolError(prev.tool, error);
     const now = new Date().toISOString();
     const failedState: SessionConnectionData["state"] =
@@ -8703,6 +8739,9 @@ export class SessionService {
       canRetry: true,
       canMove: true,
       autoRetryable: false,
+      ...(expectedRuntime?.connectionGeneration && {
+        connectionGeneration: expectedRuntime.connectionGeneration,
+      }),
       ...(failedState === "failed" ? { failedAt: conn.failedAt ?? now } : {}),
       ...(failedState === "timed_out" ? { timedOutAt: conn.timedOutAt ?? now } : {}),
     });

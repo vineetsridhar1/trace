@@ -1263,11 +1263,16 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             msg.warning as BridgeWorkspaceWarning | undefined,
             msg.sourceWorkdir as string | undefined,
             msg.sourceCommitSha as string | undefined,
+            { runtimeInstanceId: runtimeId, connectionGeneration },
           );
         });
       } else if (msg.type === "workspace_failed" && msg.sessionId) {
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
-          await sessionService.workspaceFailed(sessionId, (msg.error as string) ?? "Unknown error");
+          await sessionService.workspaceFailed(
+            sessionId,
+            (msg.error as string) ?? "Unknown error",
+            { runtimeInstanceId: runtimeId, connectionGeneration },
+          );
         });
       } else if (msg.type === "register_session" && msg.sessionId) {
         void (async () => {
