@@ -5009,6 +5009,12 @@ export class SessionService {
       !sharedRuntimeInstanceId &&
       !sharedWorkdir &&
       (!!resolvedRepoId || hosting === "cloud" || resolvedKind === "general");
+    const shouldProvisionRuntimeImmediately =
+      needsRuntimeProvisioning &&
+      Boolean(input.prompt || input.provisionWithoutPrompt) &&
+      selectedRuntimeAccessAllowed &&
+      !deferRuntimeSelection &&
+      input.deferInitialRun !== true;
     // Queue the initial prompt as a pending run whenever we're provisioning a
     // fresh runtime for it; it's delivered once the workspace is ready
     // (workspaceReady → deliverPendingCommand). This must cover BOTH the
@@ -5022,7 +5028,10 @@ export class SessionService {
       : connJson(
           defaultConnection({
             ...(deferRuntimeSelection && { state: "pending" }),
-            ...(needsRuntimeProvisioning && !deferRuntimeSelection && { state: "connecting" }),
+            ...(needsRuntimeProvisioning &&
+              !deferRuntimeSelection && {
+                state: shouldProvisionRuntimeImmediately ? "connecting" : "pending",
+              }),
             toolSource: hasExplicitTool ? "explicit" : "default",
             ...(requestedEnvironment && {
               environmentId: requestedEnvironment.id,
@@ -5262,13 +5271,7 @@ export class SessionService {
     // Only provision the runtime immediately when a prompt is provided.
     // Sessions created without a prompt (e.g. Cmd+N) defer provisioning
     // until the user sends their first message.
-    if (
-      needsRuntimeProvisioning &&
-      (input.prompt || input.provisionWithoutPrompt) &&
-      selectedRuntimeAccessAllowed &&
-      !deferRuntimeSelection &&
-      input.deferInitialRun !== true
-    ) {
+    if (shouldProvisionRuntimeImmediately) {
       this.provisionRuntime({
         sessionId: session.id,
         sessionGroupId: session.sessionGroupId,

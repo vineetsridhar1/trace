@@ -2734,6 +2734,13 @@ describe("SessionService", () => {
       } as unknown as StartSessionServiceInput);
 
       expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            connection: expect.objectContaining({ state: "pending" }),
+          }),
+        }),
+      );
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
