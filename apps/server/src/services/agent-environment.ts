@@ -536,11 +536,11 @@ export class AgentEnvironmentService {
       });
       await assertActorOrgAdmin(tx, existing.organizationId, actorType, actorId);
 
-      const referencingSessions = await tx.session.count({
+      const referencingSessionGroups = await tx.sessionGroup.count({
         where: { connection: { path: ["environmentId"], equals: id } },
       });
       const deleted =
-        referencingSessions > 0
+        referencingSessionGroups > 0
           ? await tx.agentEnvironment.update({
               where: { id },
               data: { enabled: false, isDefault: false },

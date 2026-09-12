@@ -643,6 +643,7 @@ model SessionGroup {
   slug                     String?
   branch                   String?
   workdir                  String?
+  // Authoritative lifecycle, provider, and bridge binding for the shared runtime.
   connection               Json?
   prUrl                    String?
   prSyncObservedAt         DateTime?
@@ -831,6 +832,7 @@ model Session {
   toolSessionId                           String?
   pendingRun                              Json?
   endpoints                               Json?
+  // Compatibility projection; runtime ownership lives on SessionGroup.
   connection                              Json?
   prUrl                                   String?
   worktreeDeleted                         Boolean       @default(false)

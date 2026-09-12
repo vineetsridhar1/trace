@@ -639,7 +639,7 @@ describe("AgentEnvironmentService", () => {
       createdAt: now,
       updatedAt: now,
     });
-    prismaMock.session.count.mockResolvedValueOnce(1);
+    prismaMock.sessionGroup.count.mockResolvedValueOnce(1);
     prismaMock.agentEnvironment.update.mockResolvedValueOnce({
       id: "env-1",
       organizationId: "org-1",
