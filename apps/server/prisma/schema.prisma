@@ -1888,10 +1888,11 @@ model SlackThreadSession {
 }
 
 model SlackProcessedEvent {
-  id           String   @id @default(uuid())
-  slackTeamId  String?
-  slackEventId String   @unique
-  createdAt    DateTime @default(now())
+  id              String   @id @default(uuid())
+  slackTeamId     String?
+  slackEventId    String   @unique
+  slackMessageKey String?  @unique
+  createdAt       DateTime @default(now())
 
   @@index([createdAt])
 }
