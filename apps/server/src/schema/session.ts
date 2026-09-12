@@ -353,21 +353,27 @@ export const sessionQueries = {
         workdir: true,
         sessionGroupId: true,
         connection: true,
+        sessionGroup: { select: { connection: true, workdir: true } },
       },
     });
     if (!session || session.tool === "pi") return [];
 
+    const runtimeConnection = session.sessionGroup
+      ? session.sessionGroup.connection
+      : session.connection;
     const runtimeInstanceId =
-      session.connection &&
-      typeof session.connection === "object" &&
-      !Array.isArray(session.connection) &&
-      typeof (session.connection as { runtimeInstanceId?: unknown }).runtimeInstanceId === "string"
-        ? ((session.connection as { runtimeInstanceId?: string }).runtimeInstanceId ?? null)
+      runtimeConnection &&
+      typeof runtimeConnection === "object" &&
+      !Array.isArray(runtimeConnection) &&
+      typeof (runtimeConnection as { runtimeInstanceId?: unknown }).runtimeInstanceId === "string"
+        ? ((runtimeConnection as { runtimeInstanceId?: string }).runtimeInstanceId ?? null)
         : null;
     const boundRuntime = sessionRouter.getRuntimeForSession(args.sessionId);
     const runtime = runtimeInstanceId
       ? sessionRouter.getRuntimeMetadata(runtimeInstanceId, orgId)
-      : boundRuntime;
+      : session.sessionGroup
+        ? null
+        : boundRuntime;
 
     // Try to get skills from bridge
     let skills: BridgeSkillInfo[] = [];
@@ -384,7 +390,7 @@ export const sessionQueries = {
     if (runtime && canUseBridgeSkills) {
       try {
         skills = await sessionRouter.listSkills(runtime.key, args.sessionId, {
-          workdirHint: session.workdir ?? undefined,
+          workdirHint: session.sessionGroup?.workdir ?? session.workdir ?? undefined,
           includeUserSkills: true,
           includeProjectSkills: true,
         });
@@ -1082,6 +1088,24 @@ export const sessionTypeResolvers = {
     },
   },
   Session: {
+    connection: async (
+      session: {
+        connection?: unknown;
+        sessionGroupId?: string | null;
+        sessionGroup?: { connection?: unknown } | null;
+      },
+      _args: unknown,
+      ctx: Context,
+    ) => {
+      if (session.sessionGroup && "connection" in session.sessionGroup) {
+        return session.sessionGroup.connection;
+      }
+      if (!session.sessionGroupId) return session.connection ?? null;
+      const group = (await ctx.sessionGroupLoader.load(session.sessionGroupId)) as {
+        connection?: unknown;
+      } | null;
+      return group?.connection ?? null;
+    },
     projects: async (session: { id: string }, _args: unknown, ctx: Context) => {
       requireOrgContext(ctx);
       return ctx.sessionProjectsLoader.load(session.id);

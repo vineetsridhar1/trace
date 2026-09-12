@@ -339,6 +339,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
   async function resolveSessionBoundToThisRuntime(sessionId: unknown): Promise<string | null> {
     if (typeof sessionId !== "string" || !sessionId) return null;
+    // Authorization runs when queued work executes, not when it arrived. A
+    // reconnect may have replaced this socket while an earlier event drained.
+    if (!sessionRouter.getCurrentRuntimeConnectionGeneration(runtimeKey, ws)) return null;
     const runtime = sessionRouter.getRuntimeForSession(sessionId);
     if (runtime) {
       const allowed =
@@ -351,8 +354,8 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           sessionId,
           boundRuntimeId: runtime.id,
         });
+        return null;
       }
-      return allowed ? sessionId : null;
     }
 
     const persisted = await prisma.session.findFirst({
@@ -361,19 +364,21 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         agentStatus: { notIn: ["failed", "stopped"] },
         sessionStatus: { not: "merged" },
         ...(bridgeAuth?.organizationId ? { organizationId: bridgeAuth.organizationId } : {}),
-        connection: { path: ["runtimeInstanceId"], equals: runtimeId },
+        sessionGroup: {
+          connection: { path: ["runtimeInstanceId"], equals: runtimeId },
+        },
       },
-      select: { id: true, connection: true },
+      select: { id: true, sessionGroup: { select: { connection: true } } },
     });
-    if (!persisted || isTerminalConnectionState(persisted.connection)) {
-      runtimeDebug("bridge ignored message for unbound session", {
+    if (!persisted || isTerminalConnectionState(persisted.sessionGroup?.connection)) {
+      runtimeDebug("bridge ignored message for unowned session", {
         runtimeId,
         sessionId,
       });
       return null;
     }
 
-    sessionRouter.bindSession(sessionId, runtimeKey);
+    if (!runtime) sessionRouter.bindSession(sessionId, runtimeKey);
     return sessionId;
   }
 
@@ -381,12 +386,11 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     sessionId: unknown,
     fn: (boundSessionId: string) => Promise<void>,
   ): void {
-    void (async () => {
+    if (typeof sessionId !== "string" || !sessionId) return;
+    enqueueEvent(sessionId, async () => {
       const boundSessionId = await resolveSessionBoundToThisRuntime(sessionId);
       if (!boundSessionId) return;
-      enqueueEvent(boundSessionId, () => fn(boundSessionId));
-    })().catch((err: unknown) => {
-      console.error("[bridge] error authorizing session-scoped message:", err);
+      await fn(boundSessionId);
     });
   }
 
@@ -1263,11 +1267,16 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             msg.warning as BridgeWorkspaceWarning | undefined,
             msg.sourceWorkdir as string | undefined,
             msg.sourceCommitSha as string | undefined,
+            { runtimeInstanceId: runtimeId, connectionGeneration },
           );
         });
       } else if (msg.type === "workspace_failed" && msg.sessionId) {
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
-          await sessionService.workspaceFailed(sessionId, (msg.error as string) ?? "Unknown error");
+          await sessionService.workspaceFailed(
+            sessionId,
+            (msg.error as string) ?? "Unknown error",
+            { runtimeInstanceId: runtimeId, connectionGeneration },
+          );
         });
       } else if (msg.type === "register_session" && msg.sessionId) {
         void (async () => {

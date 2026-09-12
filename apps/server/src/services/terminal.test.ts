@@ -736,7 +736,7 @@ describe("TerminalService", () => {
           hosting: "cloud",
           createdById: "user-1",
           connection: { runtimeInstanceId: "runtime-1" },
-          sessionGroup: { connection: null },
+          sessionGroup: { connection: { runtimeInstanceId: "runtime-1" } },
         }),
       );
       terminalRelayMock.getTerminalsForSessionGroup.mockReturnValueOnce(["term-1", "term-2"]);
@@ -745,6 +745,13 @@ describe("TerminalService", () => {
         if (terminalId === "term-2") return "session-2";
         return undefined;
       });
+      terminalRelayMock.getTerminalAuthContext.mockImplementation((terminalId: string) => ({
+        kind: "session",
+        sessionId: terminalRelayMock.getSessionId(terminalId) ?? "session-1",
+        sessionGroupId: "group-1",
+        runtimeInstanceId: "runtime-1",
+        ownerUserId: terminalId === "term-1" ? "user-1" : "user-2",
+      }));
       prismaMock.session.findMany.mockImplementation(() =>
         Promise.resolve([
           {
@@ -752,27 +759,18 @@ describe("TerminalService", () => {
             organizationId: "org-1",
             sessionGroupId: "group-1",
             connection: { runtimeInstanceId: "runtime-1" },
-            sessionGroup: { connection: null },
+            sessionGroup: { connection: { runtimeInstanceId: "runtime-1" } },
           },
           {
             id: "session-2",
             organizationId: "org-1",
             sessionGroupId: "group-1",
             connection: { runtimeInstanceId: "runtime-2" },
-            sessionGroup: { connection: null },
+            sessionGroup: { connection: { runtimeInstanceId: "runtime-1" } },
           },
         ]),
       );
-      // user-1 allowed on their own session-1 runtime; denied on session-2's local bridge.
-      runtimeAccessServiceMock.assertAccess.mockReset();
-      runtimeAccessServiceMock.assertAccess.mockImplementation(
-        (input: { runtimeInstanceId: string }) => {
-          if (input.runtimeInstanceId === "runtime-2") {
-            return Promise.reject(new Error("Access denied"));
-          }
-          return Promise.resolve(undefined);
-        },
-      );
+      runtimeAccessServiceMock.assertAccess.mockReset().mockResolvedValue(undefined);
 
       const result = await terminalService.listForSession({
         sessionId: "session-1",
@@ -789,7 +787,7 @@ describe("TerminalService", () => {
         organizationId: "org-1",
         sessionGroupId: "group-1",
         connection: { runtimeInstanceId: "runtime-1" },
-        sessionGroup: { connection: null },
+        sessionGroup: { connection: { runtimeInstanceId: "runtime-1" } },
       });
       terminalRelayMock.getTerminalsForSessionGroup.mockReturnValueOnce(["term-1", "term-2"]);
       terminalRelayMock.getSessionId.mockImplementation((terminalId: string) => {
@@ -810,7 +808,7 @@ describe("TerminalService", () => {
           organizationId: "org-1",
           sessionGroupId: "group-1",
           connection: { runtimeInstanceId: "runtime-1" },
-          sessionGroup: { connection: null },
+          sessionGroup: { connection: { runtimeInstanceId: "runtime-1" } },
         },
       ]);
 
@@ -838,7 +836,7 @@ describe("TerminalService", () => {
         organizationId: "org-1",
         sessionGroupId: "group-1",
         connection: { runtimeInstanceId: "runtime-1" },
-        sessionGroup: { connection: null },
+        sessionGroup: { connection: { runtimeInstanceId: "runtime-1" } },
       });
 
       const result = await terminalService.destroy({
@@ -896,7 +894,7 @@ describe("TerminalService", () => {
         organizationId: "org-1",
         sessionGroupId: "group-1",
         connection: null,
-        sessionGroup: { connection: null },
+        sessionGroup: { connection: { runtimeInstanceId: "runtime-1" } },
       });
 
       const result = await terminalService.destroy({
@@ -1047,19 +1045,19 @@ describe("TerminalService", () => {
 
   describe("terminal operations across replicas", () => {
     const ownedTerminal = () => {
-      terminalRelayMock.getTerminalAuthContextDistributed.mockResolvedValueOnce({
+      terminalRelayMock.getTerminalAuthContextDistributed.mockReset().mockResolvedValueOnce({
         kind: "session",
         sessionId: "session-1",
         sessionGroupId: "group-1",
         runtimeInstanceId: "runtime-1",
         ownerUserId: "user-1",
       });
-      prismaMock.session.findFirst.mockResolvedValueOnce({
+      prismaMock.session.findFirst.mockReset().mockResolvedValueOnce({
         id: "session-1",
         organizationId: "org-1",
         sessionGroupId: "group-1",
         connection: { runtimeInstanceId: "runtime-1" },
-        sessionGroup: { connection: null },
+        sessionGroup: { connection: { runtimeInstanceId: "runtime-1" } },
       });
     };
 

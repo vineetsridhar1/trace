@@ -43,6 +43,7 @@ import { ActionRequiredError } from "./errors.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
 import { realtimeBackplane, type BackplaneEnvelope } from "./realtime-backplane.js";
 import { runtimeDirectory, type RuntimeDescriptor } from "./runtime-directory.js";
+import { canonicalSessionConnection } from "./session-runtime-connection.js";
 import { correlatedResponseRelay } from "./correlated-response-relay.js";
 import {
   RuntimeAdapterRegistry,
@@ -59,6 +60,7 @@ interface BaseSessionCommand {
     | "resume"
     | "send"
     | "prepare"
+    | "prepare_general"
     | "prepare_app"
     | "delete"
     | "list_branches"
@@ -1234,10 +1236,12 @@ export class SessionRouter {
         return this.writeToRuntime(resolution.runtime, command, sessionId);
       }
       if (resolution.state === "remote") {
-        return this.relayToOwner(
+        const result = await this.relayToOwner(
           resolution.descriptor,
           command as unknown as Record<string, unknown>,
         );
+        if (result === "delivered") this.bindSession(sessionId, resolution.descriptor.key);
+        return result;
       }
       return "delivery_failed";
     }
@@ -2517,7 +2521,6 @@ export class SessionRouter {
     options: SessionAdapterCreateOptions & {
       hosting: string;
       onFailed: (error: string) => void;
-      onWorkspaceReady?: (workdir: string) => void;
       /**
        * Claim this session's next runtime generation and return the runtime
        * instance id the claim created. `null` means a live runtime already owns
@@ -2683,6 +2686,22 @@ export class SessionRouter {
           return;
         }
 
+        // A runtime being online does not mean its workspace is registered.
+        // Even repo-less cloud sessions wait for the bridge readiness callback.
+        if (!options.repo) {
+          const result = await this.sendAsync(
+            options.sessionId,
+            {
+              type: "prepare_general",
+              sessionId: options.sessionId,
+              sessionGroupId: options.sessionGroupId,
+            },
+            { expectedHomeRuntimeId, organizationId: options.organizationId },
+          );
+          if (result !== "delivered") options.onFailed(`prepare_general: ${result}`);
+          return;
+        }
+
         if (options.repo) {
           const result = await this.sendAsync(
             options.sessionId,
@@ -2711,8 +2730,6 @@ export class SessionRouter {
           }
           return;
         }
-
-        options.onWorkspaceReady?.("/home/coder");
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[runtime-adapter] failed to start ${options.sessionId}:`, message);
@@ -2810,12 +2827,38 @@ export class SessionRouter {
       skipUnbind?: boolean;
     },
   ): Promise<void> {
+    const groupRuntime = session.sessionGroupId
+      ? await prisma.sessionGroup.findUnique({
+          where: { id: session.sessionGroupId },
+          select: { connection: true, workdir: true, repoId: true },
+        })
+      : null;
+    if (session.sessionGroupId && !groupRuntime) throw new Error("Session group not found");
+    if (groupRuntime) {
+      const requested = connectionRecord(session.connection);
+      const current = connectionRecord(groupRuntime.connection);
+      // Re-reading authority must never retarget a delayed teardown at a newer
+      // runtime. The caller's snapshot identifies the compute it meant to stop.
+      if (
+        requested?.runtimeInstanceId !== current?.runtimeInstanceId ||
+        requested?.providerRuntimeId !== current?.providerRuntimeId
+      ) {
+        throw new Error("Runtime teardown was superseded by a newer group binding");
+      }
+      if (!current?.runtimeInstanceId && !current?.providerRuntimeId) {
+        if (!options?.skipUnbind) this.unbindSession(sessionId);
+        return;
+      }
+    }
+    const effectiveConnection = groupRuntime ? groupRuntime.connection : session.connection;
+    const effectiveWorkdir = groupRuntime ? groupRuntime.workdir : session.workdir;
+    const effectiveRepoId = groupRuntime ? groupRuntime.repoId : session.repoId;
     const adapterType =
-      typeof connectionRecord(session.connection)?.adapterType === "string"
-        ? (connectionRecord(session.connection)?.adapterType as string)
+      typeof connectionRecord(effectiveConnection)?.adapterType === "string"
+        ? (connectionRecord(effectiveConnection)?.adapterType as string)
         : adapterTypeFromHosting(session.hosting, this.runtimeAdapters);
     const adapter = this.runtimeAdapters.get(adapterType);
-    const connection = connectionRecord(session.connection);
+    const connection = connectionRecord(effectiveConnection);
     const environment = await this.resolveRuntimeEnvironment(connection);
     const reason = options?.reason ?? "session_deleted";
     const lifecycleSnapshot = lifecycleSnapshotFromConnection(connection);
@@ -2828,8 +2871,8 @@ export class SessionRouter {
         {
           type: "delete",
           sessionId,
-          workdir: session.workdir,
-          repoId: session.repoId,
+          workdir: effectiveWorkdir,
+          repoId: effectiveRepoId,
           sessionGroupId: session.sessionGroupId ?? undefined,
         },
         { expectedHomeRuntimeId, organizationId: session.organizationId },
@@ -2943,9 +2986,10 @@ export class SessionRouter {
         tool: true,
         model: true,
         reasoningEffort: true,
+        sessionGroup: { select: { connection: true } },
       },
     });
-    const conn = connectionRecord(session.connection);
+    const conn = connectionRecord(canonicalSessionConnection(session));
     let runtimeId = optionalConnectionString(conn, "runtimeInstanceId");
 
     if (command === "resume" && adapter.type === "provisioned") {

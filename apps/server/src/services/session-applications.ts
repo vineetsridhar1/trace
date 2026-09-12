@@ -43,7 +43,6 @@ type ManagedSessionGroup = {
     id: string;
     hosting: string;
     workdir: string | null;
-    connection: Prisma.JsonValue;
   }>;
   repo: {
     id: string;
@@ -118,16 +117,11 @@ export async function sessionGroupRuntimeInstanceId(
   sessionGroupId: string,
   organizationId: string,
 ): Promise<string | null> {
-  const sessions = await prisma.session.findMany({
-    where: { sessionGroupId, organizationId },
+  const group = await prisma.sessionGroup.findFirst({
+    where: { id: sessionGroupId, organizationId },
     select: { connection: true },
-    orderBy: { updatedAt: "desc" },
   });
-  for (const session of sessions) {
-    const runtimeInstanceId = connectionRuntimeInstanceId(session.connection);
-    if (runtimeInstanceId) return runtimeInstanceId;
-  }
-  return null;
+  return group ? connectionRuntimeInstanceId(group.connection) : null;
 }
 function publicProcess(process: PrismaSessionApplicationProcess) {
   return {
@@ -1384,7 +1378,7 @@ export class SessionApplicationService {
         connection: true,
         repo: { select: { id: true, setupConfig: true } },
         sessions: {
-          select: { id: true, hosting: true, workdir: true, connection: true },
+          select: { id: true, hosting: true, workdir: true },
           orderBy: { updatedAt: "desc" },
         },
       },
@@ -1400,25 +1394,9 @@ export class SessionApplicationService {
         "Application forwarding is currently only available for cloud sessions",
       );
     }
-    const groupRuntimeId = connectionRuntimeInstanceId(group.connection);
-    const session = groupRuntimeId
-      ? group.sessions.find(
-          (candidate) =>
-            candidate.hosting === "cloud" &&
-            connectionRuntimeInstanceId(candidate.connection) === groupRuntimeId,
-        )
-      : group.sessions.find(
-          (candidate) =>
-            candidate.hosting === "cloud" &&
-            hasReadyWorkspace(candidate.connection, candidate.workdir),
-        );
-    const runtimeId = groupRuntimeId ?? connectionRuntimeInstanceId(session?.connection ?? null);
-    const readinessConnection = groupRuntimeId ? group.connection : session?.connection;
-    if (
-      !session ||
-      !runtimeId ||
-      !hasReadyWorkspace(readinessConnection, group.workdir ?? session.workdir)
-    ) {
+    const runtimeId = connectionRuntimeInstanceId(group.connection);
+    const session = group.sessions.find((candidate) => candidate.hosting === "cloud");
+    if (!session || !runtimeId || !hasReadyWorkspace(group.connection, group.workdir)) {
       throw new ValidationError("Session workspace is not ready yet");
     }
     const resolution = await sessionRouter.resolveRuntime(runtimeId, organizationId);

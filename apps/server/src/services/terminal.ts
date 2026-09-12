@@ -91,8 +91,13 @@ class TerminalService {
     connection: unknown;
     sessionGroup?: { connection?: unknown } | null;
   }): string | null {
+    if (
+      session.sessionGroup &&
+      Object.prototype.hasOwnProperty.call(session.sessionGroup, "connection")
+    ) {
+      return this.getConnectionRuntimeInstanceId(session.sessionGroup.connection);
+    }
     return (
-      this.getConnectionRuntimeInstanceId(session.sessionGroup?.connection) ??
       this.getConnectionRuntimeInstanceId(session.connection) ??
       sessionRouter.getRuntimeForSession(session.id)?.id ??
       null
