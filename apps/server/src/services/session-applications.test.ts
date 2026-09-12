@@ -59,6 +59,11 @@ function mockGroup() {
     visibility: "public",
     repoId: "repo-1",
     workdir: "/workspace",
+    connection: {
+      state: "connected",
+      workspaceState: "ready",
+      runtimeInstanceId: "runtime-1",
+    },
     repo: {
       id: "repo-1",
       setupConfig: {
@@ -193,6 +198,11 @@ describe("SessionApplicationService", () => {
       visibility: "public",
       repoId: "repo-1",
       workdir: "/workspace",
+      connection: {
+        state: "connecting",
+        workspaceState: "preparing",
+        runtimeInstanceId: "runtime-1",
+      },
       repo: null,
       sessions: [
         {
@@ -286,6 +296,11 @@ describe("SessionApplicationService", () => {
       repoId: null,
       repo: null,
       workdir: "/workspace",
+      connection: {
+        state: "connected",
+        workspaceState: "ready",
+        runtimeInstanceId: "runtime-1",
+      },
       sessions: [
         {
           id: "session-1",
@@ -402,6 +417,11 @@ describe("SessionApplicationService", () => {
       repoId: null,
       repo: null,
       workdir: "/workspace",
+      connection: {
+        state: "connected",
+        workspaceState: "ready",
+        runtimeInstanceId: "runtime-1",
+      },
       sessions: [
         {
           id: "session-1",
@@ -433,6 +453,7 @@ describe("SessionApplicationService", () => {
     prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
       id: "group-1",
       kind: "design",
+      connection: { state: "connected", workspaceState: "ready", runtimeInstanceId: "runtime-1" },
       organizationId: "org-1",
       ownerUserId: "user-1",
       visibility: "public",
@@ -470,6 +491,7 @@ describe("SessionApplicationService", () => {
     prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
       id: "group-1",
       kind: "design_system",
+      connection: { state: "connected", workspaceState: "ready", runtimeInstanceId: "runtime-1" },
       organizationId: "org-1",
       ownerUserId: "user-1",
       visibility: "public",

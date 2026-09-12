@@ -959,11 +959,61 @@ describe("bridge handler auth", () => {
     expect(mocks.recordOutput).not.toHaveBeenCalled();
   });
 
+  it("ignores late output when a stale local binding disagrees with persisted ownership", async () => {
+    const ws = createMockWs();
+    mocks.registerLocalRuntimeConnection.mockResolvedValue({
+      connectedAt: new Date(),
+      label: "Old laptop",
+    });
+    mocks.getRuntimeForSession.mockReturnValue({
+      id: "runtime_old",
+      key: "org-1:runtime_old",
+      organizationId: "org-1",
+      ws,
+    });
+    mocks.sessionFindFirst.mockResolvedValue(null);
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "local",
+        instanceId: "runtime_old",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "runtime_old",
+      hostingMode: "local",
+    });
+    await vi.waitFor(() => expect(mocks.registerRuntime).toHaveBeenCalled());
+    ws.emitMessage({
+      type: "session_output",
+      sessionId: "session-moved-to-cloud",
+      data: { type: "assistant", message: "late local output" },
+    });
+
+    await vi.waitFor(() =>
+      expect(mocks.sessionFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: "session-moved-to-cloud",
+            sessionGroup: {
+              connection: { path: ["runtimeInstanceId"], equals: "runtime_old" },
+            },
+          }),
+        }),
+      ),
+    );
+    expect(mocks.recordOutput).not.toHaveBeenCalled();
+  });
   it("accepts session output when persisted session ownership matches this runtime", async () => {
     const ws = createMockWs();
     mocks.sessionFindFirst.mockResolvedValue({
       id: "session-1",
-      connection: { state: "connected", runtimeInstanceId: "runtime_owned" },
+      sessionGroup: {
+        connection: { state: "connected", runtimeInstanceId: "runtime_owned" },
+      },
     });
 
     handleBridgeConnection(ws as never, {
@@ -993,6 +1043,50 @@ describe("bridge handler auth", () => {
       });
     });
     expect(mocks.registerRuntime).toHaveBeenCalled();
+  });
+
+  it("passes runtime generation ownership to workspace callbacks", async () => {
+    const ws = createMockWs();
+    mocks.sessionFindFirst.mockResolvedValue({
+      id: "session-1",
+      connection: { state: "connecting", runtimeInstanceId: "runtime_owned" },
+    });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "runtime_owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "runtime_owned",
+      hostingMode: "cloud",
+    });
+    await Promise.resolve();
+    ws.emitMessage({
+      type: "workspace_ready",
+      sessionId: "session-1",
+      workdir: "/workspaces/current",
+    });
+
+    await vi.waitFor(() => {
+      expect(vi.mocked(sessionService.workspaceReady)).toHaveBeenCalledWith(
+        "session-1",
+        "/workspaces/current",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          runtimeInstanceId: "runtime_owned",
+          connectionGeneration: "generation-1",
+        },
+      );
+    });
   });
 
   it("processes reconnect-flushed session output after local runtime registration", async () => {
