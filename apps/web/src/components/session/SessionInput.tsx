@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LayoutTemplate } from "lucide-react";
-import { AnimatePresence } from "framer-motion";
+import { BorderBeam } from "border-beam";
 import {
   isSessionPreparing,
   isSessionRuntimeStartingUp,
@@ -11,12 +11,9 @@ import {
 import { client } from "../../lib/urql";
 import { QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { type InteractionMode, MODE_CYCLE, wrapPrompt } from "./interactionModes";
-import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
 import { isDisconnected, canSendMessage, canQueueMessage } from "./sessionStatus";
 import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
-import { getModelLabel } from "./modelOptions";
-import { getToolLabel } from "./picker/pickerShared";
 import { TraceLoader } from "../ui/trace-loader";
 import { toast } from "sonner";
 import { type ChatEditorHandle, type ChatEditorSubmitOptions } from "../chat/ChatEditor";
@@ -62,7 +59,6 @@ export function SessionInput({
   captureTyping?: boolean;
 }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
-  const model = useEntityField("sessions", sessionId, "model") as string | undefined;
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | Record<string, unknown>
@@ -129,10 +125,6 @@ export function SessionInput({
     bridgeInteractionAllowed &&
     !isOptimistic &&
     (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted) || canQueue);
-  const displayModel = model ? getModelLabel(model) : getToolLabel(tool ?? "claude_code");
-
-  const lastUserMessageAt = isActive ? (rawLastUserMessageAt ?? undefined) : undefined;
-
   const slashCommands = useSlashCommands(sessionId);
 
   // Cmd/Ctrl+L focuses the composer from anywhere in the session view.
@@ -472,67 +464,65 @@ export function SessionInput({
             <span>Preparing workspace…</span>
           </div>
         )}
-        <AnimatePresence initial={false}>
-          {isActive && !condensed && (
-            <AiLoadingIndicator
-              key="ai-loading-indicator"
-              model={displayModel}
-              startedAt={lastUserMessageAt}
-            />
-          )}
-        </AnimatePresence>
-        <SessionComposer
-          editorRef={editorRef}
-          mode={mode}
-          initialHtml={initialDraftHtml}
-          placeholder={placeholder}
-          disabled={!canSend || isSending}
-          submitDisabled={(!hasContent && images.length === 0) || !canSend || isSending}
-          attachmentDisabled={images.length >= MAX_ATTACHMENTS}
-          attachments={images}
-          slashCommands={slashCommands.commands}
-          onSubmit={handleSubmit}
-          onShiftTab={cycleMode}
-          onPasteFiles={addAttachments}
-          onFilesSelected={addAttachments}
-          onRemoveAttachment={handleRemoveImage}
-          onOpenAttachment={handleOpenAttachment}
-          onChange={(text: string, html: string) => {
-            setHasContent(text.trim().length > 0);
-            setDraftText(sessionId, text, html);
-          }}
-          emptyHint={
-            !hasContent ? (
-              <span className="pointer-events-none absolute right-3 top-2 text-[11px] text-muted-foreground">
-                <kbd className="font-sans">⌘L</kbd> to focus
-              </span>
-            ) : null
-          }
-          afterAttachment={
-            kindSupportsDesignImplementation(groupKind) ? (
-              <button
-                type="button"
-                onClick={() => setShowDesignPicker(true)}
-                disabled={!canSend || isSending || isActive}
-                className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                title="Implement a design"
-              >
-                <LayoutTemplate size={16} />
-              </button>
-            ) : null
-          }
-          controls={
-            <SessionInputOptions
-              sessionId={sessionId}
-              mode={mode}
-              onModeChange={cycleMode}
-              isActive={isActive}
-            />
-          }
-          isActive={isActive}
-          onStop={onStop}
-          onSend={handleQueueSubmit}
-        />
+        <BorderBeam
+          size="md"
+          colorVariant="colorful"
+          strength={0.7}
+          active={isActive && !condensed}
+        >
+          <SessionComposer
+            editorRef={editorRef}
+            mode={mode}
+            initialHtml={initialDraftHtml}
+            placeholder={placeholder}
+            disabled={!canSend || isSending}
+            submitDisabled={(!hasContent && images.length === 0) || !canSend || isSending}
+            attachmentDisabled={images.length >= MAX_ATTACHMENTS}
+            attachments={images}
+            slashCommands={slashCommands.commands}
+            onSubmit={handleSubmit}
+            onShiftTab={cycleMode}
+            onPasteFiles={addAttachments}
+            onFilesSelected={addAttachments}
+            onRemoveAttachment={handleRemoveImage}
+            onOpenAttachment={handleOpenAttachment}
+            onChange={(text: string, html: string) => {
+              setHasContent(text.trim().length > 0);
+              setDraftText(sessionId, text, html);
+            }}
+            emptyHint={
+              !hasContent ? (
+                <span className="pointer-events-none absolute right-3 top-2 text-[11px] text-muted-foreground">
+                  <kbd className="font-sans">⌘L</kbd> to focus
+                </span>
+              ) : null
+            }
+            afterAttachment={
+              kindSupportsDesignImplementation(groupKind) ? (
+                <button
+                  type="button"
+                  onClick={() => setShowDesignPicker(true)}
+                  disabled={!canSend || isSending || isActive}
+                  className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                  title="Implement a design"
+                >
+                  <LayoutTemplate size={16} />
+                </button>
+              ) : null
+            }
+            controls={
+              <SessionInputOptions
+                sessionId={sessionId}
+                mode={mode}
+                onModeChange={cycleMode}
+                isActive={isActive}
+              />
+            }
+            isActive={isActive}
+            onStop={onStop}
+            onSend={handleQueueSubmit}
+          />
+        </BorderBeam>
       </div>
     </div>
   );
