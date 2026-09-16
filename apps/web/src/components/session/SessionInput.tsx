@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LayoutTemplate } from "lucide-react";
 import { BorderBeam } from "border-beam";
+import { AnimatePresence } from "framer-motion";
 import {
   isSessionPreparing,
   isSessionRuntimeStartingUp,
@@ -11,9 +12,12 @@ import {
 import { client } from "../../lib/urql";
 import { QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { type InteractionMode, MODE_CYCLE, wrapPrompt } from "./interactionModes";
+import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
 import { isDisconnected, canSendMessage, canQueueMessage } from "./sessionStatus";
 import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
+import { getModelLabel } from "./modelOptions";
+import { getToolLabel } from "./picker/pickerShared";
 import { TraceLoader } from "../ui/trace-loader";
 import { toast } from "sonner";
 import { type ChatEditorHandle, type ChatEditorSubmitOptions } from "../chat/ChatEditor";
@@ -59,6 +63,7 @@ export function SessionInput({
   captureTyping?: boolean;
 }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
+  const model = useEntityField("sessions", sessionId, "model") as string | undefined;
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | Record<string, unknown>
@@ -125,6 +130,8 @@ export function SessionInput({
     bridgeInteractionAllowed &&
     !isOptimistic &&
     (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted) || canQueue);
+  const displayModel = model ? getModelLabel(model) : getToolLabel(tool ?? "claude_code");
+  const lastUserMessageAt = isActive ? (rawLastUserMessageAt ?? undefined) : undefined;
   const slashCommands = useSlashCommands(sessionId);
 
   // Cmd/Ctrl+L focuses the composer from anywhere in the session view.
@@ -464,6 +471,15 @@ export function SessionInput({
             <span>Preparing workspace…</span>
           </div>
         )}
+        <AnimatePresence initial={false}>
+          {isActive && !condensed ? (
+            <AiLoadingIndicator
+              key="ai-loading-indicator"
+              model={displayModel}
+              startedAt={lastUserMessageAt}
+            />
+          ) : null}
+        </AnimatePresence>
         <BorderBeam
           size="md"
           colorVariant="colorful"
