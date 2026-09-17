@@ -7,6 +7,8 @@ type ExecFileSyncFn = (
 ) => string;
 
 const FALLBACK_PATHS = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+const LOGIN_SHELL_TIMEOUT_MS = 10_000;
+const PATH_MARKER = "__TRACE_LOGIN_SHELL_PATH__=";
 
 function splitPath(value: string | undefined): string[] {
   return (value ?? "")
@@ -39,17 +41,23 @@ function readLoginShellPath(
   const shell = env.SHELL?.trim() || "/bin/zsh";
 
   try {
-    const stdout = execFileSyncFn(shell, ["-lic", 'printf "%s" "$PATH"'], {
+    const stdout = execFileSyncFn(shell, ["-lic", `printf "\\n${PATH_MARKER}%s\\n" "$PATH"`], {
       encoding: "utf8",
-      timeout: 2_000,
+      timeout: LOGIN_SHELL_TIMEOUT_MS,
       env: { ...env },
     });
-    const lines = stdout
+    const markedLine = stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
-      .filter(Boolean);
-    return lines.at(-1) ?? null;
-  } catch {
+      .find((line) => line.startsWith(PATH_MARKER));
+    if (!markedLine) {
+      console.warn("[shell-path] login shell did not return its PATH");
+      return null;
+    }
+    return markedLine.slice(PATH_MARKER.length) || null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[shell-path] failed to load login-shell PATH: ${message}`);
     return null;
   }
 }
