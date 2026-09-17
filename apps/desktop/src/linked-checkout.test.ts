@@ -673,6 +673,101 @@ describe("linked checkout commit-back", () => {
     expect(preview.contentTruncated).toBe(false);
   }, 15_000);
 
+  it("requires resolving local Trace worktree changes before spotlighting", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    fs.writeFileSync(path.join(worktreePath, "app.txt"), "agent local change\n");
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errorCode).toBe("DIRTY_WORKTREE");
+    expect(result.status.changedFiles).toMatchObject([
+      {
+        path: "app.txt",
+        status: "M",
+        additions: 1,
+        deletions: 3,
+      },
+    ]);
+
+    const resolved = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+      conflictStrategy: "commit",
+      commitMessage: "Save agent local change",
+    });
+
+    expect(resolved.ok).toBe(true);
+    expect(await git(worktreePath, ["status", "--porcelain", "--untracked-files=all"])).toBe("");
+    expect(await git(worktreePath, ["log", "-1", "--pretty=%s"])).toBe("Save agent local change");
+    expect(fs.readFileSync(path.join(repoPath, "app.txt"), "utf8")).toBe("agent local change\n");
+  }, 15_000);
+
+  it("replays local Trace worktree changes into the spotlighted checkout", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    fs.writeFileSync(path.join(worktreePath, "app.txt"), "keep agent local change\n");
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+      conflictStrategy: "rebase",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(fs.readFileSync(path.join(repoPath, "app.txt"), "utf8")).toBe(
+      "keep agent local change\n",
+    );
+    expect(await git(repoPath, ["status", "--porcelain", "--untracked-files=all"])).not.toBe("");
+    expect(await git(worktreePath, ["status", "--porcelain", "--untracked-files=all"])).toBe("");
+  }, 15_000);
+
+  it("stashes or discards local Trace worktree changes before spotlighting", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    fs.writeFileSync(path.join(worktreePath, "app.txt"), "stash agent local change\n");
+    const stashed = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+      conflictStrategy: "stash",
+    });
+
+    expect(stashed.ok).toBe(true);
+    expect(await git(worktreePath, ["status", "--porcelain", "--untracked-files=all"])).toBe("");
+    expect(await git(worktreePath, ["stash", "list"])).toContain("Trace linked checkout stash");
+
+    await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+      conflictStrategy: "discard",
+    });
+    fs.writeFileSync(path.join(worktreePath, "app.txt"), "discard agent local change\n");
+    const discarded = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+      conflictStrategy: "discard",
+    });
+
+    expect(discarded.ok).toBe(true);
+    expect(await git(worktreePath, ["status", "--porcelain", "--untracked-files=all"])).toBe("");
+    expect(fs.readFileSync(path.join(worktreePath, "app.txt"), "utf8")).toBe(
+      "first\nsecond\nthird\n",
+    );
+  }, 15_000);
+
   it("returns a structured error code for untracked files that would be overwritten by sync", async () => {
     const { repoPath, worktreePath } = await createRepoFixture();
     seedRepo("repo-1", repoPath);

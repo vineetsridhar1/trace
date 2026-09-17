@@ -160,6 +160,15 @@ function dispatchRelayedCorrelatedResponse(msg: Record<string, unknown>, runtime
       error,
       runtimeKey,
     );
+  } else if (msg.type === "resolve_session_git_changes_result") {
+    sessionRouter.resolveSessionGitChangesRequest(
+      requestId,
+      msg.status && typeof msg.status === "object" && !Array.isArray(msg.status)
+        ? (msg.status as Parameters<typeof sessionRouter.resolveSessionGitChangesRequest>[1])
+        : undefined,
+      error,
+      runtimeKey,
+    );
   } else if (msg.type === "branches_result") {
     sessionRouter.resolveBranchRequest(
       requestId,
@@ -985,6 +994,30 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
       if (msg.type === "session_git_sync_status_result" && typeof msg.requestId === "string") {
         sessionRouter.resolveSessionGitSyncStatusRequest(
+          msg.requestId,
+          msg.status && typeof msg.status === "object" && !Array.isArray(msg.status)
+            ? (msg.status as {
+                branch: string | null;
+                headCommitSha: string | null;
+                upstreamBranch: string | null;
+                upstreamCommitSha: string | null;
+                aheadCount: number;
+                behindCount: number;
+                remoteBranch: string | null;
+                remoteCommitSha: string | null;
+                remoteAheadCount: number;
+                remoteBehindCount: number;
+                hasUncommittedChanges: boolean;
+              })
+            : undefined,
+          typeof msg.error === "string" ? msg.error : undefined,
+          runtimeKey,
+        );
+        return;
+      }
+
+      if (msg.type === "resolve_session_git_changes_result" && typeof msg.requestId === "string") {
+        sessionRouter.resolveSessionGitChangesRequest(
           msg.requestId,
           msg.status && typeof msg.status === "object" && !Array.isArray(msg.status)
             ? (msg.status as {

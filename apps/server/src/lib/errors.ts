@@ -32,6 +32,13 @@ export class ValidationError extends Error {
   }
 }
 
+export class SessionMoveChangesError extends Error {
+  constructor() {
+    super("This session has local changes that must be committed or discarded before moving.");
+    this.name = "SessionMoveChangesError";
+  }
+}
+
 export class AuthenticationError extends Error {
   constructor(message = "Not authenticated") {
     super(message);
@@ -99,6 +106,11 @@ export function toGraphQLError(error: unknown): GraphQLError {
   if (error instanceof ValidationError) {
     return new GraphQLError(error.message, {
       extensions: { code: "BAD_USER_INPUT" },
+    });
+  }
+  if (error instanceof SessionMoveChangesError) {
+    return new GraphQLError(error.message, {
+      extensions: { code: "SESSION_MOVE_LOCAL_CHANGES" },
     });
   }
   if (error instanceof Error) {

@@ -59,6 +59,9 @@ function PanelBody({
   const theme = useTheme();
   const [syncConflictOpen, setSyncConflictOpen] = useState(false);
   const [syncConflictError, setSyncConflictError] = useState<string | null>(null);
+  const [syncConflictSource, setSyncConflictSource] = useState<"main worktree" | "Trace worktree">(
+    "main worktree",
+  );
   const [pendingGitHubAction, setPendingGitHubAction] = useState<"create" | "merge" | null>(null);
   const prUrl = useEntityField("sessionGroups", groupId, "prUrl") as string | null | undefined;
   const sessionOptimistic = useEntityField("sessions", sessionId ?? "", "_optimistic") as
@@ -95,7 +98,13 @@ function PanelBody({
     const outcome = await sync();
     if (!outcome.ok) {
       void haptic.error();
-      if (outcome.errorCode === "DIRTY_ROOT_CHECKOUT") {
+      if (
+        outcome.errorCode === "DIRTY_ROOT_CHECKOUT" ||
+        outcome.errorCode === "DIRTY_WORKTREE"
+      ) {
+        setSyncConflictSource(
+          outcome.errorCode === "DIRTY_WORKTREE" ? "Trace worktree" : "main worktree",
+        );
         setSyncConflictError(outcome.error ?? null);
         setSyncConflictOpen(true);
         return;
@@ -174,10 +183,12 @@ function PanelBody({
     <LinkedCheckoutSyncConflictSheet
       open={syncConflictOpen}
       error={syncConflictError}
+      source={syncConflictSource}
       pending={pendingAction === "sync"}
       onClose={() => {
         if (pendingAction === "sync") return;
         setSyncConflictOpen(false);
+        setSyncConflictSource("main worktree");
       }}
       onResolve={onResolveSyncConflict}
     />
