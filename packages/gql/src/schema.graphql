@@ -412,6 +412,7 @@ enum EventType {
   app_integration_binding_updated
   app_integration_request_started
   app_integration_request_executed
+  integration_tool_called
   app_deployment_queued
   app_deployment_updated
 }

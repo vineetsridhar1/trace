@@ -358,6 +358,9 @@ importers:
       '@graphql-tools/schema':
         specifier: ^10.0.14
         version: 10.0.31(graphql@16.13.1)
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.27.1
+        version: 1.27.1(zod@3.25.76)
       '@prisma/client':
         specifier: ^6.19.2
         version: 6.19.2(prisma@6.19.2(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3)

@@ -11,6 +11,7 @@ import type {
 } from "./coding-tool.js";
 import { parseQuestion } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
+import { claudeTraceMcpConfig, traceMcpUrl } from "./trace-mcp.js";
 
 /** Types we drop entirely — not relevant to the frontend */
 const SKIP_TYPES = new Set(["system", "rate_limit_event", "stderr"]);
@@ -84,6 +85,10 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     }
     if (enableClaudeInChrome) {
       args.push("--chrome");
+    }
+    const mcpUrl = traceMcpUrl(runtimeEnv);
+    if (mcpUrl) {
+      args.push("--mcp-config", claudeTraceMcpConfig(mcpUrl));
     }
     // Trace plan mode is artifact-driven. Claude's native plan mode prevents
     // the shell command that publishes the completed artifact.
