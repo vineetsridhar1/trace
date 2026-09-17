@@ -10,7 +10,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { TRACE_AI_EMAIL, TRACE_AI_NAME, TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { eventService } from "./event.js";
-import { assertActorOrgAccess } from "./actor-auth.js";
+import { assertActorOrgAccess, assertActorOrgAdmin } from "./actor-auth.js";
 import { createChannelInTransaction } from "./channel-create.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
 import { loadCloudConfig, seedCloudForOrg } from "./cloud-bootstrap.js";
@@ -502,6 +502,8 @@ export class OrganizationService {
     actorId: string,
   ): Promise<boolean> {
     const event = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await assertActorOrgAdmin(tx, organizationId, actorType, actorId);
+
       const repo = await tx.repo.findFirstOrThrow({
         where: { id, organizationId, provider: "github" },
         select: {
