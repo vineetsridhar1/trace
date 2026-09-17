@@ -24,6 +24,19 @@ export interface LinkedCheckoutConfig {
 export interface RepoPathConfig {
   repos: Record<string, LocalRepoConfig>; // repoId → local repo settings
   bridgeLabel: string | null;
+  codingToolExecutables: Record<string, string>;
+}
+
+function normalizeCodingToolExecutables(entry: unknown): Record<string, string> {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return {};
+  return Object.fromEntries(
+    Object.entries(entry)
+      .filter(
+        (candidate): candidate is [string, string] =>
+          typeof candidate[1] === "string" && Boolean(candidate[1].trim()),
+      )
+      .map(([toolId, executablePath]) => [toolId, executablePath.trim()]),
+  );
 }
 
 function normalizeRepoConfigEntry(entry: unknown): LocalRepoConfig | null {
@@ -104,6 +117,7 @@ export function readConfig(): RepoPathConfig {
     const parsed = JSON.parse(raw) as {
       repos?: Record<string, RawLocalRepoConfig>;
       bridgeLabel?: unknown;
+      codingToolExecutables?: unknown;
     };
     const repos = Object.fromEntries(
       Object.entries(parsed.repos ?? {})
@@ -111,9 +125,13 @@ export function readConfig(): RepoPathConfig {
         .filter((entry): entry is [string, LocalRepoConfig] => entry[1] != null),
     );
     const bridgeLabel = typeof parsed.bridgeLabel === "string" ? parsed.bridgeLabel.trim() : "";
-    return { repos, bridgeLabel: bridgeLabel || null };
+    return {
+      repos,
+      bridgeLabel: bridgeLabel || null,
+      codingToolExecutables: normalizeCodingToolExecutables(parsed.codingToolExecutables),
+    };
   } catch {
-    return { repos: {}, bridgeLabel: null };
+    return { repos: {}, bridgeLabel: null, codingToolExecutables: {} };
   }
 }
 
@@ -160,6 +178,23 @@ export function setBridgeLabel(label: string): Promise<string> {
   return mutate((config) => {
     config.bridgeLabel = trimmed;
     return trimmed;
+  });
+}
+
+export function getCodingToolExecutableOverrides(): Record<string, string> {
+  return readConfig().codingToolExecutables;
+}
+
+export function setCodingToolExecutableOverride(
+  toolId: string,
+  executablePath: string | null,
+): Promise<void> {
+  return mutate((config) => {
+    if (executablePath) {
+      config.codingToolExecutables[toolId] = executablePath;
+    } else {
+      delete config.codingToolExecutables[toolId];
+    }
   });
 }
 

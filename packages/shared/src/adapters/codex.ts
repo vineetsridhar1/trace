@@ -1,7 +1,11 @@
 import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput, TokenUsage } from "./coding-tool.js";
-import { buildChildProcessEnv } from "./spawn-env.js";
+import {
+  buildChildProcessEnv,
+  getExecutable,
+  type ExecutableProvider,
+} from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 
@@ -106,6 +110,8 @@ export class CodexAdapter implements CodingToolAdapter {
   private lastErrorMessage: string | null = null;
   private emittedIncrementalUsage = false;
 
+  constructor(private readonly executable: ExecutableProvider = "codex") {}
+
   run({
     prompt,
     cwd,
@@ -141,7 +147,7 @@ export class CodexAdapter implements CodingToolAdapter {
     args.push("-");
 
     const processGeneration = ++this.processGeneration;
-    const child = spawn("codex", args, {
+    const child = spawn(getExecutable(this.executable), args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
       env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),

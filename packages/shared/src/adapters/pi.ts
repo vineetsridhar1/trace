@@ -8,7 +8,11 @@ import type {
   ToolOutput,
   ToolResultBlock,
 } from "./coding-tool.js";
-import { buildChildProcessEnv } from "./spawn-env.js";
+import {
+  buildChildProcessEnv,
+  getExecutable,
+  type ExecutableProvider,
+} from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 
@@ -78,6 +82,8 @@ export class PiAdapter implements CodingToolAdapter {
   private lastUsage: TokenUsage | undefined;
   private emittedIncrementalUsage = false;
 
+  constructor(private readonly executable: ExecutableProvider = "pi") {}
+
   run({
     prompt,
     cwd,
@@ -110,7 +116,7 @@ export class PiAdapter implements CodingToolAdapter {
     }
 
     const processGeneration = ++this.processGeneration;
-    const child = spawn("pi", args, {
+    const child = spawn(getExecutable(this.executable), args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
       env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),

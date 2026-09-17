@@ -21,6 +21,10 @@ contextBridge.exposeInMainWorld("trace", {
   getCodingToolStatuses: () => ipcRenderer.invoke("get-coding-tool-statuses"),
   installOrUpdateCodingTool: (toolId: string) =>
     ipcRenderer.invoke("install-or-update-coding-tool", toolId),
+  chooseCodingToolExecutable: (toolId: string) =>
+    ipcRenderer.invoke("choose-coding-tool-executable", toolId),
+  clearCodingToolExecutable: (toolId: string) =>
+    ipcRenderer.invoke("clear-coding-tool-executable", toolId),
   getBridgeStatus: () => ipcRenderer.invoke("get-bridge-status"),
   getBridgeInfo: () => ipcRenderer.invoke("get-bridge-info"),
   setBridgeLabel: (label: string) => ipcRenderer.invoke("set-bridge-label", label),

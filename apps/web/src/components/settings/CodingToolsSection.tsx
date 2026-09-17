@@ -56,6 +56,7 @@ export function CodingToolsSection() {
   const available = statuses.filter(
     (status) => status.status === "missing" && !CODING_TOOL_PRESENTATION[status.tool]?.primary,
   );
+  const primaryMissing = topLevel.find((status) => status.status === "missing");
   const updateCount = statuses.filter((status) => status.status === "update_available").length;
 
   useEffect(() => {
@@ -112,8 +113,10 @@ export function CodingToolsSection() {
       );
     }
     if (summary === "missing") {
-      const missing = topLevel.find((status) => status.status === "missing");
-      return missing ? state.installOrUpdate(missing.tool) : Promise.resolve();
+      if (!primaryMissing) return Promise.resolve();
+      return primaryMissing.executableOverride
+        ? state.chooseExecutable(primaryMissing.tool)
+        : state.installOrUpdate(primaryMissing.tool);
     }
     return state.check();
   }
@@ -165,7 +168,9 @@ export function CodingToolsSection() {
                   ? `Update all (${updateCount})`
                   : summary === "failed"
                     ? "Retry failed"
-                    : "Install"}
+                    : primaryMissing?.executableOverride
+                      ? "Choose executable"
+                      : "Install"}
               </button>
             ) : null}
           </div>
@@ -192,6 +197,12 @@ export function CodingToolsSection() {
                   failure={state.failures[status.tool]}
                   recentlyUpdated={state.recentlyUpdated.includes(status.tool)}
                   onAction={() => void state.installOrUpdate(status.tool).catch(() => undefined)}
+                  onChooseExecutable={() =>
+                    void state.chooseExecutable(status.tool).catch(() => undefined)
+                  }
+                  onClearExecutable={() =>
+                    void state.clearExecutable(status.tool).catch(() => undefined)
+                  }
                 />
               ))}
             </div>
@@ -231,6 +242,12 @@ export function CodingToolsSection() {
                       recentlyUpdated={false}
                       onAction={() =>
                         void state.installOrUpdate(status.tool).catch(() => undefined)
+                      }
+                      onChooseExecutable={() =>
+                        void state.chooseExecutable(status.tool).catch(() => undefined)
+                      }
+                      onClearExecutable={() =>
+                        void state.clearExecutable(status.tool).catch(() => undefined)
                       }
                     />
                   ))}

@@ -10,7 +10,11 @@ import type {
   TokenUsage,
 } from "./coding-tool.js";
 import { parseQuestion } from "./coding-tool.js";
-import { buildChildProcessEnv } from "./spawn-env.js";
+import {
+  buildChildProcessEnv,
+  getExecutable,
+  type ExecutableProvider,
+} from "./spawn-env.js";
 
 /** Types we drop entirely — not relevant to the frontend */
 const SKIP_TYPES = new Set(["system", "rate_limit_event", "stderr"]);
@@ -54,6 +58,8 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   private lastPlanFilePath: string | null = null;
   private processGeneration = 0;
 
+  constructor(private readonly executable: ExecutableProvider = "claude") {}
+
   run({
     prompt,
     cwd,
@@ -93,7 +99,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     }
 
     const processGeneration = ++this.processGeneration;
-    const child = spawn("claude", args, {
+    const child = spawn(getExecutable(this.executable), args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
       env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),

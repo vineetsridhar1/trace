@@ -1,6 +1,5 @@
 declare global {
   interface ImportMetaEnv {
-    readonly DEV?: boolean;
     readonly VITE_API_URL?: string;
     readonly VITE_WS_URL?: string;
     readonly VITE_TRACE_LOCAL_MODE?: string;
@@ -47,6 +46,9 @@ declare global {
     status: "installed" | "missing" | "update_available" | "unknown";
     installedVersion: string | null;
     latestVersion: string | null;
+    executablePath: string | null;
+    executableSource: "automatic" | "override" | null;
+    executableOverride: string | null;
   };
 
   type DesktopLinkedCheckoutStatus = {
@@ -154,6 +156,8 @@ declare global {
     loginCodexWithChatgpt: () => Promise<string>;
     getCodingToolStatuses: () => Promise<DesktopCodingToolStatus[]>;
     installOrUpdateCodingTool: (toolId: string) => Promise<DesktopCodingToolStatus>;
+    chooseCodingToolExecutable: (toolId: string) => Promise<DesktopCodingToolStatus[] | null>;
+    clearCodingToolExecutable: (toolId: string) => Promise<DesktopCodingToolStatus[]>;
     getBridgeStatus: () => Promise<DesktopBridgeConnectionStatus>;
     getBridgeInfo: () => Promise<DesktopBridgeInfo>;
     setBridgeLabel: (label: string) => Promise<DesktopBridgeInfo>;

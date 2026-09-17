@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { CODING_TOOL_CLIS } from "@trace/shared";
-import { getInstallCommand, getPackageManager } from "./coding-tools.js";
+import {
+  getInstallCommand,
+  getPackageManager,
+  validateCodingToolExecutable,
+} from "./coding-tools.js";
 
 describe("Codex package manager detection", () => {
   it("detects the Homebrew cask from its resolved executable", () => {
@@ -38,5 +42,19 @@ describe("Codex package manager detection", () => {
         "@openai/codex@latest",
       ],
     });
+  });
+});
+
+describe("manual coding tool executable validation", () => {
+  it("requires the selected command name", async () => {
+    await expect(
+      validateCodingToolExecutable("claude_code", "/custom/codex", async () => "1.2.3"),
+    ).rejects.toThrow("Select the claude executable");
+  });
+
+  it("requires a successful version probe", async () => {
+    await expect(
+      validateCodingToolExecutable("claude_code", "/custom/claude", async () => null),
+    ).rejects.toThrow("did not respond successfully to --version");
   });
 });
