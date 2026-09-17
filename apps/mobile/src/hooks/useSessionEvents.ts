@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   HIDDEN_SESSION_PAYLOAD_TYPES,
   HIDDEN_SESSION_PAYLOAD_TYPE_SET,
+  eventScopeKey,
   handleSessionEvent,
+  retainScopedEvents,
   upsertFetchedSessionEventsWithOptimisticResolution,
   useAuthStore,
   useEntityStore,
@@ -178,6 +180,9 @@ export function useSessionEvents(
   const fetchEnabledRef = useRef(fetchEnabled);
   const commitEnabledRef = useRef(commitEnabled);
   const eventBufferRef = useRef(new SessionEventBuffer());
+  const scopeKey = eventScopeKey("session", sessionId);
+
+  useEffect(() => retainScopedEvents(scopeKey), [scopeKey]);
 
   const commitFetchedEvents = useCallback(
     (pending: PendingFetchedEvents) => {

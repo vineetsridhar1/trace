@@ -12,6 +12,8 @@ export {
   StoreBatchWriter,
   eventScopeKey,
   messageScopeKey,
+  retainScopedEvents,
+  updateScopedEventCache,
   useEntitiesByIds,
   useEntityField,
   useEntityIds,
