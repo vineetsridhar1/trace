@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CellContextMenuEvent, GridApi } from "ag-grid-community";
 import { toast } from "sonner";
 import { useUIStore, type UIState } from "../../stores/ui";
-import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog";
+import { archiveSessionGroup } from "../../lib/archive-session-group";
 import { motion } from "framer-motion";
 import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
@@ -30,11 +30,6 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   const { fadeControls, isCompact } = useCompactTableMode(containerRef);
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const currentUserId = useAuthStore((s: AuthState) => s.user?.id ?? null);
-  const [archiveTarget, setArchiveTarget] = useState<{
-    id: string;
-    name: string;
-    sessionCount: number;
-  } | null>(null);
   const [contextMenu, setContextMenu] = useState<SessionRowContextMenuState | null>(null);
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
 
@@ -73,11 +68,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   );
 
   const handleArchive = useCallback((group: SessionGroupRow) => {
-    setArchiveTarget({
-      id: group.id,
-      name: group.name,
-      sessionCount: group._sessionCount,
-    });
+    archiveSessionGroup(group.id, group.name);
   }, []);
 
   const handleRename = useCallback((group: SessionGroupRow) => {
@@ -196,16 +187,6 @@ export function SessionsTable({ channelId }: { channelId: string }) {
           selectedRowIds={selectedRowIds}
         />
       </motion.div>
-      {archiveTarget && (
-        <ArchiveSessionGroupDialog
-          groupId={archiveTarget.id}
-          groupName={archiveTarget.name}
-          open={true}
-          onOpenChange={(open) => {
-            if (!open) setArchiveTarget(null);
-          }}
-        />
-      )}
       {contextMenu && (
         <SessionRowContextMenu
           menu={contextMenu}

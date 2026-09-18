@@ -28,7 +28,7 @@ import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { client } from "../../lib/urql";
 import { sidebarNestedFullWidthRowClass } from "./sidebarItemStyles";
 import { SidebarSessionHoverCard } from "./SidebarSessionHoverCard";
-import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog";
+import { archiveSessionGroup } from "../../lib/archive-session-group";
 import { PrivateSessionLock } from "../session/PrivateSessionLock";
 import { SessionApplicationRunningIndicator } from "../session/SessionApplicationRunningIndicator";
 import { SpotlightBridgeIndicator } from "../session/SpotlightBridgeIndicator";
@@ -242,7 +242,6 @@ function OwnedSessionGroupItem({
   record: SidebarSessionGroupRecord;
   onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string | null) => void;
 }) {
-  const [archiveOpen, setArchiveOpen] = useState(false);
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const hasDoneBadge = useUIStore((s: UIState) => !!s.sessionGroupDoneBadges[record.id]);
   const markChannelDone = useUIStore((s: UIState) => s.markChannelDone);
@@ -322,7 +321,7 @@ function OwnedSessionGroupItem({
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          setArchiveOpen(true);
+          archiveSessionGroup(record.id, record.name);
         }}
       >
         <Archive size={13} />
@@ -363,7 +362,7 @@ function OwnedSessionGroupItem({
             <Mail size={14} className="mr-1.5" />
             Mark as unread
           </ContextMenuItem>
-          <ContextMenuItem onClick={() => setArchiveOpen(true)}>
+          <ContextMenuItem onClick={() => archiveSessionGroup(record.id, record.name)}>
             <Archive size={14} className="mr-1.5" />
             Archive workspace
           </ContextMenuItem>
@@ -406,12 +405,6 @@ function OwnedSessionGroupItem({
           )}
         </ContextMenuContent>
       </ContextMenu>
-      <ArchiveSessionGroupDialog
-        groupId={record.id}
-        groupName={record.name}
-        open={archiveOpen}
-        onOpenChange={setArchiveOpen}
-      />
     </>
   );
 }
