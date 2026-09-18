@@ -22,7 +22,7 @@ export function getChannelRepoId(channelId: string): string | undefined {
 }
 
 /**
- * Create a new General session and let the user choose the runtime later.
+ * Create a new coding session and let the user choose the runtime later.
  * Existing groups retain their own kind.
  * Used by both Cmd+N and the + session button.
  *

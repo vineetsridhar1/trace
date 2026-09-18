@@ -2,23 +2,23 @@ import { describe, expect, it } from "vitest";
 import { buildQuickSessionStartInput } from "./quick-session-input";
 
 describe("buildQuickSessionStartInput", () => {
-  it("creates a general project session with the linked repo as context", () => {
+  it("creates a coding project session with the linked repo as context", () => {
     expect(
       buildQuickSessionStartInput("channel-1", "repo-1"),
     ).toEqual({
       deferRuntimeSelection: true,
-      kind: "general",
+      kind: "coding",
       channelId: "channel-1",
       repoId: "repo-1",
     });
   });
 
-  it("allows a project without a repo to start a general session", () => {
+  it("creates a coding session for a project without a repo", () => {
     expect(
       buildQuickSessionStartInput("channel-1", undefined),
     ).toEqual({
       deferRuntimeSelection: true,
-      kind: "general",
+      kind: "coding",
       channelId: "channel-1",
     });
   });
