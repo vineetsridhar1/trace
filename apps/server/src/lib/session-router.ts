@@ -7,6 +7,7 @@ import type {
   BridgeTerminalInputCommand,
   BridgeTerminalResizeCommand,
   BridgeTerminalDestroyCommand,
+  BridgePrepareGeneralCommand,
   BridgePrepareAppCommand,
   BridgeListFilesCommand,
   BridgeReadFileCommand,
@@ -70,6 +71,7 @@ interface BaseSessionCommand {
 
 export type SessionCommand =
   | BaseSessionCommand
+  | BridgePrepareGeneralCommand
   | BridgePrepareAppCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
@@ -2679,6 +2681,28 @@ export class SessionRouter {
           );
           if (result !== "delivered") {
             options.onFailed(`prepare_app: ${result}`);
+          }
+          return;
+        }
+
+        // A repo-less provisioned session still needs the bridge to register
+        // its workspace before the service can release its pending command.
+        // Do not synthesize /home/coder here: launcher images own that path.
+        if (adapterType === "provisioned" && !options.repo) {
+          const result = await this.sendAsync(
+            options.sessionId,
+            {
+              type: "prepare_general",
+              sessionId: options.sessionId,
+              sessionGroupId: options.sessionGroupId,
+            },
+            {
+              expectedHomeRuntimeId,
+              organizationId: options.organizationId,
+            },
+          );
+          if (result !== "delivered") {
+            options.onFailed(`prepare_general: ${result}`);
           }
           return;
         }

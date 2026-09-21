@@ -1233,7 +1233,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
   });
 
-  it("runs a provisioned launcher start, bridge delivery, and stop with stable idempotency", async () => {
+  it("prepares a repo-less provisioned session through the bridge before it is ready", async () => {
     vi.stubGlobal(
       "fetch",
       vi
@@ -1287,6 +1287,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     router.createRuntime({
       sessionId: "session-1",
       sessionGroupId: "group-1",
+      sessionGroupKind: "coding",
       hosting: "cloud",
       adapterType: "provisioned",
       reserveRuntime: stubReserveRuntime(),
@@ -1328,14 +1329,20 @@ describe("SessionRouter runtime adapter dispatch", () => {
       label: "Launcher runtime",
       ws,
       hostingMode: "cloud",
+      organizationId: "org-1",
+      protocolVersion: 5,
       supportedTools: ["codex"],
       registeredRepoIds: [],
     });
     router.bindSession("session-1", runtimeInstanceId);
 
-    await vi.waitFor(() => {
-      expect(workspaceReady).toHaveBeenCalledWith("/home/coder");
+    await vi.waitFor(() => expect(ws.send).toHaveBeenCalledOnce());
+    expect(JSON.parse((ws.send as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0])).toEqual({
+      type: "prepare_general",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
     });
+    expect(workspaceReady).not.toHaveBeenCalled();
     expect(onFailed).not.toHaveBeenCalled();
     expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
       "session_runtime_provisioning",
