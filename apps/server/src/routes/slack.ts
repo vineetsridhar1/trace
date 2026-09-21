@@ -2500,8 +2500,10 @@ async function handleThreadMessage(input: {
   }
 
   const runtimeInstanceId =
-    connectionRuntimeInstanceId(thread.session.connection) ??
-    connectionRuntimeInstanceId(thread.session.sessionGroup?.connection);
+    connectionRuntimeInstanceId(thread.session.sessionGroup?.connection) ??
+    (!thread.session.sessionGroup
+      ? connectionRuntimeInstanceId(thread.session.connection)
+      : null);
   if (thread.session.hosting === "local" && runtimeInstanceId) {
     const access = await runtimeAccessService.getAccessState({
       userId: traceUserId,
@@ -2746,8 +2748,10 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
   }
 
   const runtimeInstanceId =
-    connectionRuntimeInstanceId(thread.session.connection) ??
-    connectionRuntimeInstanceId(thread.session.sessionGroup?.connection);
+    connectionRuntimeInstanceId(thread.session.sessionGroup?.connection) ??
+    (!thread.session.sessionGroup
+      ? connectionRuntimeInstanceId(thread.session.connection)
+      : null);
   if (!runtimeInstanceId || !thread.session.sessionGroupId) {
     await postSessionAccessRequestFeedback({
       ...value,

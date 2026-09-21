@@ -81,6 +81,52 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+describe("SessionRouter group teardown fencing", () => {
+  it("never retargets a delayed teardown at the replacement runtime", async () => {
+    const router = new SessionRouter();
+    const send = vi.spyOn(router, "sendAsync");
+    prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+      connection: {
+        runtimeInstanceId: "new",
+        providerRuntimeId: "provider-new",
+        adapterType: "provisioned",
+      },
+      workdir: "/new",
+      repoId: "repo-1",
+    });
+    await expect(
+      router.destroyRuntime("session-1", {
+        hosting: "cloud",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        connection: {
+          runtimeInstanceId: "old",
+          providerRuntimeId: "provider-old",
+          adapterType: "provisioned",
+        },
+      }),
+    ).rejects.toThrow("Runtime teardown was superseded");
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("does not route deletion through a stale cache when the group has no runtime", async () => {
+    const router = new SessionRouter();
+    const send = vi.spyOn(router, "sendAsync");
+    prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+      connection: null,
+      workdir: null,
+      repoId: null,
+    });
+    await router.destroyRuntime("session-1", {
+      hosting: "cloud",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      connection: null,
+    });
+    expect(send).not.toHaveBeenCalled();
+  });
+});
+
 describe("SessionRouter distributed ownership fencing", () => {
   it("checks authoritative ownership before writing to a local socket", async () => {
     const router = new SessionRouter();
@@ -919,7 +965,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
   });
 
-  it("starts an unlinked general session in the runtime home", async () => {
+  it("requires a bridge handshake before an unlinked general workspace is ready", async () => {
     const router = new SessionRouter();
     const ws = makeWs();
     router.registerRuntime({
@@ -932,8 +978,8 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
     router.bindSession("session-1", "runtime-1");
 
-    const onWorkspaceReady = vi.fn();
     const onFailed = vi.fn();
+    const send = vi.spyOn(router, "sendAsync").mockResolvedValue("delivered");
     router.createRuntime({
       sessionId: "session-1",
       sessionGroupId: "group-1",
@@ -944,11 +990,16 @@ describe("SessionRouter runtime adapter dispatch", () => {
       repo: null,
       createdById: "user-1",
       organizationId: "org-1",
-      onWorkspaceReady,
       onFailed,
     });
 
-    await vi.waitFor(() => expect(onWorkspaceReady).toHaveBeenCalledWith("/home/coder"));
+    await vi.waitFor(() =>
+      expect(send).toHaveBeenCalledWith(
+        "session-1",
+        { type: "prepare_general", sessionId: "session-1", sessionGroupId: "group-1" },
+        expect.objectContaining({ organizationId: "org-1" }),
+      ),
+    );
     expect(onFailed).not.toHaveBeenCalled();
     expect(ws.send).not.toHaveBeenCalled();
   });
