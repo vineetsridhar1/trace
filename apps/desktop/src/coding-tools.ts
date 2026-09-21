@@ -3,7 +3,11 @@ import { basename, dirname, parse } from "node:path";
 import { realpathSync } from "node:fs";
 import { promisify } from "node:util";
 import { CODING_TOOL_CLIS, type CodingToolCli } from "@trace/shared";
-import { buildChildProcessEnv, resolveExecutable } from "@trace/shared/adapters";
+import { buildChildProcessEnv } from "@trace/shared/adapters";
+import {
+  codingToolExecutableRegistry,
+  type CodingToolExecutableSource,
+} from "./coding-tool-executables.js";
 
 const execFileAsync = promisify(execFile);
 const COMMAND_TIMEOUT_MS = 10_000;
@@ -17,6 +21,9 @@ export type DesktopCodingToolStatus = {
   status: ToolStatus;
   installedVersion: string | null;
   latestVersion: string | null;
+  executablePath: string | null;
+  executableSource: CodingToolExecutableSource | null;
+  executableOverride: string | null;
 };
 
 type NpmTool = CodingToolCli & { packageName: string };
@@ -46,6 +53,26 @@ async function getInstalledVersion(executablePath: string): Promise<string | nul
   } catch {
     return null;
   }
+}
+
+export async function validateCodingToolExecutable(
+  toolId: string,
+  executablePath: string,
+  readVersion: (path: string) => Promise<string | null> = getInstalledVersion,
+): Promise<string> {
+  const tool = CODING_TOOL_CLIS[toolId];
+  if (!tool) throw new Error("Unsupported coding tool.");
+
+  const selectedCommand = basename(executablePath);
+  if (selectedCommand !== tool.command) {
+    throw new Error(`Select the ${tool.command} executable for ${tool.label}.`);
+  }
+
+  const version = await readVersion(executablePath);
+  if (!version) {
+    throw new Error(`${tool.label} did not respond successfully to --version.`);
+  }
+  return version;
 }
 
 async function getLatestNpmVersion(packageName: string): Promise<string | null> {
@@ -182,10 +209,14 @@ export function getInstallCommand(
   return { executable: "/bin/sh", args: ["-lc", tool.install] };
 }
 
-export async function getCodingToolStatuses(): Promise<DesktopCodingToolStatus[]> {
+export async function getCodingToolStatuses({
+  refreshExecutables = true,
+}: { refreshExecutables?: boolean } = {}): Promise<DesktopCodingToolStatus[]> {
+  if (refreshExecutables) await codingToolExecutableRegistry.refresh();
   return Promise.all(
     Object.values(CODING_TOOL_CLIS).map(async (tool) => {
-      const executablePath = resolveExecutable(tool.command);
+      const resolution = codingToolExecutableRegistry.get(tool.tool);
+      const executablePath = resolution.executablePath;
       const packageManager = getPackageManager(tool.tool, executablePath);
       if (!executablePath) {
         const latestVersion = await getLatestVersion(packageManager);
@@ -195,6 +226,7 @@ export async function getCodingToolStatuses(): Promise<DesktopCodingToolStatus[]
           status: "missing",
           installedVersion: null,
           latestVersion,
+          ...resolution,
         };
       }
 
@@ -208,15 +240,17 @@ export async function getCodingToolStatuses(): Promise<DesktopCodingToolStatus[]
         status: comparison !== null && comparison < 0 ? "update_available" : "installed",
         installedVersion,
         latestVersion,
+        ...resolution,
       };
     }),
   );
 }
 
 export async function installOrUpdateCodingTool(toolId: string): Promise<DesktopCodingToolStatus> {
+  await codingToolExecutableRegistry.refresh();
   const tool = CODING_TOOL_CLIS[toolId];
   if (!tool) throw new Error("Unsupported coding tool.");
-  const executablePath = resolveExecutable(tool.command);
+  const executablePath = codingToolExecutableRegistry.get(toolId).executablePath;
   const packageManager = getPackageManager(toolId, executablePath);
   const command = getInstallCommand(
     tool,
@@ -260,14 +294,16 @@ export async function installOrUpdateCodingTool(toolId: string): Promise<Desktop
   });
 
   const statuses = await getCodingToolStatuses();
-  const status =
-    statuses.find((candidate) => candidate.tool === toolId) ?? {
-      tool: tool.tool,
-      label: tool.label,
-      status: "unknown",
-      installedVersion: null,
-      latestVersion: null,
-    };
+  const status = statuses.find((candidate) => candidate.tool === toolId) ?? {
+    tool: tool.tool,
+    label: tool.label,
+    status: "unknown",
+    installedVersion: null,
+    latestVersion: null,
+    executablePath: null,
+    executableSource: null,
+    executableOverride: null,
+  };
   if (packageManager?.kind === "npm" && (!status.installedVersion || !status.latestVersion)) {
     throw new Error(
       `${tool.label} was installed, but Trace could not verify its version. Check your connection, then try again.`,

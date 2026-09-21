@@ -15,6 +15,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { setTimeout } from "node:timers";
+import { getCodingToolCli } from "@trace/shared";
 import { makeUserNotifier, updateElectronApp, UpdateSourceType } from "update-electron-app";
 import {
   BridgeClient,
@@ -26,20 +27,26 @@ import {
   getRepoConfig,
   getRepoPath,
   saveRepoPath,
+  setCodingToolExecutableOverride,
   setBridgeLabel,
 } from "./config.js";
 import { getGitInfo } from "./git-info.js";
 import { createLocalProjectOnDisk } from "./local-project.js";
-import { hydrateLoginShellPath } from "./shell-path.js";
 import { repairNodePtySpawnHelpers } from "./node-pty-spawn-helper.js";
 import {
   movePackagedMacAppToApplicationsFolder,
   shouldMovePackagedMacAppToApplicationsFolder,
 } from "./mac-install-location.js";
-import { getCodingToolStatuses, installOrUpdateCodingTool } from "./coding-tools.js";
+import {
+  getCodingToolStatuses,
+  installOrUpdateCodingTool,
+  validateCodingToolExecutable,
+} from "./coding-tools.js";
 import { BrowserWorkspaceManager } from "./browser-workspaces.js";
+import { codingToolExecutableRegistry, isExecutableFile } from "./coding-tool-executables.js";
 
 let mainWindow: BrowserWindow | null = null;
+let codingToolInitialization: Promise<void> = Promise.resolve();
 const browserWorkspaces = new BrowserWorkspaceManager();
 let browserStateFlushedForQuit = false;
 const PROJECT_PARENT_SELECTION_TTL_MS = 10 * 60 * 1000;
@@ -74,7 +81,6 @@ const appName = "Trace";
 const appIconPath = path.join(__dirname, "../assets/icon.png");
 
 app.setName(appName);
-hydrateLoginShellPath();
 if (app.isPackaged) {
   try {
     repairNodePtySpawnHelpers({ resourcesPath: process.resourcesPath });
@@ -342,16 +348,21 @@ ipcMain.handle("get-github-auth-token", async () => {
 });
 
 ipcMain.handle("login-codex-with-chatgpt", async () => {
+  await codingToolExecutableRegistry.refresh();
   const codexHome = await mkdtemp(path.join(tmpdir(), "trace-codex-login-"));
   try {
     await writeFile(path.join(codexHome, "config.toml"), 'cli_auth_credentials_store = "file"\n', {
       mode: 0o600,
     });
     const exitCode = await new Promise<number | null>((resolve, reject) => {
-      const child = spawn("codex", ["login"], {
-        env: { ...process.env, CODEX_HOME: codexHome },
-        stdio: "pipe",
-      });
+      const child = spawn(
+        codingToolExecutableRegistry.get("codex").executablePath ?? "codex",
+        ["login"],
+        {
+          env: { ...process.env, CODEX_HOME: codexHome },
+          stdio: "pipe",
+        },
+      );
       child.once("error", reject);
       child.once("close", resolve);
     });
@@ -362,11 +373,47 @@ ipcMain.handle("login-codex-with-chatgpt", async () => {
   }
 });
 
-ipcMain.handle("get-coding-tool-statuses", () => getCodingToolStatuses());
+ipcMain.handle("get-coding-tool-statuses", async () => {
+  const statuses = await getCodingToolStatuses();
+  bridge.refreshCapabilities();
+  return statuses;
+});
 ipcMain.handle("install-or-update-coding-tool", async (_event, toolId: string) => {
   const status = await installOrUpdateCodingTool(toolId);
   bridge.refreshCapabilities();
   return status;
+});
+ipcMain.handle("choose-coding-tool-executable", async (_event, toolId: string) => {
+  const tool = getCodingToolCli(toolId);
+  if (!tool) throw new Error("Unsupported coding tool.");
+  if (!mainWindow) throw new Error("Trace window is unavailable.");
+
+  const current = codingToolExecutableRegistry.get(toolId);
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: `Choose ${tool.label} executable`,
+    defaultPath: current.executableOverride ?? current.executablePath ?? undefined,
+    properties: ["openFile"],
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+
+  const executablePath = result.filePaths[0];
+  if (!isExecutableFile(executablePath)) {
+    throw new Error("The selected file is not executable.");
+  }
+  await validateCodingToolExecutable(toolId, executablePath);
+  await setCodingToolExecutableOverride(toolId, executablePath);
+  await codingToolExecutableRegistry.refreshAfterCurrent();
+  const statuses = await getCodingToolStatuses({ refreshExecutables: false });
+  bridge.refreshCapabilities();
+  return statuses;
+});
+ipcMain.handle("clear-coding-tool-executable", async (_event, toolId: string) => {
+  if (!getCodingToolCli(toolId)) throw new Error("Unsupported coding tool.");
+  await setCodingToolExecutableOverride(toolId, null);
+  await codingToolExecutableRegistry.refreshAfterCurrent();
+  const statuses = await getCodingToolStatuses({ refreshExecutables: false });
+  bridge.refreshCapabilities();
+  return statuses;
 });
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
@@ -376,7 +423,8 @@ ipcMain.handle("set-bridge-label", async (_event, label: string) => {
   bridge.updateLabel();
   return bridge.getInfo();
 });
-ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null) => {
+ipcMain.handle("set-bridge-auth-context", async (_event, organizationId: string | null) => {
+  await codingToolInitialization;
   bridge.setAuthContext(organizationId);
   return true;
 });
@@ -445,7 +493,7 @@ app.whenReady().then(() => {
   bridge.onStatusChange((status) => {
     publishBridgeStatus(status);
   });
-  bridge.connect();
+  codingToolInitialization = codingToolExecutableRegistry.refresh();
   createWindow();
 
   // After sleep/wake the WebSocket is often dead but no close event fires.

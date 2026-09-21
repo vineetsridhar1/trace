@@ -13,10 +13,29 @@ export interface CodingToolsState {
   setCheckOnLaunch: (enabled: boolean) => void;
   check: () => Promise<void>;
   installOrUpdate: (toolId: string) => Promise<void>;
+  chooseExecutable: (toolId: string) => Promise<void>;
+  clearExecutable: (toolId: string) => Promise<void>;
   updateAll: () => Promise<void>;
 }
 
 let checkPromise: Promise<void> | null = null;
+let nextStatusRequestId = 0;
+let activeStatusRequests = 0;
+
+function beginStatusRequest(): number {
+  activeStatusRequests += 1;
+  nextStatusRequestId += 1;
+  return nextStatusRequestId;
+}
+
+function finishStatusRequest(): boolean {
+  activeStatusRequests = Math.max(0, activeStatusRequests - 1);
+  return activeStatusRequests > 0;
+}
+
+function isLatestStatusRequest(requestId: number): boolean {
+  return requestId === nextStatusRequestId;
+}
 
 function readPreference(key: string, fallback: boolean): boolean {
   if (typeof localStorage === "undefined") return fallback;
@@ -39,12 +58,17 @@ export const useCodingToolsStore = create<CodingToolsState>((set, get) => ({
   check: () => {
     if (!window.trace?.getCodingToolStatuses) return Promise.resolve();
     if (checkPromise) return checkPromise;
+    const requestId = beginStatusRequest();
     set({ checking: true, failures: {}, recentlyUpdated: [] });
     checkPromise = window.trace
       .getCodingToolStatuses()
-      .then((statuses) => set({ statuses, lastCheckedAt: Date.now() }))
+      .then((statuses) => {
+        if (isLatestStatusRequest(requestId)) {
+          set({ statuses, lastCheckedAt: Date.now() });
+        }
+      })
       .finally(() => {
-        set({ checking: false });
+        set({ checking: finishStatusRequest() });
         checkPromise = null;
       });
     return checkPromise;
@@ -82,6 +106,54 @@ export const useCodingToolsStore = create<CodingToolsState>((set, get) => ({
           Object.entries(state.operations).filter(([id]) => id !== toolId),
         ),
       }));
+    }
+  },
+  chooseExecutable: async (toolId) => {
+    const api = window.trace?.chooseCodingToolExecutable;
+    if (!api) return;
+    const requestId = beginStatusRequest();
+    set({ checking: true, failures: {}, recentlyUpdated: [] });
+    try {
+      const statuses = await api(toolId);
+      if (statuses && isLatestStatusRequest(requestId)) {
+        set({ statuses, lastCheckedAt: Date.now() });
+      }
+    } catch (error) {
+      if (isLatestStatusRequest(requestId)) {
+        set((state) => ({
+          failures: {
+            ...state.failures,
+            [toolId]: error instanceof Error ? error.message : "Could not select executable",
+          },
+        }));
+      }
+      throw error;
+    } finally {
+      set({ checking: finishStatusRequest() });
+    }
+  },
+  clearExecutable: async (toolId) => {
+    const api = window.trace?.clearCodingToolExecutable;
+    if (!api) return;
+    const requestId = beginStatusRequest();
+    set({ checking: true, failures: {}, recentlyUpdated: [] });
+    try {
+      const statuses = await api(toolId);
+      if (isLatestStatusRequest(requestId)) {
+        set({ statuses, lastCheckedAt: Date.now() });
+      }
+    } catch (error) {
+      if (isLatestStatusRequest(requestId)) {
+        set((state) => ({
+          failures: {
+            ...state.failures,
+            [toolId]: error instanceof Error ? error.message : "Could not clear executable",
+          },
+        }));
+      }
+      throw error;
+    } finally {
+      set({ checking: finishStatusRequest() });
     }
   },
   updateAll: async () => {

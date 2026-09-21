@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { getCodingToolCli } from "@trace/shared";
 import { cn } from "../../lib/utils";
 import type { CodingToolOperation } from "../../stores/coding-tools";
 import { CodingToolMark } from "../desktop/CodingToolMark";
 import { CODING_TOOL_PRESENTATION } from "../desktop/coding-tool-presentation";
+import { CodingToolExecutableDetails } from "./CodingToolExecutableDetails";
 
 export function CodingToolSettingsRow({
   status,
@@ -12,16 +12,19 @@ export function CodingToolSettingsRow({
   failure,
   recentlyUpdated,
   onAction,
+  onChooseExecutable,
+  onClearExecutable,
 }: {
   status: DesktopCodingToolStatus;
   operation?: CodingToolOperation;
   failure?: string;
   recentlyUpdated: boolean;
   onAction: () => void;
+  onChooseExecutable: () => void;
+  onClearExecutable: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const presentation = CODING_TOOL_PRESENTATION[status.tool];
-  const cli = getCodingToolCli(status.tool);
   if (!presentation) return null;
 
   const meta = failure
@@ -48,7 +51,9 @@ export function CodingToolSettingsRow({
       : status.status === "update_available"
         ? "Update"
         : status.status === "missing"
-          ? "Install"
+          ? status.executableOverride
+            ? null
+            : "Install"
           : null;
 
   return (
@@ -125,34 +130,11 @@ export function CodingToolSettingsRow({
         </p>
       ) : null}
       {expanded ? (
-        <div className="border-t border-[#3f3f46] bg-[#18181b] px-4 py-3.5 pl-16">
-          <dl className="flex flex-wrap gap-x-10 gap-y-2.5">
-            <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#a1a1aa]">
-                Source
-              </dt>
-              <dd className="mt-0.5 font-mono text-xs text-[#fafafa]">
-                {cli?.install ?? "Managed externally"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#a1a1aa]">
-                Powers
-              </dt>
-              <dd className="mt-0.5 text-xs text-[#fafafa]">{status.label} sessions</dd>
-            </div>
-          </dl>
-          {cli ? (
-            <a
-              href={cli.installUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-3 inline-block text-xs font-semibold text-[#3b82f6] underline-offset-2 hover:underline"
-            >
-              Installation documentation
-            </a>
-          ) : null}
-        </div>
+        <CodingToolExecutableDetails
+          status={status}
+          onChooseExecutable={onChooseExecutable}
+          onClearExecutable={onClearExecutable}
+        />
       ) : null}
     </div>
   );
