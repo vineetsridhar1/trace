@@ -329,6 +329,9 @@ packages/
 
 ## Development
 
+When making a narrow change, start with the smallest relevant command below and
+broaden verification only when the touched surface area requires it.
+
 ```bash
 pnpm dev              # Run all apps in parallel
 pnpm dev:local        # One-command local workspace
