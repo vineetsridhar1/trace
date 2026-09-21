@@ -7,6 +7,7 @@ import {
 import { createClient as createWSClient } from "graphql-ws";
 import { getAuthHeaders, useAuthStore } from "../stores/auth.js";
 import { getPlatform, type Platform } from "../platform.js";
+import { encodePathVariables } from "./pathTransportEncoding.js";
 
 export interface CreateGqlClientOptions {
   httpUrl: string;
@@ -56,6 +57,10 @@ export type GqlClient = Client & { dispose: () => Promise<void> };
 export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
   const platform = getPlatform();
   const usesBearerAuth = platform.authMode === "bearer";
+  const encodedFetch: typeof fetch = (input, init) => {
+    if (typeof init?.body !== "string") return platform.fetch(input, init);
+    return platform.fetch(input, { ...init, body: encodePathVariables(init.body) });
+  };
 
   const wsClient = createWSClient({
     url: options.wsUrl,
@@ -94,7 +99,7 @@ export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
 
   const client = createUrqlClient({
     url: options.httpUrl,
-    fetch: platform.fetch,
+    fetch: encodedFetch,
     fetchOptions: () => ({
       credentials: "include" as const,
       headers: {
