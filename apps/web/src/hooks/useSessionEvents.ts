@@ -5,6 +5,7 @@ import { hasVisibleUserSessionContent } from "@trace/shared";
 import {
   eventScopeKey,
   handleSessionEvent,
+  retainScopedEvents,
   upsertFetchedSessionEventsWithOptimisticResolution,
   useAuthStore,
   useEntityStore,
@@ -409,6 +410,10 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
   const compactItemsRef = useRef<CompactItemsState>(null);
   const scopeKey = eventScopeKey("session", sessionId);
   const scopedEvents = useScopedEvents(scopeKey);
+
+  // A mounted timeline must not disappear when background org events evict
+  // inactive scopes. Its history is still capped per scope by client-core.
+  useEffect(() => retainScopedEvents(scopeKey), [scopeKey]);
 
   const updateCompactItems = useCallback((update: CompactItemsUpdate) => {
     setCompactItems((current) => {
