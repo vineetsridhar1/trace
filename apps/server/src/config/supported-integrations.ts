@@ -14,8 +14,11 @@ export type SupportedIntegration = {
   providerConfigKey: string;
   description: string;
   guide: string;
+  agentToolSource: AgentToolSource;
   capabilities: SupportedIntegrationCapability[];
 };
+
+export type AgentToolSource = "none" | "nango_actions" | "native_mcp";
 
 const definitions = [
   {
@@ -27,6 +30,7 @@ const definitions = [
     description: "Profiles, repositories, issues, and pull requests.",
     guide:
       'Call GitHub from a generated Node route with trace.integrations.request(request, "github", options). The browser calls only that same-origin app route.',
+    agentToolSource: "none",
     capabilities: [
       {
         id: "profile",
@@ -56,6 +60,7 @@ const definitions = [
     description: "Run read-only analytics queries with controlled identity selection.",
     guide:
       'Call Snowflake from a generated Node route with trace.integrations.snowflake.query(request, "snowflake", options). Keep SQL in server code and accept only parameter values from the browser.',
+    agentToolSource: "none",
     capabilities: [
       {
         id: "query",
@@ -79,6 +84,7 @@ export function supportedIntegrations(): SupportedIntegration[] {
       process.env[definition.providerConfigKeyEnv]?.trim() || definition.defaultProviderConfigKey,
     description: definition.description,
     guide: definition.guide,
+    agentToolSource: definition.agentToolSource,
     capabilities: definition.capabilities.map((capability) => ({
       id: capability.id,
       name: capability.name,
@@ -93,4 +99,12 @@ export function supportedIntegrations(): SupportedIntegration[] {
 export function supportedIntegration(id: string): SupportedIntegration | undefined {
   const normalizedId = id.trim().toLowerCase();
   return supportedIntegrations().find((integration) => integration.id === normalizedId);
+}
+
+export function supportedIntegrationByProviderConfigKey(
+  providerConfigKey: string,
+): SupportedIntegration | undefined {
+  return supportedIntegrations().find(
+    (integration) => integration.providerConfigKey === providerConfigKey,
+  );
 }

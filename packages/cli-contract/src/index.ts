@@ -3,6 +3,7 @@ export const TRACE_CLI_CAPABILITIES = [
   "resource:list",
   "resource:configure",
   "integration:read",
+  "integration:invoke",
   "integration:connect",
   "integration:configure",
   "app:deploy",
