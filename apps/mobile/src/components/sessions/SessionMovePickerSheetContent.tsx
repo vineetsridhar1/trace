@@ -31,6 +31,26 @@ interface RuntimeRow {
   disabled?: boolean;
 }
 
+type MoveResolution = { strategy: "COMMIT" | "DISCARD"; commitMessage?: string };
+
+function hasSessionMoveChangesError(error: unknown): boolean {
+  if (!error || typeof error !== "object" || !("graphQLErrors" in error)) return false;
+  const graphQLErrors = error.graphQLErrors;
+  return (
+    Array.isArray(graphQLErrors) &&
+    graphQLErrors.some(
+      (graphQLError) =>
+        !!graphQLError &&
+        typeof graphQLError === "object" &&
+        "extensions" in graphQLError &&
+        !!graphQLError.extensions &&
+        typeof graphQLError.extensions === "object" &&
+        "code" in graphQLError.extensions &&
+        graphQLError.extensions.code === "SESSION_MOVE_LOCAL_CHANGES",
+    )
+  );
+}
+
 export function SessionMovePickerSheetContent({
   sessionId,
   onClose,
@@ -63,8 +83,7 @@ export function SessionMovePickerSheetContent({
   const currentRuntimeInstanceId =
     connection?.runtimeInstanceId ?? groupConnection?.runtimeInstanceId ?? null;
   const mergedUnavailable = sessionStatus === "merged" && worktreeDeleted !== false;
-  const canMoveSession =
-    !mergedUnavailable && !isOptimistic && (connection?.canMove ?? true);
+  const canMoveSession = !mergedUnavailable && !isOptimistic && (connection?.canMove ?? true);
   const canUseCloudRuntime = canUseMobileCloudHosting(getConnectionMode());
   const cloudEnvironmentAvailable = useCloudAgentEnvironmentAvailable(
     canMoveSession && canUseCloudRuntime,
@@ -147,7 +166,7 @@ export function SessionMovePickerSheetContent({
   ]);
 
   const handleMoveToRuntime = useCallback(
-    async (runtimeInstanceId: string) => {
+    async (runtimeInstanceId: string, resolution?: MoveResolution) => {
       if (!canMoveSession) return;
       setMoving(runtimeInstanceId);
       void haptic.light();
@@ -160,18 +179,58 @@ export function SessionMovePickerSheetContent({
             ? await getClient()
                 .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, {
                   sessionId,
+                  conflictStrategy: resolution?.strategy ?? null,
+                  commitMessage: resolution?.commitMessage ?? null,
                 })
                 .toPromise()
             : await getClient()
                 .mutation(MOVE_SESSION_TO_RUNTIME_MUTATION, {
                   sessionId,
                   runtimeInstanceId,
+                  conflictStrategy: resolution?.strategy ?? null,
+                  commitMessage: resolution?.commitMessage ?? null,
                 })
                 .toPromise();
         const movedSession =
           runtimeInstanceId === CLOUD_RUNTIME_ID
             ? result.data?.moveSessionToCloud
             : result.data?.moveSessionToRuntime;
+        if (result.error && hasSessionMoveChangesError(result.error)) {
+          Alert.alert(
+            "Session Has Local Changes",
+            "Commit or discard the session's uncommitted changes before moving it.",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Discard Changes",
+                style: "destructive",
+                onPress: () =>
+                  Alert.alert(
+                    "Discard All Changes?",
+                    "This permanently deletes all uncommitted and untracked changes.",
+                    [
+                      { text: "Keep Changes", style: "cancel" },
+                      {
+                        text: "Discard And Move",
+                        style: "destructive",
+                        onPress: () =>
+                          void handleMoveToRuntime(runtimeInstanceId, { strategy: "DISCARD" }),
+                      },
+                    ],
+                  ),
+              },
+              {
+                text: "Commit And Move",
+                onPress: () =>
+                  void handleMoveToRuntime(runtimeInstanceId, {
+                    strategy: "COMMIT",
+                    commitMessage: "Save session changes before moving",
+                  }),
+              },
+            ],
+          );
+          return;
+        }
         if (result.error || !movedSession?.id) {
           throw result.error ?? new Error("No session returned");
         }
@@ -225,7 +284,9 @@ export function SessionMovePickerSheetContent({
                 <SymbolView name={row.icon} size={16} tintColor={theme.colors.mutedForeground} />
               }
               trailing={
-                moving === row.value ? <TraceLoader size="small" color="mutedForeground" /> : undefined
+                moving === row.value ? (
+                  <TraceLoader size="small" color="mutedForeground" />
+                ) : undefined
               }
               onPress={
                 !row.disabled && moving === null

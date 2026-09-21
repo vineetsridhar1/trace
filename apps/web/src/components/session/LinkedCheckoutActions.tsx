@@ -138,6 +138,7 @@ export function LinkedCheckoutActions({ state }: Props) {
       <LinkedCheckoutSyncConflictDialog
         open={state.syncConflictOpen}
         error={state.syncConflictError}
+        source={state.syncConflictSource}
         changedFiles={state.changedFiles}
         changedFilesTotalCount={state.changedFilesTotalCount}
         changedFilesTruncated={state.changedFilesTruncated}

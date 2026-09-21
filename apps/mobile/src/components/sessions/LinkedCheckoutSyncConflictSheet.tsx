@@ -10,29 +10,33 @@ type ConflictStrategy = "DISCARD" | "COMMIT" | "REBASE" | "STASH";
 interface LinkedCheckoutSyncConflictSheetProps {
   open: boolean;
   error: string | null;
+  source: "main worktree" | "Trace worktree";
   pending: boolean;
   onClose: () => void;
   onResolve: (input: { strategy: ConflictStrategy; commitMessage?: string }) => Promise<void>;
 }
 
-const DEFAULT_COMMIT_MESSAGE = "Save local main-worktree changes";
-
 export function LinkedCheckoutSyncConflictSheet({
   open,
   error,
+  source,
   pending,
   onClose,
   onResolve,
 }: LinkedCheckoutSyncConflictSheetProps) {
   const theme = useTheme();
   const [selectedStrategy, setSelectedStrategy] = useState<ConflictStrategy | null>(null);
-  const [commitMessage, setCommitMessage] = useState(DEFAULT_COMMIT_MESSAGE);
+  const defaultCommitMessage = `Save local ${source === "Trace worktree" ? "worktree" : "main-worktree"} changes`;
+  const [commitMessage, setCommitMessage] = useState(defaultCommitMessage);
 
   useEffect(() => {
-    if (open) return;
-    setSelectedStrategy(null);
-    setCommitMessage(DEFAULT_COMMIT_MESSAGE);
-  }, [open]);
+    if (open) {
+      setCommitMessage(defaultCommitMessage);
+    } else {
+      setSelectedStrategy(null);
+      setCommitMessage(defaultCommitMessage);
+    }
+  }, [defaultCommitMessage, open]);
 
   const trimmedCommitMessage = commitMessage.trim();
   const commitDisabled = pending || trimmedCommitMessage.length === 0;
@@ -53,10 +57,15 @@ export function LinkedCheckoutSyncConflictSheet({
         contentContainerStyle={[styles.content, { paddingBottom: theme.spacing.md }]}
       >
         <View style={styles.header}>
-          <Text variant="headline">Resolve Spotlight Conflict</Text>
+          <Text variant="headline">
+            {source === "Trace worktree"
+              ? "Worktree Has Local Changes"
+              : "Resolve Spotlight Conflict"}
+          </Text>
           <Text variant="footnote" color="mutedForeground">
-            Spotlight stopped because the main worktree has local changes. Choose how Trace should
-            resolve them before spotlighting this workspace.
+            {source === "Trace worktree"
+              ? "The worktree for this session has uncommitted changes. Choose how you want to handle them before spotlighting."
+              : "Spotlight stopped because the main worktree has local changes. Choose how Trace should resolve them before spotlighting this workspace."}
           </Text>
         </View>
 
@@ -97,7 +106,7 @@ export function LinkedCheckoutSyncConflictSheet({
             <Text variant="subheadline">Commit changes</Text>
           </View>
           <Text variant="footnote" color="mutedForeground">
-            Import the current main-worktree changes into the session branch, create a commit, then
+            Import the current {source} changes into the session branch, create a commit, then
             spotlight that new commit. Trace also pushes the commit to origin when configured.
           </Text>
 
@@ -145,7 +154,7 @@ export function LinkedCheckoutSyncConflictSheet({
               <Text variant="subheadline">Stash changes</Text>
             </View>
             <Text variant="footnote" color="mutedForeground">
-              Save the main-worktree edits to the git stash, then spotlight cleanly.
+              Save the {source} edits to the git stash, then spotlight cleanly.
             </Text>
             <View style={styles.buttonSlot}>
               <Button
@@ -165,7 +174,7 @@ export function LinkedCheckoutSyncConflictSheet({
               <Text variant="subheadline">Discard all changes</Text>
             </View>
             <Text variant="footnote" color="mutedForeground">
-              Reset the main worktree to HEAD, remove untracked files, then spotlight cleanly.
+              Reset the {source} to HEAD, remove untracked files, then spotlight cleanly.
             </Text>
             <View style={styles.buttonSlot}>
               <Button
@@ -189,8 +198,8 @@ export function LinkedCheckoutSyncConflictSheet({
               <Text variant="subheadline">Replay local changes</Text>
             </View>
             <Text variant="footnote" color="mutedForeground">
-              Replay the current main-worktree changes onto the synced session commit and keep them
-              as local edits.
+              Replay the current {source} changes onto the synced session commit and keep them as
+              local edits.
             </Text>
             <View style={styles.buttonSlot}>
               <Button

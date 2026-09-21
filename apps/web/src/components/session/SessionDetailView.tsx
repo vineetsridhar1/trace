@@ -35,6 +35,7 @@ import { Skeleton } from "../ui/skeleton";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { TraceLoader } from "../ui/trace-loader";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
+import { isSessionMoveChangesError, SessionMoveChangesDialog } from "./SessionMoveChangesDialog";
 import { useVisualPlanDocument } from "../artifact/useVisualPlanDocument";
 import { visualPlanHtmlPath } from "../artifact/visual-plan-file";
 import { findMessageActionsEventIds } from "./messageActions";
@@ -873,6 +874,7 @@ function RuntimeLifecycleNotice({
 }) {
   const [action, setAction] = useState<"retry" | "cloud" | null>(null);
   const [showPicker, setShowPicker] = useState(false);
+  const [showMoveChangesDialog, setShowMoveChangesDialog] = useState(false);
   const repo = useEntityField("sessions", sessionId, "repo") as
     | { remoteUrl?: string | null }
     | null
@@ -926,28 +928,46 @@ function RuntimeLifecycleNotice({
     }
   }, [cloudDisabledReason, sessionId]);
 
-  const handleNewCloud = useCallback(async () => {
-    if (cloudDisabledReason) {
-      toast.error("Cloud is unavailable for this repo", { description: cloudDisabledReason });
-      return;
-    }
-    setAction("cloud");
-    try {
-      const result = await client
-        .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, {
-          sessionId,
-        })
-        .toPromise();
-      if (result.error) {
-        toast.error("Failed to start cloud runtime", { description: result.error.message });
+  const handleNewCloud = useCallback(
+    async (resolution?: { strategy: "COMMIT" | "DISCARD"; commitMessage?: string }) => {
+      if (cloudDisabledReason) {
+        toast.error("Cloud is unavailable for this repo", { description: cloudDisabledReason });
+        return;
       }
-    } finally {
-      setAction(null);
-    }
-  }, [cloudDisabledReason, sessionId]);
+      setAction("cloud");
+      try {
+        const result = await client
+          .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, {
+            sessionId,
+            conflictStrategy: resolution?.strategy ?? null,
+            commitMessage: resolution?.commitMessage ?? null,
+          })
+          .toPromise();
+        if (result.error) {
+          if (isSessionMoveChangesError(result.error)) {
+            setShowMoveChangesDialog(true);
+            return;
+          }
+          toast.error("Failed to start cloud runtime", { description: result.error.message });
+        }
+      } finally {
+        setAction(null);
+      }
+    },
+    [cloudDisabledReason, sessionId],
+  );
 
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">
+      <SessionMoveChangesDialog
+        open={showMoveChangesDialog}
+        pending={action !== null}
+        onClose={() => setShowMoveChangesDialog(false)}
+        onResolve={async (resolution) => {
+          setShowMoveChangesDialog(false);
+          await handleNewCloud(resolution);
+        }}
+      />
       <div className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 ${bannerTone}`}>
         {failed ? (
           <AlertCircle size={16} className={`shrink-0 ${iconTone}`} />
@@ -988,7 +1008,7 @@ function RuntimeLifecycleNotice({
               <button
                 type="button"
                 disabled={action !== null || !!cloudDisabledReason}
-                onClick={handleNewCloud}
+                onClick={() => void handleNewCloud()}
                 className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
               >
                 {action === "cloud" ? (

@@ -8,6 +8,7 @@ import {
 } from "./config.js";
 import { formatGitError, getCurrentBranch, isSafeGitRef, runGit } from "./git-utils.js";
 import {
+  hasUncommittedTargetWorktreeChanges,
   pauseExistingAttachment,
   refreshTargetBranchForSync,
   resolveSyncTargetCommitSha,
@@ -50,6 +51,7 @@ export async function hasInProgressGitOperation(repoPath: string): Promise<boole
 export interface LinkedCheckoutAutoSyncDeps {
   revParseHead: (repoPath: string) => Promise<string>;
   hasTrackedChanges: (repoPath: string) => Promise<boolean>;
+  hasTargetWorktreeChanges: (repoPath: string, branch: string) => Promise<boolean>;
   switchDetached: (repoPath: string, sha: string) => Promise<void>;
   getCurrentBranch: (repoPath: string) => Promise<string | null>;
   hasInProgressOperation: (repoPath: string) => Promise<boolean>;
@@ -63,6 +65,7 @@ const defaultDeps: LinkedCheckoutAutoSyncDeps = {
     const status = await runGit(repoPath, ["status", "--porcelain", "--untracked-files=no"]);
     return status.length > 0;
   },
+  hasTargetWorktreeChanges: hasUncommittedTargetWorktreeChanges,
   switchDetached: async (repoPath, sha) => {
     await runGit(repoPath, ["switch", "--detach", sha]);
   },
@@ -263,6 +266,28 @@ export class LinkedCheckoutAutoSyncManager {
         currentCommitSha,
         targetSha,
       });
+
+      try {
+        if (await this.deps.hasTargetWorktreeChanges(repoPath, targetBranch)) {
+          this.logTick("pausing because target worktree has local changes", {
+            repoId,
+            targetBranch,
+          });
+          await this.pause(
+            repoId,
+            "Trace worktree has local changes. Use Spotlight to commit, stash, replay, or discard them.",
+          );
+          return;
+        }
+      } catch (error) {
+        this.logTick("failed checking target worktree changes", {
+          repoId,
+          targetBranch,
+          error: formatGitError(error),
+        });
+        await this.pause(repoId, formatGitError(error));
+        return;
+      }
 
       if (currentCommitSha === targetSha) {
         // Heal stale transient errors when the next tick confirms we're in sync.

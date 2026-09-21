@@ -164,16 +164,34 @@ export const RETRY_SESSION_GROUP_SETUP_MUTATION = gql`
 `;
 
 export const MOVE_SESSION_TO_RUNTIME_MUTATION = gql`
-  mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {
-    moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {
+  mutation MoveSessionToRuntime(
+    $sessionId: ID!
+    $runtimeInstanceId: ID!
+    $conflictStrategy: SessionMoveConflictStrategy
+    $commitMessage: String
+  ) {
+    moveSessionToRuntime(
+      sessionId: $sessionId
+      runtimeInstanceId: $runtimeInstanceId
+      conflictStrategy: $conflictStrategy
+      commitMessage: $commitMessage
+    ) {
       id
     }
   }
 `;
 
 export const MOVE_SESSION_TO_CLOUD_MUTATION = gql`
-  mutation MoveSessionToCloud($sessionId: ID!) {
-    moveSessionToCloud(sessionId: $sessionId) {
+  mutation MoveSessionToCloud(
+    $sessionId: ID!
+    $conflictStrategy: SessionMoveConflictStrategy
+    $commitMessage: String
+  ) {
+    moveSessionToCloud(
+      sessionId: $sessionId
+      conflictStrategy: $conflictStrategy
+      commitMessage: $commitMessage
+    ) {
       id
     }
   }
