@@ -12,10 +12,23 @@ vi.mock("@trace/client-core", async () => {
   return {
     ARCHIVE_SESSION_GROUP_MUTATION: "archive",
     useAuthStore: create(() => ({ user: { id: "user" }, activeOrgId: "org", loading: false })),
+    useEntityStore: create((set) => ({
+      sessionGroups: {},
+      remove: (_type: string, id: string) =>
+        set((state: { sessionGroups: Record<string, object> }) => {
+          const sessionGroups = { ...state.sessionGroups };
+          delete sessionGroups[id];
+          return { sessionGroups };
+        }),
+      upsert: (_type: string, id: string, group: object) =>
+        set((state: { sessionGroups: Record<string, object> }) => ({
+          sessionGroups: { ...state.sessionGroups, [id]: group },
+        })),
+    })),
   };
 });
 
-import { useAuthStore } from "@trace/client-core";
+import { useAuthStore, useEntityStore } from "@trace/client-core";
 
 import { archiveSessionGroup } from "./archive-session-group";
 
@@ -36,9 +49,13 @@ describe("archiveSessionGroup", () => {
   });
 
   it("cancels archiving when Undo is selected", async () => {
+    const group = { id: "undo", name: "Workspace" };
+    useEntityStore.setState({ sessionGroups: { undo: group } });
     archiveSessionGroup("undo", "Workspace");
+    expect(useEntityStore.getState().sessionGroups.undo).toBeUndefined();
     const toastOptions = options();
     toastOptions.action.onClick();
+    expect(useEntityStore.getState().sessionGroups.undo).toBe(group);
     await toastOptions.onDismiss();
     await toastOptions.onAutoClose();
     expect(mutation).not.toHaveBeenCalled();
@@ -111,9 +128,13 @@ describe("archiveSessionGroup", () => {
     () => Promise.resolve({ error: { message: "Access denied" } }),
     () => Promise.reject(new Error("Network unavailable")),
   ])("reports failures and permits retry", async (toPromise) => {
+    const group = { id: "failure", name: "Workspace" };
+    useEntityStore.setState({ sessionGroups: { failure: group } });
     mutation.mockReturnValue({ toPromise });
     archiveSessionGroup("failure", "Workspace");
+    expect(useEntityStore.getState().sessionGroups.failure).toBeUndefined();
     await options().onAutoClose();
+    expect(useEntityStore.getState().sessionGroups.failure).toBe(group);
     expect(error).toHaveBeenCalledWith("Failed to archive workspace", {
       description: expect.any(String),
     });

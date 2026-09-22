@@ -40,8 +40,12 @@ export function MermaidDiagram({ source }: { source: string }) {
     <div className="my-3 rounded-md border border-border bg-surface-deep p-3">
       {current?.image ? (
         <>
-          <div className="overflow-x-auto">
-            <img src={current.image} alt="Mermaid diagram" className="mx-auto max-w-full" />
+          <div className="max-h-[720px] overflow-auto">
+            <img
+              src={current.image}
+              alt="Mermaid diagram"
+              className="mx-auto h-auto max-w-none"
+            />
           </div>
           <details className="mt-2 text-xs text-muted-foreground">
             <summary className="cursor-pointer">Diagram source</summary>

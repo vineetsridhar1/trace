@@ -51,7 +51,10 @@ describe("Mermaid Markdown", () => {
   it("renders diagrams and preserves their source", async () => {
     vi.mocked(renderMermaid).mockResolvedValue("data:image/svg+xml,test");
     const view = await mount("graph TD; A-->B");
-    expect(view.root.findByType("img").props.src).toBe("data:image/svg+xml,test");
+    const image = view.root.findByType("img");
+    expect(image.props.src).toBe("data:image/svg+xml,test");
+    expect(image.props.className).toContain("max-w-none");
+    expect(view.root.findByProps({ className: "max-h-[720px] overflow-auto" })).toBeDefined();
     expect(view.root.findByType("code").children).toEqual(["graph TD; A-->B"]);
     expect(renderMermaid).toHaveBeenCalledWith("graph TD; A-->B", "dark");
     await act(async () => {

@@ -1,4 +1,8 @@
-import { ARCHIVE_SESSION_GROUP_MUTATION, useAuthStore } from "@trace/client-core";
+import {
+  ARCHIVE_SESSION_GROUP_MUTATION,
+  useAuthStore,
+  useEntityStore,
+} from "@trace/client-core";
 import { toast } from "sonner";
 import { client } from "./urql";
 
@@ -10,12 +14,20 @@ export function archiveSessionGroup(groupId: string, groupName: string) {
   let cancelled = false;
   let started = false;
   const { user, activeOrgId } = useAuthStore.getState();
+  const sessionGroup = useEntityStore.getState().sessionGroups[groupId];
+  useEntityStore.getState().remove("sessionGroups", groupId);
 
-  const cancel = () => {
+  const restore = () => {
+    if (!sessionGroup || useEntityStore.getState().sessionGroups[groupId]) return;
+    useEntityStore.getState().upsert("sessionGroups", groupId, sessionGroup);
+  };
+
+  const cancel = (restoreSessionGroup = false) => {
     if (cancelled || started) return;
     cancelled = true;
     pendingArchives.delete(groupId);
     unsubscribe();
+    if (restoreSessionGroup) restore();
   };
 
   const archive = async () => {
@@ -28,6 +40,7 @@ export function archiveSessionGroup(groupId: string, groupName: string) {
         .toPromise();
       if (result.error) throw result.error;
     } catch (error) {
+      restore();
       toast.error("Failed to archive workspace", {
         description: error instanceof Error ? error.message : "Please try again.",
       });
@@ -48,7 +61,7 @@ export function archiveSessionGroup(groupId: string, groupName: string) {
     duration: 8000,
     action: {
       label: "Undo",
-      onClick: cancel,
+      onClick: () => cancel(true),
     },
     onAutoClose: archive,
     onDismiss: archive,
