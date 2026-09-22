@@ -9404,6 +9404,110 @@ describe("SessionService", () => {
     });
   });
 
+  describe("message queue wakeups", () => {
+    const queued = {
+      id: "queued-wakeup",
+      sessionId: "session-1",
+      text: "Follow-up work",
+      imageKeys: [],
+      interactionMode: null,
+      position: 0,
+      createdById: "user-1",
+      organizationId: "org-1",
+      createdAt: new Date("2024-01-01T00:00:00.000Z"),
+    };
+
+    beforeEach(() => {
+      vi.stubEnv("TRACE_LOCAL_MODE", "true");
+      prismaMock.session.findUnique.mockReset();
+      prismaMock.session.findUniqueOrThrow.mockReset();
+      prismaMock.queuedMessage.aggregate.mockReset();
+      prismaMock.queuedMessage.create.mockReset();
+    });
+
+    afterEach(() => {
+      prismaMock.session.findUnique.mockReset();
+    });
+
+    it.each([
+      ["done", "in_progress", true],
+      ["active", "in_progress", false],
+      ["done", "needs_input", false],
+    ])("checks for delivery after enqueue (%s, %s)", async (agentStatus, sessionStatus, drains) => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(makeSession());
+      prismaMock.session.findUnique.mockResolvedValue({
+        agentStatus,
+        sessionStatus,
+        organizationId: "org-1",
+        pendingRun: null,
+      });
+      prismaMock.queuedMessage.aggregate.mockResolvedValueOnce({ _max: { position: null } });
+      prismaMock.queuedMessage.create.mockResolvedValueOnce(queued);
+      const drain = vi
+        .spyOn(
+          service as unknown as {
+            drainOneQueuedMessage(id: string): Promise<boolean>;
+          },
+          "drainOneQueuedMessage",
+        )
+        .mockImplementation(async () => {
+          expect(eventServiceMock.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+              eventType: "queued_message_added",
+            }),
+          );
+          return true;
+        });
+
+      await service.queueMessage({
+        sessionId: "session-1",
+        text: queued.text,
+        actorId: "user-1",
+        organizationId: "org-1",
+      });
+
+      expect(drain).toHaveBeenCalledTimes(drains ? 1 : 0);
+    });
+
+    it("retries a competing wakeup after the first drain releases its lock", async () => {
+      vi.useFakeTimers();
+      prismaMock.session.findUnique.mockResolvedValue({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        organizationId: "org-1",
+        pendingRun: null,
+      });
+      const internal = service as unknown as {
+        drainNextPendingOrQueuedMessage(id: string): Promise<boolean>;
+        drainOneQueuedMessage(id: string): Promise<boolean>;
+      };
+      let finishDrain: (value: boolean) => void = () => {};
+      const firstResult = new Promise<boolean>((resolve) => {
+        finishDrain = resolve;
+      });
+      let notifyStarted: () => void = () => {};
+      const started = new Promise<void>((resolve) => {
+        notifyStarted = resolve;
+      });
+      const drain = vi
+        .spyOn(internal, "drainOneQueuedMessage")
+        .mockImplementationOnce(() => {
+          notifyStarted();
+          return firstResult;
+        })
+        .mockResolvedValueOnce(true);
+
+      const first = internal.drainNextPendingOrQueuedMessage("session-1");
+      await started;
+      expect(await internal.drainNextPendingOrQueuedMessage("session-1")).toBe(false);
+      expect(drain).toHaveBeenCalledTimes(1);
+      finishDrain(false);
+      await first;
+      await vi.advanceTimersByTimeAsync(100);
+      expect(drain).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe("queueMessage", () => {
     it("preserves and provisions a queued prompt when selecting a runtime", async () => {
       const pendingRun = {

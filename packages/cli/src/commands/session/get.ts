@@ -12,7 +12,7 @@ export const sessionGetCommand = defineCommand({
   output: "The session's status, tool, hosting, group, channel, repository, and branch.",
   nextSteps: [
     'Run "$TRACE_CLI" session events <session-id> --limit 50 --json for recent activity.',
-    'Run "$TRACE_CLI" session send <session-id> "<message>" --queue --json for follow-up work.',
+    'Run "$TRACE_CLI" session send <session-id> "<message>" --json for notifications or follow-up work.',
   ],
   positionals: [{ name: "session-id" }],
   async run(ctx, input) {

@@ -7112,9 +7112,7 @@ export class SessionService {
     }
 
     if (!hasPendingInput && options?.drainPending !== false) {
-      setImmediate(() => {
-        void this.drainNextPendingOrQueuedMessage(id);
-      });
+      this.scheduleMessageDrain(id);
     }
   }
 
@@ -7786,6 +7784,12 @@ export class SessionService {
       actorId,
     });
 
+    // Completion may have already checked an empty queue before this insert.
+    // Check again after publishing the added event so clients observe events in order.
+    await this.drainNextPendingOrQueuedMessage(sessionId).catch((error: unknown) => {
+      console.error(`[session:${sessionId}] Failed to drain queued messages:`, error);
+    });
+
     return queuedMessage;
   }
 
@@ -8058,12 +8062,43 @@ export class SessionService {
     return reordered;
   }
 
+  private scheduleMessageDrain(sessionId: string, delayMs = 0) {
+    setTimeout(() => {
+      void this.drainNextPendingOrQueuedMessage(sessionId).catch((error: unknown) => {
+        console.error(`[session:${sessionId}] Failed to drain queued messages:`, error);
+      });
+    }, delayMs);
+  }
+
   private async drainNextPendingOrQueuedMessage(sessionId: string) {
+    const current = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { agentStatus: true, sessionStatus: true },
+    });
+    if (!current || current.agentStatus === "active" || current.sessionStatus === "needs_input") {
+      return false;
+    }
+
+    const result = await withDistributedLock(
+      { key: `session-message-drain:${sessionId}`, ttlMs: 30_000 },
+      () => this.drainNextPendingOrQueuedMessageLocked(sessionId),
+    );
+    if (!result.acquired) {
+      // Do not lose an enqueue/completion wakeup while another drain is finishing.
+      this.scheduleMessageDrain(sessionId, 100);
+      return false;
+    }
+    return result.value;
+  }
+
+  private async drainNextPendingOrQueuedMessageLocked(sessionId: string) {
     const pending = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { organizationId: true, pendingRun: true },
+      select: { organizationId: true, pendingRun: true, agentStatus: true, sessionStatus: true },
     });
-    if (!pending) return false;
+    if (!pending || pending.agentStatus === "active" || pending.sessionStatus === "needs_input") {
+      return false;
+    }
 
     if (this.parsePendingCommands(pending.pendingRun).length > 0) {
       const replayResult = await this.deliverPendingCommand(sessionId, pending.pendingRun);
@@ -8130,6 +8165,7 @@ export class SessionService {
           position: popped.position,
           createdById: popped.createdById,
           organizationId: popped.organizationId,
+          createdAt: popped.createdAt,
         },
       });
       const message = error instanceof Error ? error.message : String(error);
