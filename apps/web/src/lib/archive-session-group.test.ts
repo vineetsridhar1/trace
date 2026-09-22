@@ -28,7 +28,11 @@ vi.mock("@trace/client-core", async () => {
   };
 });
 
-import { useAuthStore, useEntityStore } from "@trace/client-core";
+import {
+  useAuthStore,
+  useEntityStore,
+  type SessionGroupEntity,
+} from "@trace/client-core";
 
 import { archiveSessionGroup } from "./archive-session-group";
 
@@ -49,7 +53,7 @@ describe("archiveSessionGroup", () => {
   });
 
   it("cancels archiving when Undo is selected", async () => {
-    const group = { id: "undo", name: "Workspace" };
+    const group = { id: "undo", name: "Workspace" } as SessionGroupEntity;
     useEntityStore.setState({ sessionGroups: { undo: group } });
     archiveSessionGroup("undo", "Workspace");
     expect(useEntityStore.getState().sessionGroups.undo).toBeUndefined();
@@ -128,7 +132,7 @@ describe("archiveSessionGroup", () => {
     () => Promise.resolve({ error: { message: "Access denied" } }),
     () => Promise.reject(new Error("Network unavailable")),
   ])("reports failures and permits retry", async (toPromise) => {
-    const group = { id: "failure", name: "Workspace" };
+    const group = { id: "failure", name: "Workspace" } as SessionGroupEntity;
     useEntityStore.setState({ sessionGroups: { failure: group } });
     mutation.mockReturnValue({ toPromise });
     archiveSessionGroup("failure", "Workspace");
