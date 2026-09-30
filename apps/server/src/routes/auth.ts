@@ -537,18 +537,8 @@ router.post("/auth/github/device/start", async (req: Request, res: Response) => 
     return;
   }
 
-  const response = await fetch("https://github.com/login/device/code", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      client_id: GITHUB_CLIENT_ID,
-      scope: "",
-    }),
-  });
-  const payload = (await response.json()) as {
+  let response: globalThis.Response;
+  let payload: {
     device_code?: string;
     user_code?: string;
     verification_uri?: string;
@@ -557,6 +547,24 @@ router.post("/auth/github/device/start", async (req: Request, res: Response) => 
     error?: string;
     error_description?: string;
   };
+  try {
+    response = await fetch("https://github.com/login/device/code", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: GITHUB_CLIENT_ID,
+        scope: "",
+      }),
+    });
+    payload = (await response.json()) as typeof payload;
+  } catch {
+    return res
+      .status(503)
+      .json({ error: "GitHub login is temporarily unavailable. Please try again." });
+  }
 
   if (
     !response.ok ||
@@ -574,11 +582,17 @@ router.post("/auth/github/device/start", async (req: Request, res: Response) => 
   const intervalSeconds =
     typeof payload.interval === "number" && payload.interval > 0 ? payload.interval : 5;
   const expiresAt = Date.now() + payload.expires_in * 1000;
-  await saveGitHubDeviceAuth(deviceAuthId, {
-    deviceCode: payload.device_code,
-    expiresAt,
-    intervalSeconds,
-  });
+  try {
+    await saveGitHubDeviceAuth(deviceAuthId, {
+      deviceCode: payload.device_code,
+      expiresAt,
+      intervalSeconds,
+    });
+  } catch {
+    return res
+      .status(503)
+      .json({ error: "GitHub login is temporarily unavailable. Please try again." });
+  }
 
   res.json({
     deviceAuthId,

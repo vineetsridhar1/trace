@@ -1126,6 +1126,56 @@ describe("github device oauth", () => {
     expect(body).not.toHaveProperty("deviceCode");
   });
 
+  it("returns a retryable response when device login state cannot be saved", async () => {
+    redisMock.set.mockRejectedValueOnce(new Error("Redis unavailable"));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.startsWith("http://127.0.0.1")) {
+          return realFetch(input, init);
+        }
+        return new Response(
+          JSON.stringify({
+            device_code: "secret-device-code",
+            user_code: "WDJB-MJHT",
+            verification_uri: "https://github.com/login/device",
+            expires_in: 900,
+            interval: 5,
+          }),
+          { headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    const res = await fetch(`${baseUrl}/auth/github/device/start`, { method: "POST" });
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toEqual({
+      error: "GitHub login is temporarily unavailable. Please try again.",
+    });
+  });
+
+  it("returns a retryable response when GitHub cannot be reached", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.startsWith("http://127.0.0.1")) {
+          return realFetch(input, init);
+        }
+        throw new Error("GitHub unavailable");
+      }),
+    );
+
+    const res = await fetch(`${baseUrl}/auth/github/device/start`, { method: "POST" });
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toEqual({
+      error: "GitHub login is temporarily unavailable. Please try again.",
+    });
+  });
+
   it("polls GitHub and creates a Trace session cookie after approval", async () => {
     vi.stubGlobal(
       "fetch",
