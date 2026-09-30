@@ -433,7 +433,8 @@ export interface RunOptions {
  */
 export interface CodingToolAdapter {
   run(options: RunOptions): void;
-  abort(): void;
+  /** Force skips graceful shutdown when the runtime is at risk of OOM. */
+  abort(force?: boolean): void;
   /** Return the tool-specific session/thread ID for resume, if available */
   getSessionId?(): string | null;
 }

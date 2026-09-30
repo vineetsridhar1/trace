@@ -6981,7 +6981,15 @@ export class SessionService {
     }
   }
 
-  async complete(id: string, options?: { drainPending?: boolean; invocationId?: string }) {
+  async complete(
+    id: string,
+    options?: {
+      drainPending?: boolean;
+      invocationId?: string;
+      agentStatus?: Extract<AgentStatus, "done" | "failed">;
+      reason?: string;
+    },
+  ) {
     // Only transition from active — don't overwrite explicit user actions
     const current = await prisma.session.findUnique({
       where: { id },
@@ -7028,7 +7036,7 @@ export class SessionService {
       return hasQuestionBlock(evt.payload as Record<string, unknown>);
     });
 
-    const newAgentStatus: AgentStatus = "done";
+    const newAgentStatus: AgentStatus = options?.agentStatus ?? "done";
     // Preserve `merged` over `needs_input`: a question/plan from a follow-up run shouldn't
     // erase the fact that the PR was already merged.
     const newSessionStatus: SessionStatus =
@@ -7080,7 +7088,7 @@ export class SessionService {
       eventType: "session_terminated",
       payload: {
         sessionId: id,
-        reason: "bridge_complete",
+        reason: options?.reason ?? "bridge_complete",
         agentStatus: newAgentStatus,
         sessionStatus: newSessionStatus,
         ...(sessionGroup ? { sessionGroup } : {}),
@@ -7111,7 +7119,7 @@ export class SessionService {
       }
     }
 
-    if (!hasPendingInput && options?.drainPending !== false) {
+    if (newAgentStatus === "done" && !hasPendingInput && options?.drainPending !== false) {
       this.scheduleMessageDrain(id);
     }
   }

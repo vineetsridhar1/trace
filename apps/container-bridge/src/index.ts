@@ -4,6 +4,7 @@ import { ContainerBridge } from "./bridge.js";
 import { installCodexAuthFile, loginAvailableTools } from "./tool-auth.js";
 import { parseRuntimeSetupCommands, runRuntimeSetupCommands } from "./runtime-setup.js";
 import { RuntimeLeaseWatchdog, type RuntimeLeaseExpirationReason } from "./runtime-lease.js";
+import { MemoryPressureWatchdog } from "./memory-pressure-watchdog.js";
 
 /**
  * If an SSH private key was injected (base64-encoded), decode it to ~/.ssh/id_rsa
@@ -144,18 +145,25 @@ async function main(): Promise<void> {
       }
     },
   );
+  const memoryPressureWatchdog = new MemoryPressureWatchdog({
+    onPressure: (snapshot) => bridge?.handleMemoryPressure(snapshot),
+    onRecovery: (snapshot) => bridge?.handleMemoryRecovery(snapshot),
+  });
+  memoryPressureWatchdog.start();
   bridge.connect();
 
   // Keep the process alive
   process.on("SIGTERM", () => {
     console.log("[container-bridge] received SIGTERM, shutting down");
     leaseWatchdog?.stop();
+    memoryPressureWatchdog.stop();
     void bridge.shutdown().finally(() => process.exit(0));
   });
 
   process.on("SIGINT", () => {
     console.log("[container-bridge] received SIGINT, shutting down");
     leaseWatchdog?.stop();
+    memoryPressureWatchdog.stop();
     void bridge.shutdown().finally(() => process.exit(0));
   });
 }

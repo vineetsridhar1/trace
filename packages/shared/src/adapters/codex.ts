@@ -335,11 +335,11 @@ export class CodexAdapter implements CodingToolAdapter {
     return this.threadId;
   }
 
-  abort() {
+  abort(force = false) {
     if (this.process) {
       // Kill the entire process group (negative PID) since we spawn detached
       try {
-        process.kill(-this.process.pid!, "SIGTERM");
+        process.kill(-this.process.pid!, force ? "SIGKILL" : "SIGTERM");
       } catch {
         /* already dead */
       }

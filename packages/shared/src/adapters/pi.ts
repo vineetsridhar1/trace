@@ -339,10 +339,10 @@ export class PiAdapter implements CodingToolAdapter {
     return this.sessionId;
   }
 
-  abort() {
+  abort(force = false) {
     if (this.process) {
       try {
-        process.kill(-this.process.pid!, "SIGTERM");
+        process.kill(-this.process.pid!, force ? "SIGKILL" : "SIGTERM");
       } catch {
         /* already dead */
       }

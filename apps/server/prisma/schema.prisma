@@ -1245,6 +1245,7 @@ model SessionApplicationProcess {
   startedAt       DateTime?
   stoppedAt       DateTime?
   lastHeartbeatAt DateTime?
+  logSequence     Int       @default(0)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

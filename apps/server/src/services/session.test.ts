@@ -6015,6 +6015,46 @@ describe("SessionService", () => {
       expect(eventServiceMock.create).not.toHaveBeenCalled();
     });
 
+    it("marks memory-pressure runs failed without draining queued work", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+      });
+      prismaMock.event.findFirst.mockResolvedValueOnce(null);
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.update.mockResolvedValueOnce({
+        organizationId: "org-1",
+        createdById: "user-1",
+        name: "Implement dashboard filters",
+      });
+      const scheduleMessageDrain = vi.spyOn(
+        service as unknown as { scheduleMessageDrain: (id: string) => void },
+        "scheduleMessageDrain",
+      );
+
+      await service.complete("session-1", {
+        agentStatus: "failed",
+        reason: "runtime_memory_pressure",
+        drainPending: false,
+      });
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: { agentStatus: "failed", sessionStatus: "in_progress" },
+        select: { organizationId: true, createdById: true, name: true },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_terminated",
+          payload: expect.objectContaining({
+            reason: "runtime_memory_pressure",
+            agentStatus: "failed",
+          }),
+        }),
+      );
+      expect(scheduleMessageDrain).not.toHaveBeenCalled();
+    });
+
     it("returns finished sessions to in_progress when no follow-up input is needed", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce({
         agentStatus: "active",

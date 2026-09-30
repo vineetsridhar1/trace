@@ -1255,6 +1255,11 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
           await sessionService.complete(sessionId, {
             invocationId: typeof msg.invocationId === "string" ? msg.invocationId : undefined,
+            ...(msg.outcome === "failed" && {
+              drainPending: false,
+              agentStatus: "failed" as const,
+              reason: msg.reason === "runtime_memory_pressure" ? "runtime_memory_pressure" : "bridge_failed",
+            }),
           });
         });
       } else if (msg.type === "workspace_ready" && msg.sessionId) {

@@ -23,6 +23,7 @@ async function sendRuntimeCommand(...args: Parameters<typeof sessionRouter.sendT
 }
 
 type Tx = Prisma.TransactionClient;
+type ProcessLogStore = Pick<Prisma.TransactionClient, "sessionApplicationLogEntry">;
 const SETUP_OUTPUT_PREVIEW_LIMIT = 65_536;
 export const PROCESS_LOG_ENTRY_MAX_CHARS = 8_192;
 export const PROCESS_LOG_RETAINED_ROWS = 500;
@@ -1144,9 +1145,13 @@ export class SessionApplicationService {
       .catch(() => undefined)
       .then(() => this.writeProcessLog(processId, organizationId, stream, data));
     this.logAppendChains.set(processId, next);
-    void next.finally(() => {
+    const clearChain = () => {
       if (this.logAppendChains.get(processId) === next) this.logAppendChains.delete(processId);
-    });
+    };
+    // `finally()` returns a second promise that mirrors `next`'s rejection.
+    // Leaving that promise unhandled turns a recoverable database error into
+    // an uncaught rejection that terminates the backend process.
+    void next.then(clearChain, clearChain);
     return next;
   }
 
@@ -1162,27 +1167,21 @@ export class SessionApplicationService {
     });
     if (!process) return null;
 
-    const entry = await prisma.$transaction(async (tx) => {
-      const last = await tx.sessionApplicationLogEntry.findFirst({
-        where: { processId },
-        orderBy: { sequence: "desc" },
-        select: { sequence: true },
-      });
-      const sequence = (last?.sequence ?? 0) + 1;
-      const created = await tx.sessionApplicationLogEntry.create({
-        data: {
-          organizationId: process.organizationId,
-          processId,
-          stream,
-          data: truncateProcessLogData(data),
-          sequence,
-        },
-      });
-      if (sequence % PROCESS_LOG_PRUNE_INTERVAL === 0) {
-        await pruneProcessLogs(tx, processId);
-      }
-      return created;
+    // The database trigger owns sequence allocation. Supplying zero keeps this
+    // write compatible with both Prisma and rolling old/new server replicas
+    // without holding an interactive transaction connection.
+    const entry = await prisma.sessionApplicationLogEntry.create({
+      data: {
+        organizationId: process.organizationId,
+        processId,
+        stream,
+        data: truncateProcessLogData(data),
+        sequence: 0,
+      },
     });
+    if (entry.sequence % PROCESS_LOG_PRUNE_INTERVAL === 0) {
+      await pruneProcessLogs(prisma, processId);
+    }
     // Publish-only (not persisted): log lines are high-volume and already live
     // in the pruned sessionApplicationLogEntry table. Persisting an Event per
     // chunk would grow the append-only event log without bound.
@@ -1498,7 +1497,7 @@ function truncateProcessLogData(data: string): string {
   return `${data.slice(0, prefixLength)}${PROCESS_LOG_TRUNCATION_SUFFIX}`;
 }
 
-async function pruneProcessLogs(tx: Tx, processId: string): Promise<void> {
+async function pruneProcessLogs(tx: ProcessLogStore, processId: string): Promise<void> {
   const staleEntries = await tx.sessionApplicationLogEntry.findMany({
     where: { processId },
     orderBy: { sequence: "desc" },

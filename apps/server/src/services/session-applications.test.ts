@@ -646,11 +646,11 @@ describe("SessionApplicationService", () => {
       organizationId: "org-1",
       sessionGroupId: "group-1",
     });
-    prismaMock.sessionApplicationLogEntry.findFirst.mockResolvedValueOnce({ sequence: 4 });
     prismaMock.sessionApplicationLogEntry.create.mockImplementationOnce(async ({ data }) => ({
       id: "log-1",
       timestamp: new Date("2026-06-07T00:00:00.000Z"),
       ...data,
+      sequence: 5,
     }));
 
     const entry = await new SessionApplicationService().appendProcessLog(
@@ -662,11 +662,16 @@ describe("SessionApplicationService", () => {
 
     expect(entry?.data.length).toBe(PROCESS_LOG_ENTRY_MAX_CHARS);
     expect(entry?.data).toContain("[trace] log chunk truncated");
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.sessionApplicationProcess.findFirst).toHaveBeenCalledWith({
+      where: { id: "process-1", organizationId: "org-1" },
+      select: { id: true, organizationId: true, sessionGroupId: true },
+    });
     expect(prismaMock.sessionApplicationLogEntry.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           data: expect.stringContaining("[trace] log chunk truncated"),
-          sequence: 5,
+          sequence: 0,
         }),
       }),
     );
@@ -688,11 +693,11 @@ describe("SessionApplicationService", () => {
       organizationId: "org-1",
       sessionGroupId: "group-1",
     });
-    prismaMock.sessionApplicationLogEntry.findFirst.mockResolvedValueOnce({ sequence: 49 });
     prismaMock.sessionApplicationLogEntry.create.mockImplementationOnce(async ({ data }) => ({
       id: "log-50",
       timestamp: new Date("2026-06-07T00:00:00.000Z"),
       ...data,
+      sequence: 50,
     }));
     prismaMock.sessionApplicationLogEntry.findMany.mockResolvedValueOnce([
       { id: "stale-1" },
@@ -715,6 +720,31 @@ describe("SessionApplicationService", () => {
     expect(prismaMock.sessionApplicationLogEntry.deleteMany).toHaveBeenCalledWith({
       where: { id: { in: ["stale-1", "stale-2"] } },
     });
+  });
+
+  it("continues a process log chain after a database write fails", async () => {
+    prismaMock.sessionApplicationProcess.findFirst.mockResolvedValue({
+      id: "process-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+    });
+    prismaMock.sessionApplicationLogEntry.create
+      .mockRejectedValueOnce(new Error("pool busy"))
+      .mockImplementationOnce(async ({ data }) => ({
+        id: "log-2",
+        timestamp: new Date("2026-06-07T00:00:00.000Z"),
+        ...data,
+        sequence: 2,
+      }));
+
+    const service = new SessionApplicationService();
+    await expect(service.appendProcessLog("process-1", "org-1", "stdout", "first")).rejects.toThrow(
+      "pool busy",
+    );
+
+    const entry = await service.appendProcessLog("process-1", "org-1", "stdout", "second");
+
+    expect(entry?.sequence).toBe(2);
   });
 
   it("marks live processes stopped and disables endpoints when the runtime is torn down", async () => {

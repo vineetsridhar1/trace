@@ -1045,6 +1045,45 @@ describe("bridge handler auth", () => {
     expect(mocks.registerRuntime).toHaveBeenCalled();
   });
 
+  it("routes memory-pressure completion as a failed run without draining queued work", async () => {
+    const ws = createMockWs();
+    mocks.sessionFindFirst.mockResolvedValue({
+      id: "session-1",
+      sessionGroup: {
+        connection: { state: "connected", runtimeInstanceId: "runtime_owned" },
+      },
+    });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "runtime_owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "runtime_owned",
+      hostingMode: "cloud",
+    });
+    await vi.waitFor(() => expect(mocks.registerRuntime).toHaveBeenCalled());
+    ws.emitMessage({
+      type: "session_complete",
+      sessionId: "session-1",
+      outcome: "failed",
+      reason: "runtime_memory_pressure",
+    });
+
+    await vi.waitFor(() =>
+      expect(mocks.complete).toHaveBeenCalledWith("session-1", {
+        drainPending: false,
+        agentStatus: "failed",
+        reason: "runtime_memory_pressure",
+      }),
+    );
+  });
+
   it("passes runtime generation ownership to workspace callbacks", async () => {
     const ws = createMockWs();
     mocks.sessionFindFirst.mockResolvedValue({

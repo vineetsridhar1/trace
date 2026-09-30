@@ -70,6 +70,7 @@ import {
   type PlaywrightInvocationSession,
 } from "./playwright-session.js";
 import { installRuntimeSkillsForCodingTools } from "./runtime-skills.js";
+import type { CgroupMemorySnapshot } from "./memory-pressure-watchdog.js";
 
 const execFileAsync = promisify(execFile);
 const AGENT_VERSION = "0.1.0";
@@ -130,6 +131,9 @@ export class ContainerBridge implements IBridgeClient {
   private pendingInputToolUseIds = new Map<string, string>();
   private sessionRunSequence = new Map<string, number>();
   private activeRuns = new Map<string, number>();
+  private memoryPressureRuns = new Map<string, number>();
+  private memoryPressureActive = false;
+  private memoryPressureSnapshot: CgroupMemorySnapshot | null = null;
   private playwrightSessions = new Map<string, PlaywrightInvocationSession>();
   private outbox = new BridgeOutbox();
   private terminalManager: TerminalManager;
@@ -224,6 +228,93 @@ export class ContainerBridge implements IBridgeClient {
 
   disconnect(): void {
     void this.shutdown();
+  }
+
+  /**
+   * Preserve the runtime and worktree by shedding child workloads before the
+   * kernel OOM killer terminates the bridge container.
+   */
+  handleMemoryPressure(snapshot: CgroupMemorySnapshot): void {
+    this.memoryPressureActive = true;
+    this.memoryPressureSnapshot = snapshot;
+    const activeSessionIds = [...this.activeRuns.keys()];
+    console.error(
+      JSON.stringify({
+        event: "runtime_memory_pressure",
+        runtimeInstanceId: this.runtimeInstanceId,
+        currentBytes: snapshot.currentBytes,
+        maxBytes: snapshot.maxBytes,
+        utilization: snapshot.utilization,
+        activeSessionIds,
+      }),
+    );
+
+    for (const sessionId of activeSessionIds) {
+      this.suspendRunForMemoryPressure(sessionId, snapshot);
+      this.adapters.get(sessionId)?.abort(true);
+    }
+
+    // Memory is shared by agents, terminals, browsers, and managed app
+    // processes. Shed all ephemeral workloads so one orphan cannot race the
+    // watchdog and take down the worktree-holding bridge process.
+    this.terminalManager.destroyAll("SIGKILL");
+    this.managedProcessManager.destroyAllImmediately();
+    for (const sessionId of [...this.playwrightSessions.keys()]) {
+      void this.cleanupPlaywrightSession(sessionId);
+    }
+  }
+
+  handleMemoryRecovery(snapshot: CgroupMemorySnapshot): void {
+    this.memoryPressureActive = false;
+    this.memoryPressureSnapshot = null;
+    this.managedProcessManager.recoverFromMemoryPressure();
+    console.log(
+      JSON.stringify({
+        event: "runtime_memory_recovered",
+        runtimeInstanceId: this.runtimeInstanceId,
+        currentBytes: snapshot.currentBytes,
+        maxBytes: snapshot.maxBytes,
+        utilization: snapshot.utilization,
+      }),
+    );
+    for (const [sessionId, pressureRunId] of this.memoryPressureRuns) {
+      if (this.activeRuns.get(sessionId) !== pressureRunId) continue;
+      this.activeRuns.delete(sessionId);
+      this.send({
+        type: "session_complete",
+        sessionId,
+        outcome: "failed",
+        reason: "runtime_memory_pressure",
+      });
+    }
+    this.memoryPressureRuns.clear();
+  }
+
+  private suspendRunForMemoryPressure(
+    sessionId: string,
+    snapshot: CgroupMemorySnapshot | null,
+  ): void {
+    if (this.memoryPressureRuns.has(sessionId)) return;
+    // Invalidate callbacks from the aborted adapter while continuing to report
+    // the session as active. The server therefore cannot drain queued work back
+    // into a runtime until the watchdog observes actual recovery.
+    const pressureRunId = (this.sessionRunSequence.get(sessionId) ?? 0) + 1;
+    this.sessionRunSequence.set(sessionId, pressureRunId);
+    this.activeRuns.set(sessionId, pressureRunId);
+    this.memoryPressureRuns.set(sessionId, pressureRunId);
+    this.send({
+      type: "session_output",
+      sessionId,
+      data: {
+        type: "error",
+        message: snapshot
+          ? `Trace stopped this run because runtime memory reached ` +
+            `${Math.round(snapshot.utilization * 100)}% of its limit. ` +
+            "The workspace was preserved; retry after narrowing or memory-capping the command."
+          : "Trace stopped this run while the runtime recovered from memory pressure. " +
+            "The workspace was preserved; retry after narrowing or memory-capping the command.",
+      },
+    });
   }
 
   shutdown(): Promise<void> {
@@ -477,6 +568,37 @@ export class ContainerBridge implements IBridgeClient {
   }
 
   private handleCommand(cmd: BridgeCommand): void {
+    if (this.memoryPressureActive) {
+      switch (cmd.type) {
+        case "run":
+        case "send":
+          this.suspendRunForMemoryPressure(cmd.sessionId, this.memoryPressureSnapshot);
+          return;
+        case "setup_script_run":
+          this.send({
+            type: "setup_script_result",
+            requestId: cmd.requestId,
+            exitCode: 1,
+            error: "Runtime is recovering from memory pressure",
+          });
+          return;
+        case "app_process_start":
+          this.send({
+            type: "app_process_error",
+            requestId: cmd.requestId,
+            processInstanceId: cmd.processInstanceId,
+            error: "Runtime is recovering from memory pressure",
+          });
+          return;
+        case "terminal_create":
+          this.send({
+            type: "terminal_error",
+            terminalId: cmd.terminalId,
+            error: "Runtime is recovering from memory pressure",
+          });
+          return;
+      }
+    }
     switch (cmd.type) {
       case "runtime_lease": {
         this.renewRuntimeLease?.(cmd.ttlMs);

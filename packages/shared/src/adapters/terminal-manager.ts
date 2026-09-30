@@ -93,19 +93,19 @@ export class TerminalManager {
     }
   }
 
-  destroy(terminalId: string): void {
+  destroy(terminalId: string, signal?: string): void {
     const terminal = this.terminals.get(terminalId);
     if (terminal) {
-      terminal.kill();
+      terminal.kill(signal);
       this.terminals.delete(terminalId);
     }
     this.terminalSessions.delete(terminalId);
     this.terminalOwners.delete(terminalId);
   }
 
-  destroyAll(): void {
+  destroyAll(signal?: string): void {
     for (const [id] of this.terminals) {
-      this.destroy(id);
+      this.destroy(id, signal);
     }
   }
 
