@@ -863,21 +863,13 @@ export class ReviewService {
 
     // Only messages from this inquiry's own turn can be its answer. The inquiry's outgoing prompt
     // bounds the turn from below; `startedAt` is the fallback when that message was never
-    // materialized.
+    // materialized. Dispatch only happens into an idle session, and anything a human sends during
+    // the turn is queued behind it, so the first `result` after the prompt is this inquiry's.
     const prompt = inquiry.sessionMessageId
       ? await prisma.sessionMessage.findUnique({ where: { id: inquiry.sessionMessageId } })
       : null;
     const turnStart = prompt?.createdAt ?? inquiry.startedAt;
     if (!turnStart) return;
-
-    // The attached session is a normal coding session a human can also talk to. If someone sent it
-    // a message after this prompt, the turn that just ended answers *them*, and claiming it would
-    // attribute an unrelated answer to this inquiry. Leave the inquiry running for its own `result`
-    // rather than guessing; the recovery sweep releases it if that never arrives.
-    const interleaved = await prisma.sessionMessage.count({
-      where: { sessionId: event.scopeId, role: "user", createdAt: { gt: turnStart } },
-    });
-    if (interleaved > 0) return;
 
     const turnMessages = await prisma.sessionMessage.findMany({
       where: { sessionId: event.scopeId, role: "assistant", createdAt: { gte: turnStart } },
@@ -1180,6 +1172,18 @@ export class ReviewService {
         include: { review: true, snapshot: true },
       });
       if (!inquiry) return;
+
+      // Only dispatch into an idle session. A prompt sent to a busy agent queues behind the turn
+      // in flight, and that turn's `result` would then be mistaken for this inquiry's answer. The
+      // recovery sweep retries, so a busy session only delays dispatch.
+      const session = await prisma.session.findUnique({
+        where: { id: sessionId },
+        select: { agentStatus: true, sessionStatus: true },
+      });
+      if (!session || session.agentStatus === "active" || session.sessionStatus === "needs_input") {
+        return;
+      }
+
       const claimed = await prisma.reviewInquiry.updateMany({
         where: { id: inquiry.id, state: "queued" },
         data: { state: "running", startedAt: new Date() },

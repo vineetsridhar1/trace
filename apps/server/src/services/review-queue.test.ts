@@ -29,8 +29,9 @@ function createReviewPrismaMock() {
       "groupBy",
     ),
     reviewGuide: table("findFirst", "create", "updateMany"),
+    session: table("findUnique"),
     reviewDelivery: table("findUnique", "findUniqueOrThrow", "create", "update", "updateMany"),
-    sessionMessage: table("findMany", "findUnique", "count"),
+    sessionMessage: table("findMany", "findUnique"),
   };
 }
 
@@ -97,9 +98,9 @@ beforeEach(() => {
   db.reviewInquiry.findMany.mockResolvedValue([]);
   db.reviewInquiry.groupBy.mockResolvedValue([]);
   db.review.findUnique.mockResolvedValue({ attachedSessionId: "session-1" });
+  db.session.findUnique.mockResolvedValue({ agentStatus: "done", sessionStatus: "in_progress" });
   db.sessionMessage.findMany.mockResolvedValue([]);
   db.sessionMessage.findUnique.mockResolvedValue(null);
-  db.sessionMessage.count.mockResolvedValue(0);
 });
 
 describe("turn correlation", () => {
@@ -168,20 +169,20 @@ describe("turn correlation", () => {
     );
   });
 
-  it("leaves the inquiry running when a human interleaved a message", async () => {
+  it("still completes when a human message arrived mid-turn", async () => {
     db.reviewInquiry.findFirst.mockResolvedValueOnce(runningInquiry()).mockResolvedValue(null);
-    db.sessionMessage.count.mockResolvedValue(1);
-    db.sessionMessage.findMany.mockResolvedValue([
-      message("message-1", "Here is the thing you just asked about.", 1),
-    ]);
+    db.sessionMessage.findMany.mockResolvedValue([message("message-1", "The answer.", 1)]);
 
     await reviewService.handleSessionOutputEvent(
       outputEvent({ type: "result", subtype: "success" }),
     );
 
-    // Claiming this turn would answer the review question with a reply meant for the human.
-    expect(db.reviewInquiry.updateMany).not.toHaveBeenCalled();
-    expect(events.create).not.toHaveBeenCalled();
+    // That message is queued behind this turn, so this `result` is still the inquiry's own answer.
+    expect(db.reviewInquiry.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ state: "completed", responseMessageId: "message-1" }),
+      }),
+    );
   });
 
   it("bounds the turn by the inquiry's own outgoing prompt", async () => {
@@ -287,6 +288,44 @@ describe("FIFO dispatch", () => {
     await reviewService.recoverStuckInquiries();
 
     expect(sessions.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("dispatches the next queued question into an idle session", async () => {
+    db.reviewInquiry.groupBy.mockResolvedValue([{ sessionId: "session-1" }]);
+    db.reviewInquiry.findFirst.mockResolvedValueOnce(null).mockResolvedValue(
+      runningInquiry({
+        state: "queued",
+        review: { organizationId: "org-1", createdById: "user-1" },
+        snapshot: { baseSha: "base", headSha: "head", files: [] },
+      }),
+    );
+    db.sessionMessage.findUnique.mockResolvedValue({ id: "prompt-1" });
+
+    await reviewService.recoverStuckInquiries();
+
+    expect(sessions.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "session-1", interactionMode: "ask" }),
+    );
+    expect(eventTypes()).toContain("review_inquiry_started");
+  });
+
+  it("does not dispatch into a session the agent is still working in", async () => {
+    db.reviewInquiry.findFirst.mockResolvedValue(null);
+    db.reviewInquiry.groupBy.mockResolvedValue([{ sessionId: "session-1" }]);
+    db.session.findUnique.mockResolvedValue({
+      agentStatus: "active",
+      sessionStatus: "in_progress",
+    });
+    db.reviewInquiry.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(runningInquiry({ state: "queued", review: { organizationId: "org-1" } }));
+
+    await reviewService.recoverStuckInquiries();
+
+    // Prompting a busy agent queues behind its turn, whose `result` would then be misread as this
+    // inquiry's answer.
+    expect(sessions.sendMessage).not.toHaveBeenCalled();
+    expect(db.reviewInquiry.updateMany).not.toHaveBeenCalled();
   });
 
   it("expires a turn that never finished so the queue can move on", async () => {
