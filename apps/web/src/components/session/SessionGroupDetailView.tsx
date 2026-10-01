@@ -448,7 +448,7 @@ export function SessionGroupDetailView({
         toast.error("Open the PR Review before navigating to changed files");
         return;
       }
-      navigateReview(groupReviewId, filePath);
+      navigateReview(groupReviewId, { filePath, startLine: 1, endLine: 1 });
       setReviewTabOpen(true);
       setActiveFilePath(null);
       setActiveTerminalId(null);

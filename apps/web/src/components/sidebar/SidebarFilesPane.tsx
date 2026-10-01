@@ -22,13 +22,7 @@ export function SidebarFilesPane({ sessionGroupId }: { sessionGroupId: string })
   const reviewSelection = useReviewUiStore((state) =>
     reviewId ? state.byReviewId[reviewId] : undefined,
   );
-  const reviewSnapshot = useMemo(
-    () =>
-      review?.snapshots.find(
-        (snapshot) => snapshot.id === (reviewSelection?.snapshotId ?? review.currentSnapshotId),
-      ) ?? review?.currentSnapshot,
-    [review, reviewSelection?.snapshotId],
-  );
+  const reviewSnapshot = review?.currentSnapshot;
   const reviewFiles = useMemo(
     () =>
       reviewSnapshot?.files.map(({ path, status, additions, deletions }) => ({

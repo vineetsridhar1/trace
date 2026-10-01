@@ -28,8 +28,8 @@ describe("GitHubReviewProvider", () => {
             number: 42,
             html_url: "https://github.com/acme/widgets/pull/42",
             title: "Safer widgets",
-            base: { sha: "base-sha" },
-            head: { sha: "head-sha" },
+            base: { sha: "base-sha", ref: "main" },
+            head: { sha: "head-sha", ref: "feat/widgets" },
           }),
           { status: 200 },
         ),
@@ -54,7 +54,13 @@ describe("GitHubReviewProvider", () => {
       "https://github.com/acme/widgets/pull/42",
       "token",
     );
-    expect(pull).toMatchObject({ remoteId: "99", baseSha: "base-sha", headSha: "head-sha" });
+    expect(pull).toMatchObject({
+      remoteId: "99",
+      baseSha: "base-sha",
+      headSha: "head-sha",
+      baseRef: "main",
+      headRef: "feat/widgets",
+    });
     expect(pull.files).toEqual([
       expect.objectContaining({ path: "src/widget.ts", patch: expect.stringContaining("+new") }),
     ]);
@@ -84,6 +90,8 @@ describe("GitHubReviewProvider", () => {
         repository: { owner: "acme", repo: "widgets" },
         baseSha: "base",
         headSha: "head",
+        baseRef: "main",
+        headRef: "feature",
         files: [],
       },
       token: "token",

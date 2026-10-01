@@ -20,6 +20,8 @@ export interface ResolvedPullRequest {
   repository: GitHubRepoRef;
   baseSha: string;
   headSha: string;
+  baseRef: string;
+  headRef: string;
   files: ReviewProviderFile[];
 }
 
@@ -56,8 +58,8 @@ interface GitHubPullResponse {
   number?: number;
   html_url?: string;
   title?: string;
-  base?: { sha?: string };
-  head?: { sha?: string };
+  base?: { sha?: string; ref?: string };
+  head?: { sha?: string; ref?: string };
 }
 
 interface GitHubFileResponse {
@@ -128,6 +130,8 @@ export class GitHubReviewProvider implements ReviewProviderAdapter {
       repository: target.repo,
       baseSha: pull.base.sha,
       headSha: pull.head.sha,
+      baseRef: typeof pull.base.ref === "string" ? pull.base.ref : "",
+      headRef: typeof pull.head.ref === "string" ? pull.head.ref : "",
       files,
     };
   }

@@ -4,18 +4,15 @@ import { ValidationError } from "../lib/errors.js";
 export const REVIEW_GUIDE_SKILL_INSTRUCTION =
   "Before generating the Guide, read $TRACE_SKILLS_DIR/review-guide/SKILL.md completely and follow it.";
 
-interface GuideReference {
-  filePath: string;
-  startLine: number;
-  endLine: number;
-}
+/** Inline prose anchor: `[[label|path|startLine-endLine]]`. */
+const ANCHOR_PATTERN = /\[\[([^[\]|]+)\|([^[\]|]+)\|(\d+)-(\d+)\]\]/g;
 
 interface GuideChapter {
   id: string;
   title: string;
   explanation: string;
   implications: string[];
-  references: GuideReference[];
+  files: string[];
 }
 
 export interface ValidatedReviewGuide {
@@ -39,21 +36,41 @@ function snapshotPaths(filesValue: Prisma.JsonValue): string[] {
   });
 }
 
-function implications(value: unknown): string[] | null {
+function stringList(value: unknown): string[] | null {
   if (typeof value === "string") return value.trim() ? [value.trim()] : null;
   if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) return null;
   const items = value.map((item) => item.trim()).filter(Boolean);
   return items.length > 0 ? items : null;
 }
 
+/**
+ * Inline anchors are what make Guide prose navigable, so they are held to the same standard as the
+ * chapter's file coverage: an anchor may only point into a file the chapter owns, because the reader
+ * jumps to it inside that chapter's own diff column.
+ */
+function validateAnchors(text: string, chapterFiles: Set<string>, label: string): void {
+  for (const match of text.matchAll(ANCHOR_PATTERN)) {
+    const [, , filePath, start, end] = match;
+    if (!chapterFiles.has(filePath!)) {
+      throw new ValidationError(
+        `${label} links to ${filePath}, which is not one of that chapter's files`,
+      );
+    }
+    if (Number(start) < 1 || Number(end) < Number(start)) {
+      throw new ValidationError(`${label} links to an invalid line range in ${filePath}`);
+    }
+  }
+}
+
 export function guideGenerationInstruction(filesValue: Prisma.JsonValue): string {
   const paths = snapshotPaths(filesValue);
   return [
     "Return only JSON, with no Markdown fence or commentary.",
-    'Use this exact shape: {"title":"...","intent":"...","chapters":[{"id":"...","title":"...","explanation":"...","implications":["..."],"references":[{"filePath":"...","startLine":1,"endLine":1}]}],"everythingElse":["..."]}.',
+    'Use this exact shape: {"title":"...","intent":"...","chapters":[{"id":"...","title":"...","explanation":"...","implications":["..."],"files":["..."]}],"everythingElse":["..."]}.',
     `The authoritative changed-file paths are: ${JSON.stringify(paths)}.`,
-    "Every authoritative path must occur exactly once across the entire response: either in the references of exactly one chapter or in everythingElse.",
-    "Never repeat a path in another chapter or in everythingElse. Do not invent paths. Use positive line numbers and endLine >= startLine.",
+    "Every authoritative path must occur exactly once across the entire response: either in the files of exactly one chapter or in everythingElse.",
+    "Never repeat a path in another chapter or in everythingElse. Do not invent paths.",
+    "Inside explanation and implications, link to specific code with [[label|path|startLine-endLine]]. The path must be one of that same chapter's files, startLine must be positive, and endLine must be at least startLine.",
   ].join("\n");
 }
 
@@ -83,46 +100,37 @@ export function validateReviewGuide(
   const covered = new Set<string>();
   const chapters: GuideChapter[] = guide.chapters.map((chapterValue, chapterIndex) => {
     const chapter = asRecord(chapterValue);
-    const chapterImplications = implications(chapter?.implications);
+    const implications = stringList(chapter?.implications);
+    const files = stringList(chapter?.files);
     if (
       !chapter ||
       typeof chapter.id !== "string" ||
       typeof chapter.title !== "string" ||
       typeof chapter.explanation !== "string" ||
-      !chapterImplications ||
-      !Array.isArray(chapter.references)
+      !implications ||
+      !files
     ) {
       throw new ValidationError(`Guide chapter ${chapterIndex + 1} is invalid`);
     }
-    const references: GuideReference[] = chapter.references.map((referenceValue) => {
-      const reference = asRecord(referenceValue);
-      if (
-        !reference ||
-        typeof reference.filePath !== "string" ||
-        !allowedPaths.has(reference.filePath) ||
-        !Number.isInteger(reference.startLine) ||
-        !Number.isInteger(reference.endLine) ||
-        Number(reference.startLine) < 1 ||
-        Number(reference.endLine) < Number(reference.startLine)
-      ) {
-        throw new ValidationError("Guide contains an invalid snapshot reference");
+    for (const filePath of files) {
+      if (!allowedPaths.has(filePath)) {
+        throw new ValidationError(`Guide references an unknown file: ${filePath}`);
       }
-      if (covered.has(reference.filePath)) {
-        throw new ValidationError(`Guide repeats changed file: ${reference.filePath}`);
+      if (covered.has(filePath)) {
+        throw new ValidationError(`Guide repeats changed file: ${filePath}`);
       }
-      covered.add(reference.filePath);
-      return {
-        filePath: reference.filePath,
-        startLine: Number(reference.startLine),
-        endLine: Number(reference.endLine),
-      };
-    });
+      covered.add(filePath);
+    }
+    const chapterFiles = new Set(files);
+    const label = `Guide chapter "${chapter.title}"`;
+    validateAnchors(chapter.explanation, chapterFiles, label);
+    implications.forEach((implication) => validateAnchors(implication, chapterFiles, label));
     return {
       id: chapter.id,
       title: chapter.title,
       explanation: chapter.explanation,
-      implications: chapterImplications,
-      references,
+      implications,
+      files,
     };
   });
 

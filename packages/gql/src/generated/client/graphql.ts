@@ -3989,15 +3989,6 @@ export type EnqueueReviewInquiryMutation = {
   enqueueReviewInquiry: { __typename?: "ReviewInquiry"; id: string };
 };
 
-export type CancelReviewInquiryMutationVariables = Exact<{
-  inquiryId: Scalars["ID"]["input"];
-}>;
-
-export type CancelReviewInquiryMutation = {
-  __typename?: "Mutation";
-  cancelReviewInquiry: { __typename?: "ReviewInquiry"; id: string; state: ReviewInquiryState };
-};
-
 export type ReviewDiffFileQueryVariables = Exact<{
   snapshotId: Scalars["ID"]["input"];
   filePath: Scalars["String"]["input"];
@@ -4009,13 +4000,10 @@ export type ReviewDiffFileQuery = {
     __typename?: "ReviewDiffFile";
     snapshotId: string;
     path: string;
-    previousPath?: string | null;
     status: string;
     additions: number;
     deletions: number;
     patch: string;
-    originalContent?: string | null;
-    modifiedContent?: string | null;
     truncated: boolean;
   };
 };
@@ -4058,15 +4046,6 @@ export type RefreshReviewSnapshotMutation = {
   refreshReviewSnapshot: { __typename?: "Review"; id: string };
 };
 
-export type CreateGeneralReviewThreadMutationVariables = Exact<{
-  input: CreateReviewThreadInput;
-}>;
-
-export type CreateGeneralReviewThreadMutation = {
-  __typename?: "Mutation";
-  createReviewThread: { __typename?: "ReviewThread"; id: string };
-};
-
 export type ReplyToReviewThreadMutationVariables = Exact<{
   threadId: Scalars["ID"]["input"];
   body: Scalars["String"]["input"];
@@ -4085,6 +4064,33 @@ export type ResolveReviewThreadMutationVariables = Exact<{
 export type ResolveReviewThreadMutation = {
   __typename?: "Mutation";
   resolveReviewThread: { __typename?: "ReviewThread"; id: string };
+};
+
+export type GuideDiffFileQueryVariables = Exact<{
+  snapshotId: Scalars["ID"]["input"];
+  filePath: Scalars["String"]["input"];
+}>;
+
+export type GuideDiffFileQuery = {
+  __typename?: "Query";
+  reviewDiffFile: {
+    __typename?: "ReviewDiffFile";
+    snapshotId: string;
+    path: string;
+    additions: number;
+    deletions: number;
+    patch: string;
+    truncated: boolean;
+  };
+};
+
+export type CancelReviewInquiryMutationVariables = Exact<{
+  inquiryId: Scalars["ID"]["input"];
+}>;
+
+export type CancelReviewInquiryMutation = {
+  __typename?: "Mutation";
+  cancelReviewInquiry: { __typename?: "ReviewInquiry"; id: string; state: ReviewInquiryState };
 };
 
 export type SelectReviewThreadMutationVariables = Exact<{
@@ -8363,49 +8369,6 @@ export const EnqueueReviewInquiryDocument = {
     },
   ],
 } as unknown as DocumentNode<EnqueueReviewInquiryMutation, EnqueueReviewInquiryMutationVariables>;
-export const CancelReviewInquiryDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "CancelReviewInquiry" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "inquiryId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "cancelReviewInquiry" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "inquiryId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "inquiryId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "state" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<CancelReviewInquiryMutation, CancelReviewInquiryMutationVariables>;
 export const ReviewDiffFileDocument = {
   kind: "Document",
   definitions: [
@@ -8454,13 +8417,10 @@ export const ReviewDiffFileDocument = {
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "snapshotId" } },
                 { kind: "Field", name: { kind: "Name", value: "path" } },
-                { kind: "Field", name: { kind: "Name", value: "previousPath" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "additions" } },
                 { kind: "Field", name: { kind: "Name", value: "deletions" } },
                 { kind: "Field", name: { kind: "Name", value: "patch" } },
-                { kind: "Field", name: { kind: "Name", value: "originalContent" } },
-                { kind: "Field", name: { kind: "Name", value: "modifiedContent" } },
                 { kind: "Field", name: { kind: "Name", value: "truncated" } },
               ],
             },
@@ -8599,49 +8559,6 @@ export const RefreshReviewSnapshotDocument = {
     },
   ],
 } as unknown as DocumentNode<RefreshReviewSnapshotMutation, RefreshReviewSnapshotMutationVariables>;
-export const CreateGeneralReviewThreadDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "CreateGeneralReviewThread" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "CreateReviewThreadInput" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "createReviewThread" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "input" },
-                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  CreateGeneralReviewThreadMutation,
-  CreateGeneralReviewThreadMutationVariables
->;
 export const ReplyToReviewThreadDocument = {
   kind: "Document",
   definitions: [
@@ -8748,6 +8665,109 @@ export const ResolveReviewThreadDocument = {
     },
   ],
 } as unknown as DocumentNode<ResolveReviewThreadMutation, ResolveReviewThreadMutationVariables>;
+export const GuideDiffFileDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "GuideDiffFile" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "snapshotId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "reviewDiffFile" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "snapshotId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "snapshotId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "filePath" },
+                value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "snapshotId" } },
+                { kind: "Field", name: { kind: "Name", value: "path" } },
+                { kind: "Field", name: { kind: "Name", value: "additions" } },
+                { kind: "Field", name: { kind: "Name", value: "deletions" } },
+                { kind: "Field", name: { kind: "Name", value: "patch" } },
+                { kind: "Field", name: { kind: "Name", value: "truncated" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<GuideDiffFileQuery, GuideDiffFileQueryVariables>;
+export const CancelReviewInquiryDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CancelReviewInquiry" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "inquiryId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "cancelReviewInquiry" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "inquiryId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "inquiryId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "state" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<CancelReviewInquiryMutation, CancelReviewInquiryMutationVariables>;
 export const SelectReviewThreadDocument = {
   kind: "Document",
   definitions: [

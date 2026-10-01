@@ -8,64 +8,107 @@ import {
 
 const files = [{ path: "src/a.ts" }, { path: "src/b.ts" }];
 
+const chapter = (overrides: Record<string, unknown>) => ({
+  id: "a",
+  title: "A",
+  explanation: "Explanation",
+  implications: ["One"],
+  files: ["src/a.ts"],
+  ...overrides,
+});
+
+const guide = (overrides: Record<string, unknown>) => ({
+  title: "Change",
+  intent: "Explain it",
+  chapters: [chapter({})],
+  everythingElse: ["src/b.ts"],
+  ...overrides,
+});
+
 describe("review guide contract", () => {
   it("normalizes list and legacy string implications", () => {
-    const guide = validateReviewGuide(
-      {
-        title: "Change",
-        intent: "Explain it",
+    const validated = validateReviewGuide(
+      guide({
         chapters: [
-          {
-            id: "a",
-            title: "A",
-            explanation: "Explanation",
-            implications: ["One", "Two"],
-            references: [{ filePath: "src/a.ts", startLine: 1, endLine: 2 }],
-          },
-          {
-            id: "b",
-            title: "B",
-            explanation: "Explanation",
-            implications: "Legacy implication",
-            references: [{ filePath: "src/b.ts", startLine: 3, endLine: 3 }],
-          },
+          chapter({ implications: ["One", "Two"] }),
+          chapter({ id: "b", implications: "Legacy implication", files: ["src/b.ts"] }),
         ],
         everythingElse: [],
-      },
+      }),
       files,
     );
 
-    expect(guide.chapters[0]?.implications).toEqual(["One", "Two"]);
-    expect(guide.chapters[1]?.implications).toEqual(["Legacy implication"]);
+    expect(validated.chapters[0]?.implications).toEqual(["One", "Two"]);
+    expect(validated.chapters[1]?.implications).toEqual(["Legacy implication"]);
+  });
+
+  it("keeps each chapter's own file list so the Guide can render their diffs together", () => {
+    const validated = validateReviewGuide(
+      guide({ chapters: [chapter({ files: ["src/a.ts", "src/b.ts"] })], everythingElse: [] }),
+      files,
+    );
+
+    expect(validated.chapters[0]?.files).toEqual(["src/a.ts", "src/b.ts"]);
+  });
+
+  it("accepts repeated inline anchors into the same chapter file", () => {
+    const validated = validateReviewGuide(
+      guide({
+        chapters: [
+          chapter({
+            explanation: "Calls [[init|src/a.ts|3-5]] and then [[flush|src/a.ts|11-11]].",
+            implications: ["[[flush|src/a.ts|11-11]] runs on every request."],
+          }),
+        ],
+      }),
+      files,
+    );
+
+    expect(validated.chapters[0]?.explanation).toContain("[[flush|src/a.ts|11-11]]");
+  });
+
+  it("rejects an inline anchor pointing outside the chapter's own files", () => {
+    expect(() =>
+      validateReviewGuide(
+        guide({ chapters: [chapter({ explanation: "See [[other|src/b.ts|2-2]]." })] }),
+        files,
+      ),
+    ).toThrow('Guide chapter "A" links to src/b.ts, which is not one of that chapter\'s files');
+  });
+
+  it("rejects an inline anchor with an inverted line range", () => {
+    expect(() =>
+      validateReviewGuide(
+        guide({ chapters: [chapter({ implications: ["See [[init|src/a.ts|9-2]]."] })] }),
+        files,
+      ),
+    ).toThrow('Guide chapter "A" links to an invalid line range in src/a.ts');
   });
 
   it("rejects a file repeated between a chapter and everything else", () => {
     expect(() =>
-      validateReviewGuide(
-        {
-          title: "Change",
-          intent: "Explain it",
-          chapters: [
-            {
-              id: "a",
-              title: "A",
-              explanation: "Explanation",
-              implications: ["One"],
-              references: [{ filePath: "src/a.ts", startLine: 1, endLine: 2 }],
-            },
-          ],
-          everythingElse: ["src/a.ts", "src/b.ts"],
-        },
-        files,
-      ),
+      validateReviewGuide(guide({ everythingElse: ["src/a.ts", "src/b.ts"] }), files),
     ).toThrow("Guide repeats changed file: src/a.ts");
   });
 
-  it("tells the coding session the exact paths and unambiguous coverage rule", () => {
+  it("rejects a chapter file that is not in the snapshot", () => {
+    expect(() =>
+      validateReviewGuide(guide({ chapters: [chapter({ files: ["src/missing.ts"] })] }), files),
+    ).toThrow("Guide references an unknown file: src/missing.ts");
+  });
+
+  it("rejects a snapshot file no chapter accounts for", () => {
+    expect(() => validateReviewGuide(guide({ everythingElse: [] }), files)).toThrow(
+      "Guide omits changed file: src/b.ts",
+    );
+  });
+
+  it("tells the coding session the exact paths, coverage rule, and anchor syntax", () => {
     const instruction = guideGenerationInstruction(files);
     expect(instruction).toContain('["src/a.ts","src/b.ts"]');
     expect(instruction).toContain("exactly once");
-    expect(instruction).toContain('"implications":["..."]');
+    expect(instruction).toContain('"files":["..."]');
+    expect(instruction).toContain("[[label|path|startLine-endLine]]");
   });
 
   it("requires the attached session to load the Guide methodology", () => {

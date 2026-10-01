@@ -1,0 +1,159 @@
+import { useCallback, useMemo, useRef, useState } from "react";
+import type { ReviewFile } from "@trace/gql";
+import { GuideChapterAside } from "./GuideChapterAside";
+import { GuideFileDiff } from "./GuideFileDiff";
+import { GuideToc } from "./GuideToc";
+import { anchorsEqual, type GuideAnchor, type GuideContent } from "./guide-content";
+
+interface GuideScrollerProps {
+  snapshotId: string;
+  content: GuideContent;
+  files: ReviewFile[];
+  onOpenInChanges(anchor: GuideAnchor): void;
+  onAskAboutChapter(chapterId: string): void;
+  onCommentOnChapter(chapterId: string): void;
+  onReviewAllChanges(): void;
+}
+
+export function GuideScroller({
+  snapshotId,
+  content,
+  files,
+  onOpenInChanges,
+  onAskAboutChapter,
+  onCommentOnChapter,
+  onReviewAllChanges,
+}: GuideScrollerProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeChapter, setActiveChapter] = useState(0);
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const [anchor, setAnchor] = useState<GuideAnchor | null>(null);
+  const filesByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files]);
+  const coveredCount = useMemo(
+    () => content.chapters.reduce((total, chapter) => total + chapter.files.length, 0),
+    [content.chapters],
+  );
+
+  const scrollToSelector = useCallback((selector: string) => {
+    scrollRef.current?.querySelector(selector)?.scrollIntoView({
+      block: "start",
+      behavior: "smooth",
+    });
+  }, []);
+
+  // The pinned chapter and the active file both follow scroll position, exactly like the sidebar
+  // follows the Changes view, so the reader always knows where they are in the walkthrough.
+  const handleScroll = useCallback(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const top = container.getBoundingClientRect().top;
+    let chapter = 0;
+    let file: string | null = activeFilePath;
+    for (const element of container.querySelectorAll<HTMLElement>("[data-guide-chapter]")) {
+      if (element.getBoundingClientRect().top - top <= 40)
+        chapter = Number(element.dataset.guideChapter);
+    }
+    for (const element of container.querySelectorAll<HTMLElement>("[data-guide-file]")) {
+      if (element.getBoundingClientRect().top - top <= 260)
+        file = element.dataset.guideFile ?? null;
+    }
+    if (chapter !== activeChapter) setActiveChapter(chapter);
+    if (file !== activeFilePath) setActiveFilePath(file);
+  }, [activeChapter, activeFilePath]);
+
+  const jumpToAnchor = useCallback(
+    (next: GuideAnchor) => {
+      setAnchor((current) => (anchorsEqual(current, next) ? current : next));
+      setActiveFilePath(next.filePath);
+      scrollToSelector(`[data-guide-file="${CSS.escape(next.filePath)}"]`);
+    },
+    [scrollToSelector],
+  );
+
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#141414]">
+      <GuideToc
+        titles={content.chapters.map((chapter) => chapter.title)}
+        activeIndex={activeChapter}
+        onSelect={(index) => scrollToSelector(`[data-guide-chapter="${index}"]`)}
+      />
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="native-scrollbar relative min-h-0 flex-1 overflow-y-auto"
+      >
+        {content.chapters.map((chapter, index) => (
+          <div
+            key={chapter.id}
+            data-guide-chapter={index}
+            className="grid border-b border-[#26262a] [grid-template-columns:minmax(0,560px)_minmax(0,1fr)]"
+          >
+            <GuideChapterAside
+              chapter={chapter}
+              index={index}
+              total={content.chapters.length}
+              nextTitle={content.chapters[index + 1]?.title ?? null}
+              activeAnchor={anchor}
+              activeFilePath={activeChapter === index ? activeFilePath : null}
+              filesByPath={filesByPath}
+              onAnchor={jumpToAnchor}
+              onFile={(filePath) => jumpToAnchor({ filePath, startLine: 1, endLine: 1 })}
+              onAsk={() => onAskAboutChapter(chapter.id)}
+              onComment={() => onCommentOnChapter(chapter.id)}
+            />
+            <div className="flex flex-col gap-[18px] bg-[#101011] px-5 pb-7 pt-5">
+              {chapter.files.map((filePath) => (
+                <GuideFileDiff
+                  key={filePath}
+                  snapshotId={snapshotId}
+                  filePath={filePath}
+                  highlight={anchor?.filePath === filePath ? anchor : null}
+                  onOpenInChanges={() =>
+                    onOpenInChanges(
+                      anchor?.filePath === filePath
+                        ? anchor
+                        : { filePath, startLine: 1, endLine: 1 },
+                    )
+                  }
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+        {content.everythingElse.length > 0 ? (
+          <div className="flex flex-col gap-2.5 border-b border-[#26262a] px-11 py-7">
+            <span className="text-[10.5px] font-semibold tracking-[0.08em] text-muted-foreground">
+              EVERYTHING ELSE
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {content.everythingElse.map((path) => (
+                <button
+                  key={path}
+                  type="button"
+                  onClick={() => onOpenInChanges({ filePath: path, startLine: 1, endLine: 1 })}
+                  className="rounded-md border border-[#262626] px-2 py-1 font-mono text-[11px] text-[#a1a1aa] hover:text-foreground"
+                >
+                  {path}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="flex h-[220px] flex-col items-center justify-center gap-2.5">
+          <span className="text-[15px] font-semibold text-[#ededef]">End of guide</span>
+          <span className="text-[12.5px] text-muted-foreground">
+            {content.chapters.length} chapter{content.chapters.length === 1 ? "" : "s"} &middot;{" "}
+            {coveredCount} of {files.length} file{files.length === 1 ? "" : "s"} covered
+          </span>
+          <button
+            type="button"
+            onClick={onReviewAllChanges}
+            className="mt-1.5 flex h-[30px] items-center rounded-[7px] border border-[#262626] px-3 text-xs font-medium text-[#d4d4d8] hover:bg-white/5"
+          >
+            Review all changes &rarr;
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

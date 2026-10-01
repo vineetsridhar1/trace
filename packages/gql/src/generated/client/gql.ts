@@ -32,14 +32,14 @@ type Documents = {
   "\n  query HomeDesigns($organizationId: ID!) {\n    designSessionGroups(organizationId: $organizationId, includeArchived: true) {\n      ...DesignCreationGroup\n    }\n  }\n\n  fragment DesignCreationGroup on SessionGroup {\n    id\n    name\n    slug\n    kind\n    status\n    visibility\n    archivedAt\n    designPreviewUrl\n    createdAt\n    updatedAt\n    owner {\n      id\n      name\n      avatarUrl\n    }\n    connection {\n      state\n    }\n    sessions {\n      id\n      sessionGroupId\n      createdById\n      agentStatus\n      sessionStatus\n      prUrl\n      worktreeDeleted\n      lastMessageAt\n      lastUserMessageAt\n      updatedAt\n      createdAt\n    }\n  }\n": typeof types.HomeDesignsDocument;
   "\n  mutation CreateReviewThread($input: CreateReviewThreadInput!) {\n    createReviewThread(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateReviewThreadDocument;
   "\n  mutation EnqueueReviewInquiry($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n    }\n  }\n": typeof types.EnqueueReviewInquiryDocument;
-  "\n  mutation CancelReviewInquiry($inquiryId: ID!) {\n    cancelReviewInquiry(inquiryId: $inquiryId) {\n      id\n      state\n    }\n  }\n": typeof types.CancelReviewInquiryDocument;
-  "\n  query ReviewDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      previousPath\n      status\n      additions\n      deletions\n      patch\n      originalContent\n      modifiedContent\n      truncated\n    }\n  }\n": typeof types.ReviewDiffFileDocument;
+  "\n  query ReviewDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      status\n      additions\n      deletions\n      patch\n      truncated\n    }\n  }\n": typeof types.ReviewDiffFileDocument;
   "\n  mutation GenerateReviewGuide($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n      state\n      position\n    }\n  }\n": typeof types.GenerateReviewGuideDocument;
   "\n  mutation SubmitReview($input: SubmitReviewInput!) {\n    submitReviewToProvider(input: $input) {\n      id\n      status\n      error\n      providerReviewId\n    }\n  }\n": typeof types.SubmitReviewDocument;
   "\n  mutation RefreshReviewSnapshot($reviewId: ID!) {\n    refreshReviewSnapshot(reviewId: $reviewId) {\n      id\n    }\n  }\n": typeof types.RefreshReviewSnapshotDocument;
-  "\n  mutation CreateGeneralReviewThread($input: CreateReviewThreadInput!) {\n    createReviewThread(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateGeneralReviewThreadDocument;
   "\n  mutation ReplyToReviewThread($threadId: ID!, $body: String!) {\n    replyToReviewThread(threadId: $threadId, body: $body) {\n      id\n    }\n  }\n": typeof types.ReplyToReviewThreadDocument;
   "\n  mutation ResolveReviewThread($threadId: ID!, $resolved: Boolean!) {\n    resolveReviewThread(threadId: $threadId, resolved: $resolved) {\n      id\n    }\n  }\n": typeof types.ResolveReviewThreadDocument;
+  "\n  query GuideDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      additions\n      deletions\n      patch\n      truncated\n    }\n  }\n": typeof types.GuideDiffFileDocument;
+  "\n  mutation CancelReviewInquiry($inquiryId: ID!) {\n    cancelReviewInquiry(inquiryId: $inquiryId) {\n      id\n      state\n    }\n  }\n": typeof types.CancelReviewInquiryDocument;
   "\n  mutation SelectReviewThread($threadId: ID!, $selected: Boolean!) {\n    setReviewThreadSelected(threadId: $threadId, selected: $selected) {\n      id\n    }\n  }\n": typeof types.SelectReviewThreadDocument;
   "\n  fragment ReviewWorkspaceFields on Review {\n    id\n    organizationId\n    repositoryId\n    channelId\n    sourceSessionGroupId\n    attachedSessionId\n    provider\n    remotePullRequestId\n    pullRequestNumber\n    pullRequestUrl\n    title\n    status\n    currentSnapshotId\n    createdAt\n    updatedAt\n    repository {\n      id\n      name\n      remoteUrl\n    }\n    currentSnapshot {\n      id\n      reviewId\n      baseSha\n      headSha\n      status\n      files {\n        path\n        previousPath\n        status\n        additions\n        deletions\n        patchAvailable\n        viewed\n        commentCount\n      }\n      patchChecksum\n      patchByteLength\n      diffFormatVersion\n      providerMetadata\n      createdById\n      createdAt\n    }\n    snapshots {\n      id\n      reviewId\n      baseSha\n      headSha\n      status\n      files {\n        path\n        previousPath\n        status\n        additions\n        deletions\n        patchAvailable\n        viewed\n        commentCount\n      }\n      patchChecksum\n      patchByteLength\n      diffFormatVersion\n      providerMetadata\n      createdById\n      createdAt\n    }\n    threads {\n      id\n      reviewId\n      originSnapshotId\n      authorId\n      scope\n      guideChapterId\n      resolvedAt\n      resolvedById\n      deliveryStatus\n      providerReviewId\n      providerCommentId\n      deliveredAt\n      deliveryError\n      createdAt\n      updatedAt\n      author {\n        id\n        name\n        email\n        avatarUrl\n      }\n      anchor {\n        snapshotId\n        filePath\n        side\n        startLine\n        endLine\n        originalLine\n        selectedText\n        context\n        hunkId\n        baseBlobId\n        headBlobId\n        status\n      }\n      comments {\n        id\n        threadId\n        authorId\n        body\n        editedAt\n        deletedAt\n        providerCommentId\n        createdAt\n        updatedAt\n        author {\n          id\n          name\n          email\n          avatarUrl\n        }\n      }\n    }\n    inquiries {\n      id\n      reviewId\n      snapshotId\n      sessionId\n      sourceKind\n      question\n      anchor\n      context\n      sessionMessageId\n      responseMessageId\n      position\n      state\n      error\n      structuredResult\n      createdAt\n      startedAt\n      completedAt\n      responseMessage {\n        id\n        sessionId\n        role\n        text\n        content\n        attachments\n        sourceEventId\n        createdAt\n      }\n    }\n    guides {\n      id\n      reviewId\n      snapshotId\n      generationInquiryId\n      status\n      title\n      intent\n      content\n      version\n      createdAt\n    }\n  }\n": typeof types.ReviewWorkspaceFieldsFragmentDoc;
   "\n  query ReviewWorkspace($id: ID!) {\n    review(id: $id) {\n      ...ReviewWorkspaceFields\n    }\n  }\n  \n": typeof types.ReviewWorkspaceDocument;
@@ -188,9 +188,7 @@ const documents: Documents = {
     types.CreateReviewThreadDocument,
   "\n  mutation EnqueueReviewInquiry($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n    }\n  }\n":
     types.EnqueueReviewInquiryDocument,
-  "\n  mutation CancelReviewInquiry($inquiryId: ID!) {\n    cancelReviewInquiry(inquiryId: $inquiryId) {\n      id\n      state\n    }\n  }\n":
-    types.CancelReviewInquiryDocument,
-  "\n  query ReviewDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      previousPath\n      status\n      additions\n      deletions\n      patch\n      originalContent\n      modifiedContent\n      truncated\n    }\n  }\n":
+  "\n  query ReviewDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      status\n      additions\n      deletions\n      patch\n      truncated\n    }\n  }\n":
     types.ReviewDiffFileDocument,
   "\n  mutation GenerateReviewGuide($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n      state\n      position\n    }\n  }\n":
     types.GenerateReviewGuideDocument,
@@ -198,12 +196,14 @@ const documents: Documents = {
     types.SubmitReviewDocument,
   "\n  mutation RefreshReviewSnapshot($reviewId: ID!) {\n    refreshReviewSnapshot(reviewId: $reviewId) {\n      id\n    }\n  }\n":
     types.RefreshReviewSnapshotDocument,
-  "\n  mutation CreateGeneralReviewThread($input: CreateReviewThreadInput!) {\n    createReviewThread(input: $input) {\n      id\n    }\n  }\n":
-    types.CreateGeneralReviewThreadDocument,
   "\n  mutation ReplyToReviewThread($threadId: ID!, $body: String!) {\n    replyToReviewThread(threadId: $threadId, body: $body) {\n      id\n    }\n  }\n":
     types.ReplyToReviewThreadDocument,
   "\n  mutation ResolveReviewThread($threadId: ID!, $resolved: Boolean!) {\n    resolveReviewThread(threadId: $threadId, resolved: $resolved) {\n      id\n    }\n  }\n":
     types.ResolveReviewThreadDocument,
+  "\n  query GuideDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      additions\n      deletions\n      patch\n      truncated\n    }\n  }\n":
+    types.GuideDiffFileDocument,
+  "\n  mutation CancelReviewInquiry($inquiryId: ID!) {\n    cancelReviewInquiry(inquiryId: $inquiryId) {\n      id\n      state\n    }\n  }\n":
+    types.CancelReviewInquiryDocument,
   "\n  mutation SelectReviewThread($threadId: ID!, $selected: Boolean!) {\n    setReviewThreadSelected(threadId: $threadId, selected: $selected) {\n      id\n    }\n  }\n":
     types.SelectReviewThreadDocument,
   "\n  fragment ReviewWorkspaceFields on Review {\n    id\n    organizationId\n    repositoryId\n    channelId\n    sourceSessionGroupId\n    attachedSessionId\n    provider\n    remotePullRequestId\n    pullRequestNumber\n    pullRequestUrl\n    title\n    status\n    currentSnapshotId\n    createdAt\n    updatedAt\n    repository {\n      id\n      name\n      remoteUrl\n    }\n    currentSnapshot {\n      id\n      reviewId\n      baseSha\n      headSha\n      status\n      files {\n        path\n        previousPath\n        status\n        additions\n        deletions\n        patchAvailable\n        viewed\n        commentCount\n      }\n      patchChecksum\n      patchByteLength\n      diffFormatVersion\n      providerMetadata\n      createdById\n      createdAt\n    }\n    snapshots {\n      id\n      reviewId\n      baseSha\n      headSha\n      status\n      files {\n        path\n        previousPath\n        status\n        additions\n        deletions\n        patchAvailable\n        viewed\n        commentCount\n      }\n      patchChecksum\n      patchByteLength\n      diffFormatVersion\n      providerMetadata\n      createdById\n      createdAt\n    }\n    threads {\n      id\n      reviewId\n      originSnapshotId\n      authorId\n      scope\n      guideChapterId\n      resolvedAt\n      resolvedById\n      deliveryStatus\n      providerReviewId\n      providerCommentId\n      deliveredAt\n      deliveryError\n      createdAt\n      updatedAt\n      author {\n        id\n        name\n        email\n        avatarUrl\n      }\n      anchor {\n        snapshotId\n        filePath\n        side\n        startLine\n        endLine\n        originalLine\n        selectedText\n        context\n        hunkId\n        baseBlobId\n        headBlobId\n        status\n      }\n      comments {\n        id\n        threadId\n        authorId\n        body\n        editedAt\n        deletedAt\n        providerCommentId\n        createdAt\n        updatedAt\n        author {\n          id\n          name\n          email\n          avatarUrl\n        }\n      }\n    }\n    inquiries {\n      id\n      reviewId\n      snapshotId\n      sessionId\n      sourceKind\n      question\n      anchor\n      context\n      sessionMessageId\n      responseMessageId\n      position\n      state\n      error\n      structuredResult\n      createdAt\n      startedAt\n      completedAt\n      responseMessage {\n        id\n        sessionId\n        role\n        text\n        content\n        attachments\n        sourceEventId\n        createdAt\n      }\n    }\n    guides {\n      id\n      reviewId\n      snapshotId\n      generationInquiryId\n      status\n      title\n      intent\n      content\n      version\n      createdAt\n    }\n  }\n":
@@ -552,14 +552,8 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  mutation CancelReviewInquiry($inquiryId: ID!) {\n    cancelReviewInquiry(inquiryId: $inquiryId) {\n      id\n      state\n    }\n  }\n",
-): (typeof documents)["\n  mutation CancelReviewInquiry($inquiryId: ID!) {\n    cancelReviewInquiry(inquiryId: $inquiryId) {\n      id\n      state\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(
-  source: "\n  query ReviewDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      previousPath\n      status\n      additions\n      deletions\n      patch\n      originalContent\n      modifiedContent\n      truncated\n    }\n  }\n",
-): (typeof documents)["\n  query ReviewDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      previousPath\n      status\n      additions\n      deletions\n      patch\n      originalContent\n      modifiedContent\n      truncated\n    }\n  }\n"];
+  source: "\n  query ReviewDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      status\n      additions\n      deletions\n      patch\n      truncated\n    }\n  }\n",
+): (typeof documents)["\n  query ReviewDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      status\n      additions\n      deletions\n      patch\n      truncated\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -582,12 +576,6 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  mutation CreateGeneralReviewThread($input: CreateReviewThreadInput!) {\n    createReviewThread(input: $input) {\n      id\n    }\n  }\n",
-): (typeof documents)["\n  mutation CreateGeneralReviewThread($input: CreateReviewThreadInput!) {\n    createReviewThread(input: $input) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(
   source: "\n  mutation ReplyToReviewThread($threadId: ID!, $body: String!) {\n    replyToReviewThread(threadId: $threadId, body: $body) {\n      id\n    }\n  }\n",
 ): (typeof documents)["\n  mutation ReplyToReviewThread($threadId: ID!, $body: String!) {\n    replyToReviewThread(threadId: $threadId, body: $body) {\n      id\n    }\n  }\n"];
 /**
@@ -596,6 +584,18 @@ export function graphql(
 export function graphql(
   source: "\n  mutation ResolveReviewThread($threadId: ID!, $resolved: Boolean!) {\n    resolveReviewThread(threadId: $threadId, resolved: $resolved) {\n      id\n    }\n  }\n",
 ): (typeof documents)["\n  mutation ResolveReviewThread($threadId: ID!, $resolved: Boolean!) {\n    resolveReviewThread(threadId: $threadId, resolved: $resolved) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  query GuideDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      additions\n      deletions\n      patch\n      truncated\n    }\n  }\n",
+): (typeof documents)["\n  query GuideDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      additions\n      deletions\n      patch\n      truncated\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation CancelReviewInquiry($inquiryId: ID!) {\n    cancelReviewInquiry(inquiryId: $inquiryId) {\n      id\n      state\n    }\n  }\n",
+): (typeof documents)["\n  mutation CancelReviewInquiry($inquiryId: ID!) {\n    cancelReviewInquiry(inquiryId: $inquiryId) {\n      id\n      state\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

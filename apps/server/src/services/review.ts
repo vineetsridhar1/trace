@@ -752,7 +752,12 @@ export class ReviewService {
           patchStorageKey: key,
           patchChecksum: checksum(body),
           patchByteLength: body.byteLength,
-          providerMetadata: reviewJson({ number: pull.number, url: pull.url }),
+          providerMetadata: reviewJson({
+            number: pull.number,
+            url: pull.url,
+            baseRef: pull.baseRef,
+            headRef: pull.headRef,
+          }),
           createdById: actor.actorId,
         },
       });
