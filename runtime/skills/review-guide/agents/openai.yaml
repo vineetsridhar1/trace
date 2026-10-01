@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Guide"
+  short_description: "Create explanation-first code review guides"
+  default_prompt: "Use $review-guide to create a structured guide for this review snapshot."

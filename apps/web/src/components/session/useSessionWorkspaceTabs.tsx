@@ -5,6 +5,7 @@ import {
   FileCode,
   Files,
   GitCompareArrows,
+  MessageSquareCode,
   Globe,
   TerminalSquare,
 } from "lucide-react";
@@ -28,6 +29,9 @@ interface SessionWorkspaceTabsOptions {
   browserTitles: Record<string, string>;
   trafficEndpointId: string | null;
   canvas: boolean;
+  reviewId?: string | null;
+  backgroundSessionId?: string | null;
+  showBackgroundSession?: boolean;
 }
 
 export function useSessionWorkspaceTabs({
@@ -39,6 +43,9 @@ export function useSessionWorkspaceTabs({
   browserTitles,
   trafficEndpointId,
   canvas,
+  reviewId,
+  backgroundSessionId,
+  showBackgroundSession = false,
 }: SessionWorkspaceTabsOptions) {
   return useMemo<SpatialWorkspaceTab[]>(() => {
     const tabs: SpatialWorkspaceTab[] = canvas
@@ -46,13 +53,24 @@ export function useSessionWorkspaceTabs({
       : [];
 
     tabs.push(
-      ...sessions.map((session) => ({
-        id: `session:${session.id}`,
-        label: session.name,
-        icon: <Bot size={12} />,
-        status: session.agentStatus === "active" ? ("live" as const) : undefined,
-      })),
+      ...sessions
+        .filter((session) => showBackgroundSession || session.id !== backgroundSessionId)
+        .map((session) => ({
+          id: `session:${session.id}`,
+          label: session.name,
+          icon: <Bot size={12} />,
+          status: session.agentStatus === "active" ? ("live" as const) : undefined,
+        })),
     );
+
+    if (reviewId) {
+      tabs.push({
+        id: `review:${reviewId}`,
+        label: "Review",
+        icon: <MessageSquareCode size={12} />,
+        status: "changed",
+      });
+    }
 
     tabs.push(
       ...artifactIds.map((artifactId) => ({
@@ -66,12 +84,14 @@ export function useSessionWorkspaceTabs({
         icon: <TerminalSquare size={12} />,
         status: terminal.status === "active" ? ("live" as const) : undefined,
       })),
-      ...files.map((file) => ({
-        id: `file:${file.filePath}`,
-        label: file.fileName,
-        icon: file.isDiff ? <GitCompareArrows size={12} /> : <FileCode size={12} />,
-        status: file.isDiff ? ("changed" as const) : undefined,
-      })),
+      ...files
+        .filter((file) => !file.isDiff)
+        .map((file) => ({
+          id: `file:${file.filePath}`,
+          label: file.fileName,
+          icon: file.isDiff ? <GitCompareArrows size={12} /> : <FileCode size={12} />,
+          status: file.isDiff ? ("changed" as const) : undefined,
+        })),
       ...drafts.map((draft) => ({
         id: draft.id,
         label: workspaceSurfaceLabel(draft.surface, browserTitles[draft.id]),
@@ -84,7 +104,19 @@ export function useSessionWorkspaceTabs({
       tabs.push({ id: "traffic", label: "Traffic", icon: <Activity size={12} /> });
     }
     return tabs;
-  }, [artifactIds, browserTitles, canvas, drafts, files, sessions, terminals, trafficEndpointId]);
+  }, [
+    artifactIds,
+    backgroundSessionId,
+    browserTitles,
+    canvas,
+    drafts,
+    files,
+    reviewId,
+    sessions,
+    showBackgroundSession,
+    terminals,
+    trafficEndpointId,
+  ]);
 }
 
 function workspaceSurfaceLabel(surface: WorkspaceSurface | null, browserTitle?: string) {

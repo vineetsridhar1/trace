@@ -229,6 +229,7 @@ enum ChatType {
 enum ScopeType {
   channel
   chat
+  review
   session
   ticket
   system
@@ -246,6 +247,69 @@ enum EntityType {
   channel
   chat
   message
+}
+
+enum ReviewStatus {
+  open
+  archived
+}
+
+enum ReviewSnapshotStatus {
+  current
+  archived
+}
+
+enum ReviewThreadScope {
+  line
+  file
+  general
+  guide_explanation
+}
+
+enum ReviewDiffSide {
+  base
+  head
+}
+
+enum ReviewAnchorStatus {
+  current
+  relocated
+  ambiguous
+  outdated
+}
+
+enum ReviewDeliveryStatus {
+  trace_only
+  selected
+  delivered
+  delivery_failed
+  outdated
+}
+
+enum ReviewInquirySourceKind {
+  guide_generation
+  diff_anchor
+  guide_anchor
+  thread
+}
+
+enum ReviewInquiryState {
+  queued
+  running
+  completed
+  failed
+  cancelled
+}
+
+enum ReviewGuideStatus {
+  ready
+  earlier
+}
+
+enum ReviewDisposition {
+  comment
+  approve
+  request_changes
 }
 
 enum UserRole {
@@ -414,6 +478,26 @@ enum EventType {
   app_integration_request_executed
   app_deployment_queued
   app_deployment_updated
+  review_opened
+  review_updated
+  review_snapshot_created
+  review_snapshot_marked_current
+  review_thread_created
+  review_thread_updated
+  review_comment_created
+  review_thread_resolved
+  review_thread_reanchored
+  review_inquiry_enqueued
+  review_inquiry_started
+  review_inquiry_completed
+  review_inquiry_failed
+  review_inquiry_cancelled
+  review_inquiry_resolved
+  review_guide_saved
+  review_guide_failed
+  review_delivery_started
+  review_delivery_succeeded
+  review_delivery_failed
 }
 
 enum AppDeploymentStatus {
@@ -619,6 +703,7 @@ type SessionGroup {
   animationPreviewCapturedAt: DateTime
   animationPreviewError: String
   sessions: [Session!]!
+  reviews: [Review!]!
   workdir: String
   connection: SessionConnection
   prUrl: String
@@ -1040,6 +1125,8 @@ type SessionSetupScriptRun {
   lastError: String
   startedAt: DateTime!
   completedAt: DateTime
+  resolvedAt: DateTime
+  resolvedById: ID
 }
 
 type SessionApplicationProcess {
@@ -1345,6 +1432,236 @@ type BranchDiffFile {
   status: String!
   additions: Int!
   deletions: Int!
+}
+
+type Review {
+  id: ID!
+  organizationId: ID!
+  repositoryId: ID!
+  repository: Repo!
+  channelId: ID
+  channel: Channel
+  sourceSessionGroupId: ID
+  sourceSessionGroup: SessionGroup
+  attachedSessionId: ID!
+  attachedSession: Session!
+  provider: RepoProvider!
+  remotePullRequestId: String!
+  pullRequestNumber: Int!
+  pullRequestUrl: String!
+  title: String!
+  description: String!
+  status: ReviewStatus!
+  currentSnapshotId: ID
+  currentSnapshot: ReviewSnapshot
+  snapshots: [ReviewSnapshot!]!
+  threads: [ReviewThread!]!
+  inquiries: [ReviewInquiry!]!
+  guides: [ReviewGuide!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type ReviewSnapshot {
+  id: ID!
+  reviewId: ID!
+  baseSha: String!
+  headSha: String!
+  status: ReviewSnapshotStatus!
+  files: [ReviewFile!]!
+  patchStorageKey: String!
+  patchChecksum: String!
+  patchByteLength: Int!
+  diffFormatVersion: Int!
+  providerMetadata: JSON!
+  createdById: ID!
+  createdAt: DateTime!
+}
+
+type ReviewFile {
+  path: String!
+  previousPath: String
+  status: String!
+  additions: Int!
+  deletions: Int!
+  patchAvailable: Boolean!
+  viewed: Boolean!
+  commentCount: Int!
+}
+
+"A focused, ordered step in a Guide's code walkthrough. Line numbers refer to the head commit."
+type ReviewGuideReference {
+  filePath: String!
+  startLine: Int!
+  endLine: Int!
+  title: String!
+  explanation: String!
+}
+
+"Exact head-commit source for a bounded Guide reference, including which lines were added."
+type ReviewCodeExcerpt {
+  snapshotId: ID!
+  path: String!
+  startLine: Int!
+  endLine: Int!
+  content: String!
+  addedLines: [Int!]!
+}
+
+type ReviewDiffFile {
+  snapshotId: ID!
+  path: String!
+  previousPath: String
+  status: String!
+  additions: Int!
+  deletions: Int!
+  patch: String!
+  originalContent: String
+  modifiedContent: String
+  truncated: Boolean!
+}
+
+type ReviewAnchor {
+  snapshotId: ID!
+  filePath: String!
+  side: ReviewDiffSide!
+  startLine: Int!
+  endLine: Int!
+  originalLine: Int
+  selectedText: String!
+  context: String!
+  hunkId: String
+  baseBlobId: String
+  headBlobId: String
+  status: ReviewAnchorStatus!
+}
+
+type ReviewComment {
+  id: ID!
+  threadId: ID!
+  authorId: ID!
+  author: User!
+  body: String!
+  editedAt: DateTime
+  deletedAt: DateTime
+  providerCommentId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type ReviewThread {
+  id: ID!
+  reviewId: ID!
+  originSnapshotId: ID!
+  authorId: ID!
+  author: User!
+  scope: ReviewThreadScope!
+  anchor: ReviewAnchor
+  guideChapterId: String
+  resolvedAt: DateTime
+  resolvedById: ID
+  deliveryStatus: ReviewDeliveryStatus!
+  providerReviewId: String
+  providerCommentId: String
+  deliveredAt: DateTime
+  deliveryError: String
+  comments: [ReviewComment!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type ReviewInquiry {
+  id: ID!
+  reviewId: ID!
+  snapshotId: ID!
+  sessionId: ID!
+  sourceKind: ReviewInquirySourceKind!
+  question: String!
+  anchor: JSON
+  context: JSON!
+  sessionMessageId: ID
+  sessionMessage: SessionMessage
+  responseMessageId: ID
+  responseMessage: SessionMessage
+  position: Int!
+  state: ReviewInquiryState!
+  error: String
+  structuredResult: JSON
+  createdAt: DateTime!
+  startedAt: DateTime
+  completedAt: DateTime
+  resolvedAt: DateTime
+  resolvedById: ID
+}
+
+type ReviewGuide {
+  id: ID!
+  reviewId: ID!
+  snapshotId: ID!
+  generationInquiryId: ID!
+  status: ReviewGuideStatus!
+  title: String!
+  intent: String!
+  content: JSON!
+  version: Int!
+  createdAt: DateTime!
+}
+
+type ReviewDelivery {
+  id: ID!
+  reviewId: ID!
+  snapshotId: ID!
+  idempotencyKey: String!
+  disposition: ReviewDisposition!
+  threadIds: [ID!]!
+  status: String!
+  providerReviewId: String
+  providerCommentIds: JSON
+  attempts: Int!
+  error: String
+  createdAt: DateTime!
+  completedAt: DateTime
+}
+
+input ReviewAnchorInput {
+  snapshotId: ID!
+  filePath: String!
+  side: ReviewDiffSide!
+  startLine: Int!
+  endLine: Int!
+  originalLine: Int
+  selectedText: String!
+  context: String!
+  hunkId: String
+  baseBlobId: String
+  headBlobId: String
+}
+
+input CreateReviewThreadInput {
+  reviewId: ID!
+  snapshotId: ID!
+  scope: ReviewThreadScope!
+  body: String!
+  anchor: ReviewAnchorInput
+  guideChapterId: String
+}
+
+input EnqueueReviewInquiryInput {
+  reviewId: ID!
+  snapshotId: ID!
+  sourceKind: ReviewInquirySourceKind!
+  question: String!
+  anchor: JSON
+  context: JSON
+}
+
+input SubmitReviewInput {
+  reviewId: ID!
+  snapshotId: ID!
+  threadIds: [ID!]!
+  disposition: ReviewDisposition!
+  body: String
+  idempotencyKey: String!
 }
 
 type SessionGroupDirectoryEntry {
@@ -1874,6 +2191,11 @@ type Query {
   """
   animationSessionGroups(organizationId: ID!, includeArchived: Boolean): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
+  review(id: ID!): Review
+  reviewForSessionGroup(sessionGroupId: ID!): Review
+  "Read at most 80 lines from the immutable snapshot head, including files outside the diff."
+  reviewCodeExcerpt(snapshotId: ID!, filePath: String!, startLine: Int!, endLine: Int!): ReviewCodeExcerpt!
+  reviewDiffFile(snapshotId: ID!, filePath: String!): ReviewDiffFile!
   hiddenSessionTabs(sessionGroupId: ID!): [HiddenSessionTab!]!
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
@@ -2109,6 +2431,19 @@ type Mutation {
   deleteSession(id: ID!): Session!
   archiveSessionGroup(id: ID!): SessionGroup
   linkSessionPullRequest(sessionId: ID!, prUrl: String!): SessionGroup!
+  openReviewForPullRequest(sessionId: ID!, pullRequestUrl: String!): Review!
+  refreshReviewSnapshot(reviewId: ID!): Review!
+  createReviewThread(input: CreateReviewThreadInput!): ReviewThread!
+  replyToReviewThread(threadId: ID!, body: String!): ReviewComment!
+  editReviewComment(commentId: ID!, body: String!): ReviewComment!
+  resolveReviewThread(threadId: ID!, resolved: Boolean!): ReviewThread!
+  reanchorReviewThread(threadId: ID!, anchor: ReviewAnchorInput!): ReviewThread!
+  setReviewThreadSelected(threadId: ID!, selected: Boolean!): ReviewThread!
+  enqueueReviewInquiry(input: EnqueueReviewInquiryInput!): ReviewInquiry!
+  cancelReviewInquiry(inquiryId: ID!): ReviewInquiry!
+  resolveReviewInquiry(inquiryId: ID!, resolved: Boolean!): ReviewInquiry!
+  saveReviewGuide(inquiryId: ID!, content: JSON!): ReviewGuide!
+  submitReviewToProvider(input: SubmitReviewInput!): ReviewDelivery!
   renameSessionGroup(id: ID!, name: String!): SessionGroup!
   updateSessionGroupVisibility(id: ID!, visibility: SessionGroupVisibility!): SessionGroup!
   deleteSessionGroup(id: ID!): Boolean!
@@ -2365,4 +2700,5 @@ type Subscription {
   sessionStatusChanged(sessionId: ID!, organizationId: ID!): Session!
   chatEvents(chatId: ID!, types: [String!]): Event!
   sessionEvents(sessionId: ID!, organizationId: ID!, after: DateTime, afterEventId: ID): Event!
+  reviewEvents(reviewId: ID!, organizationId: ID!, after: DateTime, afterEventId: ID): Event!
 }

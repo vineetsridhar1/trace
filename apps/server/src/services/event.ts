@@ -99,6 +99,7 @@ const scopeTopicMap: Record<string, (id: string) => string> = {
   channel: topics.channelEvents,
   chat: topics.chatEvents,
   ticket: topics.ticketEvents,
+  review: topics.reviewEvents,
   // "system" scope has no entity-level topic — events are broadcast on the org topic only
 };
 
@@ -128,12 +129,36 @@ export class EventService {
     if (!tx && this.shouldMaterializeSessionMessage(input)) {
       const event = await prisma.$transaction(async (db) => this.createInTransaction(input, db));
       if (!input.deferPublish) this.publishCreated(event);
+      if (!input.deferPublish) this.correlateReviewResponse(event);
       return event;
     }
 
     const event = await this.createInTransaction(input, tx ?? prisma);
     if (!input.deferPublish) this.publishCreated(event);
+    if (!input.deferPublish) this.correlateReviewResponse(event);
     return event;
+  }
+
+  private correlateReviewResponse(event: PrismaEvent): void {
+    if (event.scopeType !== "session" || event.eventType !== "session_output") return;
+    // Narrow to turn-end before loading the review service: every session in the org streams
+    // assistant and tool output through here, and only `result` can complete a review inquiry.
+    const payload = event.payload;
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      Array.isArray(payload) ||
+      (payload as Record<string, unknown>).type !== "result"
+    ) {
+      return;
+    }
+    setImmediate(() => {
+      void import("./review.js")
+        .then(({ reviewService }) => reviewService.handleSessionOutputEvent(event))
+        .catch((error: unknown) => {
+          console.error("[review] response correlation failed", error);
+        });
+    });
   }
 
   private async createInTransaction(input: CreateEventInput, db: EventDb) {
@@ -157,17 +182,19 @@ export class EventService {
   }
 
   private shouldMaterializeSessionMessage(input: CreateEventInput): boolean {
-    return sessionMessageDataFromEvent({
-      id: input.id ?? "",
-      organizationId: input.organizationId,
-      scopeType: input.scopeType,
-      scopeId: input.scopeId,
-      eventType: input.eventType,
-      payload: input.payload,
-      actorType: input.actorType,
-      actorId: input.actorId,
-      timestamp: input.timestamp ?? new Date(),
-    }) !== null;
+    return (
+      sessionMessageDataFromEvent({
+        id: input.id ?? "",
+        organizationId: input.organizationId,
+        scopeType: input.scopeType,
+        scopeId: input.scopeId,
+        eventType: input.eventType,
+        payload: input.payload,
+        actorType: input.actorType,
+        actorId: input.actorId,
+        timestamp: input.timestamp ?? new Date(),
+      }) !== null
+    );
   }
 
   async createMany(inputs: CreateEventInput[]) {

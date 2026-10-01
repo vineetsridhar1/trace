@@ -439,6 +439,15 @@ export type CreateRepoInput = {
   remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateReviewThreadInput = {
+  anchor?: InputMaybe<ReviewAnchorInput>;
+  body: Scalars["String"]["input"];
+  guideChapterId?: InputMaybe<Scalars["String"]["input"]>;
+  reviewId: Scalars["ID"]["input"];
+  scope: ReviewThreadScope;
+  snapshotId: Scalars["ID"]["input"];
+};
+
 export type CreateTicketInput = {
   assigneeIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -743,6 +752,15 @@ export type EndpointTrafficEntry = {
   startedAt: Scalars["DateTime"]["output"];
 };
 
+export type EnqueueReviewInquiryInput = {
+  anchor?: InputMaybe<Scalars["JSON"]["input"]>;
+  context?: InputMaybe<Scalars["JSON"]["input"]>;
+  question: Scalars["String"]["input"];
+  reviewId: Scalars["ID"]["input"];
+  snapshotId: Scalars["ID"]["input"];
+  sourceKind: ReviewInquirySourceKind;
+};
+
 export type EntityType = "channel" | "chat" | "message" | "session" | "ticket";
 
 export type Event = {
@@ -821,6 +839,26 @@ export type EventType =
   | "repo_created"
   | "repo_deleted"
   | "repo_updated"
+  | "review_comment_created"
+  | "review_delivery_failed"
+  | "review_delivery_started"
+  | "review_delivery_succeeded"
+  | "review_guide_failed"
+  | "review_guide_saved"
+  | "review_inquiry_cancelled"
+  | "review_inquiry_completed"
+  | "review_inquiry_enqueued"
+  | "review_inquiry_failed"
+  | "review_inquiry_resolved"
+  | "review_inquiry_started"
+  | "review_opened"
+  | "review_snapshot_created"
+  | "review_snapshot_marked_current"
+  | "review_thread_created"
+  | "review_thread_reanchored"
+  | "review_thread_resolved"
+  | "review_thread_updated"
+  | "review_updated"
   | "session_application_log_appended"
   | "session_application_process_failed"
   | "session_application_process_started"
@@ -1045,6 +1083,7 @@ export type Mutation = {
    */
   attachDesignToSession: Event;
   attachRepoRemote: Repo;
+  cancelReviewInquiry: ReviewInquiry;
   clearEndpointTraffic: Scalars["Boolean"]["output"];
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
@@ -1061,6 +1100,7 @@ export type Mutation = {
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
+  createReviewThread: ReviewThread;
   createSessionEndpointPreview: SessionEndpointPreview;
   createTerminal: Terminal;
   createTicket: Ticket;
@@ -1085,7 +1125,9 @@ export type Mutation = {
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
+  editReviewComment: ReviewComment;
   enableSessionEndpointForwarding: SessionEndpoint;
+  enqueueReviewInquiry: ReviewInquiry;
   forkSession: Session;
   forwardSessionPort: SessionEndpoint;
   hideSessionTab: HiddenSessionTab;
@@ -1103,9 +1145,12 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  openReviewForPullRequest: Review;
   openWorkspaceBrowser: Scalars["Boolean"]["output"];
   queueSessionMessage: QueuedMessage;
+  reanchorReviewThread: ReviewThread;
   refreshDesignSystemSource: DesignSystem;
+  refreshReviewSnapshot: Review;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepo: Repo;
   registerRepoWebhook: Repo;
@@ -1116,9 +1161,12 @@ export type Mutation = {
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
+  replyToReviewThread: ReviewComment;
   requestBridgeAccess: BridgeAccessRequest;
   requestPdfSessionExport: Scalars["Boolean"]["output"];
   resizeTerminal: Scalars["Boolean"]["output"];
+  resolveReviewInquiry: ReviewInquiry;
+  resolveReviewThread: ReviewThread;
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   restoreSessionTab: Scalars["Boolean"]["output"];
@@ -1133,6 +1181,7 @@ export type Mutation = {
   saveDesignSystem: DesignSystemVersion;
   saveManualElementEdit: ManualElementEditResult;
   saveManualElementEdits: Array<ManualElementEditResult>;
+  saveReviewGuide: ReviewGuide;
   saveSessionGroupFile: Scalars["Boolean"]["output"];
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -1143,12 +1192,14 @@ export type Mutation = {
   setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
+  setReviewThreadSelected: ReviewThread;
   startSession: Session;
   startSessionApplication: Array<SessionApplicationProcess>;
   startSessionProcess: SessionApplicationProcess;
   steerQueuedMessage: Event;
   stopSessionApplication: Array<SessionApplicationProcess>;
   stopSessionProcess: SessionApplicationProcess;
+  submitReviewToProvider: ReviewDelivery;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
@@ -1228,6 +1279,10 @@ export type MutationAttachRepoRemoteArgs = {
   repoId: Scalars["ID"]["input"];
 };
 
+export type MutationCancelReviewInquiryArgs = {
+  inquiryId: Scalars["ID"]["input"];
+};
+
 export type MutationClearEndpointTrafficArgs = {
   endpointId: Scalars["ID"]["input"];
 };
@@ -1298,6 +1353,10 @@ export type MutationCreateProjectArgs = {
 
 export type MutationCreateRepoArgs = {
   input: CreateRepoInput;
+};
+
+export type MutationCreateReviewThreadArgs = {
+  input: CreateReviewThreadInput;
 };
 
 export type MutationCreateSessionEndpointPreviewArgs = {
@@ -1401,10 +1460,19 @@ export type MutationEditChatMessageArgs = {
   messageId: Scalars["ID"]["input"];
 };
 
+export type MutationEditReviewCommentArgs = {
+  body: Scalars["String"]["input"];
+  commentId: Scalars["ID"]["input"];
+};
+
 export type MutationEnableSessionEndpointForwardingArgs = {
   accessMode?: InputMaybe<SessionEndpointAccessMode>;
   endpointId: Scalars["ID"]["input"];
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
+export type MutationEnqueueReviewInquiryArgs = {
+  input: EnqueueReviewInquiryInput;
 };
 
 export type MutationForkSessionArgs = {
@@ -1488,6 +1556,11 @@ export type MutationMuteScopeArgs = {
   scopeType: Scalars["String"]["input"];
 };
 
+export type MutationOpenReviewForPullRequestArgs = {
+  pullRequestUrl: Scalars["String"]["input"];
+  sessionId: Scalars["ID"]["input"];
+};
+
 export type MutationOpenWorkspaceBrowserArgs = {
   sessionGroupId: Scalars["ID"]["input"];
   url: Scalars["String"]["input"];
@@ -1501,8 +1574,17 @@ export type MutationQueueSessionMessageArgs = {
   text: Scalars["String"]["input"];
 };
 
+export type MutationReanchorReviewThreadArgs = {
+  anchor: ReviewAnchorInput;
+  threadId: Scalars["ID"]["input"];
+};
+
 export type MutationRefreshDesignSystemSourceArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type MutationRefreshReviewSnapshotArgs = {
+  reviewId: Scalars["ID"]["input"];
 };
 
 export type MutationRegisterPushTokenArgs = {
@@ -1550,6 +1632,11 @@ export type MutationReorderQueuedMessagesArgs = {
   sessionId: Scalars["ID"]["input"];
 };
 
+export type MutationReplyToReviewThreadArgs = {
+  body: Scalars["String"]["input"];
+  threadId: Scalars["ID"]["input"];
+};
+
 export type MutationRequestBridgeAccessArgs = {
   requestedCapabilities?: InputMaybe<Array<BridgeAccessCapability>>;
   requestedExpiresAt?: InputMaybe<Scalars["DateTime"]["input"]>;
@@ -1566,6 +1653,16 @@ export type MutationResizeTerminalArgs = {
   cols: Scalars["Int"]["input"];
   rows: Scalars["Int"]["input"];
   terminalId: Scalars["ID"]["input"];
+};
+
+export type MutationResolveReviewInquiryArgs = {
+  inquiryId: Scalars["ID"]["input"];
+  resolved: Scalars["Boolean"]["input"];
+};
+
+export type MutationResolveReviewThreadArgs = {
+  resolved: Scalars["Boolean"]["input"];
+  threadId: Scalars["ID"]["input"];
 };
 
 export type MutationRestartSessionProcessArgs = {
@@ -1634,6 +1731,11 @@ export type MutationSaveManualElementEditsArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationSaveReviewGuideArgs = {
+  content: Scalars["JSON"]["input"];
+  inquiryId: Scalars["ID"]["input"];
+};
+
 export type MutationSaveSessionGroupFileArgs = {
   content: Scalars["String"]["input"];
   filePath: Scalars["String"]["input"];
@@ -1694,6 +1796,11 @@ export type MutationSetOrgSecretArgs = {
   input: SetOrgSecretInput;
 };
 
+export type MutationSetReviewThreadSelectedArgs = {
+  selected: Scalars["Boolean"]["input"];
+  threadId: Scalars["ID"]["input"];
+};
+
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -1722,6 +1829,10 @@ export type MutationStopSessionProcessArgs = {
   appConfigId: Scalars["ID"]["input"];
   processConfigId: Scalars["ID"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationSubmitReviewToProviderArgs = {
+  input: SubmitReviewInput;
 };
 
 export type MutationSubscribeArgs = {
@@ -2001,6 +2112,11 @@ export type Query = {
   /** Existing on-disk worktrees of a repo on a local runtime, available to import. */
   repoWorktrees: Array<RepoWorktree>;
   repos: Array<Repo>;
+  review?: Maybe<Review>;
+  /** Read at most 80 lines from the immutable snapshot head, including files outside the diff. */
+  reviewCodeExcerpt: ReviewCodeExcerpt;
+  reviewDiffFile: ReviewDiffFile;
+  reviewForSessionGroup?: Maybe<Review>;
   searchMessages: Array<MessageSearchHit>;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
@@ -2249,6 +2365,26 @@ export type QueryRepoWorktreesArgs = {
 
 export type QueryReposArgs = {
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryReviewArgs = {
+  id: Scalars["ID"]["input"];
+};
+
+export type QueryReviewCodeExcerptArgs = {
+  endLine: Scalars["Int"]["input"];
+  filePath: Scalars["String"]["input"];
+  snapshotId: Scalars["ID"]["input"];
+  startLine: Scalars["Int"]["input"];
+};
+
+export type QueryReviewDiffFileArgs = {
+  filePath: Scalars["String"]["input"];
+  snapshotId: Scalars["ID"]["input"];
+};
+
+export type QueryReviewForSessionGroupArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QuerySearchMessagesArgs = {
@@ -2563,12 +2699,256 @@ export type RepoWorktree = {
   path: Scalars["String"]["output"];
 };
 
+export type Review = {
+  __typename?: "Review";
+  attachedSession: Session;
+  attachedSessionId: Scalars["ID"]["output"];
+  channel?: Maybe<Channel>;
+  channelId?: Maybe<Scalars["ID"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  currentSnapshot?: Maybe<ReviewSnapshot>;
+  currentSnapshotId?: Maybe<Scalars["ID"]["output"]>;
+  description: Scalars["String"]["output"];
+  guides: Array<ReviewGuide>;
+  id: Scalars["ID"]["output"];
+  inquiries: Array<ReviewInquiry>;
+  organizationId: Scalars["ID"]["output"];
+  provider: RepoProvider;
+  pullRequestNumber: Scalars["Int"]["output"];
+  pullRequestUrl: Scalars["String"]["output"];
+  remotePullRequestId: Scalars["String"]["output"];
+  repository: Repo;
+  repositoryId: Scalars["ID"]["output"];
+  snapshots: Array<ReviewSnapshot>;
+  sourceSessionGroup?: Maybe<SessionGroup>;
+  sourceSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
+  status: ReviewStatus;
+  threads: Array<ReviewThread>;
+  title: Scalars["String"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ReviewAnchor = {
+  __typename?: "ReviewAnchor";
+  baseBlobId?: Maybe<Scalars["String"]["output"]>;
+  context: Scalars["String"]["output"];
+  endLine: Scalars["Int"]["output"];
+  filePath: Scalars["String"]["output"];
+  headBlobId?: Maybe<Scalars["String"]["output"]>;
+  hunkId?: Maybe<Scalars["String"]["output"]>;
+  originalLine?: Maybe<Scalars["Int"]["output"]>;
+  selectedText: Scalars["String"]["output"];
+  side: ReviewDiffSide;
+  snapshotId: Scalars["ID"]["output"];
+  startLine: Scalars["Int"]["output"];
+  status: ReviewAnchorStatus;
+};
+
+export type ReviewAnchorInput = {
+  baseBlobId?: InputMaybe<Scalars["String"]["input"]>;
+  context: Scalars["String"]["input"];
+  endLine: Scalars["Int"]["input"];
+  filePath: Scalars["String"]["input"];
+  headBlobId?: InputMaybe<Scalars["String"]["input"]>;
+  hunkId?: InputMaybe<Scalars["String"]["input"]>;
+  originalLine?: InputMaybe<Scalars["Int"]["input"]>;
+  selectedText: Scalars["String"]["input"];
+  side: ReviewDiffSide;
+  snapshotId: Scalars["ID"]["input"];
+  startLine: Scalars["Int"]["input"];
+};
+
+export type ReviewAnchorStatus = "ambiguous" | "current" | "outdated" | "relocated";
+
+/** Exact head-commit source for a bounded Guide reference, including which lines were added. */
+export type ReviewCodeExcerpt = {
+  __typename?: "ReviewCodeExcerpt";
+  addedLines: Array<Scalars["Int"]["output"]>;
+  content: Scalars["String"]["output"];
+  endLine: Scalars["Int"]["output"];
+  path: Scalars["String"]["output"];
+  snapshotId: Scalars["ID"]["output"];
+  startLine: Scalars["Int"]["output"];
+};
+
+export type ReviewComment = {
+  __typename?: "ReviewComment";
+  author: User;
+  authorId: Scalars["ID"]["output"];
+  body: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  deletedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  editedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  id: Scalars["ID"]["output"];
+  providerCommentId?: Maybe<Scalars["String"]["output"]>;
+  threadId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ReviewDelivery = {
+  __typename?: "ReviewDelivery";
+  attempts: Scalars["Int"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  disposition: ReviewDisposition;
+  error?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  idempotencyKey: Scalars["String"]["output"];
+  providerCommentIds?: Maybe<Scalars["JSON"]["output"]>;
+  providerReviewId?: Maybe<Scalars["String"]["output"]>;
+  reviewId: Scalars["ID"]["output"];
+  snapshotId: Scalars["ID"]["output"];
+  status: Scalars["String"]["output"];
+  threadIds: Array<Scalars["ID"]["output"]>;
+};
+
+export type ReviewDeliveryStatus =
+  | "delivered"
+  | "delivery_failed"
+  | "outdated"
+  | "selected"
+  | "trace_only";
+
+export type ReviewDiffFile = {
+  __typename?: "ReviewDiffFile";
+  additions: Scalars["Int"]["output"];
+  deletions: Scalars["Int"]["output"];
+  modifiedContent?: Maybe<Scalars["String"]["output"]>;
+  originalContent?: Maybe<Scalars["String"]["output"]>;
+  patch: Scalars["String"]["output"];
+  path: Scalars["String"]["output"];
+  previousPath?: Maybe<Scalars["String"]["output"]>;
+  snapshotId: Scalars["ID"]["output"];
+  status: Scalars["String"]["output"];
+  truncated: Scalars["Boolean"]["output"];
+};
+
+export type ReviewDiffSide = "base" | "head";
+
+export type ReviewDisposition = "approve" | "comment" | "request_changes";
+
+export type ReviewFile = {
+  __typename?: "ReviewFile";
+  additions: Scalars["Int"]["output"];
+  commentCount: Scalars["Int"]["output"];
+  deletions: Scalars["Int"]["output"];
+  patchAvailable: Scalars["Boolean"]["output"];
+  path: Scalars["String"]["output"];
+  previousPath?: Maybe<Scalars["String"]["output"]>;
+  status: Scalars["String"]["output"];
+  viewed: Scalars["Boolean"]["output"];
+};
+
+export type ReviewGuide = {
+  __typename?: "ReviewGuide";
+  content: Scalars["JSON"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  generationInquiryId: Scalars["ID"]["output"];
+  id: Scalars["ID"]["output"];
+  intent: Scalars["String"]["output"];
+  reviewId: Scalars["ID"]["output"];
+  snapshotId: Scalars["ID"]["output"];
+  status: ReviewGuideStatus;
+  title: Scalars["String"]["output"];
+  version: Scalars["Int"]["output"];
+};
+
+/** A focused, ordered step in a Guide's code walkthrough. Line numbers refer to the head commit. */
+export type ReviewGuideReference = {
+  __typename?: "ReviewGuideReference";
+  endLine: Scalars["Int"]["output"];
+  explanation: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  startLine: Scalars["Int"]["output"];
+  title: Scalars["String"]["output"];
+};
+
+export type ReviewGuideStatus = "earlier" | "ready";
+
+export type ReviewInquiry = {
+  __typename?: "ReviewInquiry";
+  anchor?: Maybe<Scalars["JSON"]["output"]>;
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  context: Scalars["JSON"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  error?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  position: Scalars["Int"]["output"];
+  question: Scalars["String"]["output"];
+  resolvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  resolvedById?: Maybe<Scalars["ID"]["output"]>;
+  responseMessage?: Maybe<SessionMessage>;
+  responseMessageId?: Maybe<Scalars["ID"]["output"]>;
+  reviewId: Scalars["ID"]["output"];
+  sessionId: Scalars["ID"]["output"];
+  sessionMessage?: Maybe<SessionMessage>;
+  sessionMessageId?: Maybe<Scalars["ID"]["output"]>;
+  snapshotId: Scalars["ID"]["output"];
+  sourceKind: ReviewInquirySourceKind;
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  state: ReviewInquiryState;
+  structuredResult?: Maybe<Scalars["JSON"]["output"]>;
+};
+
+export type ReviewInquirySourceKind =
+  | "diff_anchor"
+  | "guide_anchor"
+  | "guide_generation"
+  | "thread";
+
+export type ReviewInquiryState = "cancelled" | "completed" | "failed" | "queued" | "running";
+
+export type ReviewSnapshot = {
+  __typename?: "ReviewSnapshot";
+  baseSha: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  createdById: Scalars["ID"]["output"];
+  diffFormatVersion: Scalars["Int"]["output"];
+  files: Array<ReviewFile>;
+  headSha: Scalars["String"]["output"];
+  id: Scalars["ID"]["output"];
+  patchByteLength: Scalars["Int"]["output"];
+  patchChecksum: Scalars["String"]["output"];
+  patchStorageKey: Scalars["String"]["output"];
+  providerMetadata: Scalars["JSON"]["output"];
+  reviewId: Scalars["ID"]["output"];
+  status: ReviewSnapshotStatus;
+};
+
+export type ReviewSnapshotStatus = "archived" | "current";
+
+export type ReviewStatus = "archived" | "open";
+
+export type ReviewThread = {
+  __typename?: "ReviewThread";
+  anchor?: Maybe<ReviewAnchor>;
+  author: User;
+  authorId: Scalars["ID"]["output"];
+  comments: Array<ReviewComment>;
+  createdAt: Scalars["DateTime"]["output"];
+  deliveredAt?: Maybe<Scalars["DateTime"]["output"]>;
+  deliveryError?: Maybe<Scalars["String"]["output"]>;
+  deliveryStatus: ReviewDeliveryStatus;
+  guideChapterId?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  originSnapshotId: Scalars["ID"]["output"];
+  providerCommentId?: Maybe<Scalars["String"]["output"]>;
+  providerReviewId?: Maybe<Scalars["String"]["output"]>;
+  resolvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  resolvedById?: Maybe<Scalars["ID"]["output"]>;
+  reviewId: Scalars["ID"]["output"];
+  scope: ReviewThreadScope;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ReviewThreadScope = "file" | "general" | "guide_explanation" | "line";
+
 export type ScopeInput = {
   id: Scalars["ID"]["input"];
   type: ScopeType;
 };
 
-export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
+export type ScopeType = "channel" | "chat" | "review" | "session" | "system" | "ticket";
 
 export type Session = {
   __typename?: "Session";
@@ -2771,6 +3151,7 @@ export type SessionGroup = {
   pdfPageWidth: Scalars["Float"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   repo?: Maybe<Repo>;
+  reviews: Array<Review>;
   sessions: Array<Session>;
   setupError?: Maybe<Scalars["String"]["output"]>;
   setupStatus: SetupStatus;
@@ -2879,6 +3260,8 @@ export type SessionSetupScriptRun = {
   lastError?: Maybe<Scalars["String"]["output"]>;
   outputPreview?: Maybe<Scalars["String"]["output"]>;
   outputTruncated: Scalars["Boolean"]["output"];
+  resolvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  resolvedById?: Maybe<Scalars["ID"]["output"]>;
   scriptConfigId: Scalars["String"]["output"];
   sessionGroupId: Scalars["ID"]["output"];
   startedAt: Scalars["DateTime"]["output"];
@@ -2966,11 +3349,21 @@ export type StartSessionInput = {
   worktreePath?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type SubmitReviewInput = {
+  body?: InputMaybe<Scalars["String"]["input"]>;
+  disposition: ReviewDisposition;
+  idempotencyKey: Scalars["String"]["input"];
+  reviewId: Scalars["ID"]["input"];
+  snapshotId: Scalars["ID"]["input"];
+  threadIds: Array<Scalars["ID"]["input"]>;
+};
+
 export type Subscription = {
   __typename?: "Subscription";
   channelEvents: Event;
   chatEvents: Event;
   orgEvents: Event;
+  reviewEvents: Event;
   sessionEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
@@ -2992,6 +3385,13 @@ export type SubscriptionChatEventsArgs = {
 export type SubscriptionOrgEventsArgs = {
   organizationId: Scalars["ID"]["input"];
   types?: InputMaybe<Array<Scalars["String"]["input"]>>;
+};
+
+export type SubscriptionReviewEventsArgs = {
+  after?: InputMaybe<Scalars["DateTime"]["input"]>;
+  afterEventId?: InputMaybe<Scalars["ID"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+  reviewId: Scalars["ID"]["input"];
 };
 
 export type SubscriptionSessionEventsArgs = {
@@ -3330,6 +3730,7 @@ export type ResolversTypes = ResolversObject<{
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
+  CreateReviewThreadInput: CreateReviewThreadInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: ResolverTypeWrapper<Scalars["DateTime"]["output"]>;
   DeliveryResult: DeliveryResult;
@@ -3351,6 +3752,7 @@ export type ResolversTypes = ResolversObject<{
   DesignSystemVersion: ResolverTypeWrapper<DesignSystemVersion>;
   EndpointTrafficCaptureMode: EndpointTrafficCaptureMode;
   EndpointTrafficEntry: ResolverTypeWrapper<EndpointTrafficEntry>;
+  EnqueueReviewInquiryInput: EnqueueReviewInquiryInput;
   EntityType: EntityType;
   Event: ResolverTypeWrapper<Event>;
   EventType: EventType;
@@ -3409,6 +3811,29 @@ export type ResolversTypes = ResolversObject<{
   RepoSetupScript: ResolverTypeWrapper<RepoSetupScript>;
   RepoSetupScriptInput: RepoSetupScriptInput;
   RepoWorktree: ResolverTypeWrapper<RepoWorktree>;
+  Review: ResolverTypeWrapper<Review>;
+  ReviewAnchor: ResolverTypeWrapper<ReviewAnchor>;
+  ReviewAnchorInput: ReviewAnchorInput;
+  ReviewAnchorStatus: ReviewAnchorStatus;
+  ReviewCodeExcerpt: ResolverTypeWrapper<ReviewCodeExcerpt>;
+  ReviewComment: ResolverTypeWrapper<ReviewComment>;
+  ReviewDelivery: ResolverTypeWrapper<ReviewDelivery>;
+  ReviewDeliveryStatus: ReviewDeliveryStatus;
+  ReviewDiffFile: ResolverTypeWrapper<ReviewDiffFile>;
+  ReviewDiffSide: ReviewDiffSide;
+  ReviewDisposition: ReviewDisposition;
+  ReviewFile: ResolverTypeWrapper<ReviewFile>;
+  ReviewGuide: ResolverTypeWrapper<ReviewGuide>;
+  ReviewGuideReference: ResolverTypeWrapper<ReviewGuideReference>;
+  ReviewGuideStatus: ReviewGuideStatus;
+  ReviewInquiry: ResolverTypeWrapper<ReviewInquiry>;
+  ReviewInquirySourceKind: ReviewInquirySourceKind;
+  ReviewInquiryState: ReviewInquiryState;
+  ReviewSnapshot: ResolverTypeWrapper<ReviewSnapshot>;
+  ReviewSnapshotStatus: ReviewSnapshotStatus;
+  ReviewStatus: ReviewStatus;
+  ReviewThread: ResolverTypeWrapper<ReviewThread>;
+  ReviewThreadScope: ReviewThreadScope;
   ScopeInput: ScopeInput;
   ScopeType: ScopeType;
   Session: ResolverTypeWrapper<Session>;
@@ -3452,6 +3877,7 @@ export type ResolversTypes = ResolversObject<{
   SlashCommandSource: SlashCommandSource;
   StartSessionInput: StartSessionInput;
   String: ResolverTypeWrapper<Scalars["String"]["output"]>;
+  SubmitReviewInput: SubmitReviewInput;
   Subscription: ResolverTypeWrapper<{}>;
   SupportedAppIntegration: ResolverTypeWrapper<SupportedAppIntegration>;
   SupportedIntegrationCapability: ResolverTypeWrapper<SupportedIntegrationCapability>;
@@ -3514,6 +3940,7 @@ export type ResolversParentTypes = ResolversObject<{
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
+  CreateReviewThreadInput: CreateReviewThreadInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: Scalars["DateTime"]["output"];
   DeployAppSessionInput: DeployAppSessionInput;
@@ -3529,6 +3956,7 @@ export type ResolversParentTypes = ResolversObject<{
   DesignSystemCommitArtifactEdge: DesignSystemCommitArtifactEdge;
   DesignSystemVersion: DesignSystemVersion;
   EndpointTrafficEntry: EndpointTrafficEntry;
+  EnqueueReviewInquiryInput: EnqueueReviewInquiryInput;
   Event: Event;
   Float: Scalars["Float"]["output"];
   HiddenSessionTab: HiddenSessionTab;
@@ -3574,6 +4002,19 @@ export type ResolversParentTypes = ResolversObject<{
   RepoSetupScript: RepoSetupScript;
   RepoSetupScriptInput: RepoSetupScriptInput;
   RepoWorktree: RepoWorktree;
+  Review: Review;
+  ReviewAnchor: ReviewAnchor;
+  ReviewAnchorInput: ReviewAnchorInput;
+  ReviewCodeExcerpt: ReviewCodeExcerpt;
+  ReviewComment: ReviewComment;
+  ReviewDelivery: ReviewDelivery;
+  ReviewDiffFile: ReviewDiffFile;
+  ReviewFile: ReviewFile;
+  ReviewGuide: ReviewGuide;
+  ReviewGuideReference: ReviewGuideReference;
+  ReviewInquiry: ReviewInquiry;
+  ReviewSnapshot: ReviewSnapshot;
+  ReviewThread: ReviewThread;
   ScopeInput: ScopeInput;
   Session: Session;
   SessionApplicationLogEntry: SessionApplicationLogEntry;
@@ -3601,6 +4042,7 @@ export type ResolversParentTypes = ResolversObject<{
   SlashCommand: SlashCommand;
   StartSessionInput: StartSessionInput;
   String: Scalars["String"]["output"];
+  SubmitReviewInput: SubmitReviewInput;
   Subscription: {};
   SupportedAppIntegration: SupportedAppIntegration;
   SupportedIntegrationCapability: SupportedIntegrationCapability;
@@ -4510,6 +4952,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationAttachRepoRemoteArgs, "remoteUrl" | "repoId">
   >;
+  cancelReviewInquiry?: Resolver<
+    ResolversTypes["ReviewInquiry"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCancelReviewInquiryArgs, "inquiryId">
+  >;
   clearEndpointTraffic?: Resolver<
     ResolversTypes["Boolean"],
     ParentType,
@@ -4608,6 +5056,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationCreateRepoArgs, "input">
+  >;
+  createReviewThread?: Resolver<
+    ResolversTypes["ReviewThread"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateReviewThreadArgs, "input">
   >;
   createSessionEndpointPreview?: Resolver<
     ResolversTypes["SessionEndpointPreview"],
@@ -4748,11 +5202,23 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationEditChatMessageArgs, "html" | "messageId">
   >;
+  editReviewComment?: Resolver<
+    ResolversTypes["ReviewComment"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationEditReviewCommentArgs, "body" | "commentId">
+  >;
   enableSessionEndpointForwarding?: Resolver<
     ResolversTypes["SessionEndpoint"],
     ParentType,
     ContextType,
     RequireFields<MutationEnableSessionEndpointForwardingArgs, "endpointId">
+  >;
+  enqueueReviewInquiry?: Resolver<
+    ResolversTypes["ReviewInquiry"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationEnqueueReviewInquiryArgs, "input">
   >;
   forkSession?: Resolver<
     ResolversTypes["Session"],
@@ -4850,6 +5316,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationMuteScopeArgs, "scopeId" | "scopeType">
   >;
+  openReviewForPullRequest?: Resolver<
+    ResolversTypes["Review"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationOpenReviewForPullRequestArgs, "pullRequestUrl" | "sessionId">
+  >;
   openWorkspaceBrowser?: Resolver<
     ResolversTypes["Boolean"],
     ParentType,
@@ -4862,11 +5334,23 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationQueueSessionMessageArgs, "sessionId" | "text">
   >;
+  reanchorReviewThread?: Resolver<
+    ResolversTypes["ReviewThread"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationReanchorReviewThreadArgs, "anchor" | "threadId">
+  >;
   refreshDesignSystemSource?: Resolver<
     ResolversTypes["DesignSystem"],
     ParentType,
     ContextType,
     RequireFields<MutationRefreshDesignSystemSourceArgs, "id">
+  >;
+  refreshReviewSnapshot?: Resolver<
+    ResolversTypes["Review"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRefreshReviewSnapshotArgs, "reviewId">
   >;
   registerPushToken?: Resolver<
     ResolversTypes["Boolean"],
@@ -4928,6 +5412,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationReorderQueuedMessagesArgs, "ids" | "sessionId">
   >;
+  replyToReviewThread?: Resolver<
+    ResolversTypes["ReviewComment"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationReplyToReviewThreadArgs, "body" | "threadId">
+  >;
   requestBridgeAccess?: Resolver<
     ResolversTypes["BridgeAccessRequest"],
     ParentType,
@@ -4945,6 +5435,18 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationResizeTerminalArgs, "cols" | "rows" | "terminalId">
+  >;
+  resolveReviewInquiry?: Resolver<
+    ResolversTypes["ReviewInquiry"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationResolveReviewInquiryArgs, "inquiryId" | "resolved">
+  >;
+  resolveReviewThread?: Resolver<
+    ResolversTypes["ReviewThread"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationResolveReviewThreadArgs, "resolved" | "threadId">
   >;
   restartSessionProcess?: Resolver<
     ResolversTypes["SessionApplicationProcess"],
@@ -5033,6 +5535,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationSaveManualElementEditsArgs, "inputs" | "sessionGroupId">
   >;
+  saveReviewGuide?: Resolver<
+    ResolversTypes["ReviewGuide"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationSaveReviewGuideArgs, "content" | "inquiryId">
+  >;
   saveSessionGroupFile?: Resolver<
     ResolversTypes["Boolean"],
     ParentType,
@@ -5093,6 +5601,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationSetOrgSecretArgs, "input">
   >;
+  setReviewThreadSelected?: Resolver<
+    ResolversTypes["ReviewThread"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationSetReviewThreadSelectedArgs, "selected" | "threadId">
+  >;
   startSession?: Resolver<
     ResolversTypes["Session"],
     ParentType,
@@ -5134,6 +5648,12 @@ export type MutationResolvers<
       MutationStopSessionProcessArgs,
       "appConfigId" | "processConfigId" | "sessionGroupId"
     >
+  >;
+  submitReviewToProvider?: Resolver<
+    ResolversTypes["ReviewDelivery"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationSubmitReviewToProviderArgs, "input">
   >;
   subscribe?: Resolver<
     ResolversTypes["Participant"],
@@ -5669,6 +6189,30 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QueryReposArgs, "organizationId">
   >;
+  review?: Resolver<
+    Maybe<ResolversTypes["Review"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryReviewArgs, "id">
+  >;
+  reviewCodeExcerpt?: Resolver<
+    ResolversTypes["ReviewCodeExcerpt"],
+    ParentType,
+    ContextType,
+    RequireFields<QueryReviewCodeExcerptArgs, "endLine" | "filePath" | "snapshotId" | "startLine">
+  >;
+  reviewDiffFile?: Resolver<
+    ResolversTypes["ReviewDiffFile"],
+    ParentType,
+    ContextType,
+    RequireFields<QueryReviewDiffFileArgs, "filePath" | "snapshotId">
+  >;
+  reviewForSessionGroup?: Resolver<
+    Maybe<ResolversTypes["Review"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryReviewForSessionGroupArgs, "sessionGroupId">
+  >;
   searchMessages?: Resolver<
     Array<ResolversTypes["MessageSearchHit"]>,
     ParentType,
@@ -5992,6 +6536,246 @@ export type RepoWorktreeResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type ReviewResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["Review"] = ResolversParentTypes["Review"],
+> = ResolversObject<{
+  attachedSession?: Resolver<ResolversTypes["Session"], ParentType, ContextType>;
+  attachedSessionId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  channel?: Resolver<Maybe<ResolversTypes["Channel"]>, ParentType, ContextType>;
+  channelId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  currentSnapshot?: Resolver<Maybe<ResolversTypes["ReviewSnapshot"]>, ParentType, ContextType>;
+  currentSnapshotId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  description?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  guides?: Resolver<Array<ResolversTypes["ReviewGuide"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  inquiries?: Resolver<Array<ResolversTypes["ReviewInquiry"]>, ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  provider?: Resolver<ResolversTypes["RepoProvider"], ParentType, ContextType>;
+  pullRequestNumber?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  pullRequestUrl?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  remotePullRequestId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  repository?: Resolver<ResolversTypes["Repo"], ParentType, ContextType>;
+  repositoryId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  snapshots?: Resolver<Array<ResolversTypes["ReviewSnapshot"]>, ParentType, ContextType>;
+  sourceSessionGroup?: Resolver<Maybe<ResolversTypes["SessionGroup"]>, ParentType, ContextType>;
+  sourceSessionGroupId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["ReviewStatus"], ParentType, ContextType>;
+  threads?: Resolver<Array<ResolversTypes["ReviewThread"]>, ParentType, ContextType>;
+  title?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ReviewAnchorResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ReviewAnchor"] = ResolversParentTypes["ReviewAnchor"],
+> = ResolversObject<{
+  baseBlobId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  context?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  endLine?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  filePath?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  headBlobId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  hunkId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  originalLine?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
+  selectedText?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  side?: Resolver<ResolversTypes["ReviewDiffSide"], ParentType, ContextType>;
+  snapshotId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  startLine?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["ReviewAnchorStatus"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ReviewCodeExcerptResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ReviewCodeExcerpt"] =
+    ResolversParentTypes["ReviewCodeExcerpt"],
+> = ResolversObject<{
+  addedLines?: Resolver<Array<ResolversTypes["Int"]>, ParentType, ContextType>;
+  content?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  endLine?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  path?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  snapshotId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  startLine?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ReviewCommentResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ReviewComment"] = ResolversParentTypes["ReviewComment"],
+> = ResolversObject<{
+  author?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
+  authorId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  body?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  deletedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  editedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  providerCommentId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  threadId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ReviewDeliveryResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ReviewDelivery"] =
+    ResolversParentTypes["ReviewDelivery"],
+> = ResolversObject<{
+  attempts?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  completedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  disposition?: Resolver<ResolversTypes["ReviewDisposition"], ParentType, ContextType>;
+  error?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  idempotencyKey?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  providerCommentIds?: Resolver<Maybe<ResolversTypes["JSON"]>, ParentType, ContextType>;
+  providerReviewId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  reviewId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  snapshotId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  threadIds?: Resolver<Array<ResolversTypes["ID"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ReviewDiffFileResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ReviewDiffFile"] =
+    ResolversParentTypes["ReviewDiffFile"],
+> = ResolversObject<{
+  additions?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  deletions?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  modifiedContent?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  originalContent?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  patch?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  path?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  previousPath?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  snapshotId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  truncated?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ReviewFileResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ReviewFile"] = ResolversParentTypes["ReviewFile"],
+> = ResolversObject<{
+  additions?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  commentCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  deletions?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  patchAvailable?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  path?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  previousPath?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  viewed?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ReviewGuideResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ReviewGuide"] = ResolversParentTypes["ReviewGuide"],
+> = ResolversObject<{
+  content?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  generationInquiryId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  intent?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  reviewId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  snapshotId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["ReviewGuideStatus"], ParentType, ContextType>;
+  title?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  version?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ReviewGuideReferenceResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ReviewGuideReference"] =
+    ResolversParentTypes["ReviewGuideReference"],
+> = ResolversObject<{
+  endLine?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  explanation?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  filePath?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  startLine?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  title?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ReviewInquiryResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ReviewInquiry"] = ResolversParentTypes["ReviewInquiry"],
+> = ResolversObject<{
+  anchor?: Resolver<Maybe<ResolversTypes["JSON"]>, ParentType, ContextType>;
+  completedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  context?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  error?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  position?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  question?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  resolvedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  resolvedById?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  responseMessage?: Resolver<Maybe<ResolversTypes["SessionMessage"]>, ParentType, ContextType>;
+  responseMessageId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  reviewId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  sessionId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  sessionMessage?: Resolver<Maybe<ResolversTypes["SessionMessage"]>, ParentType, ContextType>;
+  sessionMessageId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  snapshotId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  sourceKind?: Resolver<ResolversTypes["ReviewInquirySourceKind"], ParentType, ContextType>;
+  startedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  state?: Resolver<ResolversTypes["ReviewInquiryState"], ParentType, ContextType>;
+  structuredResult?: Resolver<Maybe<ResolversTypes["JSON"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ReviewSnapshotResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ReviewSnapshot"] =
+    ResolversParentTypes["ReviewSnapshot"],
+> = ResolversObject<{
+  baseSha?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  createdById?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  diffFormatVersion?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  files?: Resolver<Array<ResolversTypes["ReviewFile"]>, ParentType, ContextType>;
+  headSha?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  patchByteLength?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  patchChecksum?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  patchStorageKey?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  providerMetadata?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  reviewId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["ReviewSnapshotStatus"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ReviewThreadResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ReviewThread"] = ResolversParentTypes["ReviewThread"],
+> = ResolversObject<{
+  anchor?: Resolver<Maybe<ResolversTypes["ReviewAnchor"]>, ParentType, ContextType>;
+  author?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
+  authorId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  comments?: Resolver<Array<ResolversTypes["ReviewComment"]>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  deliveredAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  deliveryError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  deliveryStatus?: Resolver<ResolversTypes["ReviewDeliveryStatus"], ParentType, ContextType>;
+  guideChapterId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  originSnapshotId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  providerCommentId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  providerReviewId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  resolvedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  resolvedById?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  reviewId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  scope?: Resolver<ResolversTypes["ReviewThreadScope"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type SessionResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["Session"] = ResolversParentTypes["Session"],
@@ -6205,6 +6989,7 @@ export type SessionGroupResolvers<
   pdfPageWidth?: Resolver<ResolversTypes["Float"], ParentType, ContextType>;
   prUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes["Repo"]>, ParentType, ContextType>;
+  reviews?: Resolver<Array<ResolversTypes["Review"]>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes["Session"]>, ParentType, ContextType>;
   setupError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   setupStatus?: Resolver<ResolversTypes["SetupStatus"], ParentType, ContextType>;
@@ -6320,6 +7105,8 @@ export type SessionSetupScriptRunResolvers<
   lastError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   outputPreview?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   outputTruncated?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  resolvedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  resolvedById?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   scriptConfigId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   startedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
@@ -6386,6 +7173,13 @@ export type SubscriptionResolvers<
     ParentType,
     ContextType,
     RequireFields<SubscriptionOrgEventsArgs, "organizationId">
+  >;
+  reviewEvents?: SubscriptionResolver<
+    ResolversTypes["Event"],
+    "reviewEvents",
+    ParentType,
+    ContextType,
+    RequireFields<SubscriptionReviewEventsArgs, "organizationId" | "reviewId">
   >;
   sessionEvents?: SubscriptionResolver<
     ResolversTypes["Event"],
@@ -6640,6 +7434,18 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   RepoRunScript?: RepoRunScriptResolvers<ContextType>;
   RepoSetupScript?: RepoSetupScriptResolvers<ContextType>;
   RepoWorktree?: RepoWorktreeResolvers<ContextType>;
+  Review?: ReviewResolvers<ContextType>;
+  ReviewAnchor?: ReviewAnchorResolvers<ContextType>;
+  ReviewCodeExcerpt?: ReviewCodeExcerptResolvers<ContextType>;
+  ReviewComment?: ReviewCommentResolvers<ContextType>;
+  ReviewDelivery?: ReviewDeliveryResolvers<ContextType>;
+  ReviewDiffFile?: ReviewDiffFileResolvers<ContextType>;
+  ReviewFile?: ReviewFileResolvers<ContextType>;
+  ReviewGuide?: ReviewGuideResolvers<ContextType>;
+  ReviewGuideReference?: ReviewGuideReferenceResolvers<ContextType>;
+  ReviewInquiry?: ReviewInquiryResolvers<ContextType>;
+  ReviewSnapshot?: ReviewSnapshotResolvers<ContextType>;
+  ReviewThread?: ReviewThreadResolvers<ContextType>;
   Session?: SessionResolvers<ContextType>;
   SessionApplicationLogEntry?: SessionApplicationLogEntryResolvers<ContextType>;
   SessionApplicationProcess?: SessionApplicationProcessResolvers<ContextType>;

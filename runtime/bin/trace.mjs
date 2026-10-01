@@ -567,6 +567,18 @@ var traceCliOperations = {
       linkSessionPullRequest(sessionId: $sessionId, prUrl: $prUrl) { id name status prUrl }
     }`
   }),
+  openReviewForPullRequest: operation({
+    name: "TraceCliOpenReviewForPullRequest",
+    type: "mutation",
+    rootField: "openReviewForPullRequest",
+    capability: "review:open",
+    argumentPaths: ["sessionId", "pullRequestUrl"],
+    document: `mutation TraceCliOpenReviewForPullRequest($sessionId: ID!, $pullRequestUrl: String!) {
+      openReviewForPullRequest(sessionId: $sessionId, pullRequestUrl: $pullRequestUrl) {
+        id currentSnapshotId sourceSessionGroupId channelId attachedSessionId
+      }
+    }`
+  }),
   sessionEvents: operation({
     name: "TraceCliSessionEvents",
     type: "query",
@@ -3269,6 +3281,54 @@ var terminalCommands = [
   })
 ];
 
+// src/commands/review/open.ts
+var reviewOpenCommand = defineCommand({
+  path: ["review", "open"],
+  description: "Open or focus a pull request Review tab in the current session group",
+  examples: ['"$TRACE_CLI" review open https://github.com/acme/app/pull/42 --self --json'],
+  effects: [
+    "Resolves the pull request, stores an immutable snapshot, and opens or reuses its Review tab."
+  ],
+  output: "The review ID, current snapshot ID, and Review-tab UI path.",
+  nextSteps: [
+    "Open the returned UI path to inspect the frozen snapshot.",
+    "Generate a Guide or ask anchored questions only when the user requests review assistance."
+  ],
+  notes: [
+    "Opening a review does not generate a Guide, send an agent message, edit code, or post to GitHub.",
+    "The pull request must belong to the repository already linked to the current coding session."
+  ],
+  positionals: [{ name: "pull-request-url", required: true }],
+  options: [
+    {
+      name: "self",
+      flag: "--self",
+      kind: "boolean",
+      description: "Use the current coding session"
+    }
+  ],
+  async run(ctx, input) {
+    const pullRequestUrl = input.positionals[0]?.trim();
+    if (!pullRequestUrl) usage("A pull request URL is required");
+    if (!optionBoolean(input, "self")) usage("review open currently requires --self");
+    const sessionId = resolveSessionId(ctx);
+    const result = await (await ctx.client()).graphql(traceCliOperations.openReviewForPullRequest, { sessionId, pullRequestUrl });
+    const review = result.openReviewForPullRequest;
+    const groupPath = review.sourceSessionGroupId ? review.channelId ? `/c/${review.channelId}/g/${review.sourceSessionGroupId}` : `/g/${review.sourceSessionGroupId}` : "/";
+    ctx.output(
+      {
+        reviewId: review.id,
+        snapshotId: review.currentSnapshotId,
+        uiPath: `${groupPath}?review=${review.id}`
+      },
+      `Opened review ${review.id}`
+    );
+  }
+});
+
+// src/commands/review/index.ts
+var reviewCommands = [reviewOpenCommand];
+
 // src/commands/index.ts
 var commands = [
   contextCommand,
@@ -3282,6 +3342,7 @@ var commands = [
   repoCreateCommand,
   repoAttachRemoteCommand,
   ...sessionCommands,
+  ...reviewCommands,
   ...terminalCommands,
   artifactCommand
 ];
@@ -3371,6 +3432,16 @@ var commandGroups = [
     notes: [
       "Read command help before lifecycle mutations; session operations change shared Trace state."
     ]
+  },
+  {
+    name: "review",
+    description: "Open pull requests in Trace's reusable Review workspace",
+    workflow: [
+      'Run "$TRACE_CLI" review open <pull-request-url> --self --json only after the user asks to review that PR.',
+      "Use the returned review and snapshot IDs to report the pinned review target."
+    ],
+    examples: ['"$TRACE_CLI" review open https://github.com/acme/app/pull/42 --self --json'],
+    notes: ["Opening a review has no AI, source-code, or GitHub-posting side effects."]
   },
   {
     name: "terminal",

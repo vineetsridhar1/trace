@@ -151,4 +151,5 @@ export const topics = {
   sessionStatus: (sessionId: string) => `session:${sessionId}:status`,
   sessionPorts: (sessionId: string) => `session:${sessionId}:ports`,
   sessionEvents: (sessionId: string) => `session:${sessionId}:events`,
+  reviewEvents: (reviewId: string) => `review:${reviewId}:events`,
 } as const;

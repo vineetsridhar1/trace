@@ -13,6 +13,7 @@ vi.mock("../lib/pubsub.js", async () => {
       channelEvents: (id: string) => `channel:${id}:events`,
       chatEvents: (id: string) => `chat:${id}:events`,
       ticketEvents: (id: string) => `ticket:${id}:events`,
+      reviewEvents: (id: string) => `review:${id}:events`,
       orgEvents: (id: string) => `org:${id}:events`,
     },
   };
@@ -78,6 +79,36 @@ describe("EventService", () => {
       "event",
       JSON.stringify(event),
     );
+  });
+
+  it("publishes review events to both the active review and organization streams", async () => {
+    const event = {
+      id: "event-1",
+      organizationId: "org-1",
+      scopeType: "review",
+      scopeId: "review-1",
+      eventType: "review_thread_created",
+      payload: { thread: { id: "thread-1" } },
+    };
+    prismaMock.event.create.mockResolvedValueOnce(event);
+
+    const service = new EventService();
+    await service.create({
+      organizationId: "org-1",
+      scopeType: "review",
+      scopeId: "review-1",
+      eventType: "review_thread_created",
+      payload: event.payload,
+      actorType: "user",
+      actorId: "user-1",
+    });
+
+    expect(pubsubMock.publish).toHaveBeenNthCalledWith(1, "review:review-1:events", {
+      reviewEvents: event,
+    });
+    expect(pubsubMock.publish).toHaveBeenNthCalledWith(2, "org:org-1:events", {
+      orgEvents: event,
+    });
   });
 
   it("can create events without publishing until explicitly requested", async () => {

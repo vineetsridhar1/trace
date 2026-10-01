@@ -22,6 +22,12 @@ import type {
   DesignSystemCommitArtifact,
   DesignSystemVersion,
   Artifact,
+  Review,
+  ReviewSnapshot,
+  ReviewThread,
+  ReviewComment,
+  ReviewInquiry,
+  ReviewGuide,
 } from "@trace/gql";
 import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
 import { useAuthStore } from "../stores/auth.js";
@@ -238,6 +244,75 @@ export function handleOrgEvent(event: Event): void {
     const session = asJsonObject(payload.session);
     if (session && typeof session.id === "string") {
       batch.upsert("sessions", session.id, session as unknown as SessionEntity);
+    }
+  }
+
+  if (event.eventType.startsWith("review_")) {
+    const review = asJsonObject(payload.review);
+    if (review && typeof review.id === "string") {
+      batch.upsert("reviews", review.id, review as unknown as Review);
+      if (Array.isArray(review.snapshots)) {
+        for (const value of review.snapshots) {
+          const snapshot = asJsonObject(value);
+          if (snapshot && typeof snapshot.id === "string") {
+            batch.upsert("reviewSnapshots", snapshot.id, snapshot as unknown as ReviewSnapshot);
+          }
+        }
+      }
+      if (Array.isArray(review.threads)) {
+        for (const value of review.threads) {
+          const thread = asJsonObject(value);
+          if (thread && typeof thread.id === "string") {
+            batch.upsert("reviewThreads", thread.id, thread as unknown as ReviewThread);
+          }
+        }
+      }
+      if (Array.isArray(review.inquiries)) {
+        for (const value of review.inquiries) {
+          const inquiry = asJsonObject(value);
+          if (inquiry && typeof inquiry.id === "string") {
+            batch.upsert("reviewInquiries", inquiry.id, inquiry as unknown as ReviewInquiry);
+          }
+        }
+      }
+      if (Array.isArray(review.guides)) {
+        for (const value of review.guides) {
+          const guide = asJsonObject(value);
+          if (guide && typeof guide.id === "string") {
+            batch.upsert("reviewGuides", guide.id, guide as unknown as ReviewGuide);
+          }
+        }
+      }
+    }
+    const mappings = [
+      ["snapshot", "reviewSnapshots"],
+      ["thread", "reviewThreads"],
+      ["comment", "reviewComments"],
+      ["inquiry", "reviewInquiries"],
+      ["guide", "reviewGuides"],
+      ["delivery", "reviewDeliveries"],
+    ] as const;
+    if (Array.isArray(payload.threads)) {
+      for (const value of payload.threads) {
+        const thread = asJsonObject(value);
+        if (thread && typeof thread.id === "string") {
+          batch.upsert("reviewThreads", thread.id, thread as unknown as ReviewThread);
+        }
+      }
+    }
+    for (const [payloadKey, table] of mappings) {
+      const entity = asJsonObject(payload[payloadKey]);
+      if (entity && typeof entity.id === "string") {
+        batch.upsert(table, entity.id, entity as unknown as never);
+        if (payloadKey === "thread" && Array.isArray(entity.comments)) {
+          for (const value of entity.comments) {
+            const comment = asJsonObject(value);
+            if (comment && typeof comment.id === "string") {
+              batch.upsert("reviewComments", comment.id, comment as unknown as ReviewComment);
+            }
+          }
+        }
+      }
     }
   }
 

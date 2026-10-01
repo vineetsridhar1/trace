@@ -6,6 +6,7 @@ describe("workspace sidebar", () => {
     useWorkspaceSidebarStore.setState({
       filesSessionGroupId: null,
       view: "files",
+      changesReviewId: null,
       fileOpenRequest: null,
     });
   });
@@ -24,6 +25,22 @@ describe("workspace sidebar", () => {
 
     useWorkspaceSidebarStore.getState().setView("files");
     expect(useWorkspaceSidebarStore.getState().view).toBe("files");
+  });
+
+  it("tracks the review supplying the Changes sidebar", () => {
+    useWorkspaceSidebarStore.getState().openFiles("group-1", "changes", "review-1");
+    expect(useWorkspaceSidebarStore.getState().changesReviewId).toBe("review-1");
+
+    useWorkspaceSidebarStore.getState().clearChangesReview();
+    expect(useWorkspaceSidebarStore.getState().changesReviewId).toBeNull();
+  });
+
+  it("keeps the review supplying Changes while switching resource views", () => {
+    useWorkspaceSidebarStore.getState().openFiles("group-1", "changes", "review-1");
+    useWorkspaceSidebarStore.getState().setView("files");
+    useWorkspaceSidebarStore.getState().setView("changes");
+
+    expect(useWorkspaceSidebarStore.getState().changesReviewId).toBe("review-1");
   });
 
   it("toggles files for the active session group", () => {

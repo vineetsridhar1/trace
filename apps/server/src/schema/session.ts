@@ -1049,6 +1049,12 @@ export const sessionTypeResolvers = {
           ?.sessions ?? []
       );
     },
+    reviews: async (group: { id: string }) => {
+      return prisma.review.findMany({
+        where: { sourceSessionGroupId: group.id, status: "open" },
+        orderBy: { updatedAt: "desc" },
+      });
+    },
     owner: async (
       group: { owner?: unknown; ownerUser?: unknown; ownerUserId?: string },
       _args: unknown,

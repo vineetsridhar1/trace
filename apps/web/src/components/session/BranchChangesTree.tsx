@@ -8,9 +8,10 @@ import { BranchChangedFileRow } from "./BranchChangedFileRow";
 interface BranchChangesTreeProps {
   files: BranchDiffFile[];
   onFileClick: (filePath: string, status: string) => void;
+  activeFilePath?: string | null;
 }
 
-export function BranchChangesTree({ files, onFileClick }: BranchChangesTreeProps) {
+export function BranchChangesTree({ files, onFileClick, activeFilePath }: BranchChangesTreeProps) {
   const tree = useMemo(() => buildTree(files.map((file) => file.path)), [files]);
   const fileByPath = useMemo(
     () => new Map(files.map((file) => [file.path, file] as const)),
@@ -51,6 +52,7 @@ export function BranchChangesTree({ files, onFileClick }: BranchChangesTreeProps
           fileByPath={fileByPath}
           onToggle={handleToggle}
           onFileClick={onFileClick}
+          activeFilePath={activeFilePath}
         />
       ))}
     </>
@@ -64,6 +66,7 @@ interface BranchChangesTreeNodeProps {
   fileByPath: Map<string, BranchDiffFile>;
   onToggle: (path: string) => void;
   onFileClick: (filePath: string, status: string) => void;
+  activeFilePath?: string | null;
 }
 
 function BranchChangesTreeNode({
@@ -73,6 +76,7 @@ function BranchChangesTreeNode({
   fileByPath,
   onToggle,
   onFileClick,
+  activeFilePath,
 }: BranchChangesTreeNodeProps) {
   const isExpanded = expandedPaths.has(node.path);
   const Icon = isExpanded ? FolderOpen : FolderClosed;
@@ -86,6 +90,7 @@ function BranchChangesTreeNode({
         file={file}
         depth={depth}
         pathPosition="none"
+        active={file.path === activeFilePath}
         onFileClick={onFileClick}
       />
     );
@@ -115,6 +120,7 @@ function BranchChangesTreeNode({
             fileByPath={fileByPath}
             onToggle={onToggle}
             onFileClick={onFileClick}
+            activeFilePath={activeFilePath}
           />
         ))}
     </>

@@ -62,6 +62,7 @@ import { artifactMutations, artifactQueries, artifactTypeResolvers } from "./art
 import { restrictAgentRootResolvers } from "../lib/agent-authorization.js";
 import { appIntegrationMutations, appIntegrationQueries } from "./app-integrations.js";
 import { workspaceMutations } from "./workspace.js";
+import { reviewMutations, reviewQueries, reviewTypeResolvers } from "./review.js";
 
 const queries = {
   ...organizationQueries,
@@ -85,6 +86,7 @@ const queries = {
   ...designSystemQueries,
   ...artifactQueries,
   ...appIntegrationQueries,
+  ...reviewQueries,
 };
 
 const mutations = {
@@ -108,6 +110,7 @@ const mutations = {
   ...artifactMutations,
   ...appIntegrationMutations,
   ...workspaceMutations,
+  ...reviewMutations,
 };
 
 const subscriptions = {
@@ -134,6 +137,7 @@ export const resolvers = {
   ...sessionApplicationTypeResolvers,
   ...bridgeAccessTypeResolvers,
   ...artifactTypeResolvers,
+  ...reviewTypeResolvers,
 
   User: {
     organizations: (user: { id: string }) => orgMemberService.getUserOrgs(user.id),

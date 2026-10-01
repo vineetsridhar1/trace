@@ -64,6 +64,9 @@ import { ArtifactTabContent } from "../artifact/ArtifactTabContent";
 import { useWorkspaceTabRequests } from "./useWorkspaceTabRequests";
 import { CANVAS_TAB_ID, useSessionWorkspaceTabs } from "./useSessionWorkspaceTabs";
 import { useSessionApplicationsData } from "./applications/useSessionApplicationsData";
+import { ReviewTab } from "../review/ReviewTab";
+import { fetchReviewForGroup } from "../review/review-operations";
+import { useReviewUiStore } from "../../stores/review-ui";
 
 const EMPTY_ARTIFACT_IDS: string[] = [];
 const EMPTY_HIDDEN_SESSION_TABS: Record<string, string> = {};
@@ -72,6 +75,13 @@ const HIDDEN_SESSION_TABS_QUERY = gql`
     hiddenSessionTabs(sessionGroupId: $sessionGroupId) {
       sessionId
       hiddenAt
+    }
+  }
+`;
+const OPEN_REVIEW_MUTATION = gql`
+  mutation OpenReviewForPullRequest($sessionId: ID!, $pullRequestUrl: String!) {
+    openReviewForPullRequest(sessionId: $sessionId, pullRequestUrl: $pullRequestUrl) {
+      id
     }
   }
 `;
@@ -205,6 +215,18 @@ export function SessionGroupDetailView({
     | string
     | null
     | undefined;
+  const groupReviewId = useEntityStore(
+    (state) =>
+      Object.values(state.reviews).find(
+        (review) => review.sourceSessionGroupId === sessionGroupId && review.status === "open",
+      )?.id,
+  );
+  const groupReviewAttachedSessionId = useEntityStore(
+    (state) =>
+      Object.values(state.reviews).find(
+        (review) => review.sourceSessionGroupId === sessionGroupId && review.status === "open",
+      )?.attachedSessionId,
+  );
   const groupKind = useEntityField("sessionGroups", sessionGroupId, "kind") as
     | string
     | null
@@ -237,6 +259,10 @@ export function SessionGroupDetailView({
     if (!groupArchivedAt) return;
     void window.trace?.destroyBrowsersForSessionGroup(sessionGroupId);
   }, [groupArchivedAt, sessionGroupId]);
+
+  useEffect(() => {
+    void fetchReviewForGroup(sessionGroupId).catch(() => {});
+  }, [sessionGroupId]);
 
   const activeSessionGroupId = useUIStore(
     (s: { activeSessionGroupId: string | null }) => s.activeSessionGroupId,
@@ -309,6 +335,7 @@ export function SessionGroupDetailView({
     (state) => state.filesSessionGroupId === sessionGroupId,
   );
   const openFilesSidebar = useWorkspaceSidebarStore((state) => state.openFiles);
+  const clearChangesReview = useWorkspaceSidebarStore((state) => state.clearChangesReview);
   const toggleFilesSidebar = useWorkspaceSidebarStore((state) => state.toggleFiles);
   const sidebarFileOpenRequest = useWorkspaceSidebarStore((state) => state.fileOpenRequest);
   const consumeSidebarFileOpenRequest = useWorkspaceSidebarStore(
@@ -322,6 +349,8 @@ export function SessionGroupDetailView({
   const [forkEventId, setForkEventId] = useState<string | null>(null);
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
   const [applicationPanelOpen, setApplicationPanelOpen] = useState(false);
+  const [reviewTabOpen, setReviewTabOpen] = useState(true);
+  const [reviewSessionDebugOpen, setReviewSessionDebugOpen] = useState(false);
   const [workspaceInteractionActive, setWorkspaceInteractionActive] = useState(false);
   const [modalOverlayVisible, setModalOverlayVisible] = useState(false);
   const [groupLoadError, setGroupLoadError] = useState<string | null>(null);
@@ -339,6 +368,14 @@ export function SessionGroupDetailView({
     setActiveSessionId,
     setActiveTerminalId,
   });
+
+  useEffect(() => {
+    if (!groupReviewId || typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("review") === groupReviewId) {
+      setReviewTabOpen(true);
+      setRequestedActiveWorkspaceTabId(`review:${groupReviewId}`);
+    }
+  }, [groupReviewId, setRequestedActiveWorkspaceTabId]);
   const workspaceTerminals = terminals;
 
   const handleOpenForkDialog = useCallback((eventId: string) => {
@@ -407,10 +444,38 @@ export function SessionGroupDetailView({
     handleFileClick,
     handleDraftAttachmentClick,
     handleUploadedAttachmentClick,
-    handleDiffFileClick,
     handleSelectFile,
     handleCloseFile,
   } = useFileActions(sessionGroupId);
+
+  const navigateReview = useReviewUiStore((state) => state.navigate);
+  const handleDiffFileClick = useCallback(
+    (filePath: string, status: string) => {
+      // Review owns the diff, but a workspace without a PR still lists its branch changes. Opening
+      // the file keeps that navigation working instead of dead-ending on an error.
+      if (!groupReviewId) {
+        if (status === "removed") {
+          toast.info(`${filePath.split("/").pop() ?? filePath} was deleted on this branch`);
+          return;
+        }
+        handleFileClick(filePath);
+        return;
+      }
+      navigateReview(groupReviewId, { filePath, startLine: 1, endLine: 1 });
+      setReviewTabOpen(true);
+      setActiveFilePath(null);
+      setActiveTerminalId(null);
+      setRequestedActiveWorkspaceTabId(`review:${groupReviewId}`);
+    },
+    [
+      groupReviewId,
+      handleFileClick,
+      navigateReview,
+      setActiveFilePath,
+      setActiveTerminalId,
+      setRequestedActiveWorkspaceTabId,
+    ],
+  );
 
   useEffect(() => {
     if (!sidebarFileOpenRequest || sidebarFileOpenRequest.sessionGroupId !== sessionGroupId) return;
@@ -961,6 +1026,9 @@ export function SessionGroupDetailView({
     browserTitles,
     trafficEndpointId,
     canvas: isCanvasWorkspace,
+    reviewId: reviewTabOpen ? groupReviewId : null,
+    backgroundSessionId: reviewTabOpen && groupReviewId ? groupReviewAttachedSessionId : null,
+    showBackgroundSession: reviewSessionDebugOpen,
   });
 
   // Explicitly opened surfaces still win, but a canvas workspace with nothing
@@ -975,12 +1043,28 @@ export function SessionGroupDetailView({
           ? "traffic"
           : isCanvasWorkspace
             ? CANVAS_TAB_ID
-            : selectedSession
+            : selectedSession &&
+                (reviewSessionDebugOpen || selectedSession.id !== groupReviewAttachedSessionId)
               ? `session:${selectedSession.id}`
-              : (draftWorkspaceTabs[0]?.id ?? null);
+              : reviewTabOpen && groupReviewId
+                ? `review:${groupReviewId}`
+                : (draftWorkspaceTabs[0]?.id ?? null);
+
+  const handleOpenReviewSession = useCallback(() => {
+    if (!groupReviewAttachedSessionId) return;
+    setReviewSessionDebugOpen(true);
+    openSessionTab(sessionGroupId, groupReviewAttachedSessionId);
+    setRequestedActiveWorkspaceTabId(`session:${groupReviewAttachedSessionId}`);
+  }, [
+    groupReviewAttachedSessionId,
+    openSessionTab,
+    sessionGroupId,
+    setRequestedActiveWorkspaceTabId,
+  ]);
 
   const handleActivateWorkspaceTab = useCallback(
     (tabId: string) => {
+      if (!tabId.startsWith("review:")) clearChangesReview();
       if (tabId.startsWith("session:")) {
         handleSelectSession(tabId.slice("session:".length));
       } else if (tabId.startsWith("artifact:")) {
@@ -991,17 +1075,28 @@ export function SessionGroupDetailView({
         handleSelectTerminalTab(terminal?.sessionId ?? null, terminalId);
       } else if (tabId.startsWith("file:")) {
         handleSelectFileTab(tabId.slice("file:".length));
+      } else if (tabId.startsWith("review:")) {
+        setActiveArtifactId(null);
+        setActiveFilePath(null);
+        setActiveTerminalId(null);
+        openFilesSidebar(sessionGroupId, "changes", tabId.slice("review:".length));
       } else if (tabId === "traffic") {
         handleSelectTrafficTab();
       }
     },
     [
       handleSelectArtifact,
+      clearChangesReview,
       handleSelectFileTab,
       handleSelectSession,
       handleSelectTerminalTab,
       handleSelectTrafficTab,
+      openFilesSidebar,
+      sessionGroupId,
       workspaceTerminals,
+      setActiveArtifactId,
+      setActiveFilePath,
+      setActiveTerminalId,
     ],
   );
 
@@ -1014,13 +1109,18 @@ export function SessionGroupDetailView({
         }
         setDraftWorkspaceTabs((drafts) => drafts.filter((draft) => draft.id !== tabId));
       } else if (tabId.startsWith("session:")) {
-        handleCloseSession(tabId.slice("session:".length));
+        const sessionId = tabId.slice("session:".length);
+        if (sessionId === groupReviewAttachedSessionId) setReviewSessionDebugOpen(false);
+        handleCloseSession(sessionId);
       } else if (tabId.startsWith("artifact:")) {
         handleCloseArtifact(tabId.slice("artifact:".length));
       } else if (tabId.startsWith("terminal:")) {
         handleCloseTerminal(tabId.slice("terminal:".length));
       } else if (tabId.startsWith("file:")) {
         handleCloseFile(tabId.slice("file:".length));
+      } else if (tabId.startsWith("review:")) {
+        setReviewTabOpen(false);
+        setReviewSessionDebugOpen(false);
       } else if (tabId === "traffic") {
         handleCloseTrafficTab();
       }
@@ -1031,6 +1131,7 @@ export function SessionGroupDetailView({
       handleCloseTerminal,
       handleCloseSession,
       handleCloseTrafficTab,
+      groupReviewAttachedSessionId,
       draftWorkspaceTabs,
       sessionGroupId,
     ],
@@ -1045,14 +1146,41 @@ export function SessionGroupDetailView({
   const handleOpenApplicationEndpoint = useCallback(
     (url: string) => {
       const id = `draft:${crypto.randomUUID()}`;
-      setDraftWorkspaceTabs((drafts) => [
-        ...drafts,
-        { id, surface: "browser", initialUrl: url },
-      ]);
+      setDraftWorkspaceTabs((drafts) => [...drafts, { id, surface: "browser", initialUrl: url }]);
       setRequestedActiveWorkspaceTabId(id);
     },
     [setDraftWorkspaceTabs, setRequestedActiveWorkspaceTabId],
   );
+
+  const handleOpenReview = useCallback(async () => {
+    if (groupReviewId) {
+      setReviewTabOpen(true);
+      setRequestedActiveWorkspaceTabId(`review:${groupReviewId}`);
+      return;
+    }
+    if (!groupPrUrl || !selectedSession?.id) return;
+    const result = await client
+      .mutation(OPEN_REVIEW_MUTATION, {
+        sessionId: selectedSession.id,
+        pullRequestUrl: groupPrUrl,
+      })
+      .toPromise();
+    if (result.error) {
+      toast.error("Could not open PR Review", { description: result.error.message });
+      return;
+    }
+    const opened = await fetchReviewForGroup(sessionGroupId);
+    if (opened) {
+      setReviewTabOpen(true);
+      setRequestedActiveWorkspaceTabId(`review:${opened.id}`);
+    }
+  }, [
+    groupPrUrl,
+    groupReviewId,
+    selectedSession?.id,
+    sessionGroupId,
+    setRequestedActiveWorkspaceTabId,
+  ]);
 
   const browserOverlayHidden = workspaceInteractionActive || modalOverlayVisible;
 
@@ -1157,6 +1285,8 @@ export function SessionGroupDetailView({
               );
             }}
             onOpenApplications={() => setApplicationPanelOpen(true)}
+            pullRequestUrl={groupPrUrl}
+            onOpenReview={() => void handleOpenReview()}
             onStartChat={async (input) => {
               const sessionId = await handleNewChat(input);
               if (!sessionId) return false;
@@ -1244,6 +1374,17 @@ export function SessionGroupDetailView({
         return <ArtifactTabContent artifactId={tabId.slice("artifact:".length)} />;
       }
 
+      if (tabId.startsWith("review:")) {
+        return (
+          <ReviewTab
+            reviewId={tabId.slice("review:".length)}
+            sessionGroupId={sessionGroupId}
+            active={captureTyping}
+            onOpenAttachedSession={handleOpenReviewSession}
+          />
+        );
+      }
+
       const tabSession = tabId.startsWith("session:")
         ? (groupSessions.find((session) => session.id === tabId.slice("session:".length)) ?? null)
         : null;
@@ -1286,13 +1427,16 @@ export function SessionGroupDetailView({
       getFileBuffer,
       generatedProjectCanvasReady,
       groupRepo?.defaultBranch,
+      groupPrUrl,
       groupSessions,
+      handleOpenReviewSession,
       handleCreateTerminal,
       handleDiffFileClick,
       handleFileClick,
       handleBrowserTitleChange,
       handleNewChat,
       handleOpenArtifact,
+      handleOpenReview,
       handleOpenForkDialog,
       handleOpenTrafficTab,
       handleScrollComplete,

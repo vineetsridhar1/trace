@@ -438,6 +438,15 @@ export type CreateRepoInput = {
   remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateReviewThreadInput = {
+  anchor?: InputMaybe<ReviewAnchorInput>;
+  body: Scalars["String"]["input"];
+  guideChapterId?: InputMaybe<Scalars["String"]["input"]>;
+  reviewId: Scalars["ID"]["input"];
+  scope: ReviewThreadScope;
+  snapshotId: Scalars["ID"]["input"];
+};
+
 export type CreateTicketInput = {
   assigneeIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -742,6 +751,15 @@ export type EndpointTrafficEntry = {
   startedAt: Scalars["DateTime"]["output"];
 };
 
+export type EnqueueReviewInquiryInput = {
+  anchor?: InputMaybe<Scalars["JSON"]["input"]>;
+  context?: InputMaybe<Scalars["JSON"]["input"]>;
+  question: Scalars["String"]["input"];
+  reviewId: Scalars["ID"]["input"];
+  snapshotId: Scalars["ID"]["input"];
+  sourceKind: ReviewInquirySourceKind;
+};
+
 export type EntityType = "channel" | "chat" | "message" | "session" | "ticket";
 
 export type Event = {
@@ -820,6 +838,26 @@ export type EventType =
   | "repo_created"
   | "repo_deleted"
   | "repo_updated"
+  | "review_comment_created"
+  | "review_delivery_failed"
+  | "review_delivery_started"
+  | "review_delivery_succeeded"
+  | "review_guide_failed"
+  | "review_guide_saved"
+  | "review_inquiry_cancelled"
+  | "review_inquiry_completed"
+  | "review_inquiry_enqueued"
+  | "review_inquiry_failed"
+  | "review_inquiry_resolved"
+  | "review_inquiry_started"
+  | "review_opened"
+  | "review_snapshot_created"
+  | "review_snapshot_marked_current"
+  | "review_thread_created"
+  | "review_thread_reanchored"
+  | "review_thread_resolved"
+  | "review_thread_updated"
+  | "review_updated"
   | "session_application_log_appended"
   | "session_application_process_failed"
   | "session_application_process_started"
@@ -1044,6 +1082,7 @@ export type Mutation = {
    */
   attachDesignToSession: Event;
   attachRepoRemote: Repo;
+  cancelReviewInquiry: ReviewInquiry;
   clearEndpointTraffic: Scalars["Boolean"]["output"];
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
@@ -1060,6 +1099,7 @@ export type Mutation = {
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
+  createReviewThread: ReviewThread;
   createSessionEndpointPreview: SessionEndpointPreview;
   createTerminal: Terminal;
   createTicket: Ticket;
@@ -1084,7 +1124,9 @@ export type Mutation = {
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
+  editReviewComment: ReviewComment;
   enableSessionEndpointForwarding: SessionEndpoint;
+  enqueueReviewInquiry: ReviewInquiry;
   forkSession: Session;
   forwardSessionPort: SessionEndpoint;
   hideSessionTab: HiddenSessionTab;
@@ -1102,9 +1144,12 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  openReviewForPullRequest: Review;
   openWorkspaceBrowser: Scalars["Boolean"]["output"];
   queueSessionMessage: QueuedMessage;
+  reanchorReviewThread: ReviewThread;
   refreshDesignSystemSource: DesignSystem;
+  refreshReviewSnapshot: Review;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepo: Repo;
   registerRepoWebhook: Repo;
@@ -1115,9 +1160,12 @@ export type Mutation = {
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
+  replyToReviewThread: ReviewComment;
   requestBridgeAccess: BridgeAccessRequest;
   requestPdfSessionExport: Scalars["Boolean"]["output"];
   resizeTerminal: Scalars["Boolean"]["output"];
+  resolveReviewInquiry: ReviewInquiry;
+  resolveReviewThread: ReviewThread;
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   restoreSessionTab: Scalars["Boolean"]["output"];
@@ -1132,6 +1180,7 @@ export type Mutation = {
   saveDesignSystem: DesignSystemVersion;
   saveManualElementEdit: ManualElementEditResult;
   saveManualElementEdits: Array<ManualElementEditResult>;
+  saveReviewGuide: ReviewGuide;
   saveSessionGroupFile: Scalars["Boolean"]["output"];
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -1142,12 +1191,14 @@ export type Mutation = {
   setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
+  setReviewThreadSelected: ReviewThread;
   startSession: Session;
   startSessionApplication: Array<SessionApplicationProcess>;
   startSessionProcess: SessionApplicationProcess;
   steerQueuedMessage: Event;
   stopSessionApplication: Array<SessionApplicationProcess>;
   stopSessionProcess: SessionApplicationProcess;
+  submitReviewToProvider: ReviewDelivery;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
@@ -1227,6 +1278,10 @@ export type MutationAttachRepoRemoteArgs = {
   repoId: Scalars["ID"]["input"];
 };
 
+export type MutationCancelReviewInquiryArgs = {
+  inquiryId: Scalars["ID"]["input"];
+};
+
 export type MutationClearEndpointTrafficArgs = {
   endpointId: Scalars["ID"]["input"];
 };
@@ -1297,6 +1352,10 @@ export type MutationCreateProjectArgs = {
 
 export type MutationCreateRepoArgs = {
   input: CreateRepoInput;
+};
+
+export type MutationCreateReviewThreadArgs = {
+  input: CreateReviewThreadInput;
 };
 
 export type MutationCreateSessionEndpointPreviewArgs = {
@@ -1400,10 +1459,19 @@ export type MutationEditChatMessageArgs = {
   messageId: Scalars["ID"]["input"];
 };
 
+export type MutationEditReviewCommentArgs = {
+  body: Scalars["String"]["input"];
+  commentId: Scalars["ID"]["input"];
+};
+
 export type MutationEnableSessionEndpointForwardingArgs = {
   accessMode?: InputMaybe<SessionEndpointAccessMode>;
   endpointId: Scalars["ID"]["input"];
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
+export type MutationEnqueueReviewInquiryArgs = {
+  input: EnqueueReviewInquiryInput;
 };
 
 export type MutationForkSessionArgs = {
@@ -1487,6 +1555,11 @@ export type MutationMuteScopeArgs = {
   scopeType: Scalars["String"]["input"];
 };
 
+export type MutationOpenReviewForPullRequestArgs = {
+  pullRequestUrl: Scalars["String"]["input"];
+  sessionId: Scalars["ID"]["input"];
+};
+
 export type MutationOpenWorkspaceBrowserArgs = {
   sessionGroupId: Scalars["ID"]["input"];
   url: Scalars["String"]["input"];
@@ -1500,8 +1573,17 @@ export type MutationQueueSessionMessageArgs = {
   text: Scalars["String"]["input"];
 };
 
+export type MutationReanchorReviewThreadArgs = {
+  anchor: ReviewAnchorInput;
+  threadId: Scalars["ID"]["input"];
+};
+
 export type MutationRefreshDesignSystemSourceArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type MutationRefreshReviewSnapshotArgs = {
+  reviewId: Scalars["ID"]["input"];
 };
 
 export type MutationRegisterPushTokenArgs = {
@@ -1549,6 +1631,11 @@ export type MutationReorderQueuedMessagesArgs = {
   sessionId: Scalars["ID"]["input"];
 };
 
+export type MutationReplyToReviewThreadArgs = {
+  body: Scalars["String"]["input"];
+  threadId: Scalars["ID"]["input"];
+};
+
 export type MutationRequestBridgeAccessArgs = {
   requestedCapabilities?: InputMaybe<Array<BridgeAccessCapability>>;
   requestedExpiresAt?: InputMaybe<Scalars["DateTime"]["input"]>;
@@ -1565,6 +1652,16 @@ export type MutationResizeTerminalArgs = {
   cols: Scalars["Int"]["input"];
   rows: Scalars["Int"]["input"];
   terminalId: Scalars["ID"]["input"];
+};
+
+export type MutationResolveReviewInquiryArgs = {
+  inquiryId: Scalars["ID"]["input"];
+  resolved: Scalars["Boolean"]["input"];
+};
+
+export type MutationResolveReviewThreadArgs = {
+  resolved: Scalars["Boolean"]["input"];
+  threadId: Scalars["ID"]["input"];
 };
 
 export type MutationRestartSessionProcessArgs = {
@@ -1633,6 +1730,11 @@ export type MutationSaveManualElementEditsArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationSaveReviewGuideArgs = {
+  content: Scalars["JSON"]["input"];
+  inquiryId: Scalars["ID"]["input"];
+};
+
 export type MutationSaveSessionGroupFileArgs = {
   content: Scalars["String"]["input"];
   filePath: Scalars["String"]["input"];
@@ -1693,6 +1795,11 @@ export type MutationSetOrgSecretArgs = {
   input: SetOrgSecretInput;
 };
 
+export type MutationSetReviewThreadSelectedArgs = {
+  selected: Scalars["Boolean"]["input"];
+  threadId: Scalars["ID"]["input"];
+};
+
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -1721,6 +1828,10 @@ export type MutationStopSessionProcessArgs = {
   appConfigId: Scalars["ID"]["input"];
   processConfigId: Scalars["ID"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationSubmitReviewToProviderArgs = {
+  input: SubmitReviewInput;
 };
 
 export type MutationSubscribeArgs = {
@@ -2000,6 +2111,11 @@ export type Query = {
   /** Existing on-disk worktrees of a repo on a local runtime, available to import. */
   repoWorktrees: Array<RepoWorktree>;
   repos: Array<Repo>;
+  review?: Maybe<Review>;
+  /** Read at most 80 lines from the immutable snapshot head, including files outside the diff. */
+  reviewCodeExcerpt: ReviewCodeExcerpt;
+  reviewDiffFile: ReviewDiffFile;
+  reviewForSessionGroup?: Maybe<Review>;
   searchMessages: Array<MessageSearchHit>;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
@@ -2248,6 +2364,26 @@ export type QueryRepoWorktreesArgs = {
 
 export type QueryReposArgs = {
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryReviewArgs = {
+  id: Scalars["ID"]["input"];
+};
+
+export type QueryReviewCodeExcerptArgs = {
+  endLine: Scalars["Int"]["input"];
+  filePath: Scalars["String"]["input"];
+  snapshotId: Scalars["ID"]["input"];
+  startLine: Scalars["Int"]["input"];
+};
+
+export type QueryReviewDiffFileArgs = {
+  filePath: Scalars["String"]["input"];
+  snapshotId: Scalars["ID"]["input"];
+};
+
+export type QueryReviewForSessionGroupArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QuerySearchMessagesArgs = {
@@ -2562,12 +2698,256 @@ export type RepoWorktree = {
   path: Scalars["String"]["output"];
 };
 
+export type Review = {
+  __typename?: "Review";
+  attachedSession: Session;
+  attachedSessionId: Scalars["ID"]["output"];
+  channel?: Maybe<Channel>;
+  channelId?: Maybe<Scalars["ID"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  currentSnapshot?: Maybe<ReviewSnapshot>;
+  currentSnapshotId?: Maybe<Scalars["ID"]["output"]>;
+  description: Scalars["String"]["output"];
+  guides: Array<ReviewGuide>;
+  id: Scalars["ID"]["output"];
+  inquiries: Array<ReviewInquiry>;
+  organizationId: Scalars["ID"]["output"];
+  provider: RepoProvider;
+  pullRequestNumber: Scalars["Int"]["output"];
+  pullRequestUrl: Scalars["String"]["output"];
+  remotePullRequestId: Scalars["String"]["output"];
+  repository: Repo;
+  repositoryId: Scalars["ID"]["output"];
+  snapshots: Array<ReviewSnapshot>;
+  sourceSessionGroup?: Maybe<SessionGroup>;
+  sourceSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
+  status: ReviewStatus;
+  threads: Array<ReviewThread>;
+  title: Scalars["String"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ReviewAnchor = {
+  __typename?: "ReviewAnchor";
+  baseBlobId?: Maybe<Scalars["String"]["output"]>;
+  context: Scalars["String"]["output"];
+  endLine: Scalars["Int"]["output"];
+  filePath: Scalars["String"]["output"];
+  headBlobId?: Maybe<Scalars["String"]["output"]>;
+  hunkId?: Maybe<Scalars["String"]["output"]>;
+  originalLine?: Maybe<Scalars["Int"]["output"]>;
+  selectedText: Scalars["String"]["output"];
+  side: ReviewDiffSide;
+  snapshotId: Scalars["ID"]["output"];
+  startLine: Scalars["Int"]["output"];
+  status: ReviewAnchorStatus;
+};
+
+export type ReviewAnchorInput = {
+  baseBlobId?: InputMaybe<Scalars["String"]["input"]>;
+  context: Scalars["String"]["input"];
+  endLine: Scalars["Int"]["input"];
+  filePath: Scalars["String"]["input"];
+  headBlobId?: InputMaybe<Scalars["String"]["input"]>;
+  hunkId?: InputMaybe<Scalars["String"]["input"]>;
+  originalLine?: InputMaybe<Scalars["Int"]["input"]>;
+  selectedText: Scalars["String"]["input"];
+  side: ReviewDiffSide;
+  snapshotId: Scalars["ID"]["input"];
+  startLine: Scalars["Int"]["input"];
+};
+
+export type ReviewAnchorStatus = "ambiguous" | "current" | "outdated" | "relocated";
+
+/** Exact head-commit source for a bounded Guide reference, including which lines were added. */
+export type ReviewCodeExcerpt = {
+  __typename?: "ReviewCodeExcerpt";
+  addedLines: Array<Scalars["Int"]["output"]>;
+  content: Scalars["String"]["output"];
+  endLine: Scalars["Int"]["output"];
+  path: Scalars["String"]["output"];
+  snapshotId: Scalars["ID"]["output"];
+  startLine: Scalars["Int"]["output"];
+};
+
+export type ReviewComment = {
+  __typename?: "ReviewComment";
+  author: User;
+  authorId: Scalars["ID"]["output"];
+  body: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  deletedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  editedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  id: Scalars["ID"]["output"];
+  providerCommentId?: Maybe<Scalars["String"]["output"]>;
+  threadId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ReviewDelivery = {
+  __typename?: "ReviewDelivery";
+  attempts: Scalars["Int"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  disposition: ReviewDisposition;
+  error?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  idempotencyKey: Scalars["String"]["output"];
+  providerCommentIds?: Maybe<Scalars["JSON"]["output"]>;
+  providerReviewId?: Maybe<Scalars["String"]["output"]>;
+  reviewId: Scalars["ID"]["output"];
+  snapshotId: Scalars["ID"]["output"];
+  status: Scalars["String"]["output"];
+  threadIds: Array<Scalars["ID"]["output"]>;
+};
+
+export type ReviewDeliveryStatus =
+  | "delivered"
+  | "delivery_failed"
+  | "outdated"
+  | "selected"
+  | "trace_only";
+
+export type ReviewDiffFile = {
+  __typename?: "ReviewDiffFile";
+  additions: Scalars["Int"]["output"];
+  deletions: Scalars["Int"]["output"];
+  modifiedContent?: Maybe<Scalars["String"]["output"]>;
+  originalContent?: Maybe<Scalars["String"]["output"]>;
+  patch: Scalars["String"]["output"];
+  path: Scalars["String"]["output"];
+  previousPath?: Maybe<Scalars["String"]["output"]>;
+  snapshotId: Scalars["ID"]["output"];
+  status: Scalars["String"]["output"];
+  truncated: Scalars["Boolean"]["output"];
+};
+
+export type ReviewDiffSide = "base" | "head";
+
+export type ReviewDisposition = "approve" | "comment" | "request_changes";
+
+export type ReviewFile = {
+  __typename?: "ReviewFile";
+  additions: Scalars["Int"]["output"];
+  commentCount: Scalars["Int"]["output"];
+  deletions: Scalars["Int"]["output"];
+  patchAvailable: Scalars["Boolean"]["output"];
+  path: Scalars["String"]["output"];
+  previousPath?: Maybe<Scalars["String"]["output"]>;
+  status: Scalars["String"]["output"];
+  viewed: Scalars["Boolean"]["output"];
+};
+
+export type ReviewGuide = {
+  __typename?: "ReviewGuide";
+  content: Scalars["JSON"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  generationInquiryId: Scalars["ID"]["output"];
+  id: Scalars["ID"]["output"];
+  intent: Scalars["String"]["output"];
+  reviewId: Scalars["ID"]["output"];
+  snapshotId: Scalars["ID"]["output"];
+  status: ReviewGuideStatus;
+  title: Scalars["String"]["output"];
+  version: Scalars["Int"]["output"];
+};
+
+/** A focused, ordered step in a Guide's code walkthrough. Line numbers refer to the head commit. */
+export type ReviewGuideReference = {
+  __typename?: "ReviewGuideReference";
+  endLine: Scalars["Int"]["output"];
+  explanation: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  startLine: Scalars["Int"]["output"];
+  title: Scalars["String"]["output"];
+};
+
+export type ReviewGuideStatus = "earlier" | "ready";
+
+export type ReviewInquiry = {
+  __typename?: "ReviewInquiry";
+  anchor?: Maybe<Scalars["JSON"]["output"]>;
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  context: Scalars["JSON"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  error?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  position: Scalars["Int"]["output"];
+  question: Scalars["String"]["output"];
+  resolvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  resolvedById?: Maybe<Scalars["ID"]["output"]>;
+  responseMessage?: Maybe<SessionMessage>;
+  responseMessageId?: Maybe<Scalars["ID"]["output"]>;
+  reviewId: Scalars["ID"]["output"];
+  sessionId: Scalars["ID"]["output"];
+  sessionMessage?: Maybe<SessionMessage>;
+  sessionMessageId?: Maybe<Scalars["ID"]["output"]>;
+  snapshotId: Scalars["ID"]["output"];
+  sourceKind: ReviewInquirySourceKind;
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  state: ReviewInquiryState;
+  structuredResult?: Maybe<Scalars["JSON"]["output"]>;
+};
+
+export type ReviewInquirySourceKind =
+  | "diff_anchor"
+  | "guide_anchor"
+  | "guide_generation"
+  | "thread";
+
+export type ReviewInquiryState = "cancelled" | "completed" | "failed" | "queued" | "running";
+
+export type ReviewSnapshot = {
+  __typename?: "ReviewSnapshot";
+  baseSha: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  createdById: Scalars["ID"]["output"];
+  diffFormatVersion: Scalars["Int"]["output"];
+  files: Array<ReviewFile>;
+  headSha: Scalars["String"]["output"];
+  id: Scalars["ID"]["output"];
+  patchByteLength: Scalars["Int"]["output"];
+  patchChecksum: Scalars["String"]["output"];
+  patchStorageKey: Scalars["String"]["output"];
+  providerMetadata: Scalars["JSON"]["output"];
+  reviewId: Scalars["ID"]["output"];
+  status: ReviewSnapshotStatus;
+};
+
+export type ReviewSnapshotStatus = "archived" | "current";
+
+export type ReviewStatus = "archived" | "open";
+
+export type ReviewThread = {
+  __typename?: "ReviewThread";
+  anchor?: Maybe<ReviewAnchor>;
+  author: User;
+  authorId: Scalars["ID"]["output"];
+  comments: Array<ReviewComment>;
+  createdAt: Scalars["DateTime"]["output"];
+  deliveredAt?: Maybe<Scalars["DateTime"]["output"]>;
+  deliveryError?: Maybe<Scalars["String"]["output"]>;
+  deliveryStatus: ReviewDeliveryStatus;
+  guideChapterId?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  originSnapshotId: Scalars["ID"]["output"];
+  providerCommentId?: Maybe<Scalars["String"]["output"]>;
+  providerReviewId?: Maybe<Scalars["String"]["output"]>;
+  resolvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  resolvedById?: Maybe<Scalars["ID"]["output"]>;
+  reviewId: Scalars["ID"]["output"];
+  scope: ReviewThreadScope;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ReviewThreadScope = "file" | "general" | "guide_explanation" | "line";
+
 export type ScopeInput = {
   id: Scalars["ID"]["input"];
   type: ScopeType;
 };
 
-export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
+export type ScopeType = "channel" | "chat" | "review" | "session" | "system" | "ticket";
 
 export type Session = {
   __typename?: "Session";
@@ -2770,6 +3150,7 @@ export type SessionGroup = {
   pdfPageWidth: Scalars["Float"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   repo?: Maybe<Repo>;
+  reviews: Array<Review>;
   sessions: Array<Session>;
   setupError?: Maybe<Scalars["String"]["output"]>;
   setupStatus: SetupStatus;
@@ -2878,6 +3259,8 @@ export type SessionSetupScriptRun = {
   lastError?: Maybe<Scalars["String"]["output"]>;
   outputPreview?: Maybe<Scalars["String"]["output"]>;
   outputTruncated: Scalars["Boolean"]["output"];
+  resolvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  resolvedById?: Maybe<Scalars["ID"]["output"]>;
   scriptConfigId: Scalars["String"]["output"];
   sessionGroupId: Scalars["ID"]["output"];
   startedAt: Scalars["DateTime"]["output"];
@@ -2965,11 +3348,21 @@ export type StartSessionInput = {
   worktreePath?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type SubmitReviewInput = {
+  body?: InputMaybe<Scalars["String"]["input"]>;
+  disposition: ReviewDisposition;
+  idempotencyKey: Scalars["String"]["input"];
+  reviewId: Scalars["ID"]["input"];
+  snapshotId: Scalars["ID"]["input"];
+  threadIds: Array<Scalars["ID"]["input"]>;
+};
+
 export type Subscription = {
   __typename?: "Subscription";
   channelEvents: Event;
   chatEvents: Event;
   orgEvents: Event;
+  reviewEvents: Event;
   sessionEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
@@ -2991,6 +3384,13 @@ export type SubscriptionChatEventsArgs = {
 export type SubscriptionOrgEventsArgs = {
   organizationId: Scalars["ID"]["input"];
   types?: InputMaybe<Array<Scalars["String"]["input"]>>;
+};
+
+export type SubscriptionReviewEventsArgs = {
+  after?: InputMaybe<Scalars["DateTime"]["input"]>;
+  afterEventId?: InputMaybe<Scalars["ID"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+  reviewId: Scalars["ID"]["input"];
 };
 
 export type SubscriptionSessionEventsArgs = {
@@ -3537,27 +3937,12 @@ export type HomeCreationsQuery = {
   __typename?: "Query";
   appSessionGroups: Array<
     { __typename?: "SessionGroup" } & {
-      " $fragmentRefs"?: { CreationGroupFragment: CreationGroupFragment };
-    }
-  >;
-  designSessionGroups: Array<
-    { __typename?: "SessionGroup" } & {
-      " $fragmentRefs"?: { CreationGroupFragment: CreationGroupFragment };
-    }
-  >;
-  pdfSessionGroups: Array<
-    { __typename?: "SessionGroup" } & {
-      " $fragmentRefs"?: { CreationGroupFragment: CreationGroupFragment };
-    }
-  >;
-  animationSessionGroups: Array<
-    { __typename?: "SessionGroup" } & {
-      " $fragmentRefs"?: { CreationGroupFragment: CreationGroupFragment };
+      " $fragmentRefs"?: { BaseCreationGroupFragment: BaseCreationGroupFragment };
     }
   >;
 };
 
-export type CreationGroupFragment = {
+export type BaseCreationGroupFragment = {
   __typename?: "SessionGroup";
   id: string;
   name: string;
@@ -3566,8 +3951,6 @@ export type CreationGroupFragment = {
   status: SessionGroupStatus;
   visibility: SessionGroupVisibility;
   archivedAt?: string | null;
-  designPreviewUrl?: string | null;
-  animationPreviewUrl?: string | null;
   createdAt: string;
   updatedAt: string;
   owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
@@ -3586,7 +3969,395 @@ export type CreationGroupFragment = {
     updatedAt: string;
     createdAt: string;
   }>;
-} & { " $fragmentName"?: "CreationGroupFragment" };
+} & { " $fragmentName"?: "BaseCreationGroupFragment" };
+
+export type HomeDesignsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type HomeDesignsQuery = {
+  __typename?: "Query";
+  designSessionGroups: Array<
+    { __typename?: "SessionGroup" } & {
+      " $fragmentRefs"?: { DesignCreationGroupFragment: DesignCreationGroupFragment };
+    }
+  >;
+};
+
+export type DesignCreationGroupFragment = {
+  __typename?: "SessionGroup";
+  id: string;
+  name: string;
+  slug?: string | null;
+  kind: SessionGroupKind;
+  status: SessionGroupStatus;
+  visibility: SessionGroupVisibility;
+  archivedAt?: string | null;
+  designPreviewUrl?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
+  connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
+  sessions: Array<{
+    __typename?: "Session";
+    id: string;
+    sessionGroupId?: string | null;
+    createdById: string;
+    agentStatus: AgentStatus;
+    sessionStatus: SessionStatus;
+    prUrl?: string | null;
+    worktreeDeleted: boolean;
+    lastMessageAt?: string | null;
+    lastUserMessageAt?: string | null;
+    updatedAt: string;
+    createdAt: string;
+  }>;
+} & { " $fragmentName"?: "DesignCreationGroupFragment" };
+
+export type CreateReviewThreadMutationVariables = Exact<{
+  input: CreateReviewThreadInput;
+}>;
+
+export type CreateReviewThreadMutation = {
+  __typename?: "Mutation";
+  createReviewThread: { __typename?: "ReviewThread"; id: string };
+};
+
+export type EnqueueReviewInquiryMutationVariables = Exact<{
+  input: EnqueueReviewInquiryInput;
+}>;
+
+export type EnqueueReviewInquiryMutation = {
+  __typename?: "Mutation";
+  enqueueReviewInquiry: { __typename?: "ReviewInquiry"; id: string };
+};
+
+export type ReviewDiffFileQueryVariables = Exact<{
+  snapshotId: Scalars["ID"]["input"];
+  filePath: Scalars["String"]["input"];
+}>;
+
+export type ReviewDiffFileQuery = {
+  __typename?: "Query";
+  reviewDiffFile: {
+    __typename?: "ReviewDiffFile";
+    snapshotId: string;
+    path: string;
+    status: string;
+    additions: number;
+    deletions: number;
+    patch: string;
+    truncated: boolean;
+  };
+};
+
+export type CreateReviewGuideThreadMutationVariables = Exact<{
+  input: CreateReviewThreadInput;
+}>;
+
+export type CreateReviewGuideThreadMutation = {
+  __typename?: "Mutation";
+  createReviewThread: { __typename?: "ReviewThread"; id: string };
+};
+
+export type EnqueueGuideInquiryMutationVariables = Exact<{
+  input: EnqueueReviewInquiryInput;
+}>;
+
+export type EnqueueGuideInquiryMutation = {
+  __typename?: "Mutation";
+  enqueueReviewInquiry: {
+    __typename?: "ReviewInquiry";
+    id: string;
+    state: ReviewInquiryState;
+    position: number;
+  };
+};
+
+export type ResolveReviewInquiryMutationVariables = Exact<{
+  inquiryId: Scalars["ID"]["input"];
+  resolved: Scalars["Boolean"]["input"];
+}>;
+
+export type ResolveReviewInquiryMutation = {
+  __typename?: "Mutation";
+  resolveReviewInquiry: { __typename?: "ReviewInquiry"; id: string };
+};
+
+export type SubmitReviewMutationVariables = Exact<{
+  input: SubmitReviewInput;
+}>;
+
+export type SubmitReviewMutation = {
+  __typename?: "Mutation";
+  submitReviewToProvider: {
+    __typename?: "ReviewDelivery";
+    id: string;
+    status: string;
+    error?: string | null;
+    providerReviewId?: string | null;
+  };
+};
+
+export type RefreshReviewSnapshotMutationVariables = Exact<{
+  reviewId: Scalars["ID"]["input"];
+}>;
+
+export type RefreshReviewSnapshotMutation = {
+  __typename?: "Mutation";
+  refreshReviewSnapshot: { __typename?: "Review"; id: string };
+};
+
+export type ReplyToReviewThreadMutationVariables = Exact<{
+  threadId: Scalars["ID"]["input"];
+  body: Scalars["String"]["input"];
+}>;
+
+export type ReplyToReviewThreadMutation = {
+  __typename?: "Mutation";
+  replyToReviewThread: { __typename?: "ReviewComment"; id: string };
+};
+
+export type ResolveReviewThreadMutationVariables = Exact<{
+  threadId: Scalars["ID"]["input"];
+  resolved: Scalars["Boolean"]["input"];
+}>;
+
+export type ResolveReviewThreadMutation = {
+  __typename?: "Mutation";
+  resolveReviewThread: { __typename?: "ReviewThread"; id: string };
+};
+
+export type GenerateReviewGuideMutationVariables = Exact<{
+  input: EnqueueReviewInquiryInput;
+}>;
+
+export type GenerateReviewGuideMutation = {
+  __typename?: "Mutation";
+  enqueueReviewInquiry: { __typename?: "ReviewInquiry"; id: string };
+};
+
+export type GuideCodeExcerptQueryVariables = Exact<{
+  snapshotId: Scalars["ID"]["input"];
+  filePath: Scalars["String"]["input"];
+  startLine: Scalars["Int"]["input"];
+  endLine: Scalars["Int"]["input"];
+}>;
+
+export type GuideCodeExcerptQuery = {
+  __typename?: "Query";
+  reviewCodeExcerpt: {
+    __typename?: "ReviewCodeExcerpt";
+    snapshotId: string;
+    path: string;
+    startLine: number;
+    endLine: number;
+    content: string;
+    addedLines: Array<number>;
+  };
+};
+
+export type ReviewWorkspaceFieldsFragment = {
+  __typename?: "Review";
+  id: string;
+  organizationId: string;
+  repositoryId: string;
+  channelId?: string | null;
+  sourceSessionGroupId?: string | null;
+  attachedSessionId: string;
+  provider: RepoProvider;
+  remotePullRequestId: string;
+  pullRequestNumber: number;
+  pullRequestUrl: string;
+  title: string;
+  description: string;
+  status: ReviewStatus;
+  currentSnapshotId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  repository: { __typename?: "Repo"; id: string; name: string; remoteUrl?: string | null };
+  currentSnapshot?: {
+    __typename?: "ReviewSnapshot";
+    id: string;
+    reviewId: string;
+    baseSha: string;
+    headSha: string;
+    status: ReviewSnapshotStatus;
+    patchChecksum: string;
+    patchByteLength: number;
+    diffFormatVersion: number;
+    providerMetadata: JsonValue;
+    createdById: string;
+    createdAt: string;
+    files: Array<{
+      __typename?: "ReviewFile";
+      path: string;
+      previousPath?: string | null;
+      status: string;
+      additions: number;
+      deletions: number;
+      patchAvailable: boolean;
+      viewed: boolean;
+      commentCount: number;
+    }>;
+  } | null;
+  snapshots: Array<{
+    __typename?: "ReviewSnapshot";
+    id: string;
+    reviewId: string;
+    baseSha: string;
+    headSha: string;
+    status: ReviewSnapshotStatus;
+    patchChecksum: string;
+    patchByteLength: number;
+    diffFormatVersion: number;
+    providerMetadata: JsonValue;
+    createdById: string;
+    createdAt: string;
+    files: Array<{
+      __typename?: "ReviewFile";
+      path: string;
+      previousPath?: string | null;
+      status: string;
+      additions: number;
+      deletions: number;
+      patchAvailable: boolean;
+      viewed: boolean;
+      commentCount: number;
+    }>;
+  }>;
+  threads: Array<{
+    __typename?: "ReviewThread";
+    id: string;
+    reviewId: string;
+    originSnapshotId: string;
+    authorId: string;
+    scope: ReviewThreadScope;
+    guideChapterId?: string | null;
+    resolvedAt?: string | null;
+    resolvedById?: string | null;
+    deliveryStatus: ReviewDeliveryStatus;
+    providerReviewId?: string | null;
+    providerCommentId?: string | null;
+    deliveredAt?: string | null;
+    deliveryError?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    author: {
+      __typename?: "User";
+      id: string;
+      name: string;
+      email: string;
+      avatarUrl?: string | null;
+    };
+    anchor?: {
+      __typename?: "ReviewAnchor";
+      snapshotId: string;
+      filePath: string;
+      side: ReviewDiffSide;
+      startLine: number;
+      endLine: number;
+      originalLine?: number | null;
+      selectedText: string;
+      context: string;
+      hunkId?: string | null;
+      baseBlobId?: string | null;
+      headBlobId?: string | null;
+      status: ReviewAnchorStatus;
+    } | null;
+    comments: Array<{
+      __typename?: "ReviewComment";
+      id: string;
+      threadId: string;
+      authorId: string;
+      body: string;
+      editedAt?: string | null;
+      deletedAt?: string | null;
+      providerCommentId?: string | null;
+      createdAt: string;
+      updatedAt: string;
+      author: {
+        __typename?: "User";
+        id: string;
+        name: string;
+        email: string;
+        avatarUrl?: string | null;
+      };
+    }>;
+  }>;
+  inquiries: Array<{
+    __typename?: "ReviewInquiry";
+    id: string;
+    reviewId: string;
+    snapshotId: string;
+    sessionId: string;
+    sourceKind: ReviewInquirySourceKind;
+    question: string;
+    anchor?: JsonValue | null;
+    context: JsonValue;
+    sessionMessageId?: string | null;
+    responseMessageId?: string | null;
+    position: number;
+    state: ReviewInquiryState;
+    error?: string | null;
+    structuredResult?: JsonValue | null;
+    createdAt: string;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    resolvedAt?: string | null;
+    resolvedById?: string | null;
+    responseMessage?: {
+      __typename?: "SessionMessage";
+      id: string;
+      sessionId: string;
+      role: SessionMessageRole;
+      text: string;
+      content: JsonValue;
+      attachments?: JsonValue | null;
+      sourceEventId: string;
+      createdAt: string;
+    } | null;
+  }>;
+  guides: Array<{
+    __typename?: "ReviewGuide";
+    id: string;
+    reviewId: string;
+    snapshotId: string;
+    generationInquiryId: string;
+    status: ReviewGuideStatus;
+    title: string;
+    intent: string;
+    content: JsonValue;
+    version: number;
+    createdAt: string;
+  }>;
+} & { " $fragmentName"?: "ReviewWorkspaceFieldsFragment" };
+
+export type ReviewWorkspaceQueryVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type ReviewWorkspaceQuery = {
+  __typename?: "Query";
+  review?:
+    | ({ __typename?: "Review" } & {
+        " $fragmentRefs"?: { ReviewWorkspaceFieldsFragment: ReviewWorkspaceFieldsFragment };
+      })
+    | null;
+};
+
+export type ReviewForSessionGroupQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type ReviewForSessionGroupQuery = {
+  __typename?: "Query";
+  reviewForSessionGroup?:
+    | ({ __typename?: "Review" } & {
+        " $fragmentRefs"?: { ReviewWorkspaceFieldsFragment: ReviewWorkspaceFieldsFragment };
+      })
+    | null;
+};
 
 export type SessionGroupBranchDiffQueryVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
@@ -3904,6 +4675,16 @@ export type HiddenSessionTabsQuery = {
     sessionId: string;
     hiddenAt: string;
   }>;
+};
+
+export type OpenReviewForPullRequestMutationVariables = Exact<{
+  sessionId: Scalars["ID"]["input"];
+  pullRequestUrl: Scalars["String"]["input"];
+}>;
+
+export type OpenReviewForPullRequestMutation = {
+  __typename?: "Mutation";
+  openReviewForPullRequest: { __typename?: "Review"; id: string };
 };
 
 export type SessionGroupDetailQueryVariables = Exact<{
@@ -5064,6 +5845,16 @@ export type DesignSessionGroupsQuery = {
   }>;
 };
 
+export type RenameChannelGroupMutationVariables = Exact<{
+  id: Scalars["ID"]["input"];
+  input: UpdateChannelGroupInput;
+}>;
+
+export type RenameChannelGroupMutation = {
+  __typename?: "Mutation";
+  updateChannelGroup: { __typename?: "ChannelGroup"; id: string };
+};
+
 export type DeleteChannelGroupMutationVariables = Exact<{
   id: Scalars["ID"]["input"];
 }>;
@@ -5261,6 +6052,33 @@ export type OrgEventsSubscriptionVariables = Exact<{
 export type OrgEventsSubscription = {
   __typename?: "Subscription";
   orgEvents: {
+    __typename?: "Event";
+    id: string;
+    scopeType: ScopeType;
+    scopeId: string;
+    eventType: EventType;
+    payload: JsonValue;
+    parentId?: string | null;
+    timestamp: string;
+    metadata?: JsonValue | null;
+    actor: {
+      __typename?: "Actor";
+      type: ActorType;
+      id: string;
+      name?: string | null;
+      avatarUrl?: string | null;
+    };
+  };
+};
+
+export type ReviewEventsLiveSubscriptionVariables = Exact<{
+  reviewId: Scalars["ID"]["input"];
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type ReviewEventsLiveSubscription = {
+  __typename?: "Subscription";
+  reviewEvents: {
     __typename?: "Event";
     id: string;
     scopeType: ScopeType;
@@ -5881,12 +6699,12 @@ export type OnboardingSessionsQuery = {
   sessions: Array<{ __typename?: "Session"; id: string }>;
 };
 
-export const CreationGroupFragmentDoc = {
+export const BaseCreationGroupFragmentDoc = {
   kind: "Document",
   definitions: [
     {
       kind: "FragmentDefinition",
-      name: { kind: "Name", value: "CreationGroup" },
+      name: { kind: "Name", value: "BaseCreationGroup" },
       typeCondition: { kind: "NamedType", name: { kind: "Name", value: "SessionGroup" } },
       selectionSet: {
         kind: "SelectionSet",
@@ -5898,8 +6716,6 @@ export const CreationGroupFragmentDoc = {
           { kind: "Field", name: { kind: "Name", value: "status" } },
           { kind: "Field", name: { kind: "Name", value: "visibility" } },
           { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
-          { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
-          { kind: "Field", name: { kind: "Name", value: "animationPreviewUrl" } },
           { kind: "Field", name: { kind: "Name", value: "createdAt" } },
           { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
           {
@@ -5946,7 +6762,342 @@ export const CreationGroupFragmentDoc = {
       },
     },
   ],
-} as unknown as DocumentNode<CreationGroupFragment, unknown>;
+} as unknown as DocumentNode<BaseCreationGroupFragment, unknown>;
+export const DesignCreationGroupFragmentDoc = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "DesignCreationGroup" },
+      typeCondition: { kind: "NamedType", name: { kind: "Name", value: "SessionGroup" } },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "name" } },
+          { kind: "Field", name: { kind: "Name", value: "slug" } },
+          { kind: "Field", name: { kind: "Name", value: "kind" } },
+          { kind: "Field", name: { kind: "Name", value: "status" } },
+          { kind: "Field", name: { kind: "Name", value: "visibility" } },
+          { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+          { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "owner" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "connection" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessions" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DesignCreationGroupFragment, unknown>;
+export const ReviewWorkspaceFieldsFragmentDoc = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "ReviewWorkspaceFields" },
+      typeCondition: { kind: "NamedType", name: { kind: "Name", value: "Review" } },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+          { kind: "Field", name: { kind: "Name", value: "repositoryId" } },
+          { kind: "Field", name: { kind: "Name", value: "channelId" } },
+          { kind: "Field", name: { kind: "Name", value: "sourceSessionGroupId" } },
+          { kind: "Field", name: { kind: "Name", value: "attachedSessionId" } },
+          { kind: "Field", name: { kind: "Name", value: "provider" } },
+          { kind: "Field", name: { kind: "Name", value: "remotePullRequestId" } },
+          { kind: "Field", name: { kind: "Name", value: "pullRequestNumber" } },
+          { kind: "Field", name: { kind: "Name", value: "pullRequestUrl" } },
+          { kind: "Field", name: { kind: "Name", value: "title" } },
+          { kind: "Field", name: { kind: "Name", value: "description" } },
+          { kind: "Field", name: { kind: "Name", value: "status" } },
+          { kind: "Field", name: { kind: "Name", value: "currentSnapshotId" } },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "repository" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "currentSnapshot" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "reviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "baseSha" } },
+                { kind: "Field", name: { kind: "Name", value: "headSha" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "files" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "path" } },
+                      { kind: "Field", name: { kind: "Name", value: "previousPath" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "additions" } },
+                      { kind: "Field", name: { kind: "Name", value: "deletions" } },
+                      { kind: "Field", name: { kind: "Name", value: "patchAvailable" } },
+                      { kind: "Field", name: { kind: "Name", value: "viewed" } },
+                      { kind: "Field", name: { kind: "Name", value: "commentCount" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "patchChecksum" } },
+                { kind: "Field", name: { kind: "Name", value: "patchByteLength" } },
+                { kind: "Field", name: { kind: "Name", value: "diffFormatVersion" } },
+                { kind: "Field", name: { kind: "Name", value: "providerMetadata" } },
+                { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "snapshots" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "reviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "baseSha" } },
+                { kind: "Field", name: { kind: "Name", value: "headSha" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "files" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "path" } },
+                      { kind: "Field", name: { kind: "Name", value: "previousPath" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "additions" } },
+                      { kind: "Field", name: { kind: "Name", value: "deletions" } },
+                      { kind: "Field", name: { kind: "Name", value: "patchAvailable" } },
+                      { kind: "Field", name: { kind: "Name", value: "viewed" } },
+                      { kind: "Field", name: { kind: "Name", value: "commentCount" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "patchChecksum" } },
+                { kind: "Field", name: { kind: "Name", value: "patchByteLength" } },
+                { kind: "Field", name: { kind: "Name", value: "diffFormatVersion" } },
+                { kind: "Field", name: { kind: "Name", value: "providerMetadata" } },
+                { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "threads" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "reviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "originSnapshotId" } },
+                { kind: "Field", name: { kind: "Name", value: "authorId" } },
+                { kind: "Field", name: { kind: "Name", value: "scope" } },
+                { kind: "Field", name: { kind: "Name", value: "guideChapterId" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedById" } },
+                { kind: "Field", name: { kind: "Name", value: "deliveryStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "providerReviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "providerCommentId" } },
+                { kind: "Field", name: { kind: "Name", value: "deliveredAt" } },
+                { kind: "Field", name: { kind: "Name", value: "deliveryError" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "author" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "email" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "anchor" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "snapshotId" } },
+                      { kind: "Field", name: { kind: "Name", value: "filePath" } },
+                      { kind: "Field", name: { kind: "Name", value: "side" } },
+                      { kind: "Field", name: { kind: "Name", value: "startLine" } },
+                      { kind: "Field", name: { kind: "Name", value: "endLine" } },
+                      { kind: "Field", name: { kind: "Name", value: "originalLine" } },
+                      { kind: "Field", name: { kind: "Name", value: "selectedText" } },
+                      { kind: "Field", name: { kind: "Name", value: "context" } },
+                      { kind: "Field", name: { kind: "Name", value: "hunkId" } },
+                      { kind: "Field", name: { kind: "Name", value: "baseBlobId" } },
+                      { kind: "Field", name: { kind: "Name", value: "headBlobId" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "comments" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "threadId" } },
+                      { kind: "Field", name: { kind: "Name", value: "authorId" } },
+                      { kind: "Field", name: { kind: "Name", value: "body" } },
+                      { kind: "Field", name: { kind: "Name", value: "editedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "deletedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "providerCommentId" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "author" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "email" } },
+                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "inquiries" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "reviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "snapshotId" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                { kind: "Field", name: { kind: "Name", value: "sourceKind" } },
+                { kind: "Field", name: { kind: "Name", value: "question" } },
+                { kind: "Field", name: { kind: "Name", value: "anchor" } },
+                { kind: "Field", name: { kind: "Name", value: "context" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionMessageId" } },
+                { kind: "Field", name: { kind: "Name", value: "responseMessageId" } },
+                { kind: "Field", name: { kind: "Name", value: "position" } },
+                { kind: "Field", name: { kind: "Name", value: "state" } },
+                { kind: "Field", name: { kind: "Name", value: "error" } },
+                { kind: "Field", name: { kind: "Name", value: "structuredResult" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "completedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedById" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "responseMessage" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                      { kind: "Field", name: { kind: "Name", value: "role" } },
+                      { kind: "Field", name: { kind: "Name", value: "text" } },
+                      { kind: "Field", name: { kind: "Name", value: "content" } },
+                      { kind: "Field", name: { kind: "Name", value: "attachments" } },
+                      { kind: "Field", name: { kind: "Name", value: "sourceEventId" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "guides" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "reviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "snapshotId" } },
+                { kind: "Field", name: { kind: "Name", value: "generationInquiryId" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "title" } },
+                { kind: "Field", name: { kind: "Name", value: "intent" } },
+                { kind: "Field", name: { kind: "Name", value: "content" } },
+                { kind: "Field", name: { kind: "Name", value: "version" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ReviewWorkspaceFieldsFragment, unknown>;
 export const SessionGroupArtifactsDocument = {
   kind: "Document",
   definitions: [
@@ -7050,73 +8201,7 @@ export const HomeCreationsDocument = {
             selectionSet: {
               kind: "SelectionSet",
               selections: [
-                { kind: "FragmentSpread", name: { kind: "Name", value: "CreationGroup" } },
-              ],
-            },
-          },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "designSessionGroups" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "includeArchived" },
-                value: { kind: "BooleanValue", value: true },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "FragmentSpread", name: { kind: "Name", value: "CreationGroup" } },
-              ],
-            },
-          },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "pdfSessionGroups" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "includeArchived" },
-                value: { kind: "BooleanValue", value: true },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "FragmentSpread", name: { kind: "Name", value: "CreationGroup" } },
-              ],
-            },
-          },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "animationSessionGroups" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "includeArchived" },
-                value: { kind: "BooleanValue", value: true },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "FragmentSpread", name: { kind: "Name", value: "CreationGroup" } },
+                { kind: "FragmentSpread", name: { kind: "Name", value: "BaseCreationGroup" } },
               ],
             },
           },
@@ -7125,7 +8210,7 @@ export const HomeCreationsDocument = {
     },
     {
       kind: "FragmentDefinition",
-      name: { kind: "Name", value: "CreationGroup" },
+      name: { kind: "Name", value: "BaseCreationGroup" },
       typeCondition: { kind: "NamedType", name: { kind: "Name", value: "SessionGroup" } },
       selectionSet: {
         kind: "SelectionSet",
@@ -7137,8 +8222,6 @@ export const HomeCreationsDocument = {
           { kind: "Field", name: { kind: "Name", value: "status" } },
           { kind: "Field", name: { kind: "Name", value: "visibility" } },
           { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
-          { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
-          { kind: "Field", name: { kind: "Name", value: "animationPreviewUrl" } },
           { kind: "Field", name: { kind: "Name", value: "createdAt" } },
           { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
           {
@@ -7186,6 +8269,1325 @@ export const HomeCreationsDocument = {
     },
   ],
 } as unknown as DocumentNode<HomeCreationsQuery, HomeCreationsQueryVariables>;
+export const HomeDesignsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "HomeDesigns" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "includeArchived" },
+                value: { kind: "BooleanValue", value: true },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "FragmentSpread", name: { kind: "Name", value: "DesignCreationGroup" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "DesignCreationGroup" },
+      typeCondition: { kind: "NamedType", name: { kind: "Name", value: "SessionGroup" } },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "name" } },
+          { kind: "Field", name: { kind: "Name", value: "slug" } },
+          { kind: "Field", name: { kind: "Name", value: "kind" } },
+          { kind: "Field", name: { kind: "Name", value: "status" } },
+          { kind: "Field", name: { kind: "Name", value: "visibility" } },
+          { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+          { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "owner" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "connection" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessions" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<HomeDesignsQuery, HomeDesignsQueryVariables>;
+export const CreateReviewThreadDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateReviewThread" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "CreateReviewThreadInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createReviewThread" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<CreateReviewThreadMutation, CreateReviewThreadMutationVariables>;
+export const EnqueueReviewInquiryDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "EnqueueReviewInquiry" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "EnqueueReviewInquiryInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "enqueueReviewInquiry" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<EnqueueReviewInquiryMutation, EnqueueReviewInquiryMutationVariables>;
+export const ReviewDiffFileDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "ReviewDiffFile" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "snapshotId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "reviewDiffFile" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "snapshotId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "snapshotId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "filePath" },
+                value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "snapshotId" } },
+                { kind: "Field", name: { kind: "Name", value: "path" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "additions" } },
+                { kind: "Field", name: { kind: "Name", value: "deletions" } },
+                { kind: "Field", name: { kind: "Name", value: "patch" } },
+                { kind: "Field", name: { kind: "Name", value: "truncated" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ReviewDiffFileQuery, ReviewDiffFileQueryVariables>;
+export const CreateReviewGuideThreadDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateReviewGuideThread" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "CreateReviewThreadInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createReviewThread" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  CreateReviewGuideThreadMutation,
+  CreateReviewGuideThreadMutationVariables
+>;
+export const EnqueueGuideInquiryDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "EnqueueGuideInquiry" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "EnqueueReviewInquiryInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "enqueueReviewInquiry" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "state" } },
+                { kind: "Field", name: { kind: "Name", value: "position" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<EnqueueGuideInquiryMutation, EnqueueGuideInquiryMutationVariables>;
+export const ResolveReviewInquiryDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ResolveReviewInquiry" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "inquiryId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "resolved" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "Boolean" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "resolveReviewInquiry" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "inquiryId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "inquiryId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "resolved" },
+                value: { kind: "Variable", name: { kind: "Name", value: "resolved" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ResolveReviewInquiryMutation, ResolveReviewInquiryMutationVariables>;
+export const SubmitReviewDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "SubmitReview" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "SubmitReviewInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "submitReviewToProvider" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "error" } },
+                { kind: "Field", name: { kind: "Name", value: "providerReviewId" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SubmitReviewMutation, SubmitReviewMutationVariables>;
+export const RefreshReviewSnapshotDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "RefreshReviewSnapshot" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "reviewId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "refreshReviewSnapshot" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "reviewId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "reviewId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<RefreshReviewSnapshotMutation, RefreshReviewSnapshotMutationVariables>;
+export const ReplyToReviewThreadDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ReplyToReviewThread" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "threadId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "body" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "replyToReviewThread" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "threadId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "threadId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "body" },
+                value: { kind: "Variable", name: { kind: "Name", value: "body" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ReplyToReviewThreadMutation, ReplyToReviewThreadMutationVariables>;
+export const ResolveReviewThreadDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ResolveReviewThread" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "threadId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "resolved" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "Boolean" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "resolveReviewThread" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "threadId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "threadId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "resolved" },
+                value: { kind: "Variable", name: { kind: "Name", value: "resolved" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ResolveReviewThreadMutation, ResolveReviewThreadMutationVariables>;
+export const GenerateReviewGuideDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "GenerateReviewGuide" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "EnqueueReviewInquiryInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "enqueueReviewInquiry" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<GenerateReviewGuideMutation, GenerateReviewGuideMutationVariables>;
+export const GuideCodeExcerptDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "GuideCodeExcerpt" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "snapshotId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "startLine" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "endLine" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "reviewCodeExcerpt" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "snapshotId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "snapshotId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "filePath" },
+                value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "startLine" },
+                value: { kind: "Variable", name: { kind: "Name", value: "startLine" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "endLine" },
+                value: { kind: "Variable", name: { kind: "Name", value: "endLine" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "snapshotId" } },
+                { kind: "Field", name: { kind: "Name", value: "path" } },
+                { kind: "Field", name: { kind: "Name", value: "startLine" } },
+                { kind: "Field", name: { kind: "Name", value: "endLine" } },
+                { kind: "Field", name: { kind: "Name", value: "content" } },
+                { kind: "Field", name: { kind: "Name", value: "addedLines" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<GuideCodeExcerptQuery, GuideCodeExcerptQueryVariables>;
+export const ReviewWorkspaceDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "ReviewWorkspace" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "review" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "FragmentSpread", name: { kind: "Name", value: "ReviewWorkspaceFields" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "ReviewWorkspaceFields" },
+      typeCondition: { kind: "NamedType", name: { kind: "Name", value: "Review" } },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+          { kind: "Field", name: { kind: "Name", value: "repositoryId" } },
+          { kind: "Field", name: { kind: "Name", value: "channelId" } },
+          { kind: "Field", name: { kind: "Name", value: "sourceSessionGroupId" } },
+          { kind: "Field", name: { kind: "Name", value: "attachedSessionId" } },
+          { kind: "Field", name: { kind: "Name", value: "provider" } },
+          { kind: "Field", name: { kind: "Name", value: "remotePullRequestId" } },
+          { kind: "Field", name: { kind: "Name", value: "pullRequestNumber" } },
+          { kind: "Field", name: { kind: "Name", value: "pullRequestUrl" } },
+          { kind: "Field", name: { kind: "Name", value: "title" } },
+          { kind: "Field", name: { kind: "Name", value: "description" } },
+          { kind: "Field", name: { kind: "Name", value: "status" } },
+          { kind: "Field", name: { kind: "Name", value: "currentSnapshotId" } },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "repository" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "currentSnapshot" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "reviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "baseSha" } },
+                { kind: "Field", name: { kind: "Name", value: "headSha" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "files" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "path" } },
+                      { kind: "Field", name: { kind: "Name", value: "previousPath" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "additions" } },
+                      { kind: "Field", name: { kind: "Name", value: "deletions" } },
+                      { kind: "Field", name: { kind: "Name", value: "patchAvailable" } },
+                      { kind: "Field", name: { kind: "Name", value: "viewed" } },
+                      { kind: "Field", name: { kind: "Name", value: "commentCount" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "patchChecksum" } },
+                { kind: "Field", name: { kind: "Name", value: "patchByteLength" } },
+                { kind: "Field", name: { kind: "Name", value: "diffFormatVersion" } },
+                { kind: "Field", name: { kind: "Name", value: "providerMetadata" } },
+                { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "snapshots" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "reviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "baseSha" } },
+                { kind: "Field", name: { kind: "Name", value: "headSha" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "files" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "path" } },
+                      { kind: "Field", name: { kind: "Name", value: "previousPath" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "additions" } },
+                      { kind: "Field", name: { kind: "Name", value: "deletions" } },
+                      { kind: "Field", name: { kind: "Name", value: "patchAvailable" } },
+                      { kind: "Field", name: { kind: "Name", value: "viewed" } },
+                      { kind: "Field", name: { kind: "Name", value: "commentCount" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "patchChecksum" } },
+                { kind: "Field", name: { kind: "Name", value: "patchByteLength" } },
+                { kind: "Field", name: { kind: "Name", value: "diffFormatVersion" } },
+                { kind: "Field", name: { kind: "Name", value: "providerMetadata" } },
+                { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "threads" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "reviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "originSnapshotId" } },
+                { kind: "Field", name: { kind: "Name", value: "authorId" } },
+                { kind: "Field", name: { kind: "Name", value: "scope" } },
+                { kind: "Field", name: { kind: "Name", value: "guideChapterId" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedById" } },
+                { kind: "Field", name: { kind: "Name", value: "deliveryStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "providerReviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "providerCommentId" } },
+                { kind: "Field", name: { kind: "Name", value: "deliveredAt" } },
+                { kind: "Field", name: { kind: "Name", value: "deliveryError" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "author" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "email" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "anchor" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "snapshotId" } },
+                      { kind: "Field", name: { kind: "Name", value: "filePath" } },
+                      { kind: "Field", name: { kind: "Name", value: "side" } },
+                      { kind: "Field", name: { kind: "Name", value: "startLine" } },
+                      { kind: "Field", name: { kind: "Name", value: "endLine" } },
+                      { kind: "Field", name: { kind: "Name", value: "originalLine" } },
+                      { kind: "Field", name: { kind: "Name", value: "selectedText" } },
+                      { kind: "Field", name: { kind: "Name", value: "context" } },
+                      { kind: "Field", name: { kind: "Name", value: "hunkId" } },
+                      { kind: "Field", name: { kind: "Name", value: "baseBlobId" } },
+                      { kind: "Field", name: { kind: "Name", value: "headBlobId" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "comments" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "threadId" } },
+                      { kind: "Field", name: { kind: "Name", value: "authorId" } },
+                      { kind: "Field", name: { kind: "Name", value: "body" } },
+                      { kind: "Field", name: { kind: "Name", value: "editedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "deletedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "providerCommentId" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "author" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "email" } },
+                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "inquiries" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "reviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "snapshotId" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                { kind: "Field", name: { kind: "Name", value: "sourceKind" } },
+                { kind: "Field", name: { kind: "Name", value: "question" } },
+                { kind: "Field", name: { kind: "Name", value: "anchor" } },
+                { kind: "Field", name: { kind: "Name", value: "context" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionMessageId" } },
+                { kind: "Field", name: { kind: "Name", value: "responseMessageId" } },
+                { kind: "Field", name: { kind: "Name", value: "position" } },
+                { kind: "Field", name: { kind: "Name", value: "state" } },
+                { kind: "Field", name: { kind: "Name", value: "error" } },
+                { kind: "Field", name: { kind: "Name", value: "structuredResult" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "completedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedById" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "responseMessage" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                      { kind: "Field", name: { kind: "Name", value: "role" } },
+                      { kind: "Field", name: { kind: "Name", value: "text" } },
+                      { kind: "Field", name: { kind: "Name", value: "content" } },
+                      { kind: "Field", name: { kind: "Name", value: "attachments" } },
+                      { kind: "Field", name: { kind: "Name", value: "sourceEventId" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "guides" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "reviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "snapshotId" } },
+                { kind: "Field", name: { kind: "Name", value: "generationInquiryId" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "title" } },
+                { kind: "Field", name: { kind: "Name", value: "intent" } },
+                { kind: "Field", name: { kind: "Name", value: "content" } },
+                { kind: "Field", name: { kind: "Name", value: "version" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ReviewWorkspaceQuery, ReviewWorkspaceQueryVariables>;
+export const ReviewForSessionGroupDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "ReviewForSessionGroup" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "reviewForSessionGroup" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "FragmentSpread", name: { kind: "Name", value: "ReviewWorkspaceFields" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "ReviewWorkspaceFields" },
+      typeCondition: { kind: "NamedType", name: { kind: "Name", value: "Review" } },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+          { kind: "Field", name: { kind: "Name", value: "repositoryId" } },
+          { kind: "Field", name: { kind: "Name", value: "channelId" } },
+          { kind: "Field", name: { kind: "Name", value: "sourceSessionGroupId" } },
+          { kind: "Field", name: { kind: "Name", value: "attachedSessionId" } },
+          { kind: "Field", name: { kind: "Name", value: "provider" } },
+          { kind: "Field", name: { kind: "Name", value: "remotePullRequestId" } },
+          { kind: "Field", name: { kind: "Name", value: "pullRequestNumber" } },
+          { kind: "Field", name: { kind: "Name", value: "pullRequestUrl" } },
+          { kind: "Field", name: { kind: "Name", value: "title" } },
+          { kind: "Field", name: { kind: "Name", value: "description" } },
+          { kind: "Field", name: { kind: "Name", value: "status" } },
+          { kind: "Field", name: { kind: "Name", value: "currentSnapshotId" } },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "repository" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "currentSnapshot" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "reviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "baseSha" } },
+                { kind: "Field", name: { kind: "Name", value: "headSha" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "files" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "path" } },
+                      { kind: "Field", name: { kind: "Name", value: "previousPath" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "additions" } },
+                      { kind: "Field", name: { kind: "Name", value: "deletions" } },
+                      { kind: "Field", name: { kind: "Name", value: "patchAvailable" } },
+                      { kind: "Field", name: { kind: "Name", value: "viewed" } },
+                      { kind: "Field", name: { kind: "Name", value: "commentCount" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "patchChecksum" } },
+                { kind: "Field", name: { kind: "Name", value: "patchByteLength" } },
+                { kind: "Field", name: { kind: "Name", value: "diffFormatVersion" } },
+                { kind: "Field", name: { kind: "Name", value: "providerMetadata" } },
+                { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "snapshots" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "reviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "baseSha" } },
+                { kind: "Field", name: { kind: "Name", value: "headSha" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "files" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "path" } },
+                      { kind: "Field", name: { kind: "Name", value: "previousPath" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "additions" } },
+                      { kind: "Field", name: { kind: "Name", value: "deletions" } },
+                      { kind: "Field", name: { kind: "Name", value: "patchAvailable" } },
+                      { kind: "Field", name: { kind: "Name", value: "viewed" } },
+                      { kind: "Field", name: { kind: "Name", value: "commentCount" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "patchChecksum" } },
+                { kind: "Field", name: { kind: "Name", value: "patchByteLength" } },
+                { kind: "Field", name: { kind: "Name", value: "diffFormatVersion" } },
+                { kind: "Field", name: { kind: "Name", value: "providerMetadata" } },
+                { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "threads" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "reviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "originSnapshotId" } },
+                { kind: "Field", name: { kind: "Name", value: "authorId" } },
+                { kind: "Field", name: { kind: "Name", value: "scope" } },
+                { kind: "Field", name: { kind: "Name", value: "guideChapterId" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedById" } },
+                { kind: "Field", name: { kind: "Name", value: "deliveryStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "providerReviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "providerCommentId" } },
+                { kind: "Field", name: { kind: "Name", value: "deliveredAt" } },
+                { kind: "Field", name: { kind: "Name", value: "deliveryError" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "author" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "email" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "anchor" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "snapshotId" } },
+                      { kind: "Field", name: { kind: "Name", value: "filePath" } },
+                      { kind: "Field", name: { kind: "Name", value: "side" } },
+                      { kind: "Field", name: { kind: "Name", value: "startLine" } },
+                      { kind: "Field", name: { kind: "Name", value: "endLine" } },
+                      { kind: "Field", name: { kind: "Name", value: "originalLine" } },
+                      { kind: "Field", name: { kind: "Name", value: "selectedText" } },
+                      { kind: "Field", name: { kind: "Name", value: "context" } },
+                      { kind: "Field", name: { kind: "Name", value: "hunkId" } },
+                      { kind: "Field", name: { kind: "Name", value: "baseBlobId" } },
+                      { kind: "Field", name: { kind: "Name", value: "headBlobId" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "comments" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "threadId" } },
+                      { kind: "Field", name: { kind: "Name", value: "authorId" } },
+                      { kind: "Field", name: { kind: "Name", value: "body" } },
+                      { kind: "Field", name: { kind: "Name", value: "editedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "deletedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "providerCommentId" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "author" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "email" } },
+                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "inquiries" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "reviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "snapshotId" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                { kind: "Field", name: { kind: "Name", value: "sourceKind" } },
+                { kind: "Field", name: { kind: "Name", value: "question" } },
+                { kind: "Field", name: { kind: "Name", value: "anchor" } },
+                { kind: "Field", name: { kind: "Name", value: "context" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionMessageId" } },
+                { kind: "Field", name: { kind: "Name", value: "responseMessageId" } },
+                { kind: "Field", name: { kind: "Name", value: "position" } },
+                { kind: "Field", name: { kind: "Name", value: "state" } },
+                { kind: "Field", name: { kind: "Name", value: "error" } },
+                { kind: "Field", name: { kind: "Name", value: "structuredResult" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "completedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedById" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "responseMessage" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                      { kind: "Field", name: { kind: "Name", value: "role" } },
+                      { kind: "Field", name: { kind: "Name", value: "text" } },
+                      { kind: "Field", name: { kind: "Name", value: "content" } },
+                      { kind: "Field", name: { kind: "Name", value: "attachments" } },
+                      { kind: "Field", name: { kind: "Name", value: "sourceEventId" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "guides" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "reviewId" } },
+                { kind: "Field", name: { kind: "Name", value: "snapshotId" } },
+                { kind: "Field", name: { kind: "Name", value: "generationInquiryId" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "title" } },
+                { kind: "Field", name: { kind: "Name", value: "intent" } },
+                { kind: "Field", name: { kind: "Name", value: "content" } },
+                { kind: "Field", name: { kind: "Name", value: "version" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ReviewForSessionGroupQuery, ReviewForSessionGroupQueryVariables>;
 export const SessionGroupBranchDiffDocument = {
   kind: "Document",
   definitions: [
@@ -8277,6 +10679,62 @@ export const HiddenSessionTabsDocument = {
     },
   ],
 } as unknown as DocumentNode<HiddenSessionTabsQuery, HiddenSessionTabsQueryVariables>;
+export const OpenReviewForPullRequestDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "OpenReviewForPullRequest" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "pullRequestUrl" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "openReviewForPullRequest" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "pullRequestUrl" },
+                value: { kind: "Variable", name: { kind: "Name", value: "pullRequestUrl" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  OpenReviewForPullRequestMutation,
+  OpenReviewForPullRequestMutationVariables
+>;
 export const SessionGroupDetailDocument = {
   kind: "Document",
   definitions: [
@@ -11975,6 +14433,59 @@ export const DesignSessionGroupsDocument = {
     },
   ],
 } as unknown as DocumentNode<DesignSessionGroupsQuery, DesignSessionGroupsQueryVariables>;
+export const RenameChannelGroupDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "RenameChannelGroup" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "UpdateChannelGroupInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "updateChannelGroup" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<RenameChannelGroupMutation, RenameChannelGroupMutationVariables>;
 export const DeleteChannelGroupDocument = {
   kind: "Document",
   definitions: [
@@ -12664,6 +15175,81 @@ export const OrgEventsDocument = {
     },
   ],
 } as unknown as DocumentNode<OrgEventsSubscription, OrgEventsSubscriptionVariables>;
+export const ReviewEventsLiveDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "subscription",
+      name: { kind: "Name", value: "ReviewEventsLive" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "reviewId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "reviewEvents" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "reviewId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "reviewId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "scopeType" } },
+                { kind: "Field", name: { kind: "Name", value: "scopeId" } },
+                { kind: "Field", name: { kind: "Name", value: "eventType" } },
+                { kind: "Field", name: { kind: "Name", value: "payload" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "actor" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "type" } },
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "parentId" } },
+                { kind: "Field", name: { kind: "Name", value: "timestamp" } },
+                { kind: "Field", name: { kind: "Name", value: "metadata" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ReviewEventsLiveSubscription, ReviewEventsLiveSubscriptionVariables>;
 export const SearchMessagesPageDocument = {
   kind: "Document",
   definitions: [

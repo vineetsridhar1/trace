@@ -13,11 +13,17 @@ interface SidebarFileOpenRequest {
 interface WorkspaceSidebarState {
   filesSessionGroupId: string | null;
   view: WorkspaceSidebarView;
+  changesReviewId: string | null;
   fileOpenRequest: SidebarFileOpenRequest | null;
-  openFiles: (sessionGroupId: string, view?: WorkspaceSidebarView) => void;
+  openFiles: (
+    sessionGroupId: string,
+    view?: WorkspaceSidebarView,
+    reviewId?: string | null,
+  ) => void;
   toggleFiles: (sessionGroupId: string) => void;
   closeFiles: () => void;
   setView: (view: WorkspaceSidebarView) => void;
+  clearChangesReview: () => void;
   requestFileOpen: (sessionGroupId: string, filePath: string) => void;
   requestDiffOpen: (sessionGroupId: string, filePath: string, status: string) => void;
   consumeFileOpenRequest: (id: string) => void;
@@ -26,15 +32,18 @@ interface WorkspaceSidebarState {
 export const useWorkspaceSidebarStore = create<WorkspaceSidebarState>((set) => ({
   filesSessionGroupId: null,
   view: "files",
+  changesReviewId: null,
   fileOpenRequest: null,
-  openFiles: (sessionGroupId, view = "files") => set({ filesSessionGroupId: sessionGroupId, view }),
+  openFiles: (sessionGroupId, view = "files", reviewId = null) =>
+    set({ filesSessionGroupId: sessionGroupId, view, changesReviewId: reviewId }),
   toggleFiles: (sessionGroupId) =>
     set((state) => ({
-      filesSessionGroupId:
-        state.filesSessionGroupId === sessionGroupId ? null : sessionGroupId,
+      filesSessionGroupId: state.filesSessionGroupId === sessionGroupId ? null : sessionGroupId,
+      changesReviewId: null,
     })),
-  closeFiles: () => set({ filesSessionGroupId: null }),
+  closeFiles: () => set({ filesSessionGroupId: null, changesReviewId: null }),
   setView: (view) => set({ view }),
+  clearChangesReview: () => set({ changesReviewId: null }),
   requestFileOpen: (sessionGroupId, filePath) =>
     set({
       fileOpenRequest: {

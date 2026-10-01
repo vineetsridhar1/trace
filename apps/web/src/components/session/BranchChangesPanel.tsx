@@ -23,15 +23,23 @@ const SESSION_GROUP_BRANCH_DIFF_QUERY = gql`
 interface BranchChangesPanelProps {
   sessionGroupId: string;
   onFileClick: (filePath: string, status: string) => void;
+  files?: BranchDiffFile[];
+  activeFilePath?: string | null;
 }
 
-export function BranchChangesPanel({ sessionGroupId, onFileClick }: BranchChangesPanelProps) {
-  const [files, setFiles] = useState<BranchDiffFile[]>([]);
+export function BranchChangesPanel({
+  sessionGroupId,
+  onFileClick,
+  files: suppliedFiles,
+  activeFilePath,
+}: BranchChangesPanelProps) {
+  const [fetchedFiles, setFetchedFiles] = useState<BranchDiffFile[]>([]);
   const [viewMode, setViewMode] = useState<BranchChangesViewMode>("tree");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchDiff = useCallback(async () => {
+    if (suppliedFiles) return;
     setLoading(true);
     setError(null);
     try {
@@ -41,20 +49,24 @@ export function BranchChangesPanel({ sessionGroupId, onFileClick }: BranchChange
       if (result.error) {
         setError(result.error.message);
       } else {
-        setFiles(result.data?.sessionGroupBranchDiff ?? []);
+        setFetchedFiles(result.data?.sessionGroupBranchDiff ?? []);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load diff");
     } finally {
       setLoading(false);
     }
-  }, [sessionGroupId]);
+  }, [sessionGroupId, suppliedFiles]);
 
   useEffect(() => {
-    fetchDiff();
+    if (!suppliedFiles) void fetchDiff();
   }, [fetchDiff]);
 
-  if (loading) {
+  const files = suppliedFiles ?? fetchedFiles;
+  const displayLoading = suppliedFiles ? false : loading;
+  const displayError = suppliedFiles ? null : error;
+
+  if (displayLoading) {
     return (
       <div className="flex h-full items-center justify-center">
         <TraceLoader size={16} showLabel={false} />
@@ -62,7 +74,7 @@ export function BranchChangesPanel({ sessionGroupId, onFileClick }: BranchChange
     );
   }
 
-  if (error) {
+  if (displayError) {
     return (
       <div className="native-scrollbar h-full overflow-y-auto px-4 py-5">
         <div className="rounded-xl border border-border/70 bg-background/25 p-4 shadow-sm">
@@ -90,7 +102,7 @@ export function BranchChangesPanel({ sessionGroupId, onFileClick }: BranchChange
               Technical details
             </summary>
             <p className="mt-2 break-words rounded-lg bg-muted/50 px-3 py-2 text-[10px] leading-relaxed text-muted-foreground">
-              {error.replace(/^\[GraphQL\]\s*/, "")}
+              {displayError.replace(/^\[GraphQL\]\s*/, "")}
             </p>
           </details>
         </div>
@@ -109,10 +121,12 @@ export function BranchChangesPanel({ sessionGroupId, onFileClick }: BranchChange
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
             This branch currently matches its base branch.
           </p>
-          <Button size="sm" variant="ghost" className="mt-3" onClick={() => void fetchDiff()}>
-            <RefreshCw size={12} />
-            Refresh
-          </Button>
+          {!suppliedFiles ? (
+            <Button size="sm" variant="ghost" className="mt-3" onClick={() => void fetchDiff()}>
+              <RefreshCw size={12} />
+              Refresh
+            </Button>
+          ) : null}
         </div>
       </div>
     );
@@ -151,24 +165,31 @@ export function BranchChangesPanel({ sessionGroupId, onFileClick }: BranchChange
               <List size={14} />
             </button>
           </div>
-          <button
-            type="button"
-            onClick={fetchDiff}
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
-            title="Refresh"
-          >
-            <RefreshCw size={14} />
-          </button>
+          {!suppliedFiles ? (
+            <button
+              type="button"
+              onClick={fetchDiff}
+              className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+              title="Refresh"
+            >
+              <RefreshCw size={14} />
+            </button>
+          ) : null}
         </div>
       </div>
       <div className="native-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {viewMode === "tree" ? (
-          <BranchChangesTree files={files} onFileClick={onFileClick} />
+          <BranchChangesTree
+            files={files}
+            activeFilePath={activeFilePath}
+            onFileClick={onFileClick}
+          />
         ) : (
           files.map((file) => (
             <BranchChangedFileRow
               key={file.path}
               file={file}
+              active={file.path === activeFilePath}
               pathPosition="after"
               onFileClick={onFileClick}
             />

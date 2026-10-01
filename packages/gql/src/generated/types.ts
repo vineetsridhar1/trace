@@ -436,6 +436,15 @@ export type CreateRepoInput = {
   remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateReviewThreadInput = {
+  anchor?: InputMaybe<ReviewAnchorInput>;
+  body: Scalars["String"]["input"];
+  guideChapterId?: InputMaybe<Scalars["String"]["input"]>;
+  reviewId: Scalars["ID"]["input"];
+  scope: ReviewThreadScope;
+  snapshotId: Scalars["ID"]["input"];
+};
+
 export type CreateTicketInput = {
   assigneeIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -740,6 +749,15 @@ export type EndpointTrafficEntry = {
   startedAt: Scalars["DateTime"]["output"];
 };
 
+export type EnqueueReviewInquiryInput = {
+  anchor?: InputMaybe<Scalars["JSON"]["input"]>;
+  context?: InputMaybe<Scalars["JSON"]["input"]>;
+  question: Scalars["String"]["input"];
+  reviewId: Scalars["ID"]["input"];
+  snapshotId: Scalars["ID"]["input"];
+  sourceKind: ReviewInquirySourceKind;
+};
+
 export type EntityType = "channel" | "chat" | "message" | "session" | "ticket";
 
 export type Event = {
@@ -818,6 +836,26 @@ export type EventType =
   | "repo_created"
   | "repo_deleted"
   | "repo_updated"
+  | "review_comment_created"
+  | "review_delivery_failed"
+  | "review_delivery_started"
+  | "review_delivery_succeeded"
+  | "review_guide_failed"
+  | "review_guide_saved"
+  | "review_inquiry_cancelled"
+  | "review_inquiry_completed"
+  | "review_inquiry_enqueued"
+  | "review_inquiry_failed"
+  | "review_inquiry_resolved"
+  | "review_inquiry_started"
+  | "review_opened"
+  | "review_snapshot_created"
+  | "review_snapshot_marked_current"
+  | "review_thread_created"
+  | "review_thread_reanchored"
+  | "review_thread_resolved"
+  | "review_thread_updated"
+  | "review_updated"
   | "session_application_log_appended"
   | "session_application_process_failed"
   | "session_application_process_started"
@@ -1042,6 +1080,7 @@ export type Mutation = {
    */
   attachDesignToSession: Event;
   attachRepoRemote: Repo;
+  cancelReviewInquiry: ReviewInquiry;
   clearEndpointTraffic: Scalars["Boolean"]["output"];
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
@@ -1058,6 +1097,7 @@ export type Mutation = {
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
+  createReviewThread: ReviewThread;
   createSessionEndpointPreview: SessionEndpointPreview;
   createTerminal: Terminal;
   createTicket: Ticket;
@@ -1082,7 +1122,9 @@ export type Mutation = {
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
+  editReviewComment: ReviewComment;
   enableSessionEndpointForwarding: SessionEndpoint;
+  enqueueReviewInquiry: ReviewInquiry;
   forkSession: Session;
   forwardSessionPort: SessionEndpoint;
   hideSessionTab: HiddenSessionTab;
@@ -1100,9 +1142,12 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  openReviewForPullRequest: Review;
   openWorkspaceBrowser: Scalars["Boolean"]["output"];
   queueSessionMessage: QueuedMessage;
+  reanchorReviewThread: ReviewThread;
   refreshDesignSystemSource: DesignSystem;
+  refreshReviewSnapshot: Review;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepo: Repo;
   registerRepoWebhook: Repo;
@@ -1113,9 +1158,12 @@ export type Mutation = {
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
+  replyToReviewThread: ReviewComment;
   requestBridgeAccess: BridgeAccessRequest;
   requestPdfSessionExport: Scalars["Boolean"]["output"];
   resizeTerminal: Scalars["Boolean"]["output"];
+  resolveReviewInquiry: ReviewInquiry;
+  resolveReviewThread: ReviewThread;
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   restoreSessionTab: Scalars["Boolean"]["output"];
@@ -1130,6 +1178,7 @@ export type Mutation = {
   saveDesignSystem: DesignSystemVersion;
   saveManualElementEdit: ManualElementEditResult;
   saveManualElementEdits: Array<ManualElementEditResult>;
+  saveReviewGuide: ReviewGuide;
   saveSessionGroupFile: Scalars["Boolean"]["output"];
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -1140,12 +1189,14 @@ export type Mutation = {
   setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
+  setReviewThreadSelected: ReviewThread;
   startSession: Session;
   startSessionApplication: Array<SessionApplicationProcess>;
   startSessionProcess: SessionApplicationProcess;
   steerQueuedMessage: Event;
   stopSessionApplication: Array<SessionApplicationProcess>;
   stopSessionProcess: SessionApplicationProcess;
+  submitReviewToProvider: ReviewDelivery;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
@@ -1225,6 +1276,10 @@ export type MutationAttachRepoRemoteArgs = {
   repoId: Scalars["ID"]["input"];
 };
 
+export type MutationCancelReviewInquiryArgs = {
+  inquiryId: Scalars["ID"]["input"];
+};
+
 export type MutationClearEndpointTrafficArgs = {
   endpointId: Scalars["ID"]["input"];
 };
@@ -1295,6 +1350,10 @@ export type MutationCreateProjectArgs = {
 
 export type MutationCreateRepoArgs = {
   input: CreateRepoInput;
+};
+
+export type MutationCreateReviewThreadArgs = {
+  input: CreateReviewThreadInput;
 };
 
 export type MutationCreateSessionEndpointPreviewArgs = {
@@ -1398,10 +1457,19 @@ export type MutationEditChatMessageArgs = {
   messageId: Scalars["ID"]["input"];
 };
 
+export type MutationEditReviewCommentArgs = {
+  body: Scalars["String"]["input"];
+  commentId: Scalars["ID"]["input"];
+};
+
 export type MutationEnableSessionEndpointForwardingArgs = {
   accessMode?: InputMaybe<SessionEndpointAccessMode>;
   endpointId: Scalars["ID"]["input"];
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
+export type MutationEnqueueReviewInquiryArgs = {
+  input: EnqueueReviewInquiryInput;
 };
 
 export type MutationForkSessionArgs = {
@@ -1485,6 +1553,11 @@ export type MutationMuteScopeArgs = {
   scopeType: Scalars["String"]["input"];
 };
 
+export type MutationOpenReviewForPullRequestArgs = {
+  pullRequestUrl: Scalars["String"]["input"];
+  sessionId: Scalars["ID"]["input"];
+};
+
 export type MutationOpenWorkspaceBrowserArgs = {
   sessionGroupId: Scalars["ID"]["input"];
   url: Scalars["String"]["input"];
@@ -1498,8 +1571,17 @@ export type MutationQueueSessionMessageArgs = {
   text: Scalars["String"]["input"];
 };
 
+export type MutationReanchorReviewThreadArgs = {
+  anchor: ReviewAnchorInput;
+  threadId: Scalars["ID"]["input"];
+};
+
 export type MutationRefreshDesignSystemSourceArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type MutationRefreshReviewSnapshotArgs = {
+  reviewId: Scalars["ID"]["input"];
 };
 
 export type MutationRegisterPushTokenArgs = {
@@ -1547,6 +1629,11 @@ export type MutationReorderQueuedMessagesArgs = {
   sessionId: Scalars["ID"]["input"];
 };
 
+export type MutationReplyToReviewThreadArgs = {
+  body: Scalars["String"]["input"];
+  threadId: Scalars["ID"]["input"];
+};
+
 export type MutationRequestBridgeAccessArgs = {
   requestedCapabilities?: InputMaybe<Array<BridgeAccessCapability>>;
   requestedExpiresAt?: InputMaybe<Scalars["DateTime"]["input"]>;
@@ -1563,6 +1650,16 @@ export type MutationResizeTerminalArgs = {
   cols: Scalars["Int"]["input"];
   rows: Scalars["Int"]["input"];
   terminalId: Scalars["ID"]["input"];
+};
+
+export type MutationResolveReviewInquiryArgs = {
+  inquiryId: Scalars["ID"]["input"];
+  resolved: Scalars["Boolean"]["input"];
+};
+
+export type MutationResolveReviewThreadArgs = {
+  resolved: Scalars["Boolean"]["input"];
+  threadId: Scalars["ID"]["input"];
 };
 
 export type MutationRestartSessionProcessArgs = {
@@ -1631,6 +1728,11 @@ export type MutationSaveManualElementEditsArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationSaveReviewGuideArgs = {
+  content: Scalars["JSON"]["input"];
+  inquiryId: Scalars["ID"]["input"];
+};
+
 export type MutationSaveSessionGroupFileArgs = {
   content: Scalars["String"]["input"];
   filePath: Scalars["String"]["input"];
@@ -1691,6 +1793,11 @@ export type MutationSetOrgSecretArgs = {
   input: SetOrgSecretInput;
 };
 
+export type MutationSetReviewThreadSelectedArgs = {
+  selected: Scalars["Boolean"]["input"];
+  threadId: Scalars["ID"]["input"];
+};
+
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -1719,6 +1826,10 @@ export type MutationStopSessionProcessArgs = {
   appConfigId: Scalars["ID"]["input"];
   processConfigId: Scalars["ID"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationSubmitReviewToProviderArgs = {
+  input: SubmitReviewInput;
 };
 
 export type MutationSubscribeArgs = {
@@ -1998,6 +2109,11 @@ export type Query = {
   /** Existing on-disk worktrees of a repo on a local runtime, available to import. */
   repoWorktrees: Array<RepoWorktree>;
   repos: Array<Repo>;
+  review?: Maybe<Review>;
+  /** Read at most 80 lines from the immutable snapshot head, including files outside the diff. */
+  reviewCodeExcerpt: ReviewCodeExcerpt;
+  reviewDiffFile: ReviewDiffFile;
+  reviewForSessionGroup?: Maybe<Review>;
   searchMessages: Array<MessageSearchHit>;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
@@ -2246,6 +2362,26 @@ export type QueryRepoWorktreesArgs = {
 
 export type QueryReposArgs = {
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryReviewArgs = {
+  id: Scalars["ID"]["input"];
+};
+
+export type QueryReviewCodeExcerptArgs = {
+  endLine: Scalars["Int"]["input"];
+  filePath: Scalars["String"]["input"];
+  snapshotId: Scalars["ID"]["input"];
+  startLine: Scalars["Int"]["input"];
+};
+
+export type QueryReviewDiffFileArgs = {
+  filePath: Scalars["String"]["input"];
+  snapshotId: Scalars["ID"]["input"];
+};
+
+export type QueryReviewForSessionGroupArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QuerySearchMessagesArgs = {
@@ -2560,12 +2696,256 @@ export type RepoWorktree = {
   path: Scalars["String"]["output"];
 };
 
+export type Review = {
+  __typename?: "Review";
+  attachedSession: Session;
+  attachedSessionId: Scalars["ID"]["output"];
+  channel?: Maybe<Channel>;
+  channelId?: Maybe<Scalars["ID"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  currentSnapshot?: Maybe<ReviewSnapshot>;
+  currentSnapshotId?: Maybe<Scalars["ID"]["output"]>;
+  description: Scalars["String"]["output"];
+  guides: Array<ReviewGuide>;
+  id: Scalars["ID"]["output"];
+  inquiries: Array<ReviewInquiry>;
+  organizationId: Scalars["ID"]["output"];
+  provider: RepoProvider;
+  pullRequestNumber: Scalars["Int"]["output"];
+  pullRequestUrl: Scalars["String"]["output"];
+  remotePullRequestId: Scalars["String"]["output"];
+  repository: Repo;
+  repositoryId: Scalars["ID"]["output"];
+  snapshots: Array<ReviewSnapshot>;
+  sourceSessionGroup?: Maybe<SessionGroup>;
+  sourceSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
+  status: ReviewStatus;
+  threads: Array<ReviewThread>;
+  title: Scalars["String"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ReviewAnchor = {
+  __typename?: "ReviewAnchor";
+  baseBlobId?: Maybe<Scalars["String"]["output"]>;
+  context: Scalars["String"]["output"];
+  endLine: Scalars["Int"]["output"];
+  filePath: Scalars["String"]["output"];
+  headBlobId?: Maybe<Scalars["String"]["output"]>;
+  hunkId?: Maybe<Scalars["String"]["output"]>;
+  originalLine?: Maybe<Scalars["Int"]["output"]>;
+  selectedText: Scalars["String"]["output"];
+  side: ReviewDiffSide;
+  snapshotId: Scalars["ID"]["output"];
+  startLine: Scalars["Int"]["output"];
+  status: ReviewAnchorStatus;
+};
+
+export type ReviewAnchorInput = {
+  baseBlobId?: InputMaybe<Scalars["String"]["input"]>;
+  context: Scalars["String"]["input"];
+  endLine: Scalars["Int"]["input"];
+  filePath: Scalars["String"]["input"];
+  headBlobId?: InputMaybe<Scalars["String"]["input"]>;
+  hunkId?: InputMaybe<Scalars["String"]["input"]>;
+  originalLine?: InputMaybe<Scalars["Int"]["input"]>;
+  selectedText: Scalars["String"]["input"];
+  side: ReviewDiffSide;
+  snapshotId: Scalars["ID"]["input"];
+  startLine: Scalars["Int"]["input"];
+};
+
+export type ReviewAnchorStatus = "ambiguous" | "current" | "outdated" | "relocated";
+
+/** Exact head-commit source for a bounded Guide reference, including which lines were added. */
+export type ReviewCodeExcerpt = {
+  __typename?: "ReviewCodeExcerpt";
+  addedLines: Array<Scalars["Int"]["output"]>;
+  content: Scalars["String"]["output"];
+  endLine: Scalars["Int"]["output"];
+  path: Scalars["String"]["output"];
+  snapshotId: Scalars["ID"]["output"];
+  startLine: Scalars["Int"]["output"];
+};
+
+export type ReviewComment = {
+  __typename?: "ReviewComment";
+  author: User;
+  authorId: Scalars["ID"]["output"];
+  body: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  deletedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  editedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  id: Scalars["ID"]["output"];
+  providerCommentId?: Maybe<Scalars["String"]["output"]>;
+  threadId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ReviewDelivery = {
+  __typename?: "ReviewDelivery";
+  attempts: Scalars["Int"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  disposition: ReviewDisposition;
+  error?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  idempotencyKey: Scalars["String"]["output"];
+  providerCommentIds?: Maybe<Scalars["JSON"]["output"]>;
+  providerReviewId?: Maybe<Scalars["String"]["output"]>;
+  reviewId: Scalars["ID"]["output"];
+  snapshotId: Scalars["ID"]["output"];
+  status: Scalars["String"]["output"];
+  threadIds: Array<Scalars["ID"]["output"]>;
+};
+
+export type ReviewDeliveryStatus =
+  | "delivered"
+  | "delivery_failed"
+  | "outdated"
+  | "selected"
+  | "trace_only";
+
+export type ReviewDiffFile = {
+  __typename?: "ReviewDiffFile";
+  additions: Scalars["Int"]["output"];
+  deletions: Scalars["Int"]["output"];
+  modifiedContent?: Maybe<Scalars["String"]["output"]>;
+  originalContent?: Maybe<Scalars["String"]["output"]>;
+  patch: Scalars["String"]["output"];
+  path: Scalars["String"]["output"];
+  previousPath?: Maybe<Scalars["String"]["output"]>;
+  snapshotId: Scalars["ID"]["output"];
+  status: Scalars["String"]["output"];
+  truncated: Scalars["Boolean"]["output"];
+};
+
+export type ReviewDiffSide = "base" | "head";
+
+export type ReviewDisposition = "approve" | "comment" | "request_changes";
+
+export type ReviewFile = {
+  __typename?: "ReviewFile";
+  additions: Scalars["Int"]["output"];
+  commentCount: Scalars["Int"]["output"];
+  deletions: Scalars["Int"]["output"];
+  patchAvailable: Scalars["Boolean"]["output"];
+  path: Scalars["String"]["output"];
+  previousPath?: Maybe<Scalars["String"]["output"]>;
+  status: Scalars["String"]["output"];
+  viewed: Scalars["Boolean"]["output"];
+};
+
+export type ReviewGuide = {
+  __typename?: "ReviewGuide";
+  content: Scalars["JSON"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  generationInquiryId: Scalars["ID"]["output"];
+  id: Scalars["ID"]["output"];
+  intent: Scalars["String"]["output"];
+  reviewId: Scalars["ID"]["output"];
+  snapshotId: Scalars["ID"]["output"];
+  status: ReviewGuideStatus;
+  title: Scalars["String"]["output"];
+  version: Scalars["Int"]["output"];
+};
+
+/** A focused, ordered step in a Guide's code walkthrough. Line numbers refer to the head commit. */
+export type ReviewGuideReference = {
+  __typename?: "ReviewGuideReference";
+  endLine: Scalars["Int"]["output"];
+  explanation: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  startLine: Scalars["Int"]["output"];
+  title: Scalars["String"]["output"];
+};
+
+export type ReviewGuideStatus = "earlier" | "ready";
+
+export type ReviewInquiry = {
+  __typename?: "ReviewInquiry";
+  anchor?: Maybe<Scalars["JSON"]["output"]>;
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  context: Scalars["JSON"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  error?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  position: Scalars["Int"]["output"];
+  question: Scalars["String"]["output"];
+  resolvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  resolvedById?: Maybe<Scalars["ID"]["output"]>;
+  responseMessage?: Maybe<SessionMessage>;
+  responseMessageId?: Maybe<Scalars["ID"]["output"]>;
+  reviewId: Scalars["ID"]["output"];
+  sessionId: Scalars["ID"]["output"];
+  sessionMessage?: Maybe<SessionMessage>;
+  sessionMessageId?: Maybe<Scalars["ID"]["output"]>;
+  snapshotId: Scalars["ID"]["output"];
+  sourceKind: ReviewInquirySourceKind;
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  state: ReviewInquiryState;
+  structuredResult?: Maybe<Scalars["JSON"]["output"]>;
+};
+
+export type ReviewInquirySourceKind =
+  | "diff_anchor"
+  | "guide_anchor"
+  | "guide_generation"
+  | "thread";
+
+export type ReviewInquiryState = "cancelled" | "completed" | "failed" | "queued" | "running";
+
+export type ReviewSnapshot = {
+  __typename?: "ReviewSnapshot";
+  baseSha: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  createdById: Scalars["ID"]["output"];
+  diffFormatVersion: Scalars["Int"]["output"];
+  files: Array<ReviewFile>;
+  headSha: Scalars["String"]["output"];
+  id: Scalars["ID"]["output"];
+  patchByteLength: Scalars["Int"]["output"];
+  patchChecksum: Scalars["String"]["output"];
+  patchStorageKey: Scalars["String"]["output"];
+  providerMetadata: Scalars["JSON"]["output"];
+  reviewId: Scalars["ID"]["output"];
+  status: ReviewSnapshotStatus;
+};
+
+export type ReviewSnapshotStatus = "archived" | "current";
+
+export type ReviewStatus = "archived" | "open";
+
+export type ReviewThread = {
+  __typename?: "ReviewThread";
+  anchor?: Maybe<ReviewAnchor>;
+  author: User;
+  authorId: Scalars["ID"]["output"];
+  comments: Array<ReviewComment>;
+  createdAt: Scalars["DateTime"]["output"];
+  deliveredAt?: Maybe<Scalars["DateTime"]["output"]>;
+  deliveryError?: Maybe<Scalars["String"]["output"]>;
+  deliveryStatus: ReviewDeliveryStatus;
+  guideChapterId?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  originSnapshotId: Scalars["ID"]["output"];
+  providerCommentId?: Maybe<Scalars["String"]["output"]>;
+  providerReviewId?: Maybe<Scalars["String"]["output"]>;
+  resolvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  resolvedById?: Maybe<Scalars["ID"]["output"]>;
+  reviewId: Scalars["ID"]["output"];
+  scope: ReviewThreadScope;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ReviewThreadScope = "file" | "general" | "guide_explanation" | "line";
+
 export type ScopeInput = {
   id: Scalars["ID"]["input"];
   type: ScopeType;
 };
 
-export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
+export type ScopeType = "channel" | "chat" | "review" | "session" | "system" | "ticket";
 
 export type Session = {
   __typename?: "Session";
@@ -2768,6 +3148,7 @@ export type SessionGroup = {
   pdfPageWidth: Scalars["Float"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   repo?: Maybe<Repo>;
+  reviews: Array<Review>;
   sessions: Array<Session>;
   setupError?: Maybe<Scalars["String"]["output"]>;
   setupStatus: SetupStatus;
@@ -2876,6 +3257,8 @@ export type SessionSetupScriptRun = {
   lastError?: Maybe<Scalars["String"]["output"]>;
   outputPreview?: Maybe<Scalars["String"]["output"]>;
   outputTruncated: Scalars["Boolean"]["output"];
+  resolvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  resolvedById?: Maybe<Scalars["ID"]["output"]>;
   scriptConfigId: Scalars["String"]["output"];
   sessionGroupId: Scalars["ID"]["output"];
   startedAt: Scalars["DateTime"]["output"];
@@ -2963,11 +3346,21 @@ export type StartSessionInput = {
   worktreePath?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type SubmitReviewInput = {
+  body?: InputMaybe<Scalars["String"]["input"]>;
+  disposition: ReviewDisposition;
+  idempotencyKey: Scalars["String"]["input"];
+  reviewId: Scalars["ID"]["input"];
+  snapshotId: Scalars["ID"]["input"];
+  threadIds: Array<Scalars["ID"]["input"]>;
+};
+
 export type Subscription = {
   __typename?: "Subscription";
   channelEvents: Event;
   chatEvents: Event;
   orgEvents: Event;
+  reviewEvents: Event;
   sessionEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
@@ -2989,6 +3382,13 @@ export type SubscriptionChatEventsArgs = {
 export type SubscriptionOrgEventsArgs = {
   organizationId: Scalars["ID"]["input"];
   types?: InputMaybe<Array<Scalars["String"]["input"]>>;
+};
+
+export type SubscriptionReviewEventsArgs = {
+  after?: InputMaybe<Scalars["DateTime"]["input"]>;
+  afterEventId?: InputMaybe<Scalars["ID"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+  reviewId: Scalars["ID"]["input"];
 };
 
 export type SubscriptionSessionEventsArgs = {
