@@ -1,6 +1,8 @@
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReviewFile } from "@trace/gql";
+import { useReviewUiStore } from "../../stores/review-ui";
+import { useEntityStore } from "@trace/client-core";
+import type { ReviewFile, ReviewThread } from "@trace/gql";
 
 const query = vi.fn();
 
@@ -43,27 +45,46 @@ function patchFor(snapshotId: string, body: string) {
 
 describe("ReviewChangesView snapshot refresh", () => {
   let renderer: ReactTestRenderer | undefined;
+  let threads: ReviewThread[] = [];
+  const listeners = new Set<() => void>();
+  const scrollNode = {
+    scrollTop: 0,
+    clientHeight: 600,
+    offsetHeight: 600,
+    offsetWidth: 1000,
+    scrollHeight: 10000000,
+    ownerDocument: {
+      defaultView: {
+        setTimeout,
+        clearTimeout,
+        requestAnimationFrame: (callback: FrameRequestCallback) => setTimeout(() => callback(0), 0),
+        cancelAnimationFrame: clearTimeout,
+      },
+    },
+    addEventListener: (event: string, callback: () => void) => {
+      if (event === "scroll") listeners.add(callback);
+    },
+    removeEventListener: (_event: string, callback: () => void) => {
+      listeners.delete(callback);
+    },
+    scrollTo: ({ top }: { top: number }) => {
+      if (scrollNode.scrollTop === top) return;
+      scrollNode.scrollTop = top;
+      listeners.forEach((callback) => callback());
+    },
+  };
 
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-    // Each card loads its patch once it is near the viewport; report it as visible immediately.
-    vi.stubGlobal(
-      "IntersectionObserver",
-      class {
-        constructor(private readonly callback: IntersectionObserverCallback) {
-          setTimeout(() => this.callback([{ isIntersecting: true }] as never, this as never), 0);
-        }
-        observe() {}
-        disconnect() {}
-        unobserve() {}
-        takeRecords() {
-          return [];
-        }
-        root = null;
-        rootMargin = "";
-        thresholds = [];
-      },
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
+      setTimeout(() => callback(0), 0),
     );
+    vi.stubGlobal("cancelAnimationFrame", clearTimeout);
+    useReviewUiStore.setState({ byReviewId: {}, replyDrafts: {} });
+    useEntityStore.setState({ reviewThreads: {} });
+    threads = [];
+    scrollNode.scrollTop = 0;
+    listeners.clear();
     query.mockReset();
   });
 
@@ -73,7 +94,7 @@ describe("ReviewChangesView snapshot refresh", () => {
     vi.unstubAllGlobals();
   });
 
-  function view(snapshotId: string) {
+  function view(snapshotId: string, files = FILES) {
     return (
       <ReviewChangesView
         reviewId="review-1"
@@ -81,19 +102,26 @@ describe("ReviewChangesView snapshot refresh", () => {
         title="Fix the retry loop"
         description=""
         pullRequestNumber={7}
-        files={FILES}
-        threads={[]}
+        files={files}
+        threads={threads}
         inquiries={[]}
         onRefresh={() => {}}
       />
     );
   }
 
-  function render(snapshotId: string) {
+  function render(snapshotId: string, files = FILES) {
     act(() => {
       // There is no DOM here, so host refs need an explicit node mock for the
       // IntersectionObserver effect to run at all.
-      renderer = create(view(snapshotId), { createNodeMock: () => ({}) });
+      renderer = create(view(snapshotId, files), {
+        createNodeMock: (element) =>
+          typeof element.props === "object" &&
+          element.props !== null &&
+          "data-review-scroll" in element.props
+            ? scrollNode
+            : null,
+      });
     });
   }
 
@@ -130,5 +158,102 @@ describe("ReviewChangesView snapshot refresh", () => {
       expect.anything(),
       expect.objectContaining({ snapshotId: "snapshot-2" }),
     );
+  });
+  it("bounds mounted files and requests for a 20,000-file review and navigates to an unmounted file", async () => {
+    const files = Array.from({ length: 20_000 }, (_, index) => ({
+      ...FILES[0]!,
+      path: `src/file-${index}.ts`,
+    }));
+    query.mockImplementation((_query: unknown, variables: { snapshotId: string }) =>
+      patchFor(variables.snapshotId, "code"),
+    );
+    render("snapshot-1", files);
+    await settle();
+    const mountedFiles = () => renderer!.root.findAll((node) => !!node.props["data-review-file"]);
+    expect(mountedFiles().length).toBeGreaterThan(0);
+    expect(mountedFiles().length).toBeLessThan(10);
+    expect(query.mock.calls.length).toBeLessThan(10);
+    act(() =>
+      useReviewUiStore.getState().patch("review-1", { requestedFilePath: "src/file-19000.ts" }),
+    );
+    await settle();
+    expect(
+      mountedFiles().some((node) => node.props["data-review-file"] === "src/file-19000.ts"),
+    ).toBe(true);
+    expect(mountedFiles().length).toBeLessThan(10);
+    expect(useReviewUiStore.getState().byReviewId["review-1"]?.activeFilePath).toBe(
+      "src/file-19000.ts",
+    );
+    expect(mountedFiles().some((node) => node.props["data-review-file"] === "src/file-0.ts")).toBe(
+      false,
+    );
+  });
+
+  it("bounds code rows inside one huge file", async () => {
+    query.mockReturnValue(
+      patchFor("snapshot-1", Array.from({ length: 50_000 }, (_, i) => `line${i}`).join("\n+")),
+    );
+    render("snapshot-1");
+    await settle();
+    const codeRows = renderer!.root.findAll(
+      (node) => typeof node.type === "string" && !!node.props.onPointerDown,
+    );
+    expect(codeRows.length).toBeGreaterThan(0);
+    expect(codeRows.length).toBeLessThan(100);
+    expect(JSON.stringify(renderer?.toJSON())).not.toContain("line25000");
+  });
+
+  it("navigates to a line that was never mounted, then allows scrolling away from the highlight", async () => {
+    query.mockReturnValue(
+      patchFor("snapshot-1", Array.from({ length: 50_000 }, (_, i) => `line${i + 1}`).join("\n+")),
+    );
+    render("snapshot-1");
+    await settle();
+    act(() =>
+      useReviewUiStore
+        .getState()
+        .navigate("review-1", { filePath: FILES[0]!.path, startLine: 25000, endLine: 25000 }),
+    );
+    await settle();
+    expect(JSON.stringify(renderer?.toJSON())).toContain("line25000");
+    expect(useReviewUiStore.getState().byReviewId["review-1"]?.requestedLine).toBeNull();
+    act(() => scrollNode.scrollTo({ top: 2000 }));
+    await settle();
+    expect(scrollNode.scrollTop).toBe(2000);
+    expect(JSON.stringify(renderer?.toJSON())).not.toContain('"line25000"');
+  });
+
+  it("preserves an unsent reply when its anchored thread scrolls out and remounts", async () => {
+    const thread = {
+      id: "thread",
+      scope: "line",
+      comments: [],
+      deliveryStatus: "trace_only",
+      anchor: {
+        filePath: FILES[0]!.path,
+        side: "head",
+        startLine: 1,
+        endLine: 1,
+        status: "current",
+      },
+    } as unknown as ReviewThread;
+    threads = [thread];
+    useEntityStore.setState({ reviewThreads: { thread } });
+    query.mockReturnValue(
+      patchFor("snapshot-1", Array.from({ length: 1000 }, (_, i) => `line${i + 1}`).join("\n+")),
+    );
+    render("snapshot-1");
+    await settle();
+    act(() =>
+      renderer!.root
+        .findByType("input")
+        .props.onChange({ target: { value: "Draft review reply" } }),
+    );
+    act(() => scrollNode.scrollTo({ top: 10000 }));
+    await settle();
+    expect(renderer!.root.findAllByType("input")).toHaveLength(0);
+    act(() => scrollNode.scrollTo({ top: 0 }));
+    await settle();
+    expect(renderer!.root.findByType("input").props.value).toBe("Draft review reply");
   });
 });

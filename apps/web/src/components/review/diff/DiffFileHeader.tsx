@@ -34,7 +34,7 @@ export function DiffFileHeader({
   return (
     <header
       className={cn(
-        "sticky top-[-16px] z-[2] flex h-10 items-center gap-2.5 border-b border-[var(--th-review-card-edge)] bg-[var(--th-surface)] px-3.5",
+        "sticky top-0 z-[2] flex h-10 items-center gap-2.5 border-b border-[var(--th-review-card-edge)] bg-[var(--th-surface)] px-3.5",
         collapsed && "border-b-transparent",
       )}
     >

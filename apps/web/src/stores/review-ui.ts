@@ -21,6 +21,9 @@ interface ReviewUiSelection {
 }
 
 interface ReviewUiState {
+  /** Drafts survive virtualized thread cards leaving the viewport. */
+  replyDrafts: Record<string, string>;
+  setReplyDraft(threadId: string, body: string): void;
   byReviewId: Record<string, ReviewUiSelection>;
   patch(reviewId: string, value: Partial<ReviewUiSelection>): void;
   navigate(reviewId: string, highlight: ReviewHighlight): void;
@@ -39,6 +42,14 @@ const emptySelection = (): ReviewUiSelection => ({
 });
 
 export const useReviewUiStore = create<ReviewUiState>((set) => ({
+  replyDrafts: {},
+  setReplyDraft: (threadId, body) =>
+    set((state) => {
+      const replyDrafts = { ...state.replyDrafts };
+      if (body) replyDrafts[threadId] = body;
+      else delete replyDrafts[threadId];
+      return { replyDrafts };
+    }),
   byReviewId: {},
   patch: (reviewId, value) =>
     set((state) => ({

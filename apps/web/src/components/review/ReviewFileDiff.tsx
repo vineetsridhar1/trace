@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { gql } from "@urql/core";
 import type { ReviewDiffFile, ReviewInquiry, ReviewThread as ReviewThreadType } from "@trace/gql";
 import { client } from "../../lib/urql";
@@ -18,6 +18,7 @@ import { DiffLineRow, type DiffLineEmphasis } from "./diff/DiffLineRow";
 import { DiffSelectionPopover } from "./diff/DiffSelectionPopover";
 import { ReviewInquiryCard } from "./ReviewInquiryCard";
 import { inquiriesQueuedAhead, inquiryQueueLabel, reviewInquiryAnchor } from "./review-inquiry";
+import { VirtualDiffRows, visibleDiffLines } from "./diff/VirtualDiffRows";
 import { ReviewThread } from "./ReviewThread";
 import type { ReviewHighlight } from "../../stores/review-ui";
 
@@ -36,6 +37,12 @@ const DIFF_QUERY = gql`
 `;
 
 interface ReviewFileDiffProps {
+  requestedLine: number | null;
+  onNavigateToLine(offset: number): void;
+  scrollRef: RefObject<HTMLDivElement | null>;
+  fileStart: number;
+  estimatedHeight: number;
+  patchCache: Map<string, ReviewDiffFile>;
   snapshotId: string;
   filePath: string;
   status: string;
@@ -91,6 +98,12 @@ function ReviewInquiryStack({
 }
 
 export function ReviewFileDiff({
+  scrollRef,
+  fileStart,
+  estimatedHeight,
+  patchCache,
+  requestedLine,
+  onNavigateToLine,
   snapshotId,
   filePath,
   status,
@@ -105,35 +118,18 @@ export function ReviewFileDiff({
   onAsk,
 }: ReviewFileDiffProps) {
   const cardRef = useRef<HTMLElement>(null);
-  const highlightRowRef = useRef<HTMLDivElement | null>(null);
-  const [visible, setVisible] = useState(false);
-  const [diff, setDiff] = useState<ReviewDiffFile | null>(null);
+  const [diff, setDiff] = useState<ReviewDiffFile | null>(() => patchCache.get(filePath) ?? null);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<LineRange | null>(null);
   const [dragging, setDragging] = useState(false);
   const [popoverTop, setPopoverTop] = useState(0);
-
-  // The continuous diff holds every changed file, so each card only fetches its patch once it is
-  // close to the viewport. Otherwise opening a review fires one request per changed file at once.
-  useEffect(() => {
-    const element = cardRef.current;
-    if (!element || visible) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) setVisible(true);
-      },
-      { rootMargin: "600px 0px" },
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [visible]);
 
   // The patch belongs to one immutable snapshot. Callers remount this card when the review
   // advances, but the comparison is kept here too: serving a cached patch under a newer snapshot
   // would show the previous commit's code and anchor new comments to stale line numbers.
   const current = diff?.snapshotId === snapshotId ? diff : null;
   useEffect(() => {
-    if (!visible || collapsed || current || error) return;
+    if (collapsed || current || error) return;
     let cancelled = false;
     void client
       .query(DIFF_QUERY, { snapshotId, filePath })
@@ -141,23 +137,26 @@ export function ReviewFileDiff({
       .then((result) => {
         if (cancelled) return;
         if (result.error) setError(result.error.message);
-        else setDiff((result.data?.reviewDiffFile as ReviewDiffFile | undefined) ?? null);
+        else {
+          const loaded = (result.data?.reviewDiffFile as ReviewDiffFile | undefined) ?? null;
+          if (loaded) {
+            patchCache.delete(filePath);
+            patchCache.set(filePath, loaded);
+            while (patchCache.size > 24) patchCache.delete(patchCache.keys().next().value!);
+          }
+          setDiff(loaded);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [collapsed, current, error, filePath, snapshotId, visible]);
+  }, [collapsed, current, error, filePath, snapshotId, patchCache]);
 
   useEffect(() => setError(null), [snapshotId]);
 
-  const lines = useMemo(() => parsePatch(current?.patch ?? ""), [current?.patch]);
+  const lines = useMemo(() => visibleDiffLines(parsePatch(current?.patch ?? "")), [current?.patch]);
   const selection = range ? selectionFromLines(filePath, lines, range) : null;
   const highlighted = highlight?.filePath === filePath ? highlight : null;
-
-  useEffect(() => {
-    if (!highlighted || lines.length === 0) return;
-    highlightRowRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [highlighted, lines.length]);
 
   useEffect(() => {
     if (!dragging) return;
@@ -183,7 +182,9 @@ export function ReviewFileDiff({
       if (event.button !== 0) return;
       setRange({ side, start: line, end: line });
       setDragging(true);
-      setPopoverTop((event.currentTarget as HTMLElement).offsetTop + 26);
+      const rowTop = event.currentTarget.getBoundingClientRect().top;
+      const cardTop = cardRef.current?.getBoundingClientRect().top ?? rowTop;
+      setPopoverTop(rowTop - cardTop + 26);
     },
     [],
   );
@@ -276,65 +277,64 @@ export function ReviewFileDiff({
       {collapsed ? null : error ? (
         <p className="p-4 text-xs text-destructive">{error}</p>
       ) : !current ? (
-        <div className="h-40 animate-pulse bg-muted/10" />
+        <div
+          className="animate-pulse bg-muted/10"
+          style={{ height: Math.max(160, estimatedHeight - 42) }}
+        />
       ) : (
         <>
-          <div className="native-scrollbar min-w-0 overflow-x-auto py-1 font-mono text-xs leading-5">
-            <div className="min-w-max">
-              {lines.map((line, index) => {
-                if (line.kind === "meta") {
-                  const label = hunkGapLabel(line);
-                  return label ? <DiffGapRow key={index} label={label} position="between" /> : null;
-                }
-                const side = lineSide(line);
-                const lineNumber = lineNumberForSide(line, side);
-                const selected = rangeContains(range, side, lineNumber);
-                const isHighlighted =
-                  !!highlighted &&
-                  side === "head" &&
-                  lineNumber != null &&
-                  lineNumber >= highlighted.startLine &&
-                  lineNumber <= highlighted.endLine;
-                const emphasis: DiffLineEmphasis = selected
-                  ? "selected"
-                  : isHighlighted
-                    ? "asked"
-                    : "none";
-                const anchoredThreadIds =
-                  lineNumber == null
-                    ? []
-                    : (threadsByAnchor.get(anchorKey(side, lineNumber)) ?? []);
-                const anchoredInquiries =
-                  lineNumber == null
-                    ? []
-                    : (inquiriesByAnchor.get(anchorKey(side, lineNumber)) ?? []);
-                return (
-                  <Fragment key={index}>
-                    <DiffLineRow
-                      ref={
-                        isHighlighted && lineNumber === highlighted.startLine
-                          ? highlightRowRef
-                          : null
-                      }
-                      line={line}
-                      emphasis={emphasis}
-                      lineNumber={lineNumber}
-                      onPointerDown={
-                        lineNumber == null
-                          ? undefined
-                          : (event) => beginSelection(event, side, lineNumber)
-                      }
-                      onPointerEnter={
-                        lineNumber == null ? undefined : () => extendSelection(side, lineNumber)
-                      }
-                    />
-                    <ReviewThreadStack threadIds={anchoredThreadIds} />
-                    <ReviewInquiryStack inquiries={anchoredInquiries} allInquiries={inquiries} />
-                  </Fragment>
-                );
-              })}
-            </div>
-          </div>
+          <VirtualDiffRows
+            lines={lines}
+            scrollRef={scrollRef}
+            scrollMargin={fileStart + 45}
+            requestedLine={requestedLine}
+            onNavigateToLine={onNavigateToLine}
+            renderLine={(line, index) => {
+              if (line.kind === "meta") {
+                const label = hunkGapLabel(line);
+                return label ? <DiffGapRow key={index} label={label} position="between" /> : null;
+              }
+              const side = lineSide(line);
+              const lineNumber = lineNumberForSide(line, side);
+              const selected = rangeContains(range, side, lineNumber);
+              const isHighlighted =
+                !!highlighted &&
+                side === "head" &&
+                lineNumber != null &&
+                lineNumber >= highlighted.startLine &&
+                lineNumber <= highlighted.endLine;
+              const emphasis: DiffLineEmphasis = selected
+                ? "selected"
+                : isHighlighted
+                  ? "asked"
+                  : "none";
+              const anchoredThreadIds =
+                lineNumber == null ? [] : (threadsByAnchor.get(anchorKey(side, lineNumber)) ?? []);
+              const anchoredInquiries =
+                lineNumber == null
+                  ? []
+                  : (inquiriesByAnchor.get(anchorKey(side, lineNumber)) ?? []);
+              return (
+                <Fragment key={index}>
+                  <DiffLineRow
+                    line={line}
+                    emphasis={emphasis}
+                    lineNumber={lineNumber}
+                    onPointerDown={
+                      lineNumber == null
+                        ? undefined
+                        : (event) => beginSelection(event, side, lineNumber)
+                    }
+                    onPointerEnter={
+                      lineNumber == null ? undefined : () => extendSelection(side, lineNumber)
+                    }
+                  />
+                  <ReviewThreadStack threadIds={anchoredThreadIds} />
+                  <ReviewInquiryStack inquiries={anchoredInquiries} allInquiries={inquiries} />
+                </Fragment>
+              );
+            }}
+          />
           {current.truncated ? (
             <DiffGapRow label="diff truncated · open on GitHub" position="end" />
           ) : null}

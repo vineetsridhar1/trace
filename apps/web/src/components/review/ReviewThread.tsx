@@ -7,6 +7,7 @@ import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import { mutateReview } from "./review-operations";
 import { anchorPresentation, deliveryPresentation } from "./review-states";
+import { useReviewUiStore } from "../../stores/review-ui";
 import { ReviewThreadBody } from "./ReviewThreadBody";
 
 const REPLY = gql`
@@ -39,7 +40,9 @@ export function ReviewThread({
   threadId: string;
   onAsk?(threadId: string): void;
 }) {
-  const [reply, setReply] = useState("");
+  const reply = useReviewUiStore((state) => state.replyDrafts[threadId] ?? "");
+  const setReplyDraft = useReviewUiStore((state) => state.setReplyDraft);
+  const setReply = (body: string) => setReplyDraft(threadId, body);
   const [sending, setSending] = useState(false);
   const authorName = useEntityField("reviewThreads", threadId, "author")?.name ?? "";
   const scope = useEntityField("reviewThreads", threadId, "scope");
