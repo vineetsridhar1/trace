@@ -191,6 +191,7 @@ export class ReviewService {
           pullRequestNumber: pull.number,
           pullRequestUrl: pull.url,
           title: pull.title,
+          description: pull.description,
           createdById: input.actorId,
         },
         include: REVIEW_INCLUDE,
@@ -207,9 +208,10 @@ export class ReviewService {
     } else if (review.attachedSessionId !== session.id || review.status !== "open") {
       review = await prisma.review.update({
         where: { id: review.id },
-        data: { attachedSessionId: session.id, status: "open", title: pull.title },
+        data: { attachedSessionId: session.id, status: "open" },
         include: REVIEW_INCLUDE,
       });
+      await this.emit(review.id, input, "review_updated", { review });
     }
     return this.captureSnapshot(review, pull, input);
   }
@@ -717,8 +719,19 @@ export class ReviewService {
       (snapshot) => snapshot.baseSha === pull.baseSha && snapshot.headSha === pull.headSha,
     );
     if (existing) {
+      const metadataChanged =
+        review.title !== pull.title || review.description !== pull.description;
+      if (metadataChanged) {
+        review = await prisma.review.update({
+          where: { id: review.id },
+          data: { title: pull.title, description: pull.description },
+          include: REVIEW_INCLUDE,
+        });
+      }
       if (review.currentSnapshotId !== existing.id) {
         await this.markCurrent(review.id, existing.id, actor);
+      } else if (metadataChanged) {
+        await this.emit(review.id, actor, "review_updated", { review });
       }
       return this.get({ ...actor, id: review.id });
     }
@@ -755,6 +768,7 @@ export class ReviewService {
           providerMetadata: reviewJson({
             number: pull.number,
             url: pull.url,
+            description: pull.description,
             baseRef: pull.baseRef,
             headRef: pull.headRef,
           }),
@@ -782,7 +796,11 @@ export class ReviewService {
       }
       await tx.review.update({
         where: { id: review.id },
-        data: { currentSnapshotId: snapshot.id, title: pull.title },
+        data: {
+          currentSnapshotId: snapshot.id,
+          title: pull.title,
+          description: pull.description,
+        },
       });
       return snapshot;
     });

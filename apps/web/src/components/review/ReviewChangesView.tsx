@@ -6,6 +6,7 @@ import { useReviewUiStore } from "../../stores/review-ui";
 import { ReviewFileDiff } from "./ReviewFileDiff";
 import { ReviewEmptyState } from "./ReviewEmptyState";
 import { ReviewInlineComposer, type ReviewComposerTarget } from "./ReviewInlineComposer";
+import { ReviewOverview } from "./ReviewOverview";
 import { mutateReview } from "./review-operations";
 import type { ReviewLineSelection } from "./review-selection";
 
@@ -27,6 +28,9 @@ const ENQUEUE_INQUIRY = gql`
 interface ReviewChangesViewProps {
   reviewId: string;
   snapshotId: string;
+  title: string;
+  description: string;
+  pullRequestNumber: number;
   files: ReviewFile[];
   threads: ReviewThreadType[];
   onRefresh(): void;
@@ -35,6 +39,9 @@ interface ReviewChangesViewProps {
 export function ReviewChangesView({
   reviewId,
   snapshotId,
+  title,
+  description,
+  pullRequestNumber,
   files,
   threads,
   onRefresh,
@@ -133,6 +140,11 @@ export function ReviewChangesView({
         onScroll={handleScroll}
         className="native-scrollbar flex min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto bg-[#141414] px-[18px] pb-10 pt-4"
       >
+        <ReviewOverview
+          title={title}
+          description={description}
+          pullRequestNumber={pullRequestNumber}
+        />
         {files.map((file) => (
           <ReviewFileDiff
             key={file.path}

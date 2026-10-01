@@ -854,6 +854,7 @@ export type EventType =
   | "review_thread_reanchored"
   | "review_thread_resolved"
   | "review_thread_updated"
+  | "review_updated"
   | "session_application_log_appended"
   | "session_application_process_failed"
   | "session_application_process_started"
@@ -2688,6 +2689,7 @@ export type Review = {
   createdAt: Scalars["DateTime"]["output"];
   currentSnapshot?: Maybe<ReviewSnapshot>;
   currentSnapshotId?: Maybe<Scalars["ID"]["output"]>;
+  description: Scalars["String"]["output"];
   guides: Array<ReviewGuide>;
   id: Scalars["ID"]["output"];
   inquiries: Array<ReviewInquiry>;

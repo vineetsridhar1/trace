@@ -856,6 +856,7 @@ export type EventType =
   | "review_thread_reanchored"
   | "review_thread_resolved"
   | "review_thread_updated"
+  | "review_updated"
   | "session_application_log_appended"
   | "session_application_process_failed"
   | "session_application_process_started"
@@ -2690,6 +2691,7 @@ export type Review = {
   createdAt: Scalars["DateTime"]["output"];
   currentSnapshot?: Maybe<ReviewSnapshot>;
   currentSnapshotId?: Maybe<Scalars["ID"]["output"]>;
+  description: Scalars["String"]["output"];
   guides: Array<ReviewGuide>;
   id: Scalars["ID"]["output"];
   inquiries: Array<ReviewInquiry>;
@@ -4084,25 +4086,6 @@ export type GuideDiffFileQuery = {
   };
 };
 
-export type CancelReviewInquiryMutationVariables = Exact<{
-  inquiryId: Scalars["ID"]["input"];
-}>;
-
-export type CancelReviewInquiryMutation = {
-  __typename?: "Mutation";
-  cancelReviewInquiry: { __typename?: "ReviewInquiry"; id: string; state: ReviewInquiryState };
-};
-
-export type SelectReviewThreadMutationVariables = Exact<{
-  threadId: Scalars["ID"]["input"];
-  selected: Scalars["Boolean"]["input"];
-}>;
-
-export type SelectReviewThreadMutation = {
-  __typename?: "Mutation";
-  setReviewThreadSelected: { __typename?: "ReviewThread"; id: string };
-};
-
 export type ReviewWorkspaceFieldsFragment = {
   __typename?: "Review";
   id: string;
@@ -4116,6 +4099,7 @@ export type ReviewWorkspaceFieldsFragment = {
   pullRequestNumber: number;
   pullRequestUrl: string;
   title: string;
+  description: string;
   status: ReviewStatus;
   currentSnapshotId?: string | null;
   createdAt: string;
@@ -6765,6 +6749,7 @@ export const ReviewWorkspaceFieldsFragmentDoc = {
           { kind: "Field", name: { kind: "Name", value: "pullRequestNumber" } },
           { kind: "Field", name: { kind: "Name", value: "pullRequestUrl" } },
           { kind: "Field", name: { kind: "Name", value: "title" } },
+          { kind: "Field", name: { kind: "Name", value: "description" } },
           { kind: "Field", name: { kind: "Name", value: "status" } },
           { kind: "Field", name: { kind: "Name", value: "currentSnapshotId" } },
           { kind: "Field", name: { kind: "Name", value: "createdAt" } },
@@ -8725,102 +8710,6 @@ export const GuideDiffFileDocument = {
     },
   ],
 } as unknown as DocumentNode<GuideDiffFileQuery, GuideDiffFileQueryVariables>;
-export const CancelReviewInquiryDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "CancelReviewInquiry" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "inquiryId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "cancelReviewInquiry" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "inquiryId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "inquiryId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "state" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<CancelReviewInquiryMutation, CancelReviewInquiryMutationVariables>;
-export const SelectReviewThreadDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "SelectReviewThread" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "threadId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "selected" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "Boolean" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "setReviewThreadSelected" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "threadId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "threadId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "selected" },
-                value: { kind: "Variable", name: { kind: "Name", value: "selected" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<SelectReviewThreadMutation, SelectReviewThreadMutationVariables>;
 export const ReviewWorkspaceDocument = {
   kind: "Document",
   definitions: [
@@ -8879,6 +8768,7 @@ export const ReviewWorkspaceDocument = {
           { kind: "Field", name: { kind: "Name", value: "pullRequestNumber" } },
           { kind: "Field", name: { kind: "Name", value: "pullRequestUrl" } },
           { kind: "Field", name: { kind: "Name", value: "title" } },
+          { kind: "Field", name: { kind: "Name", value: "description" } },
           { kind: "Field", name: { kind: "Name", value: "status" } },
           { kind: "Field", name: { kind: "Name", value: "currentSnapshotId" } },
           { kind: "Field", name: { kind: "Name", value: "createdAt" } },
@@ -9183,6 +9073,7 @@ export const ReviewForSessionGroupDocument = {
           { kind: "Field", name: { kind: "Name", value: "pullRequestNumber" } },
           { kind: "Field", name: { kind: "Name", value: "pullRequestUrl" } },
           { kind: "Field", name: { kind: "Name", value: "title" } },
+          { kind: "Field", name: { kind: "Name", value: "description" } },
           { kind: "Field", name: { kind: "Name", value: "status" } },
           { kind: "Field", name: { kind: "Name", value: "currentSnapshotId" } },
           { kind: "Field", name: { kind: "Name", value: "createdAt" } },

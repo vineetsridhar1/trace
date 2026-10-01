@@ -16,6 +16,7 @@ export const REVIEW_FIELDS = gql`
     pullRequestNumber
     pullRequestUrl
     title
+    description
     status
     currentSnapshotId
     createdAt

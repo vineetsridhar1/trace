@@ -17,6 +17,7 @@ export interface ResolvedPullRequest {
   number: number;
   url: string;
   title: string;
+  description: string;
   repository: GitHubRepoRef;
   baseSha: string;
   headSha: string;
@@ -58,6 +59,7 @@ interface GitHubPullResponse {
   number?: number;
   html_url?: string;
   title?: string;
+  body?: string | null;
   base?: { sha?: string; ref?: string };
   head?: { sha?: string; ref?: string };
 }
@@ -127,6 +129,7 @@ export class GitHubReviewProvider implements ReviewProviderAdapter {
       number: pull.number,
       url: pull.html_url,
       title: pull.title,
+      description: typeof pull.body === "string" ? pull.body : "",
       repository: target.repo,
       baseSha: pull.base.sha,
       headSha: pull.head.sha,

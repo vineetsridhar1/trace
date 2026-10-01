@@ -191,6 +191,9 @@ export function ReviewTab({
           <ReviewChangesView
             reviewId={reviewId}
             snapshotId={snapshot.id}
+            title={review.title}
+            description={review.description}
+            pullRequestNumber={review.pullRequestNumber}
             files={snapshot.files}
             threads={snapshotThreads}
             onRefresh={() => void refresh()}

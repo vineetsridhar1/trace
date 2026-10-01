@@ -353,6 +353,7 @@ enum EventType {
   app_deployment_queued
   app_deployment_updated
   review_opened
+  review_updated
   review_snapshot_created
   review_snapshot_marked_current
   review_thread_created
@@ -976,6 +977,7 @@ model Review {
   pullRequestNumber    Int
   pullRequestUrl       String
   title                String
+  description          String           @default("")
   status               ReviewStatus     @default(open)
   currentSnapshotId    String?          @unique
   currentSnapshot      ReviewSnapshot?  @relation("CurrentReviewSnapshot", fields: [currentSnapshotId], references: [id], onDelete: Restrict)
