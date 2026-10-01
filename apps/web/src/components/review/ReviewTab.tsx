@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import { useEntityStore } from "@trace/client-core";
-import type {
-  Review,
-  ReviewGuide,
-  ReviewInquiry,
-  ReviewThread as ReviewThreadType,
-} from "@trace/gql";
+import type { Review, ReviewInquiry, ReviewThread as ReviewThreadType } from "@trace/gql";
 import { toast } from "sonner";
 import { useReviewEvents } from "../../hooks/useReviewEvents";
 import { useReviewUiStore } from "../../stores/review-ui";
@@ -20,6 +15,7 @@ import { ReviewSubmissionSheet } from "./ReviewSubmissionSheet";
 import { fetchReview, mutateReview } from "./review-operations";
 import { useSidebar } from "../ui/sidebar";
 import { isPendingGitHubThread } from "./review-delivery";
+import { selectReviewGuide } from "./guide/review-guide-selection";
 
 const REFRESH = gql`
   mutation RefreshReviewSnapshot($reviewId: ID!) {
@@ -96,13 +92,8 @@ export function ReviewTab({
     [inquiries],
   );
   const guide = useMemo(
-    () =>
-      (Object.values(reviewGuides) as ReviewGuide[])
-        .filter(
-          (candidate) => candidate.reviewId === reviewId && candidate.snapshotId === snapshot?.id,
-        )
-        .sort((a, b) => b.version - a.version)[0] ?? null,
-    [reviewGuides, reviewId, snapshot?.id],
+    () => selectReviewGuide(Object.values(reviewGuides), reviewId, snapshotId),
+    [reviewGuides, reviewId, snapshotId],
   );
   useEffect(() => {
     if (!active) return;

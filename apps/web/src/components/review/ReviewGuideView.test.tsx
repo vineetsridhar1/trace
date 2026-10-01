@@ -84,6 +84,62 @@ describe("Guide Ask about this", () => {
     act(() => button!.props.onClick());
   }
 
+  it("warns about a changed diff even before the saved Guide status updates", async () => {
+    expect(JSON.stringify(renderer.toJSON())).toContain("The diff has changed");
+    expect(renderer.root.findByType(GuideScroller).props.snapshotId).toBe("old-snapshot");
+    await act(async () => click("Regenerate Guide"));
+    expect(mutate).toHaveBeenCalledWith(expect.anything(), {
+      input: expect.objectContaining({
+        snapshotId: "latest-snapshot",
+        sourceKind: "guide_generation",
+      }),
+    });
+  });
+
+  it.each(["generating", "failed"] as const)(
+    "keeps the old Guide readable while regeneration is %s",
+    (state) => {
+      act(() =>
+        renderer.update(
+          <ReviewGuideView
+            reviewId="review"
+            snapshotId="latest-snapshot"
+            files={[]}
+            guide={guide}
+            generating={state === "generating"}
+            lastFailure={
+              state === "failed" ? { ...inquiry, state: "failed", error: "Invalid output" } : null
+            }
+            onOpenInChanges={vi.fn()}
+            onReviewAllChanges={vi.fn()}
+          />,
+        ),
+      );
+      expect(renderer.root.findByType(GuideScroller).props.snapshotId).toBe("old-snapshot");
+      expect(JSON.stringify(renderer.toJSON())).toContain(
+        state === "generating" ? "Generating an updated Guide" : "Guide regeneration failed",
+      );
+    },
+  );
+
+  it("removes the stale notice when a Guide for the latest snapshot arrives", () => {
+    act(() =>
+      renderer.update(
+        <ReviewGuideView
+          reviewId="review"
+          snapshotId="latest-snapshot"
+          files={[]}
+          guide={{ ...guide, id: "replacement", snapshotId: "latest-snapshot" }}
+          generating={false}
+          onOpenInChanges={vi.fn()}
+          onReviewAllChanges={vi.fn()}
+        />,
+      ),
+    );
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("The diff has changed");
+    expect(renderer.root.findByType(GuideScroller).props.snapshotId).toBe("latest-snapshot");
+  });
+
   it("opens a composer and queues the user's question on the displayed Guide snapshot", async () => {
     click("Ask about this");
     expect(mutate).not.toHaveBeenCalled();
