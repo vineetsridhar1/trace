@@ -7,7 +7,7 @@ export interface GuideChapterData {
   id: string;
   title: string;
   explanation: string;
-  implications: string;
+  implications: string | string[];
   references: GuideReference[];
 }
 
@@ -25,9 +25,17 @@ export function GuideChapter({
         {chapter.explanation}
       </p>
       <h4 className="mt-3 text-[10px] font-semibold uppercase tracking-wider">Implications</h4>
-      <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
-        {chapter.implications}
-      </p>
+      {Array.isArray(chapter.implications) ? (
+        <ul className="mt-1 list-disc space-y-1 pl-4 text-xs leading-5 text-muted-foreground">
+          {chapter.implications.map((implication) => (
+            <li key={implication}>{implication}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
+          {chapter.implications}
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap gap-1">
         {chapter.references.map((reference) => (
           <button

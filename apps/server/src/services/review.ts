@@ -14,6 +14,11 @@ import {
   type ReviewProviderAdapter,
 } from "./review-provider.js";
 import { sessionService } from "./session.js";
+import {
+  guideGenerationInstruction,
+  parseGuideResponse,
+  validateReviewGuide,
+} from "./review-guide.js";
 
 const REVIEW_INCLUDE = {
   repository: true,
@@ -46,9 +51,7 @@ interface StoredReviewPatch {
 
 export function reviewJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(
-    JSON.stringify(value, (_key, nested) =>
-      typeof nested === "bigint" ? Number(nested) : nested,
-    ),
+    JSON.stringify(value, (_key, nested) => (typeof nested === "bigint" ? Number(nested) : nested)),
   ) as Prisma.InputJsonValue;
 }
 
@@ -441,7 +444,7 @@ export class ReviewService {
     });
     if (!inquiry || inquiry.sourceKind !== "guide_generation")
       throw new NotFoundError("Guide inquiry", input.inquiryId);
-    const validated = this.validateGuide(input.content, inquiry.snapshot.files);
+    const validated = validateReviewGuide(input.content, inquiry.snapshot.files);
     const guide = await prisma.$transaction(async (tx) => {
       await tx.reviewGuide.updateMany({
         where: { reviewId: inquiry.reviewId, status: "ready" },
@@ -676,7 +679,7 @@ export class ReviewService {
     });
     if (inquiry.sourceKind === "guide_generation") {
       try {
-        const content = JSON.parse(response.text) as unknown;
+        const content = parseGuideResponse(response.text);
         await this.saveGuide({
           organizationId: event.organizationId,
           actorId: event.actorId,
@@ -871,7 +874,7 @@ export class ReviewService {
     const anchor = anchorRecord(inquiry.anchor);
     const format =
       inquiry.sourceKind === "guide_generation"
-        ? "Return only JSON: {title,intent,chapters:[{id,title,explanation,implications,references:[{filePath,startLine,endLine}]}],everythingElse:[filePath]}. Every changed file must occur exactly once."
+        ? guideGenerationInstruction(inquiry.snapshot.files)
         : "Answer concisely in plain text and cite the anchored lines when relevant.";
     return [
       "This is review assistance, not an implementation request.",
@@ -882,71 +885,6 @@ export class ReviewService {
       "Read-only: do not edit source, commit, push, or post to GitHub.",
       format,
     ].join("\n\n");
-  }
-
-  private validateGuide(value: unknown, filesValue: Prisma.JsonValue) {
-    const guide = anchorRecord(value);
-    if (
-      !guide ||
-      typeof guide.title !== "string" ||
-      typeof guide.intent !== "string" ||
-      !Array.isArray(guide.chapters) ||
-      !Array.isArray(guide.everythingElse)
-    ) {
-      throw new ValidationError("Guide response does not match the required structure");
-    }
-    const snapshotPaths = new Set(
-      (filesValue as Array<{ path?: unknown }>).flatMap((file) =>
-        typeof file.path === "string" ? [file.path] : [],
-      ),
-    );
-    const covered: string[] = [];
-    for (const chapterValue of guide.chapters) {
-      const chapter = anchorRecord(chapterValue);
-      if (
-        !chapter ||
-        typeof chapter.id !== "string" ||
-        typeof chapter.title !== "string" ||
-        typeof chapter.explanation !== "string" ||
-        typeof chapter.implications !== "string" ||
-        !Array.isArray(chapter.references)
-      ) {
-        throw new ValidationError("Guide chapter is invalid");
-      }
-      for (const referenceValue of chapter.references) {
-        const reference = anchorRecord(referenceValue);
-        if (
-          !reference ||
-          typeof reference.filePath !== "string" ||
-          !snapshotPaths.has(reference.filePath) ||
-          !Number.isInteger(reference.startLine) ||
-          !Number.isInteger(reference.endLine) ||
-          Number(reference.startLine) < 1 ||
-          Number(reference.endLine) < Number(reference.startLine)
-        ) {
-          throw new ValidationError("Guide contains an invalid snapshot reference");
-        }
-        covered.push(reference.filePath);
-      }
-    }
-    for (const path of guide.everythingElse) {
-      if (typeof path !== "string" || !snapshotPaths.has(path))
-        throw new ValidationError("Guide contains an unknown file");
-      covered.push(path);
-    }
-    if (
-      covered.length !== snapshotPaths.size ||
-      new Set(covered).size !== snapshotPaths.size ||
-      [...snapshotPaths].some((path) => !covered.includes(path))
-    ) {
-      throw new ValidationError("Every changed file must appear exactly once in the Guide");
-    }
-    return guide as {
-      title: string;
-      intent: string;
-      chapters: unknown[];
-      everythingElse: string[];
-    };
   }
 
   private async thread(id: string, actor: ActorInput) {
