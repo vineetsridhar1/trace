@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { gql } from "@urql/core";
 import type { ReviewDiffFile, ReviewFile, ReviewThread as ReviewThreadType } from "@trace/gql";
 import { client } from "../../lib/urql";
@@ -42,6 +42,21 @@ interface ReviewFileDiffProps {
   onToggleCollapsed(): void;
   onComment(selection: ReviewLineSelection): void;
   onAsk(selection: ReviewLineSelection): void;
+}
+
+function anchorKey(side: string, line: number): string {
+  return `${side}:${line}`;
+}
+
+function ReviewThreadStack({ threads }: { threads: ReviewThreadType[] }) {
+  if (threads.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2 border-y border-[#1f1f23] bg-[#141414] p-3 pl-16 font-sans leading-normal">
+      {threads.map((thread) => (
+        <ReviewThread key={thread.id} thread={thread} />
+      ))}
+    </div>
+  );
 }
 
 export function ReviewFileDiff({
@@ -132,7 +147,33 @@ export function ReviewFileDiff({
     [dragging],
   );
 
-  const fileThreads = threads.filter((thread) => thread.anchor?.filePath === file.path);
+  const fileThreads = useMemo(
+    () => threads.filter((thread) => thread.anchor?.filePath === file.path),
+    [file.path, threads],
+  );
+  const threadsByAnchor = useMemo(() => {
+    const grouped = new Map<string, ReviewThreadType[]>();
+    for (const thread of fileThreads) {
+      if (!thread.anchor || thread.scope !== "line") continue;
+      const key = anchorKey(thread.anchor.side, thread.anchor.endLine);
+      grouped.set(key, [...(grouped.get(key) ?? []), thread]);
+    }
+    return grouped;
+  }, [fileThreads]);
+  const renderedAnchorKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const line of lines) {
+      if (line.kind === "meta") continue;
+      const side = lineSide(line);
+      const lineNumber = lineNumberForSide(line, side);
+      if (lineNumber != null) keys.add(anchorKey(side, lineNumber));
+    }
+    return keys;
+  }, [lines]);
+  const trailingThreads = fileThreads.filter((thread) => {
+    if (!thread.anchor || thread.scope !== "line") return true;
+    return !renderedAnchorKeys.has(anchorKey(thread.anchor.side, thread.anchor.endLine));
+  });
 
   return (
     <section
@@ -175,24 +216,28 @@ export function ReviewFileDiff({
                 : isHighlighted
                   ? "asked"
                   : "none";
+              const anchoredThreads =
+                lineNumber == null ? [] : (threadsByAnchor.get(anchorKey(side, lineNumber)) ?? []);
               return (
-                <DiffLineRow
-                  key={index}
-                  ref={
-                    isHighlighted && lineNumber === highlighted.startLine ? highlightRowRef : null
-                  }
-                  line={line}
-                  emphasis={emphasis}
-                  lineNumber={lineNumber}
-                  onPointerDown={
-                    lineNumber == null
-                      ? undefined
-                      : (event) => beginSelection(event, side, lineNumber)
-                  }
-                  onPointerEnter={
-                    lineNumber == null ? undefined : () => extendSelection(side, lineNumber)
-                  }
-                />
+                <Fragment key={index}>
+                  <DiffLineRow
+                    ref={
+                      isHighlighted && lineNumber === highlighted.startLine ? highlightRowRef : null
+                    }
+                    line={line}
+                    emphasis={emphasis}
+                    lineNumber={lineNumber}
+                    onPointerDown={
+                      lineNumber == null
+                        ? undefined
+                        : (event) => beginSelection(event, side, lineNumber)
+                    }
+                    onPointerEnter={
+                      lineNumber == null ? undefined : () => extendSelection(side, lineNumber)
+                    }
+                  />
+                  <ReviewThreadStack threads={anchoredThreads} />
+                </Fragment>
               );
             })}
           </div>
@@ -215,13 +260,7 @@ export function ReviewFileDiff({
           ) : null}
         </>
       )}
-      {!collapsed && fileThreads.length > 0 ? (
-        <div className="flex flex-col gap-2 border-t border-[#1f1f23] p-3 pl-16">
-          {fileThreads.map((thread) => (
-            <ReviewThread key={thread.id} thread={thread} />
-          ))}
-        </div>
-      ) : null}
+      {!collapsed ? <ReviewThreadStack threads={trailingThreads} /> : null}
     </section>
   );
 }
