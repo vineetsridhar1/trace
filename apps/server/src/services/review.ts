@@ -1133,6 +1133,25 @@ export class ReviewService {
       } else if (metadataChanged) {
         await this.emit(review.id, actor, "review_updated", { review: reviewEntity(review) });
       }
+      // Re-check outdated anchors even when the commit is unchanged. This repairs anchors
+      // misclassified by older matching logic without requiring another PR commit.
+      const recovered = await this.reconcileAnchors(review.id, existing.id, pull.files, true);
+      if (recovered.length) {
+        const threads = await prisma.$transaction(async (tx) => {
+          const updated = [];
+          for (const thread of recovered) {
+            updated.push(
+              await tx.reviewThread.update({
+                where: { id: thread.id },
+                data: thread.data,
+                include: THREAD_INCLUDE,
+              }),
+            );
+          }
+          return updated;
+        });
+        await this.emit(review.id, actor, "review_updated", { threads });
+      }
       return this.get({ ...actor, id: review.id });
     }
     const snapshotId = randomUUID();
@@ -1215,12 +1234,13 @@ export class ReviewService {
     reviewId: string,
     snapshotId: string,
     files: ResolvedPullRequest["files"],
+    outdatedOnly = false,
   ) {
     const threads = await prisma.reviewThread.findMany({
       where: {
         reviewId,
         originSnapshotId: { not: snapshotId },
-        anchor: { not: Prisma.JsonNull },
+        anchor: outdatedOnly ? { path: ["status"], equals: "outdated" } : { not: Prisma.JsonNull },
       },
       select: { id: true, anchor: true, scope: true, deliveryStatus: true },
     });
@@ -1229,6 +1249,7 @@ export class ReviewService {
       if (!original) return [];
       const reconciled = reconcileReviewAnchor(original, thread.scope, snapshotId, files);
       const outdated = reconciled.status === "outdated";
+      if (outdatedOnly && outdated) return [];
       return [
         {
           id: thread.id,

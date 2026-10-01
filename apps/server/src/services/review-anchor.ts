@@ -82,9 +82,10 @@ export function reconcileReviewAnchor(
     };
   }
 
-  const selectedText = typeof anchor.selectedText === "string" ? anchor.selectedText : "";
-  const selectedLines = selectedText.split("\n");
-  if (!selectedText || selectedLines.length === 0) {
+  // An empty string is valid selected source for one blank line, not missing anchor data.
+  const selectedLines =
+    typeof anchor.selectedText === "string" ? anchor.selectedText.split("\n") : null;
+  if (!selectedLines || selectedLines.length !== oldEnd - oldStart + 1) {
     return { ...anchor, snapshotId, filePath: file.path, status: "outdated" };
   }
   const matches = exactMatches(file, side, selectedLines);
