@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useEntityStore } from "@trace/client-core";
+import type { Review } from "@trace/gql";
 import { ArrowLeft } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useWorkspaceSidebarStore } from "../../stores/workspace-sidebar";
+import { useReviewUiStore } from "../../stores/review-ui";
 import { BranchChangesPanel } from "../session/BranchChangesPanel";
 import { FileExplorer } from "../session/FileExplorer";
 import { useSessionGroupDirectoryTree } from "../session/useSessionGroupDirectoryTree";
@@ -12,6 +15,30 @@ export function SidebarFilesPane({ sessionGroupId }: { sessionGroupId: string })
   const setView = useWorkspaceSidebarStore((state) => state.setView);
   const requestFileOpen = useWorkspaceSidebarStore((state) => state.requestFileOpen);
   const requestDiffOpen = useWorkspaceSidebarStore((state) => state.requestDiffOpen);
+  const reviewId = useWorkspaceSidebarStore((state) => state.changesReviewId);
+  const review = useEntityStore((state) =>
+    reviewId ? (state.reviews[reviewId] as Review | undefined) : undefined,
+  );
+  const reviewSelection = useReviewUiStore((state) =>
+    reviewId ? state.byReviewId[reviewId] : undefined,
+  );
+  const reviewSnapshot = useMemo(
+    () =>
+      review?.snapshots.find(
+        (snapshot) => snapshot.id === (reviewSelection?.snapshotId ?? review.currentSnapshotId),
+      ) ?? review?.currentSnapshot,
+    [review, reviewSelection?.snapshotId],
+  );
+  const reviewFiles = useMemo(
+    () =>
+      reviewSnapshot?.files.map(({ path, status, additions, deletions }) => ({
+        path,
+        status,
+        additions,
+        deletions,
+      })),
+    [reviewSnapshot?.files],
+  );
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const { tree, loading, error, refreshTree, loadDirectory } =
     useSessionGroupDirectoryTree(sessionGroupId);
@@ -62,6 +89,8 @@ export function SidebarFilesPane({ sessionGroupId }: { sessionGroupId: string })
         ) : (
           <BranchChangesPanel
             sessionGroupId={sessionGroupId}
+            files={reviewId ? (reviewFiles ?? []) : undefined}
+            activeFilePath={reviewId ? reviewSelection?.activeFilePath : null}
             onFileClick={(filePath, status) => requestDiffOpen(sessionGroupId, filePath, status)}
           />
         )}

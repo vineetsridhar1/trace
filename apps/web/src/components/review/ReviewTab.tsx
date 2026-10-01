@@ -73,8 +73,8 @@ export function ReviewTab({
   const openFilesSidebar = useWorkspaceSidebarStore((state) => state.openFiles);
 
   useEffect(() => {
-    if (active) openFilesSidebar(sessionGroupId, "changes");
-  }, [active, openFilesSidebar, sessionGroupId]);
+    if (active) openFilesSidebar(sessionGroupId, "changes", reviewId);
+  }, [active, openFilesSidebar, reviewId, sessionGroupId]);
 
   useEffect(() => {
     void fetchReview(reviewId).catch((reason: unknown) =>

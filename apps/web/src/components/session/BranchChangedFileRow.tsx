@@ -9,6 +9,7 @@ interface BranchChangedFileRowProps {
   onFileClick: (filePath: string, status: string) => void;
   depth?: number;
   pathPosition?: "before" | "after" | "none";
+  active?: boolean;
 }
 
 export function BranchChangedFileRow({
@@ -16,6 +17,7 @@ export function BranchChangedFileRow({
   onFileClick,
   depth,
   pathPosition = "before",
+  active = false,
 }: BranchChangedFileRowProps) {
   const parts = file.path.split("/");
   const fileName = parts.pop() ?? file.path;
@@ -30,6 +32,7 @@ export function BranchChangedFileRow({
       className={cn(
         "flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-sm transition-colors hover:bg-white/10",
         depth === undefined && "px-2",
+        active && "bg-white/10",
       )}
       style={depth === undefined ? undefined : { paddingLeft: `${depth * 14 + 8}px` }}
     >
