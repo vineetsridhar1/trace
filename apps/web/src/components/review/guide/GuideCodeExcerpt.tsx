@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Button } from "../../ui/button";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../../ui/accordion";
 import { ExternalLink } from "lucide-react";
 import { DiffLineRow } from "../diff/DiffLineRow";
 import type { DiffLine } from "../diff-patch";
@@ -66,24 +67,38 @@ export function GuideCodeExcerpt({
           <span className="mr-2 text-muted-foreground">{step}.</span>
           {title}
         </h3>
-        {explanation.trim() ? (
-          <div className="space-y-1">
-            <span className="text-xs font-medium text-muted-foreground">Why this code is here</span>
-            <p className="whitespace-pre-line text-sm leading-6 text-[var(--th-review-text-mid)]">
-              {explanation}
-            </p>
-          </div>
-        ) : (
-          <div className="text-sm text-muted-foreground">
-            <p>
-              This saved snippet has no explanation. Regenerate the Guide to explain its role in the
-              chapter.
-            </p>
-            <Button variant="ghost" size="sm" onClick={onRegenerate}>
-              Regenerate Guide
-            </Button>
-          </div>
-        )}
+        <Accordion>
+          <AccordionItem value="info">
+            <AccordionTrigger
+              className="py-1 text-xs text-muted-foreground"
+              aria-label={`More info about ${title}`}
+            >
+              More info
+            </AccordionTrigger>
+            <AccordionContent className="pt-2 pb-0">
+              {explanation.trim() ? (
+                <div className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Why this code is here
+                  </span>
+                  <p className="whitespace-pre-line text-sm leading-6 text-[var(--th-review-text-mid)]">
+                    {explanation}
+                  </p>
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  <p>
+                    This saved snippet has no explanation. Regenerate the Guide to explain its role
+                    in the chapter.
+                  </p>
+                  <Button variant="ghost" size="sm" onClick={onRegenerate}>
+                    Regenerate Guide
+                  </Button>
+                </div>
+              )}
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
       <header className="sticky top-0 z-[1] flex min-h-10 flex-wrap items-center gap-2 border-b border-[var(--th-review-card-edge)] bg-[var(--th-surface)] px-3.5 py-2">
         <span

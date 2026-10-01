@@ -48,6 +48,8 @@ describe("Guide code excerpt", () => {
   let renderer: ReactTestRenderer;
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("requestAnimationFrame", vi.fn(() => 0));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
     query.mockReset();
   });
   afterEach(() => {
@@ -55,7 +57,22 @@ describe("Guide code excerpt", () => {
     vi.unstubAllGlobals();
   });
 
-  it("requests only the named range and displays its explanation and code", async () => {
+  function toggleInfo() {
+    const trigger = renderer.root
+      .findAllByType("button")
+      .find((node) => node.props["aria-label"] === "More info about Validate");
+    act(() =>
+      trigger!.props.onClick({
+        button: 0,
+        currentTarget: { tagName: "BUTTON" },
+        nativeEvent: new Event("click"),
+        preventDefault() {},
+        stopPropagation() {},
+      }),
+    );
+  }
+
+  it("requests only the named range and keeps its explanation collapsed until expanded", async () => {
     query.mockReturnValue({
       toPromise: () => Promise.resolve(result("s1", 10, 11, "validateInput\napplyChange")),
     });
@@ -69,7 +86,9 @@ describe("Guide code excerpt", () => {
       endLine: 11,
     });
     const rendered = JSON.stringify(renderer.toJSON());
-    expect(rendered).toContain("Validation precedes writes.");
+    expect(rendered).not.toContain("Validation precedes writes.");
+    toggleInfo();
+    expect(JSON.stringify(renderer.toJSON())).toContain("Validation precedes writes.");
     expect(rendered).toContain("validateInput");
     expect(rendered).toContain("applyChange");
   });
@@ -112,6 +131,7 @@ describe("Guide code excerpt", () => {
     await act(async () => {
       renderer = create(view("s1", 10, 11, ""));
     });
+    toggleInfo();
     expect(JSON.stringify(renderer.toJSON())).toContain("This saved snippet has no explanation");
     const button = renderer.root
       .findAllByType("button")
