@@ -51,9 +51,14 @@ export function GuideFileDiff({
     return () => observer.disconnect();
   }, [visible]);
 
+  // The patch belongs to one immutable snapshot, so a cached patch from an earlier one is never
+  // valid here. Callers remount on snapshot change; this comparison keeps the card correct either
+  // way rather than rendering the previous commit's code.
+  const current = diff?.snapshotId === snapshotId ? diff : null;
+
   // A Guide link can target a file far down the scroll, so load on demand rather than up front.
   useEffect(() => {
-    if ((!visible && !highlight) || diff || error) return;
+    if ((!visible && !highlight) || current || error) return;
     let cancelled = false;
     void client
       .query(DIFF_QUERY, { snapshotId, filePath })
@@ -66,9 +71,11 @@ export function GuideFileDiff({
     return () => {
       cancelled = true;
     };
-  }, [diff, error, filePath, highlight, snapshotId, visible]);
+  }, [current, error, filePath, highlight, snapshotId, visible]);
 
-  const lines = useMemo(() => parsePatch(diff?.patch ?? ""), [diff?.patch]);
+  useEffect(() => setError(null), [snapshotId]);
+
+  const lines = useMemo(() => parsePatch(current?.patch ?? ""), [current?.patch]);
   useEffect(() => {
     if (!highlight || lines.length === 0) return;
     highlightRowRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -88,10 +95,10 @@ export function GuideFileDiff({
             {filePath.slice(lastSlash + 1)}
           </span>
         </span>
-        {diff ? (
+        {current ? (
           <span className="ml-auto shrink-0 font-mono text-[11.5px] font-medium">
-            <span className="text-[var(--th-success)]">+{diff.additions}</span>{" "}
-            <span className="text-[var(--destructive)]">&minus;{diff.deletions}</span>
+            <span className="text-[var(--th-success)]">+{current.additions}</span>{" "}
+            <span className="text-[var(--destructive)]">&minus;{current.deletions}</span>
           </span>
         ) : null}
         <button
@@ -103,8 +110,8 @@ export function GuideFileDiff({
         </button>
       </header>
       {error ? <p className="p-4 text-xs text-destructive">{error}</p> : null}
-      {!error && !diff ? <div className="h-40 animate-pulse bg-muted/10" /> : null}
-      {diff ? (
+      {!error && !current ? <div className="h-40 animate-pulse bg-muted/10" /> : null}
+      {current ? (
         <div className="native-scrollbar min-w-0 overflow-x-auto py-1 font-mono text-xs leading-5">
           <div className="min-w-max">
             {lines.map((line, index) => {
@@ -132,7 +139,7 @@ export function GuideFileDiff({
           </div>
         </div>
       ) : null}
-      {diff?.truncated ? <DiffGapRow label="diff truncated" position="end" /> : null}
+      {current?.truncated ? <DiffGapRow label="diff truncated" position="end" /> : null}
     </div>
   );
 }

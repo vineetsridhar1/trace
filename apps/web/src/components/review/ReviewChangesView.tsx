@@ -172,7 +172,10 @@ export function ReviewChangesView({
         />
         {files.map((file) => (
           <ReviewFileDiff
-            key={file.path}
+            // Keyed by snapshot as well as path: a refresh must remount the card so it drops the
+            // previous commit's cached patch. Reusing it would render stale code under the new
+            // snapshot and anchor new comments to stale line numbers.
+            key={`${snapshotId}:${file.path}`}
             snapshotId={snapshotId}
             filePath={file.path}
             status={file.status}

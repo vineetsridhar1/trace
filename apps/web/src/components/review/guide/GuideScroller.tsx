@@ -110,7 +110,9 @@ export function GuideScroller({
             <div className="flex flex-col gap-[18px] bg-[var(--th-review-card-deep)] px-5 pb-7 pt-5">
               {chapter.files.map((filePath) => (
                 <GuideFileDiff
-                  key={filePath}
+                  // Same reason as the Changes cards: a new snapshot must remount so the card
+                  // cannot keep serving the previous commit's cached patch.
+                  key={`${snapshotId}:${filePath}`}
                   snapshotId={snapshotId}
                   filePath={filePath}
                   highlight={anchor?.filePath === filePath ? anchor : null}

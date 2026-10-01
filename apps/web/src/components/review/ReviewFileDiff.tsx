@@ -128,11 +128,15 @@ export function ReviewFileDiff({
     return () => observer.disconnect();
   }, [visible]);
 
+  // The patch belongs to one immutable snapshot. Callers remount this card when the review
+  // advances, but the comparison is kept here too: serving a cached patch under a newer snapshot
+  // would show the previous commit's code and anchor new comments to stale line numbers.
+  const current = diff?.snapshotId === snapshotId ? diff : null;
   useEffect(() => {
-    if (!visible || collapsed || diff || error) return;
+    if (!visible || collapsed || current || error) return;
     let cancelled = false;
     void client
-      .query(DIFF_QUERY, { snapshotId, filePath: filePath })
+      .query(DIFF_QUERY, { snapshotId, filePath })
       .toPromise()
       .then((result) => {
         if (cancelled) return;
@@ -142,9 +146,11 @@ export function ReviewFileDiff({
     return () => {
       cancelled = true;
     };
-  }, [collapsed, diff, error, filePath, snapshotId, visible]);
+  }, [collapsed, current, error, filePath, snapshotId, visible]);
 
-  const lines = useMemo(() => parsePatch(diff?.patch ?? ""), [diff?.patch]);
+  useEffect(() => setError(null), [snapshotId]);
+
+  const lines = useMemo(() => parsePatch(current?.patch ?? ""), [current?.patch]);
   const selection = range ? selectionFromLines(filePath, lines, range) : null;
   const highlighted = highlight?.filePath === filePath ? highlight : null;
 
@@ -269,7 +275,7 @@ export function ReviewFileDiff({
       />
       {collapsed ? null : error ? (
         <p className="p-4 text-xs text-destructive">{error}</p>
-      ) : !diff ? (
+      ) : !current ? (
         <div className="h-40 animate-pulse bg-muted/10" />
       ) : (
         <>
@@ -329,7 +335,7 @@ export function ReviewFileDiff({
               })}
             </div>
           </div>
-          {diff.truncated ? (
+          {current.truncated ? (
             <DiffGapRow label="diff truncated · open on GitHub" position="end" />
           ) : null}
           {selection && range ? (

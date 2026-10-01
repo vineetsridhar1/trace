@@ -642,15 +642,6 @@ export class ReviewService {
       if (existing.reviewId !== review.id || existing.actorId !== input.actorId)
         throw new AuthorizationError();
       if (existing.status === "succeeded") return existing;
-      // A delivery already in flight must not be re-sent. The provider's marker scan would usually
-      // catch the duplicate, but only after GitHub has already accepted the first review.
-      if (
-        existing.status === "submitting" &&
-        Date.now() - (existing.startedAt ?? existing.createdAt).getTime() <
-          DELIVERY_IN_FLIGHT_TIMEOUT_MS
-      ) {
-        throw new ValidationError("This review is already being sent to GitHub");
-      }
       const existingThreadIds = Array.isArray(existing.threadIds)
         ? existing.threadIds.filter((value): value is string => typeof value === "string")
         : [];
@@ -677,29 +668,15 @@ export class ReviewService {
       );
     }
     const delivery = existing
-      ? await prisma.reviewDelivery.update({
-          where: { id: existing.id },
-          data: {
-            status: "submitting",
-            error: null,
-            startedAt: new Date(),
-            completedAt: null,
-            attempts: { increment: 1 },
-          },
-        })
-      : await prisma.reviewDelivery.create({
-          data: {
-            reviewId: review.id,
-            snapshotId: input.snapshotId,
-            actorId: input.actorId,
-            idempotencyKey: input.idempotencyKey,
-            disposition: input.disposition,
-            threadIds: uniqueThreadIds,
-            body: input.body,
-            status: "submitting",
-            startedAt: new Date(),
-            attempts: 1,
-          },
+      ? await this.reclaimDelivery(existing.id)
+      : await this.claimNewDelivery({
+          reviewId: review.id,
+          snapshotId: input.snapshotId,
+          actorId: input.actorId,
+          idempotencyKey: input.idempotencyKey,
+          disposition: input.disposition,
+          threadIds: uniqueThreadIds,
+          body: input.body ?? null,
         });
     await this.emit(review.id, input, "review_delivery_started", { delivery });
     try {
@@ -806,6 +783,63 @@ export class ReviewService {
   }
 
   /**
+   * Takes ownership of a retry with a single conditional write. Validating the row and then
+   * updating it would let two concurrent retries both pass and both post to GitHub: the provider's
+   * marker scan is itself a read followed by a POST, so it cannot be the only guard.
+   */
+  private async reclaimDelivery(deliveryId: string) {
+    const claimed = await prisma.reviewDelivery.updateMany({
+      where: {
+        id: deliveryId,
+        OR: [
+          { status: { notIn: ["submitting", "succeeded"] } },
+          // A submission abandoned mid-flight (crashed replica) may be taken over once stale.
+          {
+            status: "submitting",
+            startedAt: { lt: new Date(Date.now() - DELIVERY_IN_FLIGHT_TIMEOUT_MS) },
+          },
+        ],
+      },
+      data: {
+        status: "submitting",
+        error: null,
+        startedAt: new Date(),
+        completedAt: null,
+        attempts: { increment: 1 },
+      },
+    });
+    if (claimed.count !== 1) {
+      throw new ValidationError("This review is already being sent to GitHub");
+    }
+    return prisma.reviewDelivery.findUniqueOrThrow({ where: { id: deliveryId } });
+  }
+
+  /**
+   * First attempt for a key. The unique constraint on `idempotencyKey` is the claim: if a racing
+   * request created the row first, this loses and reports the submission as already in flight.
+   */
+  private async claimNewDelivery(data: {
+    reviewId: string;
+    snapshotId: string;
+    actorId: string;
+    idempotencyKey: string;
+    disposition: "comment" | "approve" | "request_changes";
+    threadIds: string[];
+    body: string | null;
+  }) {
+    try {
+      return await prisma.reviewDelivery.create({
+        data: { ...data, status: "submitting", startedAt: new Date(), attempts: 1 },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new ValidationError("This review is already being sent to GitHub");
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Turn-terminal correlation. Coding tools emit one assistant output per message in a turn, so the
    * first of them is usually preamble before a tool call — never the answer. Every adapter emits a
    * single `result` output when the turn actually ends, so that is the only safe completion signal:
@@ -827,18 +861,28 @@ export class ReviewService {
       actorType: "agent" as const,
     };
 
-    // Only messages from this inquiry's own turn can be its answer. `startedAt` is stamped when the
-    // inquiry is claimed, before its prompt is sent, so it bounds the turn from below.
-    const turnMessages = inquiry.startedAt
-      ? await prisma.sessionMessage.findMany({
-          where: {
-            sessionId: event.scopeId,
-            role: "assistant",
-            createdAt: { gte: inquiry.startedAt },
-          },
-          orderBy: { createdAt: "asc" },
-        })
-      : [];
+    // Only messages from this inquiry's own turn can be its answer. The inquiry's outgoing prompt
+    // bounds the turn from below; `startedAt` is the fallback when that message was never
+    // materialized.
+    const prompt = inquiry.sessionMessageId
+      ? await prisma.sessionMessage.findUnique({ where: { id: inquiry.sessionMessageId } })
+      : null;
+    const turnStart = prompt?.createdAt ?? inquiry.startedAt;
+    if (!turnStart) return;
+
+    // The attached session is a normal coding session a human can also talk to. If someone sent it
+    // a message after this prompt, the turn that just ended answers *them*, and claiming it would
+    // attribute an unrelated answer to this inquiry. Leave the inquiry running for its own `result`
+    // rather than guessing; the recovery sweep releases it if that never arrives.
+    const interleaved = await prisma.sessionMessage.count({
+      where: { sessionId: event.scopeId, role: "user", createdAt: { gt: turnStart } },
+    });
+    if (interleaved > 0) return;
+
+    const turnMessages = await prisma.sessionMessage.findMany({
+      where: { sessionId: event.scopeId, role: "assistant", createdAt: { gte: turnStart } },
+      orderBy: { createdAt: "asc" },
+    });
 
     if (payload.subtype === "error") {
       await this.failInquiry(inquiry.id, "The coding session ended this turn with an error", actor);

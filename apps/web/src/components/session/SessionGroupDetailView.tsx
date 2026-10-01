@@ -450,9 +450,15 @@ export function SessionGroupDetailView({
 
   const navigateReview = useReviewUiStore((state) => state.navigate);
   const handleDiffFileClick = useCallback(
-    (filePath: string, _status: string) => {
+    (filePath: string, status: string) => {
+      // Review owns the diff, but a workspace without a PR still lists its branch changes. Opening
+      // the file keeps that navigation working instead of dead-ending on an error.
       if (!groupReviewId) {
-        toast.error("Open the PR Review before navigating to changed files");
+        if (status === "removed") {
+          toast.info(`${filePath.split("/").pop() ?? filePath} was deleted on this branch`);
+          return;
+        }
+        handleFileClick(filePath);
         return;
       }
       navigateReview(groupReviewId, { filePath, startLine: 1, endLine: 1 });
@@ -463,6 +469,7 @@ export function SessionGroupDetailView({
     },
     [
       groupReviewId,
+      handleFileClick,
       navigateReview,
       setActiveFilePath,
       setActiveTerminalId,

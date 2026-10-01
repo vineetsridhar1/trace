@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Event as PrismaEvent } from "@prisma/client";
+import { Prisma, type Event as PrismaEvent } from "@prisma/client";
 
 vi.mock("../lib/db.js", () => ({ prisma: createReviewPrismaMock() }));
 vi.mock("../lib/storage/index.js", () => ({ storage: { putObject: vi.fn(), getObject: vi.fn() } }));
@@ -29,15 +29,15 @@ function createReviewPrismaMock() {
       "groupBy",
     ),
     reviewGuide: table("findFirst", "create", "updateMany"),
-    reviewDelivery: table("findUnique", "create", "update"),
-    sessionMessage: table("findMany", "findUnique"),
+    reviewDelivery: table("findUnique", "findUniqueOrThrow", "create", "update", "updateMany"),
+    sessionMessage: table("findMany", "findUnique", "count"),
   };
 }
 
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionService } from "./session.js";
-import { reviewService } from "./review.js";
+import { ReviewService, reviewService } from "./review.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const db = prisma as any;
@@ -98,6 +98,8 @@ beforeEach(() => {
   db.reviewInquiry.groupBy.mockResolvedValue([]);
   db.review.findUnique.mockResolvedValue({ attachedSessionId: "session-1" });
   db.sessionMessage.findMany.mockResolvedValue([]);
+  db.sessionMessage.findUnique.mockResolvedValue(null);
+  db.sessionMessage.count.mockResolvedValue(0);
 });
 
 describe("turn correlation", () => {
@@ -162,6 +164,41 @@ describe("turn correlation", () => {
           role: "assistant",
           createdAt: { gte: STARTED_AT },
         }),
+      }),
+    );
+  });
+
+  it("leaves the inquiry running when a human interleaved a message", async () => {
+    db.reviewInquiry.findFirst.mockResolvedValueOnce(runningInquiry()).mockResolvedValue(null);
+    db.sessionMessage.count.mockResolvedValue(1);
+    db.sessionMessage.findMany.mockResolvedValue([
+      message("message-1", "Here is the thing you just asked about.", 1),
+    ]);
+
+    await reviewService.handleSessionOutputEvent(
+      outputEvent({ type: "result", subtype: "success" }),
+    );
+
+    // Claiming this turn would answer the review question with a reply meant for the human.
+    expect(db.reviewInquiry.updateMany).not.toHaveBeenCalled();
+    expect(events.create).not.toHaveBeenCalled();
+  });
+
+  it("bounds the turn by the inquiry's own outgoing prompt", async () => {
+    const promptAt = new Date(STARTED_AT.getTime() + 30_000);
+    db.reviewInquiry.findFirst
+      .mockResolvedValueOnce(runningInquiry({ sessionMessageId: "prompt-1" }))
+      .mockResolvedValue(null);
+    db.sessionMessage.findUnique.mockResolvedValue({ id: "prompt-1", createdAt: promptAt });
+    db.sessionMessage.findMany.mockResolvedValue([message("message-1", "Answer.", 1)]);
+
+    await reviewService.handleSessionOutputEvent(
+      outputEvent({ type: "result", subtype: "success" }),
+    );
+
+    expect(db.sessionMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ createdAt: { gte: promptAt } }),
       }),
     );
   });
@@ -289,6 +326,13 @@ describe("FIFO dispatch", () => {
 });
 
 describe("GitHub delivery", () => {
+  // A stub provider so a lost claim can be proven to never reach GitHub.
+  const provider = {
+    resolvePullRequest: vi.fn(),
+    submitReview: vi.fn(),
+  };
+  const service = new ReviewService(provider);
+
   const review = {
     id: "review-1",
     organizationId: "org-1",
@@ -320,7 +364,7 @@ describe("GitHub delivery", () => {
     idempotencyKey: "key-1",
   };
 
-  it("refuses to re-send a submission that is still in flight", async () => {
+  it("claims a retry with one conditional write, so a race cannot double-post", async () => {
     db.review.findFirst.mockResolvedValue(review);
     db.reviewDelivery.findUnique.mockResolvedValue({
       id: "delivery-1",
@@ -329,15 +373,44 @@ describe("GitHub delivery", () => {
       snapshotId: "snapshot-1",
       disposition: "comment",
       threadIds: ["thread-1"],
-      status: "submitting",
-      startedAt: new Date(),
-      createdAt: new Date(),
+      status: "failed",
+      startedAt: new Date(0),
+      createdAt: new Date(0),
     });
+    // The losing side of the race: another caller already flipped the row to submitting.
+    db.reviewDelivery.updateMany.mockResolvedValue({ count: 0 });
 
-    await expect(reviewService.submit(submission)).rejects.toThrow(
+    await expect(service.submit(submission)).rejects.toThrow(
       "This review is already being sent to GitHub",
     );
-    expect(db.reviewDelivery.update).not.toHaveBeenCalled();
+    expect(db.reviewDelivery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: "delivery-1",
+          OR: [
+            { status: { notIn: ["submitting", "succeeded"] } },
+            expect.objectContaining({ status: "submitting" }),
+          ],
+        }),
+      }),
+    );
+    expect(provider.submitReview).not.toHaveBeenCalled();
+  });
+
+  it("treats a lost create race on the same key as already in flight", async () => {
+    db.review.findFirst.mockResolvedValue(review);
+    db.reviewDelivery.findUnique.mockResolvedValue(null);
+    db.reviewDelivery.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("duplicate key", {
+        code: "P2002",
+        clientVersion: "test",
+      }),
+    );
+
+    await expect(service.submit(submission)).rejects.toThrow(
+      "This review is already being sent to GitHub",
+    );
+    expect(provider.submitReview).not.toHaveBeenCalled();
   });
 
   it("returns the original result for a key that already succeeded", async () => {
@@ -351,12 +424,13 @@ describe("GitHub delivery", () => {
     };
     db.reviewDelivery.findUnique.mockResolvedValue(succeeded);
 
-    await expect(reviewService.submit(submission)).resolves.toBe(succeeded);
+    await expect(service.submit(submission)).resolves.toBe(succeeded);
     expect(db.reviewDelivery.create).not.toHaveBeenCalled();
   });
 
   it("rejects reusing a key for a different set of threads", async () => {
     db.review.findFirst.mockResolvedValue(review);
+    db.reviewDelivery.updateMany.mockResolvedValue({ count: 1 });
     db.reviewDelivery.findUnique.mockResolvedValue({
       id: "delivery-1",
       reviewId: "review-1",
@@ -369,7 +443,7 @@ describe("GitHub delivery", () => {
       createdAt: new Date(0),
     });
 
-    await expect(reviewService.submit(submission)).rejects.toThrow(
+    await expect(service.submit(submission)).rejects.toThrow(
       "Idempotency key was already used for a different submission",
     );
   });
