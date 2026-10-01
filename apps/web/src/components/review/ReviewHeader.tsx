@@ -25,7 +25,7 @@ export function ReviewHeader({
   onSubmit,
 }: ReviewHeaderProps) {
   return (
-    <header className="flex h-[60px] shrink-0 items-center gap-5 border-b border-[#1f1f23] bg-[#141414] px-[18px]">
+    <header className="flex h-[52px] shrink-0 items-center gap-5 border-b border-[#1f1f23] bg-[#141414] px-4">
       <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
         <span className="shrink-0 font-semibold text-[#8b8b95]">#{review.pullRequestNumber}</span>
         <span className="truncate font-semibold text-[#ededef]">{review.title}</span>
@@ -67,7 +67,7 @@ export function ReviewHeader({
         <button
           type="button"
           onClick={onSubmit}
-          className="flex h-9 shrink-0 items-center gap-2 rounded-[8px] bg-gradient-to-b from-[#4d8ff8] to-[#2f6fd8] px-4 text-[13px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,.18),0_1px_3px_rgba(0,0,0,.4)]"
+          className="flex h-8 shrink-0 items-center gap-2 rounded-[8px] bg-gradient-to-b from-[#4d8ff8] to-[#2f6fd8] px-3.5 text-[13px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,.18),0_1px_3px_rgba(0,0,0,.4)]"
         >
           Send to GitHub
           <span className="rounded-[9px] bg-white/20 px-1.5 text-[10.5px]">
