@@ -191,7 +191,7 @@ export function ReviewFileDiff({
     <section
       ref={cardRef}
       data-review-file={file.path}
-      className="relative min-w-0 shrink-0 overflow-hidden rounded-[9px] border border-[#232326] bg-[#0f0f10]"
+      className="relative min-w-0 shrink-0 overflow-clip rounded-[9px] border border-[#232326] bg-[#0f0f10]"
     >
       <DiffFileHeader
         filePath={file.path}

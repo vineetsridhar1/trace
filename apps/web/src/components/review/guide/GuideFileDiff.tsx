@@ -79,7 +79,7 @@ export function GuideFileDiff({
     <div
       ref={cardRef}
       data-guide-file={filePath}
-      className="min-w-0 overflow-hidden rounded-[9px] border border-[#232326] bg-[#0f0f10]"
+      className="min-w-0 overflow-clip rounded-[9px] border border-[#232326] bg-[#0f0f10]"
     >
       <header className="sticky top-0 z-[1] flex h-10 items-center gap-2.5 border-b border-[#232326] bg-[#171717] px-3.5">
         <span className="min-w-0 truncate font-mono text-[12.5px] text-muted-foreground">
