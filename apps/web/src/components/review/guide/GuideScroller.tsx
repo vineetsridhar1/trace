@@ -2,7 +2,6 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { ReviewFile } from "@trace/gql";
 import { GuideChapterAside } from "./GuideChapterAside";
 import { GuideFileDiff } from "./GuideFileDiff";
-import { GuideToc } from "./GuideToc";
 import { anchorsEqual, type GuideAnchor, type GuideContent } from "./guide-content";
 
 interface GuideScrollerProps {
@@ -72,11 +71,6 @@ export function GuideScroller({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#141414]">
-      <GuideToc
-        titles={content.chapters.map((chapter) => chapter.title)}
-        activeIndex={activeChapter}
-        onSelect={(index) => scrollToSelector(`[data-guide-chapter="${index}"]`)}
-      />
       <div
         ref={scrollRef}
         onScroll={handleScroll}
