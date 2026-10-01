@@ -1,0 +1,1 @@
+export const LARGE_DIFF_LINE_THRESHOLD = 1_000;

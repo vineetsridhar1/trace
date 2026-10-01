@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "../../../lib/utils";
+import { LARGE_DIFF_LINE_THRESHOLD } from "../review-diff-policy";
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   added: { label: "NEW", className: "bg-[var(--th-success)]/12 text-[var(--th-success)]" },
@@ -59,6 +60,14 @@ export function DiffFileHeader({
           )}
         >
           {badge.label}
+        </span>
+      ) : null}
+      {collapsed && additions + deletions >= LARGE_DIFF_LINE_THRESHOLD ? (
+        <span
+          className="min-w-0 truncate text-xs text-muted-foreground"
+          title="Large diff · collapsed by default"
+        >
+          Large diff · collapsed by default
         </span>
       ) : null}
       <span className="ml-auto shrink-0 font-mono text-[11.5px] font-medium">

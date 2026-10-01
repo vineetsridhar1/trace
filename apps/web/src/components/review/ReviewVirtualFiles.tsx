@@ -5,9 +5,10 @@ import { useReviewUiStore } from "../../stores/review-ui";
 import type { ReviewLineSelection } from "./review-selection";
 import { ReviewFileDiff } from "./ReviewFileDiff";
 import { ReviewOverview } from "./ReviewOverview";
+import { LARGE_DIFF_LINE_THRESHOLD } from "./review-diff-policy";
 
 function defaultCollapsed(file: ReviewFile): boolean {
-  return file.status === "removed" || file.additions + file.deletions >= 1_000;
+  return file.status === "removed" || file.additions + file.deletions >= LARGE_DIFF_LINE_THRESHOLD;
 }
 
 /** Files and their rows share this one scroll element; neither level adds a vertical scroller. */
