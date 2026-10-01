@@ -109,18 +109,20 @@ export function GuideScroller({
             data-guide-chapter={index}
             className="grid border-b border-[var(--th-review-edge)] [grid-template-columns:minmax(0,560px)_minmax(0,1fr)]"
           >
-            <GuideChapterAside
-              chapter={chapter}
-              index={index}
-              total={content.chapters.length}
-              activeAnchor={anchor}
-              activeFilePath={activeChapter === index ? activeFilePath : null}
-              filesByPath={filesByPath}
-              onAnchor={jumpToAnchor}
-              onFile={(filePath) => jumpToAnchor({ filePath, startLine: 1, endLine: 1 })}
-              onAsk={() => onAskAboutChapter(chapter.id)}
-              onComment={() => onCommentOnChapter(chapter.id)}
-            />
+            <div className="min-w-0 border-r border-[var(--th-edge-faint)]">
+              <GuideChapterAside
+                chapter={chapter}
+                index={index}
+                total={content.chapters.length}
+                activeAnchor={anchor}
+                activeFilePath={activeChapter === index ? activeFilePath : null}
+                filesByPath={filesByPath}
+                onAnchor={jumpToAnchor}
+                onFile={(filePath) => jumpToAnchor({ filePath, startLine: 1, endLine: 1 })}
+                onAsk={() => onAskAboutChapter(chapter.id)}
+                onComment={() => onCommentOnChapter(chapter.id)}
+              />
+            </div>
             <div className="flex flex-col gap-[18px] bg-[var(--th-review-card-deep)] px-5 pb-7 pt-5">
               {chapter.files.map((filePath) =>
                 filesByPath.has(filePath) ? (

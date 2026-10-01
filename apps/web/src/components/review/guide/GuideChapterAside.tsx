@@ -28,7 +28,7 @@ export function GuideChapterAside({
   onComment(): void;
 }) {
   return (
-    <div className="flex flex-col gap-[18px] border-r border-[var(--th-edge-faint)] px-10 pb-7 pt-7">
+    <div className="sticky top-0 flex flex-col gap-[18px] px-10 pb-7 pt-7">
       <span className="font-mono text-[11px] font-medium text-muted-foreground">
         CHAPTER {index + 1} OF {total}
       </span>
