@@ -99,7 +99,7 @@ export function GuideGenerationDialog({
             value={instructions}
             onChange={(event) => patchUi(reviewId, { guideInstructions: event.target.value })}
             placeholder={
-              'For example: "Ignore frontend" or "Explain the syncing logic in depth only".'
+              "Examples:\nFocus on API and database changes; skip UI details.\nTrace a request from entry point to response, including error paths.\nExplain the change for someone new to this codebase."
             }
             className="min-h-28"
             maxLength={10000}
