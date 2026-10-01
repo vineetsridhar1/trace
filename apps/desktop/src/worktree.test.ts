@@ -523,7 +523,7 @@ describe("createWorktree", () => {
 
     expect(execFileMock).toHaveBeenCalledWith(
       "git",
-      ["fetch", "origin"],
+      ["fetch", "--prune", "origin"],
       expect.objectContaining({ cwd: "/tmp/repo", timeout: 10 * 60_000 }),
       expect.any(Function),
     );
@@ -919,7 +919,7 @@ describe("createWorktree", () => {
 
     expect(execFileMock).toHaveBeenCalledWith(
       "git",
-      ["fetch", "origin"],
+      ["fetch", "--prune", "origin"],
       expect.objectContaining({
         cwd: "/tmp/repo",
         env: expect.objectContaining({ GIT_TERMINAL_PROMPT: "0" }),
@@ -1370,7 +1370,7 @@ describe("createWorktree", () => {
     );
     expect(execFileMock).not.toHaveBeenCalledWith(
       "git",
-      ["fetch", "origin"],
+      ["fetch", "--prune", "origin"],
       expect.anything(),
       expect.any(Function),
     );

@@ -356,7 +356,7 @@ export async function createWorktree({
   // Fetch latest so origin refs are up to date when a remote exists.
   if (!baseCommitSha) {
     if (hasOrigin) {
-      await execFileAsync("git", ["fetch", "origin"], {
+      await execFileAsync("git", ["fetch", "--prune", "origin"], {
         cwd: repoPath,
         timeout: GIT_FETCH_TIMEOUT_MS,
       });
@@ -369,7 +369,7 @@ export async function createWorktree({
       .then(() => true)
       .catch(() => false);
     if (!reachable && hasOrigin) {
-      await execFileAsync("git", ["fetch", "origin"], {
+      await execFileAsync("git", ["fetch", "--prune", "origin"], {
         cwd: repoPath,
         timeout: GIT_FETCH_TIMEOUT_MS,
       });
