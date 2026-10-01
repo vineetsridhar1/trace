@@ -8,7 +8,6 @@ export function GuideChapterAside({
   chapter,
   index,
   total,
-  nextTitle,
   activeAnchor,
   activeFilePath,
   filesByPath,
@@ -20,7 +19,6 @@ export function GuideChapterAside({
   chapter: GuideChapterContent;
   index: number;
   total: number;
-  nextTitle: string | null;
   activeAnchor: GuideAnchor | null;
   activeFilePath: string | null;
   filesByPath: Map<string, ReviewFile>;
@@ -116,11 +114,6 @@ export function GuideChapterAside({
         >
           <MessageSquare size={11} /> Comment
         </button>
-        {nextTitle ? (
-          <span className="ml-auto text-[#71717a]">
-            Keep scrolling for {nextTitle.toLowerCase()} &darr;
-          </span>
-        ) : null}
       </div>
     </div>
   );

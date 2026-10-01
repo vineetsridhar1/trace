@@ -92,7 +92,6 @@ export function GuideScroller({
               chapter={chapter}
               index={index}
               total={content.chapters.length}
-              nextTitle={content.chapters[index + 1]?.title ?? null}
               activeAnchor={anchor}
               activeFilePath={activeChapter === index ? activeFilePath : null}
               filesByPath={filesByPath}
