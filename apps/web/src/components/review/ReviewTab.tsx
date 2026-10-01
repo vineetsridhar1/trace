@@ -8,6 +8,7 @@ import type {
   ReviewThread as ReviewThreadType,
 } from "@trace/gql";
 import { toast } from "sonner";
+import { useReviewEvents } from "../../hooks/useReviewEvents";
 import { useReviewUiStore } from "../../stores/review-ui";
 import { useWorkspaceSidebarStore } from "../../stores/workspace-sidebar";
 import { ReviewChangesView } from "./ReviewChangesView";
@@ -49,6 +50,7 @@ export function ReviewTab({
   sessionGroupId: string;
   active: boolean;
 }) {
+  useReviewEvents(reviewId, active);
   const review = useEntityStore((state) => state.reviews[reviewId]) as Review | undefined;
   const reviewThreads = useEntityStore((state) => state.reviewThreads);
   const reviewInquiries = useEntityStore((state) => state.reviewInquiries);

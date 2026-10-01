@@ -27,6 +27,13 @@ function resetStores() {
     designSystems: {},
     designSystemCommitArtifacts: {},
     designSystemVersions: {},
+    reviews: {},
+    reviewSnapshots: {},
+    reviewThreads: {},
+    reviewComments: {},
+    reviewInquiries: {},
+    reviewGuides: {},
+    reviewDeliveries: {},
     eventsByScope: {},
     _eventIdsByScope: {},
     _sessionIdsByGroup: {},
@@ -139,6 +146,39 @@ beforeEach(() => {
 });
 
 describe("handleOrgEvent", () => {
+  it("upserts a newly created review thread and its first comment", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "review_thread_created",
+        scopeType: "review",
+        scopeId: "review-1",
+        payload: {
+          thread: {
+            id: "thread-1",
+            reviewId: "review-1",
+            originSnapshotId: "snapshot-1",
+            comments: [
+              {
+                id: "comment-1",
+                threadId: "thread-1",
+                body: "This should update without a refresh.",
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().reviewThreads["thread-1"]).toMatchObject({
+      id: "thread-1",
+      reviewId: "review-1",
+    });
+    expect(useEntityStore.getState().reviewComments["comment-1"]).toMatchObject({
+      id: "comment-1",
+      threadId: "thread-1",
+    });
+  });
+
   it("hydrates a design system authoring group from its creation event", () => {
     handleOrgEvent(
       makeEvent({

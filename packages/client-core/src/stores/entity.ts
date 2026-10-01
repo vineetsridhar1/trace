@@ -770,6 +770,13 @@ const ENTITY_KEYS: EntityType[] = [
   "designSystemVersions",
   "artifacts",
   "appDeployments",
+  "reviews",
+  "reviewSnapshots",
+  "reviewThreads",
+  "reviewComments",
+  "reviewInquiries",
+  "reviewGuides",
+  "reviewDeliveries",
 ];
 
 function getMessageEntityScopeKey(
