@@ -124,7 +124,7 @@ describe("normalizeGuideContent", () => {
         startLine: 2,
         endLine: 8,
         title: "entry",
-        explanation: "See entry (L2–8).",
+        explanation: "See [[entry|src/a.ts|2-8]].",
       },
     ]);
     expect(
@@ -145,8 +145,8 @@ describe("normalizeGuideContent", () => {
       ],
     });
     expect(content.chapters[0]?.references.map((ref) => ref.explanation)).toEqual([
-      "validate (L2–8) rejects invalid moves.",
-      "publish (L40–44) notifies clients.",
+      "[[validate|src/a.ts|2-8]] rejects invalid moves.",
+      "[[publish|src/a.ts|40-44]] notifies clients.",
     ]);
   });
 

@@ -6,6 +6,7 @@ import { DiffLineRow } from "../diff/DiffLineRow";
 import type { DiffLine } from "../diff-patch";
 import { cn } from "../../../lib/utils";
 import { guideReferenceKey } from "./guide-content";
+import { GuideSnippetExplanation } from "./GuideSnippetExplanation";
 import { useGuideExcerpt } from "./useGuideExcerpt";
 
 export function GuideCodeExcerpt({
@@ -82,7 +83,11 @@ export function GuideCodeExcerpt({
                     Why this code is here
                   </span>
                   <p className="whitespace-pre-line text-sm leading-6 text-[var(--th-review-text-mid)]">
-                    {explanation}
+                    <GuideSnippetExplanation
+                      text={explanation}
+                      snapshotId={snapshotId}
+                      filePath={filePath}
+                    />
                   </p>
                 </div>
               ) : (

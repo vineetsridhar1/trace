@@ -26,6 +26,31 @@ const guide = (overrides: Record<string, unknown>) => ({
 });
 
 describe("review guide contract", () => {
+  it("normalizes bracketed cross-file links inside snippet explanations", () => {
+    const path = String.raw`app/\[id\]/route.ts`;
+    const result = validateReviewGuide(
+      guide({
+        chapters: [
+          chapter({
+            references: [
+              {
+                filePath: "src/a.ts",
+                startLine: 1,
+                endLine: 2,
+                title: "Entry",
+                explanation: "Calls [[GET /api/[id]|app/[id]/route.ts|4-8]].",
+              },
+            ],
+          }),
+        ],
+      }),
+      [...files, { path }],
+    );
+    expect(result.chapters[0]?.references[0]?.explanation).toBe(
+      `Calls [[GET /api/[id]|${path}|4-8]].`,
+    );
+  });
+
   it("normalizes list and legacy string implications", () => {
     const validated = validateReviewGuide(
       guide({

@@ -17,7 +17,9 @@ Guide's job is to provide a curated reading path through the important parts.
 - Each chapter introduces one behavior, contract, or architectural idea in the left column. Its
   explanation stays visible as the reader scrolls through the chapter's code steps.
 - The right column shows an **ordered sequence of bounded excerpts**. Every step has a title, a
-  short explanation, an exact file path, and a line range. Only that range renders.
+  short explanation under a collapsed **More info** accordion, an exact file path, and a line range.
+  Only that range renders. Code references in the explanation open a popup showing the exact
+  snapshot code, so the reader can inspect a claim without leaving the step.
 - The sequence should answer “where does this start, what happens next, and what is the result?”
 - The same file can appear several times in a chapter or across chapters, using the ranges relevant
   to each idea. Files have no exclusive chapter ownership.
@@ -95,6 +97,8 @@ Each reference needs:
 - `title`: the role of this step, e.g. “Reject a move from the wrong player.”
 - `explanation`: 2–4 concrete sentences explaining this snippet, not a copy of the chapter summary.
   First identify what its important lines do, citing exact line numbers such as `L42–45` and `L46`.
+  Bare `L` references always mean this step's own `filePath`. For any other file, use an explicit
+  `[[label|exact/path.ts|10-18]]` link; never leave the file identity implicit.
   Then explain why that behavior is needed for this chapter's outcome and what it receives from
   the previous step or passes to the next. Use a paragraph break when it helps distinguish behavior
   from its role in the flow. Group related lines; do not narrate punctuation or trivial boilerplate.
@@ -112,6 +116,10 @@ reason to add filler excerpts. Mentioning one range does not claim that every li
 been explained or reviewed.
 
 ### 5. Connect prose to excerpts
+
+Inside each step's explanation, both `L42–45` and explicit `[[label|path|42-45]]` references open
+a code preview popup. Use small, verified ranges (at most 80 lines) and explicit paths for cross-file
+connections. The popup reads the Guide snapshot, including unchanged files outside the PR diff.
 
 Optional inline links in chapter prose use `[[label|path|startLine-endLine]]`. Target the exact
 range of a reference in that chapter, so a click takes the reader to the step you mean. Use a short

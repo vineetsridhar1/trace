@@ -25,7 +25,7 @@ export interface GuideContent {
 }
 
 /** Matches the `[[label|path|startLine-endLine]]` anchors the Guide contract puts inside prose. */
-const ANCHOR_PATTERN = /\[\[([^[\]|]+)\|([^|\r\n]+)\|(\d+)-(\d+)\]\]/g;
+const ANCHOR_PATTERN = /\[\[([^|\r\n]+)\|([^|\r\n]+)\|(\d+)-(\d+)\]\]/g;
 
 export function parseGuideSegments(text: string): GuideSegment[] {
   const segments: GuideSegment[] = [];
@@ -131,7 +131,7 @@ function chapterReferences(
       .map((segment) =>
         segment.kind === "text"
           ? segment.text
-          : `${segment.label} (L${segment.anchor.startLine}–${segment.anchor.endLine})`,
+          : `[[${segment.label}|${segment.anchor.filePath}|${segment.anchor.startLine}-${segment.anchor.endLine}]]`,
       )
       .join("");
     for (const segment of paragraph) {

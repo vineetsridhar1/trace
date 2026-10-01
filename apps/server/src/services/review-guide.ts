@@ -10,7 +10,7 @@ export const REVIEW_GUIDE_SKILL_INSTRUCTION = [
 ].join("\n\n");
 
 /** Inline prose anchor: `[[label|path|startLine-endLine]]`. */
-const ANCHOR_PATTERN = /\[\[([^[\]|]+)\|([^|\r\n]+)\|(\d+)-(\d+)\]\]/g;
+const ANCHOR_PATTERN = /\[\[([^|\r\n]+)\|([^|\r\n]+)\|(\d+)-(\d+)\]\]/g;
 const MAX_PROMPT_PATHS = 500;
 
 interface GuideChapter {
@@ -91,7 +91,7 @@ export function guideGenerationInstruction(filesValue: Prisma.JsonValue): string
         ]
       : []),
     "Chapters explain behaviors, not files. Give each chapter ordered references tracing its code path, with a title and explanation for each step. The same file may appear in multiple chapters and steps. Include unchanged code when it helps explain the flow.",
-    "Every reference needs its own explanation: identify what the important lines do (using Lx or Lx-Ly), why that matters to this chapter, and how the result connects to the preceding or following step. A title or filename alone is not an explanation.",
+    "Every reference needs its own explanation: identify what the important lines do (using Lx or Lx-Ly), why that matters to this chapter, and how the result connects to the preceding or following step. Bare L-ranges refer only to that step's file. For other files use [[label|path|startLine-endLine]] so readers can open the exact code in a popup. A title or filename alone is not an explanation.",
     "Every reference must name an exact head-commit range, typically 5-25 lines and at most 80. Do not use whole files as filler. Do not invent code, paths, or line numbers.",
     "Anything you do not assign is filed under everythingElse automatically, so prefer omitting a path over guessing at it.",
     "Inside explanation and implications, link to specific code with [[label|path|startLine-endLine]]. Each link should match a reference's exact range in this chapter. References may target any repository file, including files outside the PR or used in another chapter. Use exact paths (preserving literal brackets and backslashes) and head-commit line numbers. startLine must be positive, and endLine must be at least startLine.",
@@ -197,7 +197,8 @@ export function validateReviewGuide(
         startLine: ref.startLine,
         endLine: ref.endLine,
         title: typeof ref.title === "string" ? ref.title : filePath,
-        explanation: typeof ref.explanation === "string" ? ref.explanation : "",
+        explanation:
+          typeof ref.explanation === "string" ? normalizeAnchors(ref.explanation, resolvePath) : "",
       });
     }
     // Older Guides expressed ranges only as prose links. Preserve these as focused excerpts,
