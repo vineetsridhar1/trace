@@ -197,25 +197,16 @@ export function ReviewInquiryCard({
                 value={followUp}
                 onChange={(event) => setFollowUp(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                  if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
                     void sendFollowUp();
                   }
                 }}
-                className="h-16 w-full resize-none rounded-md border border-[var(--th-review-ai)]/20 bg-black/15 p-2 text-xs outline-none focus:border-[var(--th-review-ai)]"
+                disabled={sendingFollowUp}
+                className="h-12 w-full resize-none rounded-md border border-[var(--th-review-ai)]/20 bg-black/15 p-2 text-xs outline-none placeholder:text-muted-foreground focus:border-[var(--th-review-ai)] disabled:cursor-wait disabled:opacity-50"
                 placeholder="Ask a follow-up…"
+                aria-label="Ask a follow-up"
               />
-              <div className="mt-1.5 flex items-center justify-end gap-2">
-                <span className="mr-auto text-[10.5px] text-muted-foreground">⌘/Ctrl + Enter to send</span>
-                <button
-                  type="button"
-                  disabled={!followUp.trim() || sendingFollowUp}
-                  onClick={() => void sendFollowUp()}
-                  className="rounded-md bg-[var(--th-review-ai)]/20 px-2 py-1 text-[11px] font-medium text-[var(--th-review-ai-light)] hover:bg-[var(--th-review-ai)]/30 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {sendingFollowUp ? "Sending…" : "Send follow-up"}
-                </button>
-              </div>
             </div>
           ) : null}
 
