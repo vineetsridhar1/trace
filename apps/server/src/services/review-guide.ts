@@ -1,6 +1,9 @@
 import { type Prisma } from "@prisma/client";
 import { ValidationError } from "../lib/errors.js";
 
+export const REVIEW_GUIDE_SKILL_INSTRUCTION =
+  "Before generating the Guide, read $TRACE_SKILLS_DIR/review-guide/SKILL.md completely and follow it.";
+
 interface GuideReference {
   filePath: string;
   startLine: number;

@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "version": 29,
+  "version": 30,
   "protocolVersion": 1,
-  "contentHash": "314d96494ffbcea971362eb4040964a2b4e7c68b9ad9363e64b866975cc2e9f1",
+  "contentHash": "c81b89c08afc3a04865ab05665698f8e30e5aa3e4ffe5fccbe5bb7dae61ed7f4",
   "files": [
     "bin/trace",
     "bin/trace.mjs",
@@ -31,6 +31,8 @@
     "skills/design-craft/LICENSE.txt",
     "skills/design-craft/UPSTREAM.md",
     "skills/request-user-input/SKILL.md",
+    "skills/review-guide/SKILL.md",
+    "skills/review-guide/agents/openai.yaml",
     "skills/trace-session/SKILL.md",
     "skills/trace-session/agents/openai.yaml",
     "skills/trace-artifacts/SKILL.md",

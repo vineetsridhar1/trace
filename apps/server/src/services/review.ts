@@ -17,6 +17,7 @@ import { sessionService } from "./session.js";
 import {
   guideGenerationInstruction,
   parseGuideResponse,
+  REVIEW_GUIDE_SKILL_INSTRUCTION,
   validateReviewGuide,
 } from "./review-guide.js";
 
@@ -883,6 +884,7 @@ export class ReviewService {
       `Context: ${JSON.stringify(inquiry.context)}`,
       `Request: ${inquiry.question}`,
       "Read-only: do not edit source, commit, push, or post to GitHub.",
+      ...(inquiry.sourceKind === "guide_generation" ? [REVIEW_GUIDE_SKILL_INSTRUCTION] : []),
       format,
     ].join("\n\n");
   }

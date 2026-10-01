@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   guideGenerationInstruction,
   parseGuideResponse,
+  REVIEW_GUIDE_SKILL_INSTRUCTION,
   validateReviewGuide,
 } from "./review-guide.js";
 
@@ -65,6 +66,12 @@ describe("review guide contract", () => {
     expect(instruction).toContain('["src/a.ts","src/b.ts"]');
     expect(instruction).toContain("exactly once");
     expect(instruction).toContain('"implications":["..."]');
+  });
+
+  it("requires the attached session to load the Guide methodology", () => {
+    expect(REVIEW_GUIDE_SKILL_INSTRUCTION).toContain(
+      "$TRACE_SKILLS_DIR/review-guide/SKILL.md completely",
+    );
   });
 
   it("accepts JSON wrapped in a Markdown fence", () => {
