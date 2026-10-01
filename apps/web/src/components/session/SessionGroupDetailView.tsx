@@ -329,7 +329,6 @@ export function SessionGroupDetailView({
     (state) => state.filesSessionGroupId === sessionGroupId,
   );
   const openFilesSidebar = useWorkspaceSidebarStore((state) => state.openFiles);
-  const clearChangesReview = useWorkspaceSidebarStore((state) => state.clearChangesReview);
   const toggleFilesSidebar = useWorkspaceSidebarStore((state) => state.toggleFiles);
   const sidebarFileOpenRequest = useWorkspaceSidebarStore((state) => state.fileOpenRequest);
   const consumeSidebarFileOpenRequest = useWorkspaceSidebarStore(
@@ -1033,7 +1032,6 @@ export function SessionGroupDetailView({
 
   const handleActivateWorkspaceTab = useCallback(
     (tabId: string) => {
-      if (!tabId.startsWith("review:")) clearChangesReview();
       if (tabId.startsWith("session:")) {
         handleSelectSession(tabId.slice("session:".length));
       } else if (tabId.startsWith("artifact:")) {
@@ -1055,7 +1053,6 @@ export function SessionGroupDetailView({
     },
     [
       handleSelectArtifact,
-      clearChangesReview,
       handleSelectFileTab,
       handleSelectSession,
       handleSelectTerminalTab,
