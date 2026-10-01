@@ -32,7 +32,7 @@ export function DiffFileHeader({
     <header
       className={cn(
         "sticky top-[-16px] z-[2] flex h-10 items-center gap-2.5 border-b border-[#232326] bg-[#171717] px-3.5",
-        collapsed ? "rounded-[9px] border-b-transparent" : "rounded-t-[9px]",
+        collapsed && "border-b-transparent",
       )}
     >
       <button
