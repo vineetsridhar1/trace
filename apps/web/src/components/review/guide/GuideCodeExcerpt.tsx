@@ -70,18 +70,17 @@ export function GuideCodeExcerpt({
         active && "ring-1 ring-[var(--th-accent)]",
       )}
     >
-      <div className="space-y-2 border-b border-[var(--th-review-card-edge)] px-4 py-3">
-        <h3 className="text-sm font-medium text-foreground">
-          <span className="mr-2 text-muted-foreground">{step}.</span>
-          {title}
-        </h3>
+      <div className="border-b border-[var(--th-review-card-edge)] px-4 py-3">
         <Accordion>
           <AccordionItem value="info">
             <AccordionTrigger
-              className="py-1 text-xs text-muted-foreground"
-              aria-label={`More info about ${title}`}
+              className="min-w-0 items-center gap-2 py-0 text-sm font-medium text-foreground"
+              aria-label={title}
             >
-              More info
+              <span className="min-w-0 truncate" title={title}>
+                <span className="mr-2 text-muted-foreground">{step}.</span>
+                {title}
+              </span>
             </AccordionTrigger>
             <AccordionContent className="pt-2 pb-0">
               {explanation.trim() ? (

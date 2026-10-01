@@ -66,7 +66,7 @@ describe("Guide code excerpt", () => {
   function toggleInfo() {
     const trigger = renderer.root
       .findAllByType("button")
-      .find((node) => node.props["aria-label"] === "More info about Validate");
+      .find((node) => node.props["aria-label"] === "Validate");
     act(() =>
       trigger!.props.onClick({
         button: 0,
