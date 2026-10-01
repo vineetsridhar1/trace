@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reviewJson } from "./review.js";
+import { hasProviderDelivery, reviewJson } from "./review.js";
 
 describe("reviewJson", () => {
   it("serializes Prisma bigint fields for review event payloads", () => {
@@ -20,5 +20,40 @@ describe("reviewJson", () => {
         },
       },
     });
+  });
+});
+
+describe("hasProviderDelivery", () => {
+  it("recognizes every persisted GitHub delivery marker", () => {
+    expect(
+      hasProviderDelivery({
+        deliveryStatus: "delivered",
+        comments: [],
+      }),
+    ).toBe(true);
+    expect(
+      hasProviderDelivery({
+        deliveryStatus: "trace_only",
+        providerReviewId: "review-1",
+        comments: [],
+      }),
+    ).toBe(true);
+    expect(
+      hasProviderDelivery({
+        deliveryStatus: "trace_only",
+        comments: [{ providerCommentId: "comment-1" }],
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps an undelivered Trace thread eligible", () => {
+    expect(
+      hasProviderDelivery({
+        deliveryStatus: "trace_only",
+        providerReviewId: null,
+        providerCommentId: null,
+        comments: [{ providerCommentId: null }],
+      }),
+    ).toBe(false);
   });
 });

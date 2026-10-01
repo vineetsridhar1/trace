@@ -19,6 +19,7 @@ import { ReviewLoadingState } from "./ReviewLoadingState";
 import { ReviewSubmissionSheet } from "./ReviewSubmissionSheet";
 import { fetchReview, mutateReview } from "./review-operations";
 import { useSidebar } from "../ui/sidebar";
+import { isPendingGitHubThread } from "./review-delivery";
 
 const REFRESH = gql`
   mutation RefreshReviewSnapshot($reviewId: ID!) {
@@ -185,9 +186,9 @@ export function ReviewTab({
   const snapshotThreads = threads.filter(
     (thread) => thread.originSnapshotId === snapshot.id && thread.scope !== "guide_explanation",
   );
-  const selectedCount = snapshotThreads.filter(
-    (thread) => thread.deliveryStatus === "selected",
-  ).length;
+  const pendingThreads = snapshotThreads.filter((thread) =>
+    isPendingGitHubThread(thread, snapshot.id),
+  );
   const guideGenerating = guideInquiries.some(
     (inquiry) =>
       inquiry.snapshotId === snapshot.id &&
@@ -205,7 +206,7 @@ export function ReviewTab({
         snapshot={snapshot}
         view={view}
         refreshing={refreshing}
-        selectedThreadCount={selectedCount}
+        pendingThreadCount={pendingThreads.length}
         onView={(next) => patchUi(reviewId, { view: next })}
         onRefresh={() => void refresh()}
         onSubmit={() => setSubmissionOpen(true)}
@@ -262,7 +263,7 @@ export function ReviewTab({
         headSha={snapshot.headSha}
         pullRequestNumber={review.pullRequestNumber}
         pullRequestUrl={review.pullRequestUrl}
-        threads={threads}
+        threads={pendingThreads}
       />
     </div>
   );

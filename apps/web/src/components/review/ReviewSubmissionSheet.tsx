@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { cn } from "../../lib/utils";
 import { mutateReview } from "./review-operations";
 import { anchorRangeLabel } from "./review-states";
+import { isPendingGitHubThread } from "./review-delivery";
 
 const SUBMIT = gql`
   mutation SubmitReview($input: SubmitReviewInput!) {
@@ -53,13 +54,7 @@ export function ReviewSubmissionSheet({
   threads,
 }: Props) {
   const eligible = useMemo(
-    () =>
-      threads.filter(
-        (thread) =>
-          thread.originSnapshotId === snapshotId &&
-          thread.deliveryStatus !== "delivered" &&
-          thread.scope !== "guide_explanation",
-      ),
+    () => threads.filter((thread) => isPendingGitHubThread(thread, snapshotId)),
     [snapshotId, threads],
   );
   const [selected, setSelected] = useState<string[]>([]);

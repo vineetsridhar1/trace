@@ -67,6 +67,20 @@ function cleanBody(value: string, label = "Comment"): string {
   return body;
 }
 
+export function hasProviderDelivery(thread: {
+  deliveryStatus: string;
+  providerReviewId?: string | null;
+  providerCommentId?: string | null;
+  comments: Array<{ providerCommentId?: string | null }>;
+}): boolean {
+  return (
+    thread.deliveryStatus === "delivered" ||
+    !!thread.providerReviewId ||
+    !!thread.providerCommentId ||
+    thread.comments.some((comment) => !!comment.providerCommentId)
+  );
+}
+
 function patchKey(reviewId: string, snapshotId: string): string {
   return `reviews/${reviewId}/snapshots/${snapshotId}/diff-v1.json`;
 }
@@ -515,8 +529,7 @@ export class ReviewService {
       throw new ValidationError("One or more selected threads are invalid");
     if (
       threads.some(
-        (thread) =>
-          thread.deliveryStatus === "delivered" || thread.originSnapshotId !== input.snapshotId,
+        (thread) => hasProviderDelivery(thread) || thread.originSnapshotId !== input.snapshotId,
       )
     ) {
       throw new ValidationError(
