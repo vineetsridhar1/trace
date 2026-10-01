@@ -5,6 +5,7 @@ import {
   FileCode,
   Files,
   GitCompareArrows,
+  MessageSquareCode,
   Globe,
   TerminalSquare,
 } from "lucide-react";
@@ -28,6 +29,7 @@ interface SessionWorkspaceTabsOptions {
   browserTitles: Record<string, string>;
   trafficEndpointId: string | null;
   canvas: boolean;
+  reviewId?: string | null;
 }
 
 export function useSessionWorkspaceTabs({
@@ -39,6 +41,7 @@ export function useSessionWorkspaceTabs({
   browserTitles,
   trafficEndpointId,
   canvas,
+  reviewId,
 }: SessionWorkspaceTabsOptions) {
   return useMemo<SpatialWorkspaceTab[]>(() => {
     const tabs: SpatialWorkspaceTab[] = canvas
@@ -54,6 +57,15 @@ export function useSessionWorkspaceTabs({
       })),
     );
 
+    if (reviewId) {
+      tabs.push({
+        id: `review:${reviewId}`,
+        label: "Review",
+        icon: <MessageSquareCode size={12} />,
+        status: "changed",
+      });
+    }
+
     tabs.push(
       ...artifactIds.map((artifactId) => ({
         id: `artifact:${artifactId}`,
@@ -66,12 +78,14 @@ export function useSessionWorkspaceTabs({
         icon: <TerminalSquare size={12} />,
         status: terminal.status === "active" ? ("live" as const) : undefined,
       })),
-      ...files.map((file) => ({
-        id: `file:${file.filePath}`,
-        label: file.fileName,
-        icon: file.isDiff ? <GitCompareArrows size={12} /> : <FileCode size={12} />,
-        status: file.isDiff ? ("changed" as const) : undefined,
-      })),
+      ...files
+        .filter((file) => !file.isDiff)
+        .map((file) => ({
+          id: `file:${file.filePath}`,
+          label: file.fileName,
+          icon: file.isDiff ? <GitCompareArrows size={12} /> : <FileCode size={12} />,
+          status: file.isDiff ? ("changed" as const) : undefined,
+        })),
       ...drafts.map((draft) => ({
         id: draft.id,
         label: workspaceSurfaceLabel(draft.surface, browserTitles[draft.id]),
@@ -84,7 +98,17 @@ export function useSessionWorkspaceTabs({
       tabs.push({ id: "traffic", label: "Traffic", icon: <Activity size={12} /> });
     }
     return tabs;
-  }, [artifactIds, browserTitles, canvas, drafts, files, sessions, terminals, trafficEndpointId]);
+  }, [
+    artifactIds,
+    browserTitles,
+    canvas,
+    drafts,
+    files,
+    reviewId,
+    sessions,
+    terminals,
+    trafficEndpointId,
+  ]);
 }
 
 function workspaceSurfaceLabel(surface: WorkspaceSurface | null, browserTitle?: string) {

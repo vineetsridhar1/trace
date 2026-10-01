@@ -12,6 +12,7 @@ import { repoAttachRemoteCommand } from "./repo/attach-remote.js";
 import { repoCreateCommand } from "./repo/create.js";
 import { sessionCommands } from "./session/index.js";
 import { terminalCommands } from "./terminal/index.js";
+import { reviewCommands } from "./review/index.js";
 
 export const commands: readonly CommandDefinition[] = [
   contextCommand,
@@ -25,6 +26,7 @@ export const commands: readonly CommandDefinition[] = [
   repoCreateCommand,
   repoAttachRemoteCommand,
   ...sessionCommands,
+  ...reviewCommands,
   ...terminalCommands,
   artifactCommand,
 ];
@@ -115,6 +117,16 @@ export const commandGroups: readonly CommandGroupDefinition[] = [
     notes: [
       "Read command help before lifecycle mutations; session operations change shared Trace state.",
     ],
+  },
+  {
+    name: "review",
+    description: "Open pull requests in Trace's reusable Review workspace",
+    workflow: [
+      'Run "$TRACE_CLI" review open <pull-request-url> --self --json only after the user asks to review that PR.',
+      "Use the returned review and snapshot IDs to report the pinned review target.",
+    ],
+    examples: ['"$TRACE_CLI" review open https://github.com/acme/app/pull/42 --self --json'],
+    notes: ["Opening a review has no AI, source-code, or GitHub-posting side effects."],
   },
   {
     name: "terminal",

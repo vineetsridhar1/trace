@@ -132,6 +132,7 @@ enum ChatType {
 enum ScopeType {
   channel
   chat
+  review
   session
   ticket
   system
@@ -186,6 +187,57 @@ enum SessionMessageRole {
   user
   assistant
   system
+}
+
+enum ReviewStatus {
+  open
+  archived
+}
+
+enum ReviewSnapshotStatus {
+  current
+  archived
+}
+
+enum ReviewThreadScope {
+  line
+  file
+  general
+  guide_explanation
+}
+
+enum ReviewDeliveryStatus {
+  trace_only
+  selected
+  delivered
+  delivery_failed
+  outdated
+}
+
+enum ReviewInquirySourceKind {
+  guide_generation
+  diff_anchor
+  guide_anchor
+  thread
+}
+
+enum ReviewInquiryState {
+  queued
+  running
+  completed
+  failed
+  cancelled
+}
+
+enum ReviewGuideStatus {
+  ready
+  earlier
+}
+
+enum ReviewDisposition {
+  comment
+  approve
+  request_changes
 }
 
 enum EventType {
@@ -300,6 +352,24 @@ enum EventType {
   app_integration_request_executed
   app_deployment_queued
   app_deployment_updated
+  review_opened
+  review_snapshot_created
+  review_snapshot_marked_current
+  review_thread_created
+  review_thread_updated
+  review_comment_created
+  review_thread_resolved
+  review_thread_reanchored
+  review_inquiry_enqueued
+  review_inquiry_started
+  review_inquiry_completed
+  review_inquiry_failed
+  review_inquiry_cancelled
+  review_guide_saved
+  review_guide_failed
+  review_delivery_started
+  review_delivery_succeeded
+  review_delivery_failed
 }
 
 enum AppDeploymentStatus {
@@ -405,6 +475,7 @@ model Organization {
   integrationConnections         IntegrationConnection[]
   appIntegrationBindings         AppIntegrationBinding[]
   integrationRequestAuditEntries IntegrationRequestAuditEntry[]
+  reviews                        Review[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -498,7 +569,12 @@ model User {
   integrationConnections        IntegrationConnection[]      @relation("IntegrationConnectionOwner")
   createdIntegrationConnections IntegrationConnection[]      @relation("IntegrationConnectionCreator")
   createdAppIntegrationBindings AppIntegrationBinding[]      @relation("AppIntegrationBindingCreator")
-  hiddenSessionTabs            HiddenSessionTab[]
+  hiddenSessionTabs             HiddenSessionTab[]
+  authoredReviews               Review[]                     @relation("ReviewCreator")
+  authoredReviewSnapshots       ReviewSnapshot[]             @relation("ReviewSnapshotCreator")
+  authoredReviewThreads         ReviewThread[]               @relation("ReviewThreadAuthor")
+  resolvedReviewThreads         ReviewThread[]               @relation("ReviewThreadResolver")
+  authoredReviewComments        ReviewComment[]              @relation("ReviewCommentAuthor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -523,6 +599,7 @@ model Repo {
   sessionEndpoints            SessionEndpoint[]
   sourcedDesignSystems        DesignSystem[]              @relation("DesignSystemSourceRepo")
   appDeployments              AppDeployment[]
+  reviews                     Review[]
 
   webhookId     String?
   webhookSecret String?
@@ -591,6 +668,7 @@ model Channel {
   members       ChannelMember[]
   messages      Message[]
   slackBindings SlackChannelBinding[]
+  reviews       Review[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -693,6 +771,7 @@ model SessionGroup {
   animationPreviewAttemptedAt DateTime?
   animationPreviewError       String?
   appDeployments              AppDeployment[]
+  reviews                     Review[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -805,37 +884,37 @@ model DesignSystemVersion {
 }
 
 model Session {
-  id                                      String        @id @default(uuid())
-  name                                    String
-  agentStatus                             AgentStatus   @default(not_started)
-  sessionStatus                           SessionStatus @default(in_progress)
-  tool                                    CodingTool
-  model                                   String?
-  reasoningEffort                         String?
-  toolChangedAt                           DateTime?
-  lastUserMessageAt                       DateTime?
-  lastMessageAt                           DateTime?
-  hosting                                 HostingMode
-  organizationId                          String
-  organization                            Organization  @relation(fields: [organizationId], references: [id])
-  createdById                             String
-  createdBy                               User          @relation("SessionCreator", fields: [createdById], references: [id])
-  repoId                                  String?
-  repo                                    Repo?         @relation(fields: [repoId], references: [id])
-  branch                                  String?
-  channelId                               String?
-  channel                                 Channel?      @relation(fields: [channelId], references: [id])
-  sessionGroupId                          String?
-  sessionGroup                            SessionGroup? @relation(fields: [sessionGroupId], references: [id])
-  workdir                                 String?
-  toolSessionId                           String?
-  pendingRun                              Json?
-  endpoints                               Json?
-  connection                              Json?
-  prUrl                                   String?
-  worktreeDeleted                         Boolean       @default(false)
-  readOnlyWorkspace                       Boolean       @default(false)
-  activeInvocationId                      String?
+  id                 String        @id @default(uuid())
+  name               String
+  agentStatus        AgentStatus   @default(not_started)
+  sessionStatus      SessionStatus @default(in_progress)
+  tool               CodingTool
+  model              String?
+  reasoningEffort    String?
+  toolChangedAt      DateTime?
+  lastUserMessageAt  DateTime?
+  lastMessageAt      DateTime?
+  hosting            HostingMode
+  organizationId     String
+  organization       Organization  @relation(fields: [organizationId], references: [id])
+  createdById        String
+  createdBy          User          @relation("SessionCreator", fields: [createdById], references: [id])
+  repoId             String?
+  repo               Repo?         @relation(fields: [repoId], references: [id])
+  branch             String?
+  channelId          String?
+  channel            Channel?      @relation(fields: [channelId], references: [id])
+  sessionGroupId     String?
+  sessionGroup       SessionGroup? @relation(fields: [sessionGroupId], references: [id])
+  workdir            String?
+  toolSessionId      String?
+  pendingRun         Json?
+  endpoints          Json?
+  connection         Json?
+  prUrl              String?
+  worktreeDeleted    Boolean       @default(false)
+  readOnlyWorkspace  Boolean       @default(false)
+  activeInvocationId String?
 
   inputTokens         BigInt @default(0)
   outputTokens        BigInt @default(0)
@@ -843,12 +922,14 @@ model Session {
   cacheCreationTokens BigInt @default(0)
   costUsd             Float  @default(0)
 
-  projects       SessionProject[]
-  queuedMessages QueuedMessage[]
-  messages       SessionMessage[]
-  slackThread    SlackThreadSession?
-  artifacts      Artifact[]
-  hiddenByUsers  HiddenSessionTab[]
+  projects        SessionProject[]
+  queuedMessages  QueuedMessage[]
+  messages        SessionMessage[]
+  slackThread     SlackThreadSession?
+  artifacts       Artifact[]
+  hiddenByUsers   HiddenSessionTab[]
+  attachedReviews Review[]
+  reviewInquiries ReviewInquiry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -859,21 +940,199 @@ model Session {
 }
 
 model SessionMessage {
-  id            String             @id @default(uuid())
-  sessionId     String
-  session       Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  organizationId String
-  role          SessionMessageRole
-  actorType     ActorType
-  actorId       String
-  text          String
-  content       Json
-  attachments   Json?
-  sourceEventId String             @unique
-  createdAt     DateTime           @default(now())
+  id                      String             @id @default(uuid())
+  sessionId               String
+  session                 Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  organizationId          String
+  role                    SessionMessageRole
+  actorType               ActorType
+  actorId                 String
+  text                    String
+  content                 Json
+  attachments             Json?
+  sourceEventId           String             @unique
+  createdAt               DateTime           @default(now())
+  outgoingReviewInquiries ReviewInquiry[]    @relation("ReviewInquiryOutgoingMessage")
+  responseReviewInquiries ReviewInquiry[]    @relation("ReviewInquiryResponseMessage")
 
   @@index([sessionId, createdAt, id])
   @@index([organizationId, createdAt, id])
+}
+
+model Review {
+  id                   String           @id @default(uuid())
+  organizationId       String
+  organization         Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  repositoryId         String
+  repository           Repo             @relation(fields: [repositoryId], references: [id], onDelete: Restrict)
+  channelId            String?
+  channel              Channel?         @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  sourceSessionGroupId String?
+  sourceSessionGroup   SessionGroup?    @relation(fields: [sourceSessionGroupId], references: [id], onDelete: SetNull)
+  attachedSessionId    String
+  attachedSession      Session          @relation(fields: [attachedSessionId], references: [id], onDelete: Restrict)
+  provider             RepoProvider
+  remotePullRequestId  String
+  pullRequestNumber    Int
+  pullRequestUrl       String
+  title                String
+  status               ReviewStatus     @default(open)
+  currentSnapshotId    String?          @unique
+  currentSnapshot      ReviewSnapshot?  @relation("CurrentReviewSnapshot", fields: [currentSnapshotId], references: [id], onDelete: Restrict)
+  createdById          String
+  createdBy            User             @relation("ReviewCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  snapshots            ReviewSnapshot[] @relation("ReviewSnapshots")
+  threads              ReviewThread[]
+  inquiries            ReviewInquiry[]
+  guides               ReviewGuide[]
+  deliveries           ReviewDelivery[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@unique([organizationId, provider, remotePullRequestId, sourceSessionGroupId])
+  @@index([organizationId, updatedAt])
+  @@index([sourceSessionGroupId])
+  @@index([attachedSessionId])
+}
+
+model ReviewSnapshot {
+  id                String               @id @default(uuid())
+  reviewId          String
+  review            Review               @relation("ReviewSnapshots", fields: [reviewId], references: [id], onDelete: Cascade)
+  currentForReview  Review?              @relation("CurrentReviewSnapshot")
+  baseSha           String
+  headSha           String
+  status            ReviewSnapshotStatus @default(current)
+  files             Json
+  patchStorageKey   String
+  patchChecksum     String
+  patchByteLength   Int
+  diffFormatVersion Int                  @default(1)
+  providerMetadata  Json                 @default("{}")
+  createdById       String
+  createdBy         User                 @relation("ReviewSnapshotCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  threads           ReviewThread[]
+  inquiries         ReviewInquiry[]
+  guides            ReviewGuide[]
+  deliveries        ReviewDelivery[]
+  createdAt         DateTime             @default(now())
+
+  @@unique([reviewId, baseSha, headSha])
+  @@index([reviewId, createdAt])
+}
+
+model ReviewThread {
+  id                String               @id @default(uuid())
+  reviewId          String
+  review            Review               @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  originSnapshotId  String
+  originSnapshot    ReviewSnapshot       @relation(fields: [originSnapshotId], references: [id], onDelete: Restrict)
+  authorId          String
+  author            User                 @relation("ReviewThreadAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  scope             ReviewThreadScope
+  anchor            Json?
+  guideChapterId    String?
+  resolvedAt        DateTime?
+  resolvedById      String?
+  resolvedBy        User?                @relation("ReviewThreadResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  deliveryStatus    ReviewDeliveryStatus @default(trace_only)
+  providerReviewId  String?
+  providerCommentId String?
+  deliveredAt       DateTime?
+  deliveryError     String?
+  comments          ReviewComment[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([reviewId, createdAt])
+  @@index([originSnapshotId])
+}
+
+model ReviewComment {
+  id                String       @id @default(uuid())
+  threadId          String
+  thread            ReviewThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  authorId          String
+  author            User         @relation("ReviewCommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  body              String
+  editedAt          DateTime?
+  deletedAt         DateTime?
+  providerCommentId String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([threadId, createdAt])
+}
+
+model ReviewInquiry {
+  id                String                  @id @default(uuid())
+  reviewId          String
+  review            Review                  @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  snapshotId        String
+  snapshot          ReviewSnapshot          @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  sessionId         String
+  session           Session                 @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  sourceKind        ReviewInquirySourceKind
+  question          String
+  anchor            Json?
+  context           Json                    @default("{}")
+  sessionMessageId  String?                 @unique
+  sessionMessage    SessionMessage?         @relation("ReviewInquiryOutgoingMessage", fields: [sessionMessageId], references: [id], onDelete: SetNull)
+  responseMessageId String?                 @unique
+  responseMessage   SessionMessage?         @relation("ReviewInquiryResponseMessage", fields: [responseMessageId], references: [id], onDelete: SetNull)
+  position          Int
+  state             ReviewInquiryState      @default(queued)
+  error             String?
+  structuredResult  Json?
+  guide             ReviewGuide?
+  createdAt         DateTime                @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+
+  @@unique([reviewId, position])
+  @@index([reviewId, state, position])
+  @@index([sessionId, state])
+}
+
+model ReviewGuide {
+  id                  String            @id @default(uuid())
+  reviewId            String
+  review              Review            @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  snapshotId          String
+  snapshot            ReviewSnapshot    @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  generationInquiryId String            @unique
+  generationInquiry   ReviewInquiry     @relation(fields: [generationInquiryId], references: [id], onDelete: Restrict)
+  status              ReviewGuideStatus @default(ready)
+  title               String
+  intent              String
+  content             Json
+  version             Int               @default(1)
+  createdAt           DateTime          @default(now())
+
+  @@unique([snapshotId, version])
+  @@index([reviewId, createdAt])
+}
+
+model ReviewDelivery {
+  id                 String            @id @default(uuid())
+  reviewId           String
+  review             Review            @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  snapshotId         String
+  snapshot           ReviewSnapshot    @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  actorId            String
+  idempotencyKey     String            @unique
+  disposition        ReviewDisposition
+  threadIds          Json
+  body               String?
+  status             String            @default("pending")
+  providerReviewId   String?
+  providerCommentIds Json?
+  attempts           Int               @default(0)
+  error              String?
+  createdAt          DateTime          @default(now())
+  completedAt        DateTime?
+
+  @@index([reviewId, createdAt])
 }
 
 model SessionMessageBackfillCursor {

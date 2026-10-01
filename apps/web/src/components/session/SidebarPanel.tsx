@@ -1,10 +1,4 @@
-import {
-  Files,
-  GitCompareArrows,
-  Globe,
-  PanelRightClose,
-  TerminalSquare,
-} from "lucide-react";
+import { Files, Globe, PanelRightClose, TerminalSquare } from "lucide-react";
 import { useEntityField } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import { BranchChangesPanel } from "./BranchChangesPanel";
@@ -112,12 +106,6 @@ export function SidebarPanel({
           icon={Files}
           label="Files"
           onClick={() => onTabChange("files")}
-        />
-        <SidebarDestination
-          active={activeTab === "changes"}
-          icon={GitCompareArrows}
-          label="Changes"
-          onClick={() => onTabChange("changes")}
         />
       </nav>
 

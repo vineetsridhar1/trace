@@ -64,6 +64,9 @@ import { ArtifactTabContent } from "../artifact/ArtifactTabContent";
 import { useWorkspaceTabRequests } from "./useWorkspaceTabRequests";
 import { CANVAS_TAB_ID, useSessionWorkspaceTabs } from "./useSessionWorkspaceTabs";
 import { useSessionApplicationsData } from "./applications/useSessionApplicationsData";
+import { ReviewTab } from "../review/ReviewTab";
+import { fetchReviewForGroup } from "../review/review-operations";
+import { useReviewUiStore } from "../../stores/review-ui";
 
 const EMPTY_ARTIFACT_IDS: string[] = [];
 const EMPTY_HIDDEN_SESSION_TABS: Record<string, string> = {};
@@ -72,6 +75,13 @@ const HIDDEN_SESSION_TABS_QUERY = gql`
     hiddenSessionTabs(sessionGroupId: $sessionGroupId) {
       sessionId
       hiddenAt
+    }
+  }
+`;
+const OPEN_REVIEW_MUTATION = gql`
+  mutation OpenReviewForPullRequest($sessionId: ID!, $pullRequestUrl: String!) {
+    openReviewForPullRequest(sessionId: $sessionId, pullRequestUrl: $pullRequestUrl) {
+      id
     }
   }
 `;
@@ -205,6 +215,12 @@ export function SessionGroupDetailView({
     | string
     | null
     | undefined;
+  const groupReviewId = useEntityStore(
+    (state) =>
+      Object.values(state.reviews).find(
+        (review) => review.sourceSessionGroupId === sessionGroupId && review.status === "open",
+      )?.id,
+  );
   const groupKind = useEntityField("sessionGroups", sessionGroupId, "kind") as
     | string
     | null
@@ -237,6 +253,10 @@ export function SessionGroupDetailView({
     if (!groupArchivedAt) return;
     void window.trace?.destroyBrowsersForSessionGroup(sessionGroupId);
   }, [groupArchivedAt, sessionGroupId]);
+
+  useEffect(() => {
+    void fetchReviewForGroup(sessionGroupId).catch(() => {});
+  }, [sessionGroupId]);
 
   const activeSessionGroupId = useUIStore(
     (s: { activeSessionGroupId: string | null }) => s.activeSessionGroupId,
@@ -339,6 +359,13 @@ export function SessionGroupDetailView({
     setActiveSessionId,
     setActiveTerminalId,
   });
+
+  useEffect(() => {
+    if (!groupReviewId || typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("review") === groupReviewId) {
+      setRequestedActiveWorkspaceTabId(`review:${groupReviewId}`);
+    }
+  }, [groupReviewId, setRequestedActiveWorkspaceTabId]);
   const workspaceTerminals = terminals;
 
   const handleOpenForkDialog = useCallback((eventId: string) => {
@@ -407,10 +434,30 @@ export function SessionGroupDetailView({
     handleFileClick,
     handleDraftAttachmentClick,
     handleUploadedAttachmentClick,
-    handleDiffFileClick,
     handleSelectFile,
     handleCloseFile,
   } = useFileActions(sessionGroupId);
+
+  const navigateReview = useReviewUiStore((state) => state.navigate);
+  const handleDiffFileClick = useCallback(
+    (filePath: string, _status: string) => {
+      if (!groupReviewId) {
+        toast.error("Open the PR Review before navigating to changed files");
+        return;
+      }
+      navigateReview(groupReviewId, filePath);
+      setActiveFilePath(null);
+      setActiveTerminalId(null);
+      setRequestedActiveWorkspaceTabId(`review:${groupReviewId}`);
+    },
+    [
+      groupReviewId,
+      navigateReview,
+      setActiveFilePath,
+      setActiveTerminalId,
+      setRequestedActiveWorkspaceTabId,
+    ],
+  );
 
   useEffect(() => {
     if (!sidebarFileOpenRequest || sidebarFileOpenRequest.sessionGroupId !== sessionGroupId) return;
@@ -961,6 +1008,7 @@ export function SessionGroupDetailView({
     browserTitles,
     trafficEndpointId,
     canvas: isCanvasWorkspace,
+    reviewId: groupReviewId,
   });
 
   // Explicitly opened surfaces still win, but a canvas workspace with nothing
@@ -991,6 +1039,10 @@ export function SessionGroupDetailView({
         handleSelectTerminalTab(terminal?.sessionId ?? null, terminalId);
       } else if (tabId.startsWith("file:")) {
         handleSelectFileTab(tabId.slice("file:".length));
+      } else if (tabId.startsWith("review:")) {
+        setActiveArtifactId(null);
+        setActiveFilePath(null);
+        setActiveTerminalId(null);
       } else if (tabId === "traffic") {
         handleSelectTrafficTab();
       }
@@ -1002,6 +1054,9 @@ export function SessionGroupDetailView({
       handleSelectTerminalTab,
       handleSelectTrafficTab,
       workspaceTerminals,
+      setActiveArtifactId,
+      setActiveFilePath,
+      setActiveTerminalId,
     ],
   );
 
@@ -1045,14 +1100,37 @@ export function SessionGroupDetailView({
   const handleOpenApplicationEndpoint = useCallback(
     (url: string) => {
       const id = `draft:${crypto.randomUUID()}`;
-      setDraftWorkspaceTabs((drafts) => [
-        ...drafts,
-        { id, surface: "browser", initialUrl: url },
-      ]);
+      setDraftWorkspaceTabs((drafts) => [...drafts, { id, surface: "browser", initialUrl: url }]);
       setRequestedActiveWorkspaceTabId(id);
     },
     [setDraftWorkspaceTabs, setRequestedActiveWorkspaceTabId],
   );
+
+  const handleOpenReview = useCallback(async () => {
+    if (groupReviewId) {
+      setRequestedActiveWorkspaceTabId(`review:${groupReviewId}`);
+      return;
+    }
+    if (!groupPrUrl || !selectedSession?.id) return;
+    const result = await client
+      .mutation(OPEN_REVIEW_MUTATION, {
+        sessionId: selectedSession.id,
+        pullRequestUrl: groupPrUrl,
+      })
+      .toPromise();
+    if (result.error) {
+      toast.error("Could not open PR Review", { description: result.error.message });
+      return;
+    }
+    const opened = await fetchReviewForGroup(sessionGroupId);
+    if (opened) setRequestedActiveWorkspaceTabId(`review:${opened.id}`);
+  }, [
+    groupPrUrl,
+    groupReviewId,
+    selectedSession?.id,
+    sessionGroupId,
+    setRequestedActiveWorkspaceTabId,
+  ]);
 
   const browserOverlayHidden = workspaceInteractionActive || modalOverlayVisible;
 
@@ -1157,6 +1235,8 @@ export function SessionGroupDetailView({
               );
             }}
             onOpenApplications={() => setApplicationPanelOpen(true)}
+            pullRequestUrl={groupPrUrl}
+            onOpenReview={() => void handleOpenReview()}
             onStartChat={async (input) => {
               const sessionId = await handleNewChat(input);
               if (!sessionId) return false;
@@ -1244,6 +1324,10 @@ export function SessionGroupDetailView({
         return <ArtifactTabContent artifactId={tabId.slice("artifact:".length)} />;
       }
 
+      if (tabId.startsWith("review:")) {
+        return <ReviewTab reviewId={tabId.slice("review:".length)} />;
+      }
+
       const tabSession = tabId.startsWith("session:")
         ? (groupSessions.find((session) => session.id === tabId.slice("session:".length)) ?? null)
         : null;
@@ -1286,6 +1370,7 @@ export function SessionGroupDetailView({
       getFileBuffer,
       generatedProjectCanvasReady,
       groupRepo?.defaultBranch,
+      groupPrUrl,
       groupSessions,
       handleCreateTerminal,
       handleDiffFileClick,
@@ -1293,6 +1378,7 @@ export function SessionGroupDetailView({
       handleBrowserTitleChange,
       handleNewChat,
       handleOpenArtifact,
+      handleOpenReview,
       handleOpenForkDialog,
       handleOpenTrafficTab,
       handleScrollComplete,

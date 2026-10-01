@@ -25,6 +25,13 @@ import type {
   DesignSystemVersion,
   Artifact,
   AppDeployment,
+  Review,
+  ReviewSnapshot,
+  ReviewThread,
+  ReviewComment,
+  ReviewInquiry,
+  ReviewGuide,
+  ReviewDelivery,
 } from "@trace/gql";
 
 /** Client-side session entity with extra fields not in the GQL schema */
@@ -64,6 +71,13 @@ export type EntityTableMap = {
   designSystemVersions: DesignSystemVersion;
   artifacts: Artifact;
   appDeployments: AppDeployment;
+  reviews: Review;
+  reviewSnapshots: ReviewSnapshot;
+  reviewThreads: ReviewThread;
+  reviewComments: ReviewComment;
+  reviewInquiries: ReviewInquiry;
+  reviewGuides: ReviewGuide;
+  reviewDeliveries: ReviewDelivery;
 };
 
 export type EntityType = keyof EntityTableMap;
@@ -151,6 +165,13 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   designSystemVersions: {},
   artifacts: {},
   appDeployments: {},
+  reviews: {},
+  reviewSnapshots: {},
+  reviewThreads: {},
+  reviewComments: {},
+  reviewInquiries: {},
+  reviewGuides: {},
+  reviewDeliveries: {},
   eventsByScope: {},
   _eventIdsByScope: {},
   _sessionIdsByGroup: {},
@@ -399,6 +420,13 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       designSystemVersions: {},
       artifacts: {},
       appDeployments: {},
+      reviews: {},
+      reviewSnapshots: {},
+      reviewThreads: {},
+      reviewComments: {},
+      reviewInquiries: {},
+      reviewGuides: {},
+      reviewDeliveries: {},
       eventsByScope: {},
       _eventIdsByScope: {},
       _sessionIdsByGroup: {},

@@ -133,6 +133,29 @@ async function canViewSessionEvent(
   return !group || canViewSessionGroup(group, userId);
 }
 
+async function canViewReviewEvent(
+  reviewId: string,
+  organizationId: string,
+  userId: string,
+  cache: Map<string, boolean>,
+): Promise<boolean> {
+  const cached = cache.get(reviewId);
+  if (cached !== undefined) return cached;
+  const review = await prisma.review.findFirst({
+    where: { id: reviewId, organizationId },
+    select: {
+      sourceSessionGroup: { select: { visibility: true, ownerUserId: true } },
+      attachedSession: {
+        select: { sessionGroup: { select: { visibility: true, ownerUserId: true } } },
+      },
+    },
+  });
+  const group = review?.sourceSessionGroup ?? review?.attachedSession.sessionGroup;
+  const visible = !!review && (!group || canViewSessionGroup(group, userId));
+  cache.set(reviewId, visible);
+  return visible;
+}
+
 function eventPayloadChannelIds(payload: Record<string, unknown> | null): string[] {
   const ids = new Set<string>();
   const addChannel = (value: unknown) => {
@@ -246,6 +269,15 @@ export const eventQueries = {
     if (args.scope?.type === "channel") {
       await assertChannelAccess(args.scope.id, ctx.userId, orgId);
     }
+    if (args.scope?.type === "review") {
+      const visible = await canViewReviewEvent(
+        args.scope.id,
+        args.organizationId,
+        ctx.userId,
+        new Map(),
+      );
+      if (!visible) throw new Error("Not authorized for this review");
+    }
 
     const events = await eventService.query(args.organizationId, {
       scopeType: args.scope?.type,
@@ -271,6 +303,7 @@ export const eventQueries = {
       { visibility: string; ownerUserId: string } | null
     >();
     const channelVisibilityCache = new Map<string, boolean>();
+    const reviewVisibilityCache = new Map<string, boolean>();
     for (const event of events) {
       if (event.scopeType === "chat") {
         chatIds.add(event.scopeId);
@@ -317,6 +350,19 @@ export const eventQueries = {
       }
       if (event.scopeType === "chat") {
         if (chatMembership.get(event.scopeId) ?? false) filtered.push(event);
+        continue;
+      }
+      if (event.scopeType === "review") {
+        if (
+          await canViewReviewEvent(
+            event.scopeId,
+            args.organizationId,
+            ctx.userId,
+            reviewVisibilityCache,
+          )
+        ) {
+          filtered.push(event);
+        }
         continue;
       }
       if (
@@ -436,6 +482,7 @@ export const eventSubscriptions = {
         { visibility: string; ownerUserId: string } | null
       >();
       const channelVisibilityCache = new Map<string, boolean>();
+      const reviewVisibilityCache = new Map<string, boolean>();
 
       return filterAsyncIterator(
         pubsub.asyncIterator<{
@@ -464,6 +511,14 @@ export const eventSubscriptions = {
             membershipCache.delete(`${event.scopeType}:${event.scopeId}`);
             sessionVisibilityCache.clear();
             channelVisibilityCache.clear();
+          }
+          if (event.scopeType === "review") {
+            return canViewReviewEvent(
+              event.scopeId,
+              args.organizationId,
+              ctx.userId,
+              reviewVisibilityCache,
+            );
           }
 
           if (event.scopeType === "chat") {
@@ -610,6 +665,27 @@ export const eventSubscriptions = {
           );
         },
       );
+    },
+  },
+  reviewEvents: {
+    subscribe: async (
+      _: unknown,
+      args: {
+        reviewId: string;
+        organizationId: string;
+        after?: Date | null;
+        afterEventId?: string | null;
+      },
+      ctx: Context,
+    ) => {
+      assertOrgAccess(ctx, args.organizationId);
+      const review = await prisma.review.findFirst({
+        where: { id: args.reviewId, organizationId: args.organizationId },
+        select: { attachedSessionId: true },
+      });
+      if (!review) throw new Error("Review not found");
+      await assertSessionReadable(review.attachedSessionId, ctx.userId, args.organizationId);
+      return pubsub.asyncIterator(topics.reviewEvents(args.reviewId));
     },
   },
 };

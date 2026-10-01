@@ -18,6 +18,7 @@ export const TRACE_CLI_CAPABILITIES = [
   "session:stop",
   "session:archive",
   "session:link-pr",
+  "review:open",
   "terminal:control",
   "workspace:control",
 ] as const;
@@ -595,6 +596,18 @@ export const traceCliOperations = {
     argumentPaths: ["sessionId", "prUrl"],
     document: `mutation TraceCliLinkSessionPullRequest($sessionId: ID!, $prUrl: String!) {
       linkSessionPullRequest(sessionId: $sessionId, prUrl: $prUrl) { id name status prUrl }
+    }`,
+  }),
+  openReviewForPullRequest: operation({
+    name: "TraceCliOpenReviewForPullRequest",
+    type: "mutation",
+    rootField: "openReviewForPullRequest",
+    capability: "review:open",
+    argumentPaths: ["sessionId", "pullRequestUrl"],
+    document: `mutation TraceCliOpenReviewForPullRequest($sessionId: ID!, $pullRequestUrl: String!) {
+      openReviewForPullRequest(sessionId: $sessionId, pullRequestUrl: $pullRequestUrl) {
+        id currentSnapshotId sourceSessionGroupId channelId attachedSessionId
+      }
     }`,
   }),
   sessionEvents: operation({

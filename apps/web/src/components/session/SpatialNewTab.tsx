@@ -1,4 +1,4 @@
-import { AppWindow, Globe, TerminalSquare } from "lucide-react";
+import { AppWindow, GitPullRequest, Globe, TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuthStore } from "@trace/client-core";
@@ -39,6 +39,8 @@ interface SpatialNewTabProps {
   onConvert: (surface: WorkspaceSurface) => void;
   onOpenApplication: (url: string) => void;
   onOpenApplications: () => void;
+  pullRequestUrl?: string | null;
+  onOpenReview?: () => void;
 }
 
 const quickStarts: Array<{
@@ -82,6 +84,8 @@ export function SpatialNewTab({
   onConvert,
   onOpenApplication,
   onOpenApplications,
+  pullRequestUrl,
+  onOpenReview,
 }: SpatialNewTabProps) {
   const editorRef = useRef<ChatEditorHandle>(null);
   const organizationId = useAuthStore((state) => state.activeOrgId);
@@ -198,10 +202,18 @@ export function SpatialNewTab({
           />
         </div>
 
-        <div
-          className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3"
-        >
-          {quickStarts.map((item) => {
+        <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3">
+          {quickStarts.map((originalItem) => {
+            const item =
+              originalItem.id === "application" && pullRequestUrl
+                ? {
+                    ...originalItem,
+                    id: "review" as const,
+                    label: "PR Review",
+                    detail: "Review the linked pull request",
+                    icon: GitPullRequest,
+                  }
+                : originalItem;
             const Icon = item.icon;
             const disabled = item.surface === "terminal" && !canStartTerminal;
             const applicationUnavailable = item.id === "application" && !applicationUrl;
@@ -212,6 +224,10 @@ export function SpatialNewTab({
                 onClick={() => {
                   if (applicationUnavailable) {
                     onOpenApplications();
+                    return;
+                  }
+                  if (item.id === "review") {
+                    onOpenReview?.();
                     return;
                   }
                   if (item.id === "application" && applicationUrl) {
@@ -231,7 +247,9 @@ export function SpatialNewTab({
                   {item.label}
                 </span>
                 <span className="mt-1.5 block text-[10px] leading-4 text-muted-foreground">
-                  {applicationUnavailable ? "Start an application to open its preview" : item.detail}
+                  {applicationUnavailable
+                    ? "Start an application to open its preview"
+                    : item.detail}
                 </span>
               </button>
             );
