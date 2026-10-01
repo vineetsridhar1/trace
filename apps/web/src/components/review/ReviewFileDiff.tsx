@@ -209,49 +209,55 @@ export function ReviewFileDiff({
       ) : (
         <>
           <div className="native-scrollbar min-w-0 overflow-x-auto py-1 font-mono text-xs leading-5">
-            {lines.map((line, index) => {
-              if (line.kind === "meta") {
-                const label = hunkGapLabel(line);
-                return label ? <DiffGapRow key={index} label={label} position="between" /> : null;
-              }
-              const side = lineSide(line);
-              const lineNumber = lineNumberForSide(line, side);
-              const selected = rangeContains(range, side, lineNumber);
-              const isHighlighted =
-                !!highlighted &&
-                side === "head" &&
-                lineNumber != null &&
-                lineNumber >= highlighted.startLine &&
-                lineNumber <= highlighted.endLine;
-              const emphasis: DiffLineEmphasis = selected
-                ? "selected"
-                : isHighlighted
-                  ? "asked"
-                  : "none";
-              const anchoredThreads =
-                lineNumber == null ? [] : (threadsByAnchor.get(anchorKey(side, lineNumber)) ?? []);
-              return (
-                <Fragment key={index}>
-                  <DiffLineRow
-                    ref={
-                      isHighlighted && lineNumber === highlighted.startLine ? highlightRowRef : null
-                    }
-                    line={line}
-                    emphasis={emphasis}
-                    lineNumber={lineNumber}
-                    onPointerDown={
-                      lineNumber == null
-                        ? undefined
-                        : (event) => beginSelection(event, side, lineNumber)
-                    }
-                    onPointerEnter={
-                      lineNumber == null ? undefined : () => extendSelection(side, lineNumber)
-                    }
-                  />
-                  <ReviewThreadStack threads={anchoredThreads} />
-                </Fragment>
-              );
-            })}
+            <div className="min-w-max">
+              {lines.map((line, index) => {
+                if (line.kind === "meta") {
+                  const label = hunkGapLabel(line);
+                  return label ? <DiffGapRow key={index} label={label} position="between" /> : null;
+                }
+                const side = lineSide(line);
+                const lineNumber = lineNumberForSide(line, side);
+                const selected = rangeContains(range, side, lineNumber);
+                const isHighlighted =
+                  !!highlighted &&
+                  side === "head" &&
+                  lineNumber != null &&
+                  lineNumber >= highlighted.startLine &&
+                  lineNumber <= highlighted.endLine;
+                const emphasis: DiffLineEmphasis = selected
+                  ? "selected"
+                  : isHighlighted
+                    ? "asked"
+                    : "none";
+                const anchoredThreads =
+                  lineNumber == null
+                    ? []
+                    : (threadsByAnchor.get(anchorKey(side, lineNumber)) ?? []);
+                return (
+                  <Fragment key={index}>
+                    <DiffLineRow
+                      ref={
+                        isHighlighted && lineNumber === highlighted.startLine
+                          ? highlightRowRef
+                          : null
+                      }
+                      line={line}
+                      emphasis={emphasis}
+                      lineNumber={lineNumber}
+                      onPointerDown={
+                        lineNumber == null
+                          ? undefined
+                          : (event) => beginSelection(event, side, lineNumber)
+                      }
+                      onPointerEnter={
+                        lineNumber == null ? undefined : () => extendSelection(side, lineNumber)
+                      }
+                    />
+                    <ReviewThreadStack threads={anchoredThreads} />
+                  </Fragment>
+                );
+              })}
+            </div>
           </div>
           {diff.truncated ? (
             <DiffGapRow label="diff truncated · open on GitHub" position="end" />

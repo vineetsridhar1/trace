@@ -104,28 +104,30 @@ export function GuideFileDiff({
       {!error && !diff ? <div className="h-40 animate-pulse bg-muted/10" /> : null}
       {diff ? (
         <div className="native-scrollbar min-w-0 overflow-x-auto py-1 font-mono text-xs leading-5">
-          {lines.map((line, index) => {
-            if (line.kind === "meta") {
-              const label = hunkGapLabel(line);
-              return label ? <DiffGapRow key={index} label={label} position="between" /> : null;
-            }
-            const lineNumber = line.newLine ?? line.oldLine;
-            const lit =
-              !!highlight &&
-              line.kind !== "delete" &&
-              line.newLine != null &&
-              line.newLine >= highlight.startLine &&
-              line.newLine <= highlight.endLine;
-            return (
-              <DiffLineRow
-                key={index}
-                ref={lit && line.newLine === highlight.startLine ? highlightRowRef : null}
-                line={line}
-                emphasis={lit ? "selected" : "none"}
-                lineNumber={lineNumber}
-              />
-            );
-          })}
+          <div className="min-w-max">
+            {lines.map((line, index) => {
+              if (line.kind === "meta") {
+                const label = hunkGapLabel(line);
+                return label ? <DiffGapRow key={index} label={label} position="between" /> : null;
+              }
+              const lineNumber = line.newLine ?? line.oldLine;
+              const lit =
+                !!highlight &&
+                line.kind !== "delete" &&
+                line.newLine != null &&
+                line.newLine >= highlight.startLine &&
+                line.newLine <= highlight.endLine;
+              return (
+                <DiffLineRow
+                  key={index}
+                  ref={lit && line.newLine === highlight.startLine ? highlightRowRef : null}
+                  line={line}
+                  emphasis={lit ? "selected" : "none"}
+                  lineNumber={lineNumber}
+                />
+              );
+            })}
+          </div>
         </div>
       ) : null}
       {diff?.truncated ? <DiffGapRow label="diff truncated" position="end" /> : null}
