@@ -13,6 +13,7 @@ export function DiffSelectionPopover({
 }) {
   return (
     <div
+      data-review-selection-popover
       style={{ top }}
       className="absolute left-1/2 z-[3] flex -translate-x-1/2 items-center gap-0.5 rounded-[9px] border border-[#3a3a40] bg-[#1c1c1f] p-[3px] text-xs font-medium shadow-[0_10px_28px_rgba(0,0,0,.55)]"
     >

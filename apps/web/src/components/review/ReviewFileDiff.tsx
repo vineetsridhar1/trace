@@ -125,6 +125,18 @@ export function ReviewFileDiff({
     return () => window.removeEventListener("pointerup", stop);
   }, [dragging]);
 
+  useEffect(() => {
+    if (!range) return;
+    const dismiss = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest("[data-review-selection-popover]")) return;
+      setRange(null);
+      setDragging(false);
+    };
+    document.addEventListener("pointerdown", dismiss, true);
+    return () => document.removeEventListener("pointerdown", dismiss, true);
+  }, [range]);
+
   const beginSelection = useCallback(
     (event: React.PointerEvent, side: LineRange["side"], line: number) => {
       if (event.button !== 0) return;
