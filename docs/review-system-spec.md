@@ -99,25 +99,35 @@ The primary review surface has two top-level views:
 Review: Add workspace permissions                 [Changes] [Guide]
 PR #482 · base 5bd2… → head 8f19… · 12 files
 
-+------------------+--------------------------------------+------------------------+
-| Files            | Diff                                 | Review Chat / threads  |
-| 12 changed       | Split / Unified                      | 3 pending comments     |
-| comment badges   | selected file and line comments      | queue and discussion   |
-|                  |                                      |                        |
-|                  |                                      | [Send to GitHub]       |
-+------------------+--------------------------------------+------------------------+
++------------------------+------------------------------------------------------+
+| Changed files sidebar  | One continuous, scrollable diff                      |
+| src/auth/policy.ts     | src/auth/policy.ts                                   |
+| +42 -8 · 2 comments    | [full file diff]                                     |
+|                        |                                                      |
+| apps/server/routes.ts  | apps/server/routes.ts                                |
+| +15 -2                 | [full file diff]                                     |
+|                        |                                                      |
+| …                      | …                                                    |
++------------------------+------------------------------------------------------+
 ```
 
-- **Files** lists changed files, additions/deletions, viewed state, and comment badges.
-- **Diff** supports split and unified rendering, file navigation, syntax highlighting,
-  collapsed unchanged context, and stable line selection.
+- **Changed files sidebar** reuses Trace's existing diff sidebar. It lists changed files,
+  additions/deletions, viewed state, and comment badges.
+- **Continuous diff** renders every changed file in a single scrollable main pane. It
+  supports split and unified rendering, syntax highlighting, collapsed unchanged context,
+  and stable line selection.
+- Clicking a file in the sidebar scrolls the main pane to that file. Scrolling the main
+  pane updates the active file in the sidebar.
 - Selecting a line or range opens a compact composer with two intentional paths:
   **Comment for team** and **Ask AI**.
 - **Comment for team** creates a Trace review thread. It does not call GitHub.
 - **Ask AI** creates a queued Review Inquiry whose full code anchor and local context
   travel with the message to the attached coding session.
-- The right panel shows team threads and Review Chat. It may collapse, but it does not
-  replace the normal session chat.
+
+The Review tab is the only diff destination. Existing diff tabs are removed. Any action
+that formerly opened a file-diff tab—selecting Changes, a changed file, or a review
+notification—opens or focuses the Review tab and navigates to the relevant snapshot,
+file, and line. A Review tab is reused rather than duplicated.
 
 ### Team comments and GitHub delivery
 
