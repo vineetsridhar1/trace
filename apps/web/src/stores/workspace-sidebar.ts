@@ -23,6 +23,7 @@ interface WorkspaceSidebarState {
   toggleFiles: (sessionGroupId: string) => void;
   closeFiles: () => void;
   setView: (view: WorkspaceSidebarView) => void;
+  clearChangesReview: () => void;
   requestFileOpen: (sessionGroupId: string, filePath: string) => void;
   requestDiffOpen: (sessionGroupId: string, filePath: string, status: string) => void;
   consumeFileOpenRequest: (id: string) => void;
@@ -42,6 +43,7 @@ export const useWorkspaceSidebarStore = create<WorkspaceSidebarState>((set) => (
     })),
   closeFiles: () => set({ filesSessionGroupId: null, changesReviewId: null }),
   setView: (view) => set({ view }),
+  clearChangesReview: () => set({ changesReviewId: null }),
   requestFileOpen: (sessionGroupId, filePath) =>
     set({
       fileOpenRequest: {
