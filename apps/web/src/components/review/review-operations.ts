@@ -144,6 +144,8 @@ export const REVIEW_FIELDS = gql`
       createdAt
       startedAt
       completedAt
+      resolvedAt
+      resolvedById
       responseMessage {
         id
         sessionId

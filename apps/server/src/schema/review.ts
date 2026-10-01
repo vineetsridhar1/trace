@@ -101,6 +101,11 @@ export const reviewMutations = {
     mapError(() => reviewService.enqueueInquiry({ ...actor(ctx), ...args.input })),
   cancelReviewInquiry: (_: unknown, args: { inquiryId: string }, ctx: Context) =>
     mapError(() => reviewService.cancelInquiry({ ...actor(ctx), ...args })),
+  resolveReviewInquiry: (
+    _: unknown,
+    args: { inquiryId: string; resolved: boolean },
+    ctx: Context,
+  ) => mapError(() => reviewService.resolveInquiry({ ...actor(ctx), ...args })),
   saveReviewGuide: (_: unknown, args: { inquiryId: string; content: unknown }, ctx: Context) =>
     mapError(() => reviewService.saveGuide({ ...actor(ctx), ...args })),
   submitReviewToProvider: (_: unknown, args: { input: SubmitReviewInput }, ctx: Context) =>

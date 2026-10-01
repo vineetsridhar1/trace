@@ -848,6 +848,7 @@ export type EventType =
   | "review_inquiry_completed"
   | "review_inquiry_enqueued"
   | "review_inquiry_failed"
+  | "review_inquiry_resolved"
   | "review_inquiry_started"
   | "review_opened"
   | "review_snapshot_created"
@@ -1163,6 +1164,7 @@ export type Mutation = {
   requestBridgeAccess: BridgeAccessRequest;
   requestPdfSessionExport: Scalars["Boolean"]["output"];
   resizeTerminal: Scalars["Boolean"]["output"];
+  resolveReviewInquiry: ReviewInquiry;
   resolveReviewThread: ReviewThread;
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
@@ -1650,6 +1652,11 @@ export type MutationResizeTerminalArgs = {
   cols: Scalars["Int"]["input"];
   rows: Scalars["Int"]["input"];
   terminalId: Scalars["ID"]["input"];
+};
+
+export type MutationResolveReviewInquiryArgs = {
+  inquiryId: Scalars["ID"]["input"];
+  resolved: Scalars["Boolean"]["input"];
 };
 
 export type MutationResolveReviewThreadArgs = {
@@ -2837,6 +2844,8 @@ export type ReviewInquiry = {
   id: Scalars["ID"]["output"];
   position: Scalars["Int"]["output"];
   question: Scalars["String"]["output"];
+  resolvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  resolvedById?: Maybe<Scalars["ID"]["output"]>;
   responseMessage?: Maybe<SessionMessage>;
   responseMessageId?: Maybe<Scalars["ID"]["output"]>;
   reviewId: Scalars["ID"]["output"];
@@ -3220,6 +3229,8 @@ export type SessionSetupScriptRun = {
   lastError?: Maybe<Scalars["String"]["output"]>;
   outputPreview?: Maybe<Scalars["String"]["output"]>;
   outputTruncated: Scalars["Boolean"]["output"];
+  resolvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  resolvedById?: Maybe<Scalars["ID"]["output"]>;
   scriptConfigId: Scalars["String"]["output"];
   sessionGroupId: Scalars["ID"]["output"];
   startedAt: Scalars["DateTime"]["output"];
@@ -4024,6 +4035,16 @@ export type GenerateReviewGuideMutation = {
   };
 };
 
+export type ResolveReviewInquiryMutationVariables = Exact<{
+  inquiryId: Scalars["ID"]["input"];
+  resolved: Scalars["Boolean"]["input"];
+}>;
+
+export type ResolveReviewInquiryMutation = {
+  __typename?: "Mutation";
+  resolveReviewInquiry: { __typename?: "ReviewInquiry"; id: string };
+};
+
 export type SubmitReviewMutationVariables = Exact<{
   input: SubmitReviewInput;
 }>;
@@ -4233,6 +4254,8 @@ export type ReviewWorkspaceFieldsFragment = {
     createdAt: string;
     startedAt?: string | null;
     completedAt?: string | null;
+    resolvedAt?: string | null;
+    resolvedById?: string | null;
     responseMessage?: {
       __typename?: "SessionMessage";
       id: string;
@@ -5998,6 +6021,33 @@ export type OrgEventsSubscription = {
   };
 };
 
+export type ReviewEventsLiveSubscriptionVariables = Exact<{
+  reviewId: Scalars["ID"]["input"];
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type ReviewEventsLiveSubscription = {
+  __typename?: "Subscription";
+  reviewEvents: {
+    __typename?: "Event";
+    id: string;
+    scopeType: ScopeType;
+    scopeId: string;
+    eventType: EventType;
+    payload: JsonValue;
+    parentId?: string | null;
+    timestamp: string;
+    metadata?: JsonValue | null;
+    actor: {
+      __typename?: "Actor";
+      type: ActorType;
+      id: string;
+      name?: string | null;
+      avatarUrl?: string | null;
+    };
+  };
+};
+
 export type SearchMessagesPageQueryVariables = Exact<{
   query: Scalars["String"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
@@ -6952,6 +7002,8 @@ export const ReviewWorkspaceFieldsFragmentDoc = {
                 { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                 { kind: "Field", name: { kind: "Name", value: "startedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "completedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedById" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "responseMessage" },
@@ -8459,6 +8511,59 @@ export const GenerateReviewGuideDocument = {
     },
   ],
 } as unknown as DocumentNode<GenerateReviewGuideMutation, GenerateReviewGuideMutationVariables>;
+export const ResolveReviewInquiryDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ResolveReviewInquiry" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "inquiryId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "resolved" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "Boolean" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "resolveReviewInquiry" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "inquiryId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "inquiryId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "resolved" },
+                value: { kind: "Variable", name: { kind: "Name", value: "resolved" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ResolveReviewInquiryMutation, ResolveReviewInquiryMutationVariables>;
 export const SubmitReviewDocument = {
   kind: "Document",
   definitions: [
@@ -8971,6 +9076,8 @@ export const ReviewWorkspaceDocument = {
                 { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                 { kind: "Field", name: { kind: "Name", value: "startedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "completedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedById" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "responseMessage" },
@@ -9276,6 +9383,8 @@ export const ReviewForSessionGroupDocument = {
                 { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                 { kind: "Field", name: { kind: "Name", value: "startedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "completedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "resolvedById" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "responseMessage" },
@@ -14907,6 +15016,81 @@ export const OrgEventsDocument = {
     },
   ],
 } as unknown as DocumentNode<OrgEventsSubscription, OrgEventsSubscriptionVariables>;
+export const ReviewEventsLiveDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "subscription",
+      name: { kind: "Name", value: "ReviewEventsLive" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "reviewId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "reviewEvents" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "reviewId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "reviewId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "scopeType" } },
+                { kind: "Field", name: { kind: "Name", value: "scopeId" } },
+                { kind: "Field", name: { kind: "Name", value: "eventType" } },
+                { kind: "Field", name: { kind: "Name", value: "payload" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "actor" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "type" } },
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "parentId" } },
+                { kind: "Field", name: { kind: "Name", value: "timestamp" } },
+                { kind: "Field", name: { kind: "Name", value: "metadata" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ReviewEventsLiveSubscription, ReviewEventsLiveSubscriptionVariables>;
 export const SearchMessagesPageDocument = {
   kind: "Document",
   definitions: [

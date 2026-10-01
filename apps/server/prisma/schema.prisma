@@ -366,6 +366,7 @@ enum EventType {
   review_inquiry_completed
   review_inquiry_failed
   review_inquiry_cancelled
+  review_inquiry_resolved
   review_guide_saved
   review_guide_failed
   review_delivery_started
@@ -575,6 +576,7 @@ model User {
   authoredReviewSnapshots       ReviewSnapshot[]             @relation("ReviewSnapshotCreator")
   authoredReviewThreads         ReviewThread[]               @relation("ReviewThreadAuthor")
   resolvedReviewThreads         ReviewThread[]               @relation("ReviewThreadResolver")
+  resolvedReviewInquiries       ReviewInquiry[]              @relation("ReviewInquiryResolver")
   authoredReviewComments        ReviewComment[]              @relation("ReviewCommentAuthor")
 
   createdAt DateTime @default(now())
@@ -1090,6 +1092,9 @@ model ReviewInquiry {
   createdAt         DateTime                @default(now())
   startedAt         DateTime?
   completedAt       DateTime?
+  resolvedAt        DateTime?
+  resolvedById      String?
+  resolvedBy        User?                   @relation("ReviewInquiryResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
 
   @@unique([reviewId, position])
   @@index([reviewId, state, position])

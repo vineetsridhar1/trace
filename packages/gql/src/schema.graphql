@@ -492,6 +492,7 @@ enum EventType {
   review_inquiry_completed
   review_inquiry_failed
   review_inquiry_cancelled
+  review_inquiry_resolved
   review_guide_saved
   review_guide_failed
   review_delivery_started
@@ -1124,6 +1125,8 @@ type SessionSetupScriptRun {
   lastError: String
   startedAt: DateTime!
   completedAt: DateTime
+  resolvedAt: DateTime
+  resolvedById: ID
 }
 
 type SessionApplicationProcess {
@@ -1568,6 +1571,8 @@ type ReviewInquiry {
   createdAt: DateTime!
   startedAt: DateTime
   completedAt: DateTime
+  resolvedAt: DateTime
+  resolvedById: ID
 }
 
 type ReviewGuide {
@@ -2415,6 +2420,7 @@ type Mutation {
   setReviewThreadSelected(threadId: ID!, selected: Boolean!): ReviewThread!
   enqueueReviewInquiry(input: EnqueueReviewInquiryInput!): ReviewInquiry!
   cancelReviewInquiry(inquiryId: ID!): ReviewInquiry!
+  resolveReviewInquiry(inquiryId: ID!, resolved: Boolean!): ReviewInquiry!
   saveReviewGuide(inquiryId: ID!, content: JSON!): ReviewGuide!
   submitReviewToProvider(input: SubmitReviewInput!): ReviewDelivery!
   renameSessionGroup(id: ID!, name: String!): SessionGroup!

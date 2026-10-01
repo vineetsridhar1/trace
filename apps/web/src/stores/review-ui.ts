@@ -17,6 +17,7 @@ interface ReviewUiSelection {
   /** The range the Guide or a thread last pointed at, kept lit until something else is chosen. */
   highlight: ReviewHighlight | null;
   collapsedFilePaths: string[];
+  collapsedInquiryIds: string[];
 }
 
 interface ReviewUiState {
@@ -24,6 +25,7 @@ interface ReviewUiState {
   patch(reviewId: string, value: Partial<ReviewUiSelection>): void;
   navigate(reviewId: string, highlight: ReviewHighlight): void;
   toggleFileCollapsed(reviewId: string, filePath: string): void;
+  toggleInquiryCollapsed(reviewId: string, inquiryId: string): void;
 }
 
 const emptySelection = (): ReviewUiSelection => ({
@@ -33,6 +35,7 @@ const emptySelection = (): ReviewUiSelection => ({
   requestedLine: null,
   highlight: null,
   collapsedFilePaths: [],
+  collapsedInquiryIds: [],
 });
 
 export const useReviewUiStore = create<ReviewUiState>((set) => ({
@@ -76,6 +79,22 @@ export const useReviewUiStore = create<ReviewUiState>((set) => ({
             collapsedFilePaths: collapsed
               ? current.collapsedFilePaths.filter((path) => path !== filePath)
               : [...current.collapsedFilePaths, filePath],
+          },
+        },
+      };
+    }),
+  toggleInquiryCollapsed: (reviewId, inquiryId) =>
+    set((state) => {
+      const current = state.byReviewId[reviewId] ?? emptySelection();
+      const collapsed = current.collapsedInquiryIds.includes(inquiryId);
+      return {
+        byReviewId: {
+          ...state.byReviewId,
+          [reviewId]: {
+            ...current,
+            collapsedInquiryIds: collapsed
+              ? current.collapsedInquiryIds.filter((id) => id !== inquiryId)
+              : [...current.collapsedInquiryIds, inquiryId],
           },
         },
       };

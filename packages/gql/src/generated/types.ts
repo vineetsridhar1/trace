@@ -846,6 +846,7 @@ export type EventType =
   | "review_inquiry_completed"
   | "review_inquiry_enqueued"
   | "review_inquiry_failed"
+  | "review_inquiry_resolved"
   | "review_inquiry_started"
   | "review_opened"
   | "review_snapshot_created"
@@ -1161,6 +1162,7 @@ export type Mutation = {
   requestBridgeAccess: BridgeAccessRequest;
   requestPdfSessionExport: Scalars["Boolean"]["output"];
   resizeTerminal: Scalars["Boolean"]["output"];
+  resolveReviewInquiry: ReviewInquiry;
   resolveReviewThread: ReviewThread;
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
@@ -1648,6 +1650,11 @@ export type MutationResizeTerminalArgs = {
   cols: Scalars["Int"]["input"];
   rows: Scalars["Int"]["input"];
   terminalId: Scalars["ID"]["input"];
+};
+
+export type MutationResolveReviewInquiryArgs = {
+  inquiryId: Scalars["ID"]["input"];
+  resolved: Scalars["Boolean"]["input"];
 };
 
 export type MutationResolveReviewThreadArgs = {
@@ -2835,6 +2842,8 @@ export type ReviewInquiry = {
   id: Scalars["ID"]["output"];
   position: Scalars["Int"]["output"];
   question: Scalars["String"]["output"];
+  resolvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  resolvedById?: Maybe<Scalars["ID"]["output"]>;
   responseMessage?: Maybe<SessionMessage>;
   responseMessageId?: Maybe<Scalars["ID"]["output"]>;
   reviewId: Scalars["ID"]["output"];
@@ -3218,6 +3227,8 @@ export type SessionSetupScriptRun = {
   lastError?: Maybe<Scalars["String"]["output"]>;
   outputPreview?: Maybe<Scalars["String"]["output"]>;
   outputTruncated: Scalars["Boolean"]["output"];
+  resolvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  resolvedById?: Maybe<Scalars["ID"]["output"]>;
   scriptConfigId: Scalars["String"]["output"];
   sessionGroupId: Scalars["ID"]["output"];
   startedAt: Scalars["DateTime"]["output"];

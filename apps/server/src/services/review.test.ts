@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasProviderDelivery, reviewJson } from "./review.js";
+import { hasProviderDelivery, isFinishedInquiryState, reviewJson } from "./review.js";
 
 describe("reviewJson", () => {
   it("serializes Prisma bigint fields for review event payloads", () => {
@@ -55,5 +55,15 @@ describe("hasProviderDelivery", () => {
         comments: [{ providerCommentId: null }],
       }),
     ).toBe(false);
+  });
+});
+
+describe("isFinishedInquiryState", () => {
+  it("only permits resolving terminal AI conversations", () => {
+    expect(isFinishedInquiryState("queued")).toBe(false);
+    expect(isFinishedInquiryState("running")).toBe(false);
+    expect(isFinishedInquiryState("completed")).toBe(true);
+    expect(isFinishedInquiryState("failed")).toBe(true);
+    expect(isFinishedInquiryState("cancelled")).toBe(true);
   });
 });

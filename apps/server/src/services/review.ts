@@ -1,5 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
-import { Prisma, type ActorType, type Event as PrismaEvent } from "@prisma/client";
+import {
+  Prisma,
+  type ActorType,
+  type Event as PrismaEvent,
+  type ReviewInquiryState,
+} from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { storage } from "../lib/storage/index.js";
 import { AuthorizationError, NotFoundError, ValidationError } from "../lib/errors.js";
@@ -79,6 +84,10 @@ export function hasProviderDelivery(thread: {
     !!thread.providerCommentId ||
     thread.comments.some((comment) => !!comment.providerCommentId)
   );
+}
+
+export function isFinishedInquiryState(state: ReviewInquiryState): boolean {
+  return state !== "queued" && state !== "running";
 }
 
 function patchKey(reviewId: string, snapshotId: string): string {
@@ -452,6 +461,31 @@ export class ReviewService {
     });
     await this.emit(inquiry.reviewId, input, "review_inquiry_cancelled", { inquiry: cancelled });
     return cancelled;
+  }
+
+  async resolveInquiry(input: ActorInput & { inquiryId: string; resolved: boolean }) {
+    const inquiry = await prisma.reviewInquiry.findFirst({
+      where: { id: input.inquiryId, review: { organizationId: input.organizationId } },
+      include: { review: { select: { attachedSessionId: true } } },
+    });
+    if (!inquiry) throw new NotFoundError("Review inquiry", input.inquiryId);
+    await assertSessionAccess(
+      inquiry.review.attachedSessionId,
+      input.actorId,
+      input.organizationId,
+    );
+    if (input.resolved && !isFinishedInquiryState(inquiry.state)) {
+      throw new ValidationError("Only finished AI conversations can be resolved");
+    }
+    const updated = await prisma.reviewInquiry.update({
+      where: { id: inquiry.id },
+      data: input.resolved
+        ? { resolvedAt: new Date(), resolvedById: input.actorId }
+        : { resolvedAt: null, resolvedById: null },
+      include: { responseMessage: true },
+    });
+    await this.emit(inquiry.reviewId, input, "review_inquiry_resolved", { inquiry: updated });
+    return updated;
   }
 
   async saveGuide(input: ActorInput & { inquiryId: string; content: unknown }) {
