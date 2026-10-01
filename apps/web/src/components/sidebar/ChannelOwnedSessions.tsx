@@ -17,6 +17,8 @@ import { toast } from "sonner";
 import { UPDATE_SESSION_GROUP_VISIBILITY_MUTATION, useAuthStore } from "@trace/client-core";
 import type { AuthState } from "@trace/client-core";
 import { useAttachedCheckoutForGroup } from "../../stores/bridges";
+import { SessionListName } from "../channel/SessionListName";
+import { SessionPullRequestIndicators } from "../session/SessionPullRequestIndicators";
 import { SessionStatusIndicator } from "../channel/SessionStatusIndicator";
 import type { SessionGroupRow } from "../channel/sessions-table-types";
 import { useSessionGroupRows } from "../channel/useSessionGroupRows";
@@ -299,9 +301,11 @@ function OwnedSessionGroupItem({
     >
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <SessionStatusIndicator row={record.row} size={6} showDonePulse={false} />
-        <span className={cn("min-w-0 flex-1 truncate", hasDoneBadge && "font-semibold")}>
-          {record.name}
-        </span>
+        <SessionListName
+          groupId={record.id}
+          className={cn("min-w-0 flex-1 truncate", hasDoneBadge && "font-semibold")}
+          onOpen={openSessionGroup}
+        />
         {isPrivate && (
           <PrivateSessionLock
             className="h-4 w-4 rounded-sm text-muted-foreground/80"
@@ -310,6 +314,9 @@ function OwnedSessionGroupItem({
         )}
         {attached && <SpotlightBridgeIndicator attached={attached} />}
         <SessionApplicationRunningIndicator sessionGroupId={record.id} />
+        {record.status === "in_review" && (
+          <SessionPullRequestIndicators sessionGroupId={record.id} />
+        )}
         <span className="shrink-0 text-[11px] text-foreground group-hover/session-row:hidden group-focus-within/session-row:hidden">
           {activityLabel}
         </span>

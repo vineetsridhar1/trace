@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CellContextMenuEvent, GridApi } from "ag-grid-community";
 import { toast } from "sonner";
 import { useUIStore, type UIState } from "../../stores/ui";
+import { renameSessionGroup } from "../../lib/rename-session-group";
 import { archiveSessionGroup } from "../../lib/archive-session-group";
 import { motion } from "framer-motion";
 import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import {
-  RENAME_SESSION_GROUP_MUTATION,
   UPDATE_SESSION_GROUP_VISIBILITY_MUTATION,
   useAuthStore,
   type AuthState,
@@ -84,21 +84,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     setRenamingGroupId(null);
     if (!trimmed || trimmed === group.name.trim()) return;
 
-    const rollback = applyOptimisticPatch("sessionGroups", group.id, { name: trimmed });
-    void client
-      .mutation(RENAME_SESSION_GROUP_MUTATION, { id: group.id, name: trimmed })
-      .toPromise()
-      .then((result) => {
-        if (!result.error) return;
-        rollback();
-        toast.error("Failed to rename workspace", { description: result.error.message });
-      })
-      .catch((error: unknown) => {
-        rollback();
-        toast.error("Failed to rename workspace", {
-          description: error instanceof Error ? error.message : "Please try again.",
-        });
-      });
+    void renameSessionGroup(group.id, trimmed);
   }, []);
 
   const handleUpdateVisibility = useCallback(
