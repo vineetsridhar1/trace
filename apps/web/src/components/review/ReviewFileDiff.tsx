@@ -1,14 +1,12 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { gql } from "@urql/core";
 import type { ReviewDiffFile, ReviewInquiry, ReviewThread as ReviewThreadType } from "@trace/gql";
 import { client } from "../../lib/urql";
 import { hunkGapLabel, parsePatch } from "./diff-patch";
 import {
-  type LineRange,
   lineNumberForSide,
   lineSide,
   rangeContains,
-  selectionFromLines,
   selectionRangeLabel,
   type ReviewLineSelection,
 } from "./review-selection";
@@ -19,6 +17,7 @@ import { DiffSelectionPopover } from "./diff/DiffSelectionPopover";
 import { ReviewInquiryCard } from "./ReviewInquiryCard";
 import { inquiriesQueuedAhead, inquiryQueueLabel, reviewInquiryAnchor } from "./review-inquiry";
 import { VirtualDiffRows, visibleDiffLines } from "./diff/VirtualDiffRows";
+import { useReviewLineSelection } from "./useReviewLineSelection";
 import { ReviewThread } from "./ReviewThread";
 import type { ReviewHighlight } from "../../stores/review-ui";
 
@@ -120,9 +119,6 @@ export function ReviewFileDiff({
   const cardRef = useRef<HTMLElement>(null);
   const [diff, setDiff] = useState<ReviewDiffFile | null>(() => patchCache.get(filePath) ?? null);
   const [error, setError] = useState<string | null>(null);
-  const [range, setRange] = useState<LineRange | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const [popoverTop, setPopoverTop] = useState(0);
 
   // The patch belongs to one immutable snapshot. Callers remount this card when the review
   // advances, but the comparison is kept here too: serving a cached patch under a newer snapshot
@@ -155,51 +151,9 @@ export function ReviewFileDiff({
   useEffect(() => setError(null), [snapshotId]);
 
   const lines = useMemo(() => visibleDiffLines(parsePatch(current?.patch ?? "")), [current?.patch]);
-  const selection = range ? selectionFromLines(filePath, lines, range) : null;
+  const { range, selection, popoverTop, beginSelection, extendSelection, clearSelection } =
+    useReviewLineSelection(filePath, lines, cardRef);
   const highlighted = highlight?.filePath === filePath ? highlight : null;
-
-  useEffect(() => {
-    if (!dragging) return;
-    const stop = () => setDragging(false);
-    window.addEventListener("pointerup", stop);
-    return () => window.removeEventListener("pointerup", stop);
-  }, [dragging]);
-
-  useEffect(() => {
-    if (!range) return;
-    const dismiss = (event: PointerEvent) => {
-      const target = event.target;
-      if (target instanceof Element && target.closest("[data-review-selection-popover]")) return;
-      setRange(null);
-      setDragging(false);
-    };
-    document.addEventListener("pointerdown", dismiss, true);
-    return () => document.removeEventListener("pointerdown", dismiss, true);
-  }, [range]);
-
-  const beginSelection = useCallback(
-    (event: React.PointerEvent, side: LineRange["side"], line: number) => {
-      if (event.button !== 0) return;
-      setRange({ side, start: line, end: line });
-      setDragging(true);
-      const rowTop = event.currentTarget.getBoundingClientRect().top;
-      const cardTop = cardRef.current?.getBoundingClientRect().top ?? rowTop;
-      setPopoverTop(rowTop - cardTop + 26);
-    },
-    [],
-  );
-
-  const extendSelection = useCallback(
-    (side: LineRange["side"], line: number) => {
-      if (!dragging) return;
-      setRange((current) =>
-        current && current.side === side
-          ? { side, start: Math.min(current.start, line), end: Math.max(current.end, line) }
-          : current,
-      );
-    },
-    [dragging],
-  );
 
   const fileThreads = useMemo(
     () => threads.filter((thread) => thread.anchor?.filePath === filePath),
@@ -344,11 +298,11 @@ export function ReviewFileDiff({
               top={popoverTop}
               onComment={() => {
                 onComment(selection);
-                setRange(null);
+                clearSelection();
               }}
               onAsk={() => {
                 onAsk(selection);
-                setRange(null);
+                clearSelection();
               }}
             />
           ) : null}

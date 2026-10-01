@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Button } from "../../ui/button";
 import type { ReviewFile } from "@trace/gql";
 import { GuideChapterAside } from "./GuideChapterAside";
+import type { ReviewLineSelection } from "../review-selection";
 import { GuideCodeExcerpt } from "./GuideCodeExcerpt";
 import {
   anchorsEqual,
@@ -18,6 +19,7 @@ interface GuideScrollerProps {
   files: ReviewFile[];
   onOpenReference(anchor: GuideAnchor): void;
   onOpenInChanges(anchor: GuideAnchor): void;
+  onCodeAction(chapterId: string, kind: "comment" | "ask", selection: ReviewLineSelection): void;
   onAskAboutChapter(chapterId: string): void;
   onCommentOnChapter(chapterId: string): void;
   onReviewAllChanges(): void;
@@ -32,6 +34,7 @@ export function GuideScroller({
   files,
   onOpenInChanges,
   onOpenReference,
+  onCodeAction,
   onAskAboutChapter,
   onCommentOnChapter,
   onReviewAllChanges,
@@ -102,6 +105,9 @@ export function GuideScroller({
             <div className="flex flex-col gap-[18px] bg-[var(--th-review-card-deep)] px-5 pb-7 pt-5">
               {chapter.references.map((reference, step) => (
                 <GuideCodeExcerpt
+                  reviewId={reviewId}
+                  onComment={(selection) => onCodeAction(chapter.id, "comment", selection)}
+                  onAsk={(selection) => onCodeAction(chapter.id, "ask", selection)}
                   key={`${snapshotId}:${guideReferenceKey(reference)}`}
                   snapshotId={snapshotId}
                   filePath={reference.filePath}

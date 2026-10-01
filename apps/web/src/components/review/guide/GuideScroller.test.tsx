@@ -65,6 +65,7 @@ describe("Guide reference navigation", () => {
     act(() => {
       renderer = create(
         <GuideScroller
+          onCodeAction={vi.fn()}
           reviewId="review"
           guideId="guide"
           snapshotId="snapshot"

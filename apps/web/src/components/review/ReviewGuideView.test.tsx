@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useEntityStore } from "@trace/client-core";
 import type { ReviewGuide, ReviewInquiry, SessionMessage } from "@trace/gql";
 import { ReviewGuideView } from "./ReviewGuideView";
+import { GuideScroller } from "./guide/GuideScroller";
 import { ReviewInlineComposer } from "./ReviewInlineComposer";
 import { ReviewInquiryCard } from "./ReviewInquiryCard";
 import { useReviewUiStore } from "../../stores/review-ui";
@@ -104,6 +105,45 @@ describe("Guide Ask about this", () => {
     // Mutation results never create UI entities. The review event populates the store.
     expect(renderer.root.findAllByType(ReviewInquiryCard)).toHaveLength(0);
   });
+
+  it.each(["ask", "comment"] as const)(
+    "submits a selected Guide range as %s on its own snapshot",
+    async (kind) => {
+      const anchor = {
+        filePath: "src/game.ts",
+        side: "head",
+        startLine: 12,
+        endLine: 14,
+        selectedText: "selected code",
+        context: "surrounding code",
+      };
+      act(() =>
+        renderer.root.findByType(GuideScroller).props.onCodeAction("validate", kind, anchor),
+      );
+      expect(renderer.root.findByType("textarea").props.placeholder).toBe(
+        kind === "ask" ? "Ask about these lines…" : "Stays in Trace until you send it…",
+      );
+      act(() => renderer.root.findByType(ReviewInlineComposer).props.onBody("Explain this range"));
+      await act(async () => renderer.root.findByType(ReviewInlineComposer).props.onSubmit());
+      expect(mutate).toHaveBeenCalledWith(expect.anything(), {
+        input: expect.objectContaining({
+          reviewId: "review",
+          snapshotId: "old-snapshot",
+          anchor: { snapshotId: "old-snapshot", ...anchor },
+          ...(kind === "ask"
+            ? {
+                sourceKind: "diff_anchor",
+                context: expect.objectContaining({
+                  guideId: "guide",
+                  guideChapterId: "validate",
+                  selectedText: "selected code",
+                }),
+              }
+            : { scope: "line", guideChapterId: "validate" }),
+        }),
+      });
+    },
+  );
 
   it("keeps the draft when enqueue fails", async () => {
     mutate.mockRejectedValue(new Error("Queue unavailable"));

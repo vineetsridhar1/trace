@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { Button } from "../../ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../../ui/accordion";
 import { ExternalLink } from "lucide-react";
-import { DiffLineRow } from "../diff/DiffLineRow";
+import { GuideSnippetDiff } from "./GuideSnippetDiff";
+import type { ReviewLineSelection } from "../review-selection";
 import type { DiffLine } from "../diff-patch";
 import { cn } from "../../../lib/utils";
 import { guideReferenceKey } from "./guide-content";
@@ -10,6 +11,9 @@ import { GuideSnippetExplanation } from "./GuideSnippetExplanation";
 import { useGuideExcerpt } from "./useGuideExcerpt";
 
 export function GuideCodeExcerpt({
+  reviewId,
+  onComment,
+  onAsk,
   snapshotId,
   filePath,
   startLine,
@@ -22,6 +26,9 @@ export function GuideCodeExcerpt({
   onOpen,
   onRegenerate,
 }: {
+  reviewId: string;
+  onComment(selection: ReviewLineSelection): void;
+  onAsk(selection: ReviewLineSelection): void;
   snapshotId: string;
   filePath: string;
   startLine: number;
@@ -127,18 +134,14 @@ export function GuideCodeExcerpt({
       {error ? <p className="p-4 text-xs text-destructive">{error}</p> : null}
       {!error && !excerpt ? <div className="h-24 animate-pulse bg-muted/10" /> : null}
       {excerpt ? (
-        <div className="native-scrollbar min-w-0 overflow-x-auto py-1 font-mono text-xs leading-5">
-          <div className="min-w-max">
-            {lines.map((line) => (
-              <DiffLineRow
-                key={line.newLine}
-                line={line}
-                lineNumber={line.newLine}
-                emphasis="none"
-              />
-            ))}
-          </div>
-        </div>
+        <GuideSnippetDiff
+          reviewId={reviewId}
+          snapshotId={snapshotId}
+          filePath={filePath}
+          lines={lines}
+          onComment={onComment}
+          onAsk={onAsk}
+        />
       ) : null}
     </div>
   );

@@ -15,6 +15,9 @@ function view(
 ) {
   return (
     <GuideCodeExcerpt
+      reviewId="review"
+      onComment={() => {}}
+      onAsk={() => {}}
       snapshotId={snapshotId}
       filePath="src/a.ts"
       startLine={startLine}
@@ -48,7 +51,10 @@ describe("Guide code excerpt", () => {
   let renderer: ReactTestRenderer;
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-    vi.stubGlobal("requestAnimationFrame", vi.fn(() => 0));
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      vi.fn(() => 0),
+    );
     vi.stubGlobal("cancelAnimationFrame", vi.fn());
     query.mockReset();
   });

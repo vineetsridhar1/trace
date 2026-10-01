@@ -85,6 +85,36 @@ describe("Guide chapter questions", () => {
     );
   });
 
+  it("captures chapter context for an inline Guide code question", async () => {
+    const anchor = {
+      snapshotId: "old-snapshot",
+      filePath: "src/game.ts",
+      side: "head",
+      startLine: 12,
+      endLine: 14,
+    };
+    const inquiry = await service.enqueueInquiry({
+      ...input,
+      sourceKind: "diff_anchor",
+      anchor,
+      context: {
+        ...input.context,
+        selectedText: "selected code",
+        surroundingContext: "source context",
+      },
+    });
+    expect(inquiry).toMatchObject({
+      sourceKind: "diff_anchor",
+      anchor,
+      context: {
+        guideId: "guide",
+        guideChapter: chapter,
+        selectedText: "selected code",
+        surroundingContext: "source context",
+      },
+    });
+  });
+
   it("rejects a chapter or guide that does not belong to the snapshot", async () => {
     await expect(
       service.enqueueInquiry({

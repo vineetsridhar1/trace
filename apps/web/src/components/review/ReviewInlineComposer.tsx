@@ -52,7 +52,7 @@ export function ReviewInlineComposer({
         placeholder={
           comment
             ? "Stays in Trace until you send it…"
-            : target.guideChapterId
+            : target.scope === "guide_explanation"
               ? "Ask about this chapter…"
               : "Ask about these lines…"
         }

@@ -400,6 +400,8 @@ export class ReviewService {
       startLine: input.startLine,
       endLine: input.startLine + content.split("\n").length - 1,
       content,
+      // Service-only metadata used to keep comments on contextual code out of GitHub delivery.
+      inDiff: complete,
       addedLines: lines.flatMap((line) =>
         line.oldLine === null && line.newLine !== null ? [line.newLine] : [],
       ),
@@ -424,7 +426,40 @@ export class ReviewService {
         typeof file.path === "string" ? [file.path] : [],
       ),
     );
-    const anchor = input.anchor ? validateAnchor(input.anchor, snapshot.id, files) : undefined;
+    let scope = input.scope;
+    let anchorInput = input.anchor;
+    if (anchorInput && input.guideChapterId) {
+      const hasChapter = review.guides.some((guide) => {
+        const content = anchorRecord(guide.content);
+        return (
+          guide.snapshotId === snapshot.id &&
+          Array.isArray(content?.chapters) &&
+          content.chapters.some((chapter) => anchorRecord(chapter)?.id === input.guideChapterId)
+        );
+      });
+      if (!hasChapter)
+        throw new ValidationError("Guide chapter does not belong to this review snapshot");
+      if (
+        anchorInput.side !== "head" ||
+        typeof anchorInput.filePath !== "string" ||
+        typeof anchorInput.startLine !== "number" ||
+        typeof anchorInput.endLine !== "number"
+      )
+        throw new ValidationError("Guide code comments require a head-side line range");
+      const excerpt = await this.codeExcerpt({
+        ...input,
+        snapshotId: snapshot.id,
+        filePath: anchorInput.filePath,
+        startLine: anchorInput.startLine,
+        endLine: anchorInput.endLine,
+      });
+      // Guide excerpts can include unchanged source outside diff hunks. Verify that code at the
+      // immutable SHA, and keep those comments Trace-only instead of submitting invalid GH anchors.
+      files.add(excerpt.path);
+      scope = excerpt.inDiff ? "line" : "guide_explanation";
+      anchorInput = { ...anchorInput, endLine: excerpt.endLine, selectedText: excerpt.content };
+    }
+    const anchor = anchorInput ? validateAnchor(anchorInput, snapshot.id, files) : undefined;
     if ((input.scope === "line" || input.scope === "file") && !anchor) {
       throw new ValidationError("Code-scoped threads require an anchor");
     }
@@ -433,7 +468,7 @@ export class ReviewService {
         reviewId: review.id,
         originSnapshotId: snapshot.id,
         authorId: input.actorId,
-        scope: input.scope,
+        scope,
         anchor,
         guideChapterId: input.guideChapterId,
         comments: { create: { authorId: input.actorId, body: cleanBody(input.body) } },
@@ -550,7 +585,10 @@ export class ReviewService {
     if (!snapshot) throw new ValidationError("Snapshot does not belong to this review");
     const context = anchorRecord(input.context) ?? {};
     let guideContext: Record<string, unknown> = {};
-    if (input.sourceKind === "guide_anchor") {
+    if (
+      input.sourceKind === "guide_anchor" ||
+      (input.sourceKind === "diff_anchor" && typeof context.guideChapterId === "string")
+    ) {
       if (typeof context.guideChapterId !== "string")
         throw new ValidationError("Guide question requires a chapter");
       const guide = await prisma.reviewGuide.findFirst({

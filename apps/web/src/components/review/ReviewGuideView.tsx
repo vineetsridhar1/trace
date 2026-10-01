@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useEntityField } from "@trace/client-core";
 import { gql } from "@urql/core";
 import type { ReviewFile, ReviewGuide, ReviewInquiry } from "@trace/gql";
@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "../ui/button";
 import { ReviewEmptyState } from "./ReviewEmptyState";
 import { ReviewInlineComposer, type ReviewComposerTarget } from "./ReviewInlineComposer";
+import { selectionRangeLabel, type ReviewLineSelection } from "./review-selection";
 import { mutateReview } from "./review-operations";
 import { GuideGeneratingState } from "./guide/GuideGeneratingState";
 import { guideSourceUrl } from "./guide/guide-source";
@@ -68,6 +69,11 @@ export function ReviewGuideView({
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    setComposer(null);
+    setBody("");
+  }, [guide?.id, guideSnapshotId]);
+
   const openComposer = useCallback(
     (chapterId: string, kind: ReviewComposerTarget["kind"]) => {
       setBody("");
@@ -82,6 +88,20 @@ export function ReviewGuideView({
     [content.chapters],
   );
 
+  const openCodeComposer = useCallback(
+    (chapterId: string, kind: ReviewComposerTarget["kind"], anchor: ReviewLineSelection) => {
+      setBody("");
+      setComposer({
+        kind,
+        scope: "line",
+        guideChapterId: chapterId,
+        anchor,
+        label: `${anchor.filePath} · ${selectionRangeLabel({ side: anchor.side, start: anchor.startLine, end: anchor.endLine })}`,
+      });
+    },
+    [],
+  );
+
   const submit = async () => {
     if (!composer?.guideChapterId || !body.trim() || submitting) return;
     setSubmitting(true);
@@ -91,23 +111,40 @@ export function ReviewGuideView({
           input: {
             reviewId,
             snapshotId: guideSnapshotId,
-            sourceKind: "guide_anchor",
+            sourceKind: composer.anchor ? "diff_anchor" : "guide_anchor",
             question: body.trim(),
-            context: { guideId: guide?.id, guideChapterId: composer.guideChapterId },
+            ...(composer.anchor
+              ? { anchor: { snapshotId: guideSnapshotId, ...composer.anchor } }
+              : {}),
+            context: {
+              guideId: guide?.id,
+              guideChapterId: composer.guideChapterId,
+              ...(composer.anchor
+                ? {
+                    selectedText: composer.anchor.selectedText,
+                    surroundingContext: composer.anchor.context,
+                  }
+                : {}),
+            },
           },
         });
-        toast.success("Question queued for this chapter");
+        toast.success(
+          composer.anchor ? "Question queued for these lines" : "Question queued for this chapter",
+        );
       } else {
         await mutateReview(CREATE_THREAD, {
           input: {
             reviewId,
             snapshotId: guideSnapshotId,
-            scope: "guide_explanation",
+            scope: composer.scope,
+            ...(composer.anchor
+              ? { anchor: { snapshotId: guideSnapshotId, ...composer.anchor } }
+              : {}),
             body: body.trim(),
             guideChapterId: composer.guideChapterId,
           },
         });
-        toast.success("Comment saved on this chapter");
+        toast.success(composer.anchor ? "Comment saved in Trace" : "Comment saved on this chapter");
       }
       setBody("");
       setComposer(null);
@@ -194,6 +231,7 @@ export function ReviewGuideView({
         files={guideFiles ?? files}
         onOpenInChanges={guideSnapshotId === snapshotId ? onOpenInChanges : openReference}
         onOpenReference={openReference}
+        onCodeAction={openCodeComposer}
         onAskAboutChapter={(chapterId) => openComposer(chapterId, "ask")}
         onCommentOnChapter={(chapterId) => openComposer(chapterId, "comment")}
         onReviewAllChanges={onReviewAllChanges}
