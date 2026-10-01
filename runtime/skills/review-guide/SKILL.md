@@ -15,9 +15,9 @@ snapshot's continuous diff.
 
 The Guide is read as one continuous scroll, two columns wide:
 
-- The left column holds one chapter's prose and stays pinned while the reader scrolls.
-- The right column shows the full diff of every file that chapter owns, in order.
-- When a chapter's last file scrolls past, the next chapter's prose takes over the left column.
+- The left column holds one chapter's prose and scrolls with the adjacent files.
+- The right column shows the full diff of each changed file the chapter owns, in order.
+  Context files outside the PR appear as source links, not diff cards.
 - Chapters flow directly into one another as the reviewer scrolls; do not depend on a separate
   chapter-navigation control.
 
@@ -25,8 +25,9 @@ This layout drives the whole contract:
 
 - A chapter owns a **set of files**, because their diffs are stacked beside its prose. Group files
   that are read together.
-- Prose contains **inline links** into those files. A link jumps the right column to that line range
-  and highlights it, so the reader never leaves the chapter to see the code being discussed.
+- Prose contains **inline links** to repository files. Links into chapter diffs jump to and highlight
+  the range. Links to other changed files navigate to their diff; links outside the PR open source
+  at the snapshot's head commit. Cross-chapter references are allowed.
 - `everythingElse` becomes a trailing list of changed files not worth a full chapter.
 - Reviewers may ask follow-up questions or create review threads from any chapter.
 - The Guide is saved against an immutable base/head snapshot. Never describe uncommitted work or a
@@ -53,8 +54,8 @@ only when it answers a specific question needed for the explanation. Do not broa
 repository. If the snapshot commits are unavailable, use the bounded context provided by Trace and
 do not invent details.
 
-Line numbers in every link must be head-side line numbers from that snapshot diff. Read them off the
-diff rather than estimating, because a wrong number sends the reader to the wrong code.
+Line numbers in every link must come from the snapshot head commit. Read changed ranges from the
+diff and contextual ranges from `git show <head-sha>:<path>`; do not estimate from a newer checkout.
 
 ## Build the explanation
 
@@ -107,7 +108,8 @@ For each chapter:
   operations, or future work. Reviewers read these as the chapter's "worth a look" list, so keep each
   one short and concrete. Do not invent risks unsupported by the diff; leave the list empty when a
   chapter genuinely has none.
-- `files`: every changed path this chapter covers, in reading order.
+- `files`: paths this chapter covers, in reading order. You may include unchanged repository files
+  when useful context, but do not describe them as changes in this PR.
 
 Use `everythingElse` only for real changed files whose contribution is too small or mechanical to
 justify a chapter. It is not a dumping ground. An ordinary wiring or config file usually belongs in a
@@ -123,13 +125,14 @@ Write links inline, in both `explanation` and `implications`, using exactly this
 
 - `label` is what the reader sees: the symbol, route, or phrase being named. Keep it short — a
   function name, type, or endpoint, not a sentence.
-- `path` must be one of that same chapter's `files`. A link into another chapter's file would scroll
-  the reader out of the chapter, so it is rejected.
+- `path` may be any real repository file at the head commit, including unchanged files and files
+  assigned to another chapter. Preserve literal brackets and backslashes in filenames; JSON
+  requires a literal backslash to be escaped as `\\`.
 - `startLine-endLine` is a head-side range. Use the same number twice for a single line.
 
 Prefer a link over a backticked name whenever the code is in the chapter. Link the smallest range
 that shows the point — a signature, a branch, a loop — not a whole file. Several links into one file
-are expected and encouraged. Use backticks only for names that are not in this chapter's diff.
+are expected and encouraged. Use backticks for names that do not need navigation.
 
 ```text
 Every game is stored in a module-level [[games|lib/store.ts|3-3]] Map, keyed by a six-character code
@@ -157,12 +160,12 @@ Return only one JSON object. Do not wrap it in a Markdown fence or add commentar
 }
 ```
 
-Hard requirements — Trace rejects the Guide if any of these is broken:
+Authoring requirements:
 
-- Copy every path exactly from Trace's authoritative changed-file list.
-- Never mention an unchanged or invented path.
-- Every inline link must target a path in its own chapter's `files`, with integer line numbers
-  greater than zero and `endLine >= startLine`.
+- Copy changed paths exactly from Trace's authoritative list, including literal backslashes.
+- Contextual references outside the PR are allowed; inspect them at the head commit and never
+  invent paths. The changed-file list is not a list of every file in the repository.
+- Every inline link must use integer line numbers greater than zero and `endLine >= startLine`.
 - Give every chapter at least one file.
 - Keep `title` to one line and `intent` to one or two sentences.
 - Use unique, stable, snake-case chapter IDs.
@@ -179,10 +182,11 @@ Trace repairs these for you, so aim for them but never stall on them:
 
 Perform this check silently:
 
-1. Confirm every path you used appears verbatim in the authoritative list from the request.
+1. Confirm changed paths match the authoritative list verbatim; verify other references in the
+   repository at the head commit.
 2. Confirm no path appears more than once, and that every chapter has at least one file.
-3. For every `[[...]]` link, confirm the path is in that chapter's own `files`, and that the range is
-   a positive ordered pair of head-side line numbers taken from the diff.
+3. For every `[[...]]` link, confirm the path and positive ordered line range against the head
+   commit. Bracketed routes such as `[gameId]` are valid paths.
 4. Confirm the prose explains the change rather than reviewing its quality.
 5. Confirm the response contains JSON only.
 

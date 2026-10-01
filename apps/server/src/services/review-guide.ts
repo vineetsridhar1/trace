@@ -8,7 +8,8 @@ export const REVIEW_GUIDE_SKILL_INSTRUCTION = [
 ].join("\n\n");
 
 /** Inline prose anchor: `[[label|path|startLine-endLine]]`. */
-const ANCHOR_PATTERN = /\[\[([^[\]|]+)\|([^[\]|]+)\|(\d+)-(\d+)\]\]/g;
+const ANCHOR_PATTERN = /\[\[([^[\]|]+)\|([^|\r\n]+)\|(\d+)-(\d+)\]\]/g;
+const MAX_PROMPT_PATHS = 500;
 
 interface GuideChapter {
   id: string;
@@ -47,15 +48,29 @@ function stringList(value: unknown): string[] | null {
   return value.map((item) => item.trim()).filter(Boolean);
 }
 
-/**
- * Inline anchors are navigation, not content. An anchor pointing outside the chapter's own files
- * cannot be followed — the reader jumps to it inside that chapter's diff column — so it is reduced
- * to its plain label rather than failing the whole Guide.
- */
-function stripUnresolvableAnchors(text: string, chapterFiles: Set<string>): string {
-  return text.replace(ANCHOR_PATTERN, (match, label: string, filePath: string, start, end) => {
-    if (!chapterFiles.has(filePath)) return label;
-    return Number(start) >= 1 && Number(end) >= Number(start) ? match : label;
+/** Exact paths win; only repair bracket escaping when there is one snapshot candidate. */
+function pathResolver(paths: string[]): (path: string) => string {
+  const exact = new Set(paths);
+  const unescape = (path: string) => path.replace(/\\([[\]])/g, "$1");
+  const aliases = new Map<string, string | null>();
+  for (const path of paths) {
+    const alias = unescape(path);
+    aliases.set(alias, aliases.has(alias) ? null : path);
+  }
+  return (path) => (exact.has(path) ? path : (aliases.get(unescape(path)) ?? path));
+}
+
+/** Preserve repository references even when the snapshot has no diff for that file. */
+function normalizeAnchors(text: string, resolvePath: (path: string) => string): string {
+  return text.replace(ANCHOR_PATTERN, (_match, label: string, filePath: string, start, end) => {
+    if (
+      !Number.isSafeInteger(Number(start)) ||
+      !Number.isSafeInteger(Number(end)) ||
+      Number(start) < 1 ||
+      Number(end) < Number(start)
+    )
+      return label;
+    return `[[${label}|${resolvePath(filePath)}|${start}-${end}]]`;
   });
 }
 
@@ -71,9 +86,9 @@ export function guideGenerationInstruction(filesValue: Prisma.JsonValue): string
           `That list is truncated to the first ${MAX_PROMPT_PATHS} of ${paths.length} paths; cover what you can and leave the rest out.`,
         ]
       : []),
-    "Assign each path to the files of at most one chapter, or to everythingElse. Do not invent paths.",
+    "Assign each changed path to the files of at most one chapter, or to everythingElse. You may also include real repository files outside the PR when needed for context. Do not invent paths.",
     "Anything you do not assign is filed under everythingElse automatically, so prefer omitting a path over guessing at it.",
-    "Inside explanation and implications, link to specific code with [[label|path|startLine-endLine]]. The path must be one of that same chapter's files, startLine must be positive, and endLine must be at least startLine.",
+    "Inside explanation and implications, link to specific code with [[label|path|startLine-endLine]]. Links may target any repository file, including files outside the PR or in another chapter. Use exact paths (preserving literal brackets and backslashes) and head-commit line numbers. startLine must be positive, and endLine must be at least startLine.",
   ].join("\n");
 }
 
@@ -99,14 +114,10 @@ export function validateReviewGuide(
   }
 
   const paths = snapshotPaths(filesValue);
-  const allowedPaths = new Set(paths);
+  const resolvePath = pathResolver(paths);
   const covered = new Set<string>();
 
-  // Only the Guide's structure is fatal. Every reference the model gets wrong — a path outside the
-  // changeset, a repeat, an omission, an anchor that cannot be followed — is repaired here, because
-  // the alternative is throwing away a generation that took a full coding-session turn. The agent
-  // can read the whole repository, so naming a real file that this pull request does not touch is
-  // its most likely mistake, not a sign the rest of the Guide is wrong.
+  // Coverage concerns changed files; contextual repository references remain valid.
   const chapters: GuideChapter[] = guide.chapters.map((chapterValue, chapterIndex) => {
     const chapter = asRecord(chapterValue);
     const id = typeof chapter?.id === "string" ? chapter.id : null;
@@ -132,30 +143,28 @@ export function validateReviewGuide(
         `Guide chapter ${chapterIndex + 1} is missing or malformed "${badField ?? "files"}"`,
       );
     }
-    const files = declaredFiles.filter((filePath) => {
-      if (!allowedPaths.has(filePath) || covered.has(filePath)) return false;
+    const files = declaredFiles.map(resolvePath).filter((filePath) => {
+      if (covered.has(filePath)) return false;
       covered.add(filePath);
       return true;
     });
-    // Anchors are resolved against the files the chapter actually kept, so a stored Guide never
-    // renders a link to a file this snapshot cannot show.
-    const chapterFiles = new Set(files);
     return {
       id,
       title,
-      explanation: stripUnresolvableAnchors(explanation, chapterFiles),
-      implications: implications.map((implication) =>
-        stripUnresolvableAnchors(implication, chapterFiles),
-      ),
+      explanation: normalizeAnchors(explanation, resolvePath),
+      implications: implications.map((implication) => normalizeAnchors(implication, resolvePath)),
       files,
     };
   });
 
-  const everythingElse = guide.everythingElse.filter((value): value is string => {
-    if (typeof value !== "string" || !allowedPaths.has(value) || covered.has(value)) return false;
-    covered.add(value);
-    return true;
-  });
+  const everythingElse = guide.everythingElse
+    .filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
+    .map(resolvePath)
+    .filter((value) => {
+      if (covered.has(value)) return false;
+      covered.add(value);
+      return true;
+    });
   // Full coverage is a property of the stored Guide, not a demand on the model: anything the
   // chapters never claimed is filed under "everything else".
   everythingElse.push(...paths.filter((path) => !covered.has(path)));

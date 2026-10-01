@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "version": 32,
+  "version": 33,
   "protocolVersion": 1,
-  "contentHash": "a640d2686a29af1d48815e2fa2e08a1273fb2d7f326947cc2f6e49795733c9e9",
+  "contentHash": "936869ae413cc377aa9c03fe9d6edf0e8219d2e19848de80e2d17b81526ab3c4",
   "files": [
     "bin/trace",
     "bin/trace.mjs",

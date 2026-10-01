@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useEntityField } from "@trace/client-core";
 import { gql } from "@urql/core";
 import type { ReviewFile, ReviewGuide, ReviewInquiry } from "@trace/gql";
 import { BookOpen, Sparkles } from "lucide-react";
@@ -8,6 +9,7 @@ import { ReviewEmptyState } from "./ReviewEmptyState";
 import { ReviewInlineComposer, type ReviewComposerTarget } from "./ReviewInlineComposer";
 import { mutateReview } from "./review-operations";
 import { GuideGeneratingState } from "./guide/GuideGeneratingState";
+import { guideSourceUrl } from "./guide/guide-source";
 import { GuideScroller } from "./guide/GuideScroller";
 import { normalizeGuideContent, type GuideAnchor } from "./guide/guide-content";
 
@@ -51,6 +53,16 @@ export function ReviewGuideView({
   onAskAboutChapter,
   onReviewAllChanges,
 }: ReviewGuideViewProps) {
+  const pullRequestUrl = useEntityField("reviews", reviewId, "pullRequestUrl");
+  const headSha = useEntityField("reviewSnapshots", guide?.snapshotId ?? snapshotId, "headSha");
+  const openReference = useCallback(
+    (anchor: GuideAnchor) => {
+      const url = guideSourceUrl(pullRequestUrl ?? "", headSha ?? "", anchor);
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      else toast.error("Source link is unavailable for this reference");
+    },
+    [pullRequestUrl, headSha],
+  );
   const content = useMemo(() => normalizeGuideContent(guide?.content), [guide?.content]);
   const [composer, setComposer] = useState<ReviewComposerTarget | null>(null);
   const [body, setBody] = useState("");
@@ -166,6 +178,7 @@ export function ReviewGuideView({
         content={content}
         files={files}
         onOpenInChanges={onOpenInChanges}
+        onOpenReference={openReference}
         onAskAboutChapter={onAskAboutChapter}
         onCommentOnChapter={openComposer}
         onReviewAllChanges={onReviewAllChanges}

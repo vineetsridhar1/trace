@@ -8,6 +8,7 @@ interface GuideScrollerProps {
   snapshotId: string;
   content: GuideContent;
   files: ReviewFile[];
+  onOpenReference(anchor: GuideAnchor): void;
   onOpenInChanges(anchor: GuideAnchor): void;
   onAskAboutChapter(chapterId: string): void;
   onCommentOnChapter(chapterId: string): void;
@@ -19,6 +20,7 @@ export function GuideScroller({
   content,
   files,
   onOpenInChanges,
+  onOpenReference,
   onAskAboutChapter,
   onCommentOnChapter,
   onReviewAllChanges,
@@ -29,8 +31,12 @@ export function GuideScroller({
   const [anchor, setAnchor] = useState<GuideAnchor | null>(null);
   const filesByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files]);
   const coveredCount = useMemo(
-    () => content.chapters.reduce((total, chapter) => total + chapter.files.length, 0),
-    [content.chapters],
+    () =>
+      content.chapters.reduce(
+        (total, chapter) => total + chapter.files.filter((path) => filesByPath.has(path)).length,
+        0,
+      ),
+    [content.chapters, filesByPath],
   );
 
   const scrollToSelector = useCallback((selector: string) => {
@@ -75,11 +81,19 @@ export function GuideScroller({
 
   const jumpToAnchor = useCallback(
     (next: GuideAnchor) => {
+      if (!filesByPath.has(next.filePath)) {
+        onOpenReference(next);
+        return;
+      }
+      if (!content.chapters.some((chapter) => chapter.files.includes(next.filePath))) {
+        onOpenInChanges(next);
+        return;
+      }
       setAnchor((current) => (anchorsEqual(current, next) ? current : next));
       setActiveFilePath(next.filePath);
       scrollToSelector(`[data-guide-file="${CSS.escape(next.filePath)}"]`);
     },
-    [scrollToSelector],
+    [scrollToSelector, filesByPath, content.chapters, onOpenReference, onOpenInChanges],
   );
 
   return (
@@ -108,23 +122,37 @@ export function GuideScroller({
               onComment={() => onCommentOnChapter(chapter.id)}
             />
             <div className="flex flex-col gap-[18px] bg-[var(--th-review-card-deep)] px-5 pb-7 pt-5">
-              {chapter.files.map((filePath) => (
-                <GuideFileDiff
-                  // Same reason as the Changes cards: a new snapshot must remount so the card
-                  // cannot keep serving the previous commit's cached patch.
-                  key={`${snapshotId}:${filePath}`}
-                  snapshotId={snapshotId}
-                  filePath={filePath}
-                  highlight={anchor?.filePath === filePath ? anchor : null}
-                  onOpenInChanges={() =>
-                    onOpenInChanges(
-                      anchor?.filePath === filePath
-                        ? anchor
-                        : { filePath, startLine: 1, endLine: 1 },
-                    )
-                  }
-                />
-              ))}
+              {chapter.files.map((filePath) =>
+                filesByPath.has(filePath) ? (
+                  <GuideFileDiff
+                    // Same reason as the Changes cards: a new snapshot must remount so the card
+                    // cannot keep serving the previous commit's cached patch.
+                    key={`${snapshotId}:${filePath}`}
+                    snapshotId={snapshotId}
+                    filePath={filePath}
+                    highlight={anchor?.filePath === filePath ? anchor : null}
+                    onOpenInChanges={() =>
+                      onOpenInChanges(
+                        anchor?.filePath === filePath
+                          ? anchor
+                          : { filePath, startLine: 1, endLine: 1 },
+                      )
+                    }
+                  />
+                ) : (
+                  <button
+                    key={filePath}
+                    type="button"
+                    onClick={() => onOpenReference({ filePath, startLine: 1, endLine: 1 })}
+                    className="min-w-0 rounded-md border border-[var(--th-edge)] p-4 text-left text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    <span className="block break-all font-mono">{filePath}</span>
+                    <span className="mt-1 block text-xs">
+                      Context file · outside this PR’s changes · Open source ↗
+                    </span>
+                  </button>
+                ),
+              )}
             </div>
           </div>
         ))}
@@ -138,7 +166,7 @@ export function GuideScroller({
                 <button
                   key={path}
                   type="button"
-                  onClick={() => onOpenInChanges({ filePath: path, startLine: 1, endLine: 1 })}
+                  onClick={() => jumpToAnchor({ filePath: path, startLine: 1, endLine: 1 })}
                   className="rounded-md border border-[var(--th-edge)] px-2 py-1 font-mono text-[11px] text-[var(--th-primary)] hover:text-foreground"
                 >
                   {path}

@@ -22,7 +22,7 @@ export interface GuideContent {
 }
 
 /** Matches the `[[label|path|startLine-endLine]]` anchors the Guide contract puts inside prose. */
-const ANCHOR_PATTERN = /\[\[([^[\]|]+)\|([^[\]|]+)\|(\d+)-(\d+)\]\]/g;
+const ANCHOR_PATTERN = /\[\[([^[\]|]+)\|([^|\r\n]+)\|(\d+)-(\d+)\]\]/g;
 
 export function parseGuideSegments(text: string): GuideSegment[] {
   const segments: GuideSegment[] = [];

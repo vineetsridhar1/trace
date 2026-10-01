@@ -14,6 +14,16 @@ describe("parseGuideSegments", () => {
     ]);
   });
 
+  it.each([
+    "app/game/[gameId]/page.tsx",
+    String.raw`app/game/\[gameId\]/page.tsx`,
+    "app/[[...slug]]/page.tsx",
+  ])("parses bracketed repository path %s", (filePath) => {
+    expect(parseGuideSegments(`[[route|${filePath}|2-8]]`)).toEqual([
+      { kind: "anchor", label: "route", anchor: { filePath, startLine: 2, endLine: 8 } },
+    ]);
+  });
+
   it("keeps plain prose as a single segment", () => {
     expect(parseGuideSegments("Nothing to link.")).toEqual([
       { kind: "text", text: "Nothing to link." },

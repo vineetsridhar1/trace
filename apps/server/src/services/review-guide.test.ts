@@ -67,22 +67,18 @@ describe("review guide contract", () => {
     expect(validated.chapters[0]?.explanation).toContain("[[flush|src/a.ts|11-11]]");
   });
 
-  it("rejects an inline anchor pointing outside the chapter's own files", () => {
-    expect(() =>
-      validateReviewGuide(
-        guide({ chapters: [chapter({ explanation: "See [[other|src/b.ts|2-2]]." })] }),
-        files,
-      ),
-    ).toThrow('Guide chapter "A" links to src/b.ts, which is not one of that chapter\'s files');
+  it("preserves links outside the chapter and outside the changeset", () => {
+    const explanation = "See [[other|src/b.ts|2-2]] and [[context|src/context.ts|5-8]].";
+    const validated = validateReviewGuide(guide({ chapters: [chapter({ explanation })] }), files);
+    expect(validated.chapters[0]?.explanation).toBe(explanation);
   });
 
-  it("rejects an inline anchor with an inverted line range", () => {
-    expect(() =>
-      validateReviewGuide(
-        guide({ chapters: [chapter({ implications: ["See [[init|src/a.ts|9-2]]."] })] }),
-        files,
-      ),
-    ).toThrow('Guide chapter "A" links to an invalid line range in src/a.ts');
+  it("reduces invalid line ranges to labels without losing the explanation", () => {
+    const validated = validateReviewGuide(
+      guide({ chapters: [chapter({ implications: ["See [[init|src/a.ts|9-2]]."] })] }),
+      files,
+    );
+    expect(validated.chapters[0]?.implications).toEqual(["See init."]);
   });
 
   it("drops a repeated path instead of discarding the generation", () => {
@@ -95,10 +91,63 @@ describe("review guide contract", () => {
     expect(validated.everythingElse).toEqual(["src/b.ts"]);
   });
 
-  it("rejects a chapter file that is not in the snapshot", () => {
-    expect(() =>
-      validateReviewGuide(guide({ chapters: [chapter({ files: ["src/missing.ts"] })] }), files),
-    ).toThrow("Guide references an unknown file: src/missing.ts");
+  it("keeps contextual chapter files and still covers every changed file", () => {
+    const validated = validateReviewGuide(
+      guide({ chapters: [chapter({ files: ["src/context.ts"] })] }),
+      files,
+    );
+    expect(validated.chapters[0]?.files).toEqual(["src/context.ts"]);
+    expect(validated.everythingElse).toEqual(["src/b.ts", "src/a.ts"]);
+  });
+
+  it("repairs a uniquely matching bracket-escaped path in ownership and prose", () => {
+    const actual = String.raw`app/game/\[gameId\]/page.tsx`;
+    const requested = "app/game/[gameId]/page.tsx";
+    const validated = validateReviewGuide(
+      guide({
+        chapters: [chapter({ files: [requested], explanation: `See [[game|${requested}|2-4]].` })],
+        everythingElse: [requested],
+      }),
+      [{ path: actual }],
+    );
+    expect(validated.chapters[0]?.files).toEqual([actual]);
+    expect(validated.chapters[0]?.explanation).toBe(`See [[game|${actual}|2-4]].`);
+    expect(validated.everythingElse).toEqual([]);
+  });
+
+  it("prefers an exact path when escaped and unescaped filenames both exist", () => {
+    const literal = "app/[id]/page.tsx";
+    const escaped = String.raw`app/\[id\]/page.tsx`;
+    const validated = validateReviewGuide(
+      guide({
+        chapters: [chapter({ files: [literal, escaped] })],
+        everythingElse: [],
+      }),
+      [{ path: literal }, { path: escaped }],
+    );
+    expect(validated.chapters[0]?.files).toEqual([literal, escaped]);
+  });
+
+  it("does not guess when multiple bracket-escaped paths match", () => {
+    const requested = "app/[id]/page.tsx";
+    const candidates = [String.raw`app/\[id]/page.tsx`, String.raw`app/[id\]/page.tsx`];
+    const validated = validateReviewGuide(
+      guide({
+        chapters: [chapter({ files: [requested] })],
+        everythingElse: [],
+      }),
+      candidates.map((path) => ({ path })),
+    );
+    expect(validated.chapters[0]?.files).toEqual([requested]);
+    expect(validated.everythingElse).toEqual(candidates);
+  });
+
+  it("bounds the changed-file prompt without dropping stored coverage", () => {
+    const large = Array.from({ length: 501 }, (_, i) => ({ path: `src/${i}.ts` }));
+    expect(guideGenerationInstruction(large)).toContain("first 500 of 501 paths");
+    expect(
+      validateReviewGuide(guide({ chapters: [], everythingElse: [] }), large).everythingElse,
+    ).toHaveLength(501);
   });
 
   it("files an unaccounted snapshot path under everything else", () => {
