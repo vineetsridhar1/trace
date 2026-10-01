@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { hasProviderDelivery, isFinishedInquiryState, reviewJson } from "./review.js";
+import {
+  hasProviderDelivery,
+  isFinishedInquiryState,
+  reviewJson,
+  threadAppliesToSnapshot,
+} from "./review.js";
 
 describe("reviewJson", () => {
   it("serializes Prisma bigint fields for review event payloads", () => {
@@ -65,5 +70,31 @@ describe("isFinishedInquiryState", () => {
     expect(isFinishedInquiryState("completed")).toBe(true);
     expect(isFinishedInquiryState("failed")).toBe(true);
     expect(isFinishedInquiryState("cancelled")).toBe(true);
+  });
+});
+
+describe("threadAppliesToSnapshot", () => {
+  it("uses the reconciled live anchor rather than immutable origin", () => {
+    expect(
+      threadAppliesToSnapshot(
+        {
+          originSnapshotId: "snapshot-1",
+          anchor: { snapshotId: "snapshot-2", status: "relocated" },
+        },
+        "snapshot-2",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects an outdated live anchor", () => {
+    expect(
+      threadAppliesToSnapshot(
+        {
+          originSnapshotId: "snapshot-1",
+          anchor: { snapshotId: "snapshot-2", status: "outdated" },
+        },
+        "snapshot-2",
+      ),
+    ).toBe(false);
   });
 });

@@ -18,6 +18,7 @@ import {
   type ResolvedPullRequest,
   type ReviewProviderAdapter,
 } from "./review-provider.js";
+import { reconcileReviewAnchor } from "./review-anchor.js";
 import { sessionService } from "./session.js";
 import {
   guideGenerationInstruction,
@@ -88,6 +89,15 @@ export function hasProviderDelivery(thread: {
 
 export function isFinishedInquiryState(state: ReviewInquiryState): boolean {
   return state !== "queued" && state !== "running";
+}
+
+export function threadAppliesToSnapshot(
+  thread: { originSnapshotId: string; anchor: unknown },
+  snapshotId: string,
+): boolean {
+  const anchor = anchorRecord(thread.anchor);
+  if (!anchor) return thread.originSnapshotId === snapshotId;
+  return anchor.snapshotId === snapshotId && anchor.status !== "outdated";
 }
 
 function patchKey(reviewId: string, snapshotId: string): string {
@@ -563,7 +573,8 @@ export class ReviewService {
       throw new ValidationError("One or more selected threads are invalid");
     if (
       threads.some(
-        (thread) => hasProviderDelivery(thread) || thread.originSnapshotId !== input.snapshotId,
+        (thread) =>
+          hasProviderDelivery(thread) || !threadAppliesToSnapshot(thread, input.snapshotId),
       )
     ) {
       throw new ValidationError(
@@ -828,16 +839,24 @@ export class ReviewService {
           originSnapshotId: { not: snapshot.id },
           anchor: { not: Prisma.JsonNull },
         },
-        select: { id: true, anchor: true, deliveryStatus: true },
+        select: { id: true, anchor: true, scope: true, deliveryStatus: true },
       });
       for (const thread of anchoredThreads) {
         const original = anchorRecord(thread.anchor);
         if (!original) continue;
+        const reconciled = reconcileReviewAnchor(original, thread.scope, snapshot.id, pull.files);
+        const outdated = reconciled.status === "outdated";
         await tx.reviewThread.update({
           where: { id: thread.id },
           data: {
-            anchor: reviewJson({ ...original, status: "outdated" }),
-            ...(thread.deliveryStatus === "delivered" ? {} : { deliveryStatus: "outdated" }),
+            anchor: reviewJson(reconciled),
+            ...(thread.deliveryStatus === "delivered"
+              ? {}
+              : outdated
+                ? { deliveryStatus: "outdated" }
+                : thread.deliveryStatus === "outdated"
+                  ? { deliveryStatus: "trace_only" }
+                  : {}),
           },
         });
       }

@@ -31,6 +31,35 @@ describe("isPendingGitHubThread", () => {
     ).toBe(false);
   });
 
+  it("includes an older comment reconciled onto the latest snapshot", () => {
+    expect(
+      isPendingGitHubThread(
+        thread({
+          originSnapshotId: "snapshot-old",
+          anchor: {
+            snapshotId: "snapshot-latest",
+            status: "relocated",
+          } as ReviewThread["anchor"],
+        }),
+        "snapshot-latest",
+      ),
+    ).toBe(true);
+  });
+
+  it("excludes a reconciled comment whose code is gone", () => {
+    expect(
+      isPendingGitHubThread(
+        thread({
+          anchor: {
+            snapshotId: "snapshot-latest",
+            status: "outdated",
+          } as ReviewThread["anchor"],
+        }),
+        "snapshot-latest",
+      ),
+    ).toBe(false);
+  });
+
   it("excludes threads already represented on GitHub", () => {
     expect(
       isPendingGitHubThread(thread({ providerReviewId: "github-review-1" }), "snapshot-latest"),

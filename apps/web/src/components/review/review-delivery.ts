@@ -7,6 +7,7 @@ type DeliveryCandidate = Pick<
   | "deliveryStatus"
   | "providerReviewId"
   | "providerCommentId"
+  | "anchor"
   | "comments"
 >;
 
@@ -19,11 +20,11 @@ export function isPendingGitHubThread(thread: DeliveryCandidate, snapshotId: str
   const hasComment = thread.comments.some(
     (comment) => !comment.deletedAt && comment.body.trim().length > 0,
   );
+  const appliesToSnapshot = thread.anchor
+    ? thread.anchor.snapshotId === snapshotId && thread.anchor.status !== "outdated"
+    : thread.originSnapshotId === snapshotId;
 
   return (
-    thread.originSnapshotId === snapshotId &&
-    thread.scope !== "guide_explanation" &&
-    hasComment &&
-    !alreadyOnGitHub
+    appliesToSnapshot && thread.scope !== "guide_explanation" && hasComment && !alreadyOnGitHub
   );
 }

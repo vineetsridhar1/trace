@@ -186,7 +186,10 @@ export function ReviewTab({
   if (!review || !snapshot) return <ReviewLoadingState label="Loading review…" />;
 
   const snapshotThreads = threads.filter(
-    (thread) => thread.originSnapshotId === snapshot.id && thread.scope !== "guide_explanation",
+    (thread) =>
+      (thread.anchor?.snapshotId === snapshot.id ||
+        (!thread.anchor && thread.originSnapshotId === snapshot.id)) &&
+      thread.scope !== "guide_explanation",
   );
   const pendingThreads = snapshotThreads.filter((thread) =>
     isPendingGitHubThread(thread, snapshot.id),
