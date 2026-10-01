@@ -208,7 +208,7 @@ export function ReviewFileDiff({
         <div className="h-40 animate-pulse bg-muted/10" />
       ) : (
         <>
-          <div className="min-w-0 overflow-x-hidden py-1 font-mono text-xs leading-5">
+          <div className="native-scrollbar min-w-0 overflow-x-auto py-1 font-mono text-xs leading-5">
             {lines.map((line, index) => {
               if (line.kind === "meta") {
                 const label = hunkGapLabel(line);

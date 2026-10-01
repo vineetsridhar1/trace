@@ -103,7 +103,7 @@ export function GuideFileDiff({
       {error ? <p className="p-4 text-xs text-destructive">{error}</p> : null}
       {!error && !diff ? <div className="h-40 animate-pulse bg-muted/10" /> : null}
       {diff ? (
-        <div className="min-w-0 overflow-x-hidden py-1 font-mono text-xs leading-5">
+        <div className="native-scrollbar min-w-0 overflow-x-auto py-1 font-mono text-xs leading-5">
           {lines.map((line, index) => {
             if (line.kind === "meta") {
               const label = hunkGapLabel(line);
