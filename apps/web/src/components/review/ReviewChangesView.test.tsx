@@ -159,6 +159,71 @@ describe("ReviewChangesView snapshot refresh", () => {
       expect.objectContaining({ snapshotId: "snapshot-2" }),
     );
   });
+  it.each([
+    { status: "removed", additions: 0, deletions: 80 },
+    { status: "modified", additions: 500, deletions: 500 },
+  ])("defers $status patches until expanded and releases them on collapse", async (metadata) => {
+    const files = [{ ...FILES[0]!, ...metadata }];
+    query.mockImplementation((_query: unknown, variables: { snapshotId: string }) =>
+      patchFor(variables.snapshotId, "loadedCode"),
+    );
+    render("snapshot-1", files);
+    await settle();
+    const toggle = () =>
+      renderer!.root
+        .findAllByType("button")
+        .find((node) => node.props["aria-expanded"] !== undefined)!;
+    expect(toggle().props["aria-expanded"]).toBe(false);
+    expect(query).not.toHaveBeenCalled();
+
+    act(() => toggle().props.onClick());
+    await settle();
+    expect(toggle().props["aria-expanded"]).toBe(true);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(renderer?.toJSON())).toContain("loadedCode");
+
+    // The explicit expansion survives remounting the snapshot's virtualized file list.
+    act(() => renderer?.update(view("snapshot-2", files)));
+    await settle();
+    expect(toggle().props["aria-expanded"]).toBe(true);
+    expect(query).toHaveBeenCalledTimes(2);
+
+    act(() => toggle().props.onClick());
+    await settle();
+    expect(JSON.stringify(renderer?.toJSON())).not.toContain("loadedCode");
+    expect(query).toHaveBeenCalledTimes(2);
+    act(() => toggle().props.onClick());
+    await settle();
+    // Re-expansion fetches again: collapse did not retain the full patch in memory.
+    expect(query).toHaveBeenCalledTimes(3);
+  });
+
+  it("expands a default-collapsed file when navigating directly to a line", async () => {
+    const files = [{ ...FILES[0]!, additions: 1000 }];
+    query.mockReturnValue(patchFor("snapshot-1", "navigationTarget"));
+    render("snapshot-1", files);
+    await settle();
+    expect(query).not.toHaveBeenCalled();
+    act(() =>
+      useReviewUiStore.getState().navigate("review-1", {
+        filePath: files[0]!.path,
+        startLine: 1,
+        endLine: 1,
+      }),
+    );
+    await settle();
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(renderer?.toJSON())).toContain("navigationTarget");
+  });
+
+  it("keeps diffs below the large-file threshold expanded", async () => {
+    query.mockReturnValue(patchFor("snapshot-1", "ordinaryDiff"));
+    render("snapshot-1", [{ ...FILES[0]!, additions: 499, deletions: 500 }]);
+    await settle();
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(renderer?.toJSON())).toContain("ordinaryDiff");
+  });
+
   it("bounds mounted files and requests for a 20,000-file review and navigates to an unmounted file", async () => {
     const files = Array.from({ length: 20_000 }, (_, index) => ({
       ...FILES[0]!,

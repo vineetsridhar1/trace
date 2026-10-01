@@ -6,6 +6,10 @@ import type { ReviewLineSelection } from "./review-selection";
 import { ReviewFileDiff } from "./ReviewFileDiff";
 import { ReviewOverview } from "./ReviewOverview";
 
+function defaultCollapsed(file: ReviewFile): boolean {
+  return file.status === "removed" || file.additions + file.deletions >= 1_000;
+}
+
 /** Files and their rows share this one scroll element; neither level adds a vertical scroller. */
 export function ReviewVirtualFiles({
   reviewId,
@@ -49,7 +53,12 @@ export function ReviewVirtualFiles({
     count: files.length + 1,
     getScrollElement: () => scrollRef.current,
     getItemKey,
-    estimateSize: () => 240,
+    estimateSize: (index) => {
+      const file = files[index - 1];
+      return file && (selection?.fileCollapsedOverrides[file.path] ?? defaultCollapsed(file))
+        ? 58
+        : 240;
+    },
     overscan: 2,
     paddingStart: 16,
     paddingEnd: 24,
@@ -115,10 +124,10 @@ export function ReviewVirtualFiles({
                   deletions={file.deletions}
                   threads={threads}
                   inquiries={inquiries}
-                  collapsed={selection?.collapsedFilePaths.includes(file.path) ?? false}
+                  collapsed={selection?.fileCollapsedOverrides[file.path] ?? defaultCollapsed(file)}
                   highlight={selection?.highlight ?? null}
                   onToggleCollapsed={() => {
-                    toggleCollapsed(reviewId, file.path);
+                    toggleCollapsed(reviewId, file.path, defaultCollapsed(file));
                     virtualizer.scrollToIndex(item.index, { align: "start" });
                   }}
                   onComment={onComment}

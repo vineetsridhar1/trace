@@ -117,7 +117,9 @@ export function ReviewFileDiff({
   onAsk,
 }: ReviewFileDiffProps) {
   const cardRef = useRef<HTMLElement>(null);
-  const [diff, setDiff] = useState<ReviewDiffFile | null>(() => patchCache.get(filePath) ?? null);
+  const [diff, setDiff] = useState<ReviewDiffFile | null>(() =>
+    collapsed ? null : (patchCache.get(filePath) ?? null),
+  );
   const [error, setError] = useState<string | null>(null);
 
   // The patch belongs to one immutable snapshot. Callers remount this card when the review
@@ -125,7 +127,12 @@ export function ReviewFileDiff({
   // would show the previous commit's code and anchor new comments to stale line numbers.
   const current = diff?.snapshotId === snapshotId ? diff : null;
   useEffect(() => {
-    if (collapsed || current || error) return;
+    if (collapsed) {
+      patchCache.delete(filePath);
+      setDiff(null);
+      return;
+    }
+    if (current || error) return;
     let cancelled = false;
     void client
       .query(DIFF_QUERY, { snapshotId, filePath })
@@ -150,7 +157,10 @@ export function ReviewFileDiff({
 
   useEffect(() => setError(null), [snapshotId]);
 
-  const lines = useMemo(() => visibleDiffLines(parsePatch(current?.patch ?? "")), [current?.patch]);
+  const lines = useMemo(
+    () => (collapsed ? [] : visibleDiffLines(parsePatch(current?.patch ?? ""))),
+    [collapsed, current?.patch],
+  );
   const { range, selection, popoverTop, beginSelection, extendSelection, clearSelection } =
     useReviewLineSelection(filePath, lines, cardRef);
   const highlighted = highlight?.filePath === filePath ? highlight : null;

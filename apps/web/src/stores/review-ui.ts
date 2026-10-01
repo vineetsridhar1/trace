@@ -16,7 +16,8 @@ interface ReviewUiSelection {
   requestedLine: number | null;
   /** The range the Guide or a thread last pointed at, kept lit until something else is chosen. */
   highlight: ReviewHighlight | null;
-  collapsedFilePaths: string[];
+  /** Missing entries use file metadata defaults; explicit choices survive virtualized remounts. */
+  fileCollapsedOverrides: Record<string, boolean>;
   collapsedInquiryIds: string[];
 }
 
@@ -27,7 +28,7 @@ interface ReviewUiState {
   byReviewId: Record<string, ReviewUiSelection>;
   patch(reviewId: string, value: Partial<ReviewUiSelection>): void;
   navigate(reviewId: string, highlight: ReviewHighlight): void;
-  toggleFileCollapsed(reviewId: string, filePath: string): void;
+  toggleFileCollapsed(reviewId: string, filePath: string, defaultCollapsed?: boolean): void;
   toggleInquiryCollapsed(reviewId: string, inquiryId: string): void;
 }
 
@@ -37,7 +38,7 @@ const emptySelection = (): ReviewUiSelection => ({
   requestedFilePath: null,
   requestedLine: null,
   highlight: null,
-  collapsedFilePaths: [],
+  fileCollapsedOverrides: {},
   collapsedInquiryIds: [],
 });
 
@@ -71,25 +72,24 @@ export const useReviewUiStore = create<ReviewUiState>((set) => ({
             requestedLine: highlight.startLine,
             activeFilePath: highlight.filePath,
             highlight,
-            collapsedFilePaths: current.collapsedFilePaths.filter(
-              (path) => path !== highlight.filePath,
-            ),
+            fileCollapsedOverrides: {
+              ...current.fileCollapsedOverrides,
+              [highlight.filePath]: false,
+            },
           },
         },
       };
     }),
-  toggleFileCollapsed: (reviewId, filePath) =>
+  toggleFileCollapsed: (reviewId, filePath, defaultCollapsed = false) =>
     set((state) => {
       const current = state.byReviewId[reviewId] ?? emptySelection();
-      const collapsed = current.collapsedFilePaths.includes(filePath);
+      const collapsed = current.fileCollapsedOverrides[filePath] ?? defaultCollapsed;
       return {
         byReviewId: {
           ...state.byReviewId,
           [reviewId]: {
             ...current,
-            collapsedFilePaths: collapsed
-              ? current.collapsedFilePaths.filter((path) => path !== filePath)
-              : [...current.collapsedFilePaths, filePath],
+            fileCollapsedOverrides: { ...current.fileCollapsedOverrides, [filePath]: !collapsed },
           },
         },
       };
