@@ -20,15 +20,17 @@ const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
   { value: "claude-fable-5", label: "Fable 5" },
   { value: "claude-sonnet-5", label: "Sonnet 5" },
   { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
-  { value: "claude-opus-5", label: "Opus 5" },
+  { value: "claude-opus-5-5", label: "Opus 5.5" },
+  { value: "claude-opus-5-5[1m]", label: "Opus 5.5 (1M)" },
   { value: "claude-haiku-4-5", label: "Haiku 4.5" },
 ];
 
 const CODEX_MODELS: readonly ModelOption[] = [
   { value: "gpt-6-astra", label: "GPT-6 Astra" },
-  { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
+  { value: "gpt-6.1-sol", label: "GPT-6.1 Sol" },
+  { value: "gpt-6-sol", label: "GPT-6 Sol" },
   { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
-  { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
+  { value: "gpt-6-luna", label: "GPT-6 Luna" },
   { value: "gpt-5.5", label: "GPT-5.5" },
 ];
 
@@ -150,8 +152,8 @@ const REASONING_EFFORT_OPTIONS_BY_TOOL: Readonly<Record<string, readonly Reasoni
   };
 
 const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
-  claude_code: "claude-opus-5",
-  codex: "gpt-5.6-sol",
+  claude_code: "claude-opus-5-5[1m]",
+  codex: "gpt-6-astra",
   cursor_composer: "auto",
   pi: "openai/gpt-5.5",
 };
