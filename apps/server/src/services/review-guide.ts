@@ -91,6 +91,7 @@ export function guideGenerationInstruction(filesValue: Prisma.JsonValue): string
         ]
       : []),
     "Chapters explain behaviors, not files. Give each chapter ordered references tracing its code path, with a title and explanation for each step. The same file may appear in multiple chapters and steps. Include unchanged code when it helps explain the flow.",
+    "Every reference needs its own explanation: identify what the important lines do (using Lx or Lx-Ly), why that matters to this chapter, and how the result connects to the preceding or following step. A title or filename alone is not an explanation.",
     "Every reference must name an exact head-commit range, typically 5-25 lines and at most 80. Do not use whole files as filler. Do not invent code, paths, or line numbers.",
     "Anything you do not assign is filed under everythingElse automatically, so prefer omitting a path over guessing at it.",
     "Inside explanation and implications, link to specific code with [[label|path|startLine-endLine]]. Each link should match a reference's exact range in this chapter. References may target any repository file, including files outside the PR or used in another chapter. Use exact paths (preserving literal brackets and backslashes) and head-commit line numbers. startLine must be positive, and endLine must be at least startLine.",
@@ -106,6 +107,7 @@ export function parseGuideResponse(text: string): unknown {
 export function validateReviewGuide(
   value: unknown,
   filesValue: Prisma.JsonValue,
+  options: { requireExplainedSteps?: boolean } = {},
 ): ValidatedReviewGuide {
   const guide = asRecord(value);
   if (
@@ -118,6 +120,7 @@ export function validateReviewGuide(
     throw new ValidationError("Guide response does not match the required structure");
   }
 
+  const explainedSteps = guide.formatVersion === 2 || options.requireExplainedSteps === true;
   const paths = snapshotPaths(filesValue);
   const resolvePath = pathResolver(paths);
   const covered = new Set<string>();
@@ -152,7 +155,7 @@ export function validateReviewGuide(
     if (chapterIds.has(id)) throw new ValidationError(`Guide repeats chapter id "${id}"`);
     chapterIds.add(id);
     if (
-      guide.formatVersion === 2 &&
+      explainedSteps &&
       (!Array.isArray(chapter?.references) || chapter.references.length === 0)
     ) {
       throw new ValidationError(`Guide chapter "${title}" needs specific code references`);
@@ -181,7 +184,7 @@ export function validateReviewGuide(
       const filePath = resolvePath(ref.filePath);
       validateExcerptRange(filePath, ref.startLine, ref.endLine);
       if (
-        guide.formatVersion === 2 &&
+        explainedSteps &&
         (typeof ref.title !== "string" ||
           !ref.title.trim() ||
           typeof ref.explanation !== "string" ||
@@ -199,7 +202,7 @@ export function validateReviewGuide(
     }
     // Older Guides expressed ranges only as prose links. Preserve these as focused excerpts,
     // but never fall back to rendering an entire file when a range is absent or too broad.
-    if (guide.formatVersion !== 2) {
+    if (!explainedSteps) {
       for (const text of [explanation, ...implications]) {
         for (const match of text.matchAll(ANCHOR_PATTERN)) {
           const filePath = resolvePath(match[2]!);
@@ -216,7 +219,7 @@ export function validateReviewGuide(
     }
     const files = [
       ...new Set([
-        ...(guide.formatVersion === 2 ? [] : declaredFiles.map(resolvePath)),
+        ...(explainedSteps ? [] : declaredFiles.map(resolvePath)),
         ...references.map((reference) => reference.filePath),
       ]),
     ];
@@ -244,7 +247,7 @@ export function validateReviewGuide(
   everythingElse.push(...paths.filter((path) => !covered.has(path)));
 
   return {
-    formatVersion: guide.formatVersion === 2 ? 2 : 1,
+    formatVersion: explainedSteps ? 2 : 1,
     title: guide.title,
     intent: guide.intent,
     chapters,

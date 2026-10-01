@@ -5,7 +5,14 @@ import { GuideCodeExcerpt } from "./GuideCodeExcerpt";
 const query = vi.hoisted(() => vi.fn());
 vi.mock("../../../lib/urql", () => ({ client: { query } }));
 
-function view(snapshotId: string, startLine = 10, endLine = 11) {
+const regenerate = vi.fn();
+
+function view(
+  snapshotId: string,
+  startLine = 10,
+  endLine = 11,
+  explanation = "Validation precedes writes.",
+) {
   return (
     <GuideCodeExcerpt
       snapshotId={snapshotId}
@@ -13,11 +20,12 @@ function view(snapshotId: string, startLine = 10, endLine = 11) {
       startLine={startLine}
       endLine={endLine}
       title="Validate"
-      explanation="Validation precedes writes."
+      explanation={explanation}
       step={1}
       active
       inChanges
       onOpen={() => {}}
+      onRegenerate={regenerate}
     />
   );
 }
@@ -95,6 +103,36 @@ describe("Guide code excerpt", () => {
       startLine: 20,
       endLine: 21,
     });
+  });
+
+  it("offers regeneration when a saved snippet has no explanation", async () => {
+    query.mockReturnValue({
+      toPromise: () => Promise.resolve(result("s1", 10, 11, "validateInput")),
+    });
+    await act(async () => {
+      renderer = create(view("s1", 10, 11, ""));
+    });
+    expect(JSON.stringify(renderer.toJSON())).toContain("This saved snippet has no explanation");
+    const button = renderer.root
+      .findAllByType("button")
+      .find((node) => node.children.includes("Regenerate Guide"));
+    act(() => button!.props.onClick());
+    expect(regenerate).toHaveBeenCalled();
+  });
+
+  it("labels a clamped excerpt with the actual ending line", async () => {
+    query.mockReturnValue({
+      toPromise: () =>
+        Promise.resolve(
+          result("s1", 1, 10, Array.from({ length: 10 }, (_, i) => `line${i + 1}`).join("\n")),
+        ),
+    });
+    await act(async () => {
+      renderer = create(view("s1", 1, 11));
+    });
+    const rendered = JSON.stringify(renderer.toJSON());
+    expect(rendered).toContain("–10");
+    expect(rendered).not.toContain("–11");
   });
 
   it("shows a fetch failure instead of substituting a full-file diff", async () => {

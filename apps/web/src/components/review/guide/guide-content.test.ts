@@ -119,12 +119,58 @@ describe("normalizeGuideContent", () => {
       ],
     });
     expect(content.chapters[0]?.references).toEqual([
-      { filePath: "src/a.ts", startLine: 2, endLine: 8, title: "entry", explanation: "" },
+      {
+        filePath: "src/a.ts",
+        startLine: 2,
+        endLine: 8,
+        title: "entry",
+        explanation: "See entry (L2–8).",
+      },
     ]);
     expect(
       normalizeGuideContent({ chapters: [{ title: "Files only", files: ["src/a.ts"] }] })
         .chapters[0]?.references,
     ).toEqual([]);
+  });
+
+  it("keeps the relevant legacy paragraph beside each snippet without inventing context", () => {
+    const content = normalizeGuideContent({
+      chapters: [
+        {
+          title: "Flow",
+          explanation:
+            "[[validate|src/a.ts|2-8]] rejects invalid moves.\n\n[[publish|src/a.ts|40-44]] notifies clients.",
+          references: [{ filePath: "src/a.ts", startLine: 2, endLine: 8 }],
+        },
+      ],
+    });
+    expect(content.chapters[0]?.references.map((ref) => ref.explanation)).toEqual([
+      "validate (L2–8) rejects invalid moves.",
+      "publish (L40–44) notifies clients.",
+    ]);
+  });
+
+  it("does not create unexplained extra snippets from new-format prose links", () => {
+    const content = normalizeGuideContent({
+      formatVersion: 2,
+      chapters: [
+        {
+          title: "Flow",
+          explanation: "Also [[helper|src/b.ts|1-2]].",
+          references: [
+            {
+              filePath: "src/a.ts",
+              startLine: 2,
+              endLine: 8,
+              title: "Validate",
+              explanation: "Checks state before moving.",
+            },
+          ],
+        },
+      ],
+    });
+    expect(content.chapters[0]?.references).toHaveLength(1);
+    expect(content.chapters[0]?.references[0]?.explanation).toBe("Checks state before moving.");
   });
 
   it("never expands a legacy whole-file range into a large code card", () => {

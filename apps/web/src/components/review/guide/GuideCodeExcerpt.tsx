@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Button } from "../../ui/button";
 import { ExternalLink } from "lucide-react";
 import { DiffLineRow } from "../diff/DiffLineRow";
 import type { DiffLine } from "../diff-patch";
@@ -17,6 +18,7 @@ export function GuideCodeExcerpt({
   active,
   inChanges,
   onOpen,
+  onRegenerate,
 }: {
   snapshotId: string;
   filePath: string;
@@ -28,6 +30,7 @@ export function GuideCodeExcerpt({
   active: boolean;
   inChanges: boolean;
   onOpen(): void;
+  onRegenerate(): void;
 }) {
   const { cardRef, excerpt, error } = useGuideExcerpt(
     snapshotId,
@@ -47,6 +50,7 @@ export function GuideCodeExcerpt({
     }));
   }, [excerpt, startLine]);
 
+  const displayedEndLine = excerpt?.endLine ?? endLine;
   return (
     <div
       ref={cardRef}
@@ -62,9 +66,24 @@ export function GuideCodeExcerpt({
           <span className="mr-2 text-muted-foreground">{step}.</span>
           {title}
         </h3>
-        {explanation ? (
-          <p className="text-sm leading-6 text-muted-foreground">{explanation}</p>
-        ) : null}
+        {explanation.trim() ? (
+          <div className="space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Why this code is here</span>
+            <p className="whitespace-pre-line text-sm leading-6 text-[var(--th-review-text-mid)]">
+              {explanation}
+            </p>
+          </div>
+        ) : (
+          <div className="text-sm text-muted-foreground">
+            <p>
+              This saved snippet has no explanation. Regenerate the Guide to explain its role in the
+              chapter.
+            </p>
+            <Button variant="ghost" size="sm" onClick={onRegenerate}>
+              Regenerate Guide
+            </Button>
+          </div>
+        )}
       </div>
       <header className="sticky top-0 z-[1] flex min-h-10 flex-wrap items-center gap-2 border-b border-[var(--th-review-card-edge)] bg-[var(--th-surface)] px-3.5 py-2">
         <span
@@ -75,7 +94,7 @@ export function GuideCodeExcerpt({
         </span>
         <span className="shrink-0 font-mono text-xs text-muted-foreground">
           L{startLine}
-          {endLine !== startLine ? `–${endLine}` : ""}
+          {displayedEndLine !== startLine ? `–${displayedEndLine}` : ""}
         </span>
         <button
           type="button"

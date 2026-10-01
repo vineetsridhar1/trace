@@ -110,6 +110,7 @@ export function GuideScroller({
                   title={reference.title}
                   explanation={reference.explanation}
                   step={step + 1}
+                  onRegenerate={onRegenerate}
                   active={anchor?.chapterIndex === index && anchorsEqual(anchor, reference)}
                   inChanges={filesByPath.has(reference.filePath)}
                   onOpen={() =>

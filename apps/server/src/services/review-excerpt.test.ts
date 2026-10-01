@@ -91,6 +91,16 @@ describe("Review code excerpts", () => {
     });
   });
 
+  it("clamps an end-line overshoot and reports the actual displayed range", async () => {
+    mocks.readFile.mockResolvedValue("context\nadded\ncontext2\n");
+    expect(await service.codeExcerpt({ ...input, endLine: 11 })).toMatchObject({
+      startLine: 2,
+      endLine: 3,
+      content: "added\ncontext2",
+    });
+    expect(sourceExcerpt("one\ntwo\n", 1, 3)).toBe("one\ntwo");
+  });
+
   it("denies private-session access before reading code", async () => {
     mocks.access.mockRejectedValue(new Error("Access denied"));
     await expect(service.codeExcerpt(input)).rejects.toThrow("Access denied");
@@ -112,7 +122,7 @@ describe("Review code excerpts", () => {
   });
 
   it("rejects nonexistent lines and binary source instead of substituting other code", () => {
-    expect(() => sourceExcerpt("one\ntwo\n", 2, 3)).toThrow("beyond");
+    expect(() => sourceExcerpt("one\ntwo\n", 3, 4)).toThrow("beyond");
     expect(() => sourceExcerpt("\0binary", 1, 1)).toThrow("binary");
     expect(sourceExcerpt("one\r\ntwo\r\n", 2, 2)).toBe("two");
   });

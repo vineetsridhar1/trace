@@ -240,7 +240,15 @@ describe("turn correlation", () => {
           title: "Core",
           explanation: "The service owns it.",
           implications: [],
-          files: ["src/a.ts"],
+          references: [
+            {
+              filePath: "src/a.ts",
+              startLine: 1,
+              endLine: 4,
+              title: "Service boundary",
+              explanation: "These lines centralize validation before the service writes state.",
+            },
+          ],
         },
       ],
       everythingElse: [],

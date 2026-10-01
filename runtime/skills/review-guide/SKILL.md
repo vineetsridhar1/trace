@@ -93,8 +93,12 @@ to show everything.
 Each reference needs:
 
 - `title`: the role of this step, e.g. “Reject a move from the wrong player.”
-- `explanation`: why this excerpt belongs in the flow, what it establishes, and how it connects to
-  the next step. Explain the system effect instead of narrating each statement.
+- `explanation`: 2–4 concrete sentences explaining this snippet, not a copy of the chapter summary.
+  First identify what its important lines do, citing exact line numbers such as `L42–45` and `L46`.
+  Then explain why that behavior is needed for this chapter's outcome and what it receives from
+  the previous step or passes to the next. Use a paragraph break when it helps distinguish behavior
+  from its role in the flow. Group related lines; do not narrate punctuation or trivial boilerplate.
+  If a line is important enough to show, the explanation should make its relevance understandable.
 - `filePath`, `startLine`, `endLine`: the exact repository path and inclusive head-side line range.
 
 The order in `references` is the reading order. Return to an earlier file if the flow calls for it.
@@ -132,14 +136,14 @@ Return one JSON object only, with no Markdown fence or surrounding commentary:
       "references": [
         {
           "title": "Enter through the move endpoint",
-          "explanation": "The handler passes the submitted move and expected version to the store; the store owns validation.",
+          "explanation": "L18–21 read the submitted move and expected version. L22–26 pass both to the store instead of changing state in the route. This is the entry point for the chapter’s validation flow: the next step decides whether the move can be accepted.",
           "filePath": "app/api/game/[id]/route.ts",
           "startLine": 18,
           "endLine": 26
         },
         {
           "title": "Check the version before applying the move",
-          "explanation": "This guard keeps a stale request from changing the game. Accepted moves advance the version used by subsequent requests.",
+          "explanation": "L42–46 compare the submitted version with current state and reject stale requests before any write. L47–57 apply accepted moves and advance the version. This enforces the chapter’s central rule: only moves based on the current game can change it, and later callers receive the new version.",
           "filePath": "lib/gameStore.ts",
           "startLine": 42,
           "endLine": 57
@@ -154,7 +158,7 @@ Return one JSON object only, with no Markdown fence or surrounding commentary:
       "references": [
         {
           "title": "Publish only the accepted state",
-          "explanation": "The same store participates in this second behavior. This excerpt shows the notification boundary, rather than repeating its validation logic.",
+          "explanation": "L60–63 construct the accepted state update; L64–68 publish it to subscribers. This connects the validation chapter to client synchronization: only state that passed validation reaches this notification boundary.",
           "filePath": "lib/gameStore.ts",
           "startLine": 60,
           "endLine": 68

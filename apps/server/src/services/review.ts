@@ -398,7 +398,7 @@ export class ReviewService {
       snapshotId: snapshot.id,
       path: input.filePath,
       startLine: input.startLine,
-      endLine: input.endLine,
+      endLine: input.startLine + content.split("\n").length - 1,
       content,
       addedLines: lines.flatMap((line) =>
         line.oldLine === null && line.newLine !== null ? [line.newLine] : [],
@@ -677,7 +677,9 @@ export class ReviewService {
     });
     if (!inquiry || inquiry.sourceKind !== "guide_generation")
       throw new NotFoundError("Guide inquiry", input.inquiryId);
-    const validated = validateReviewGuide(input.content, inquiry.snapshot.files);
+    const validated = validateReviewGuide(input.content, inquiry.snapshot.files, {
+      requireExplainedSteps: true,
+    });
     const guide = await prisma.$transaction(async (tx) => {
       await tx.reviewGuide.updateMany({
         where: { reviewId: inquiry.reviewId, status: "ready" },

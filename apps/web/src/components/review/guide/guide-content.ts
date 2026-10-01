@@ -91,6 +91,7 @@ function chapterReferences(
   chapter: Record<string, unknown>,
   paragraphs: GuideSegment[][],
   implications: GuideSegment[][],
+  legacy: boolean,
 ): ReviewGuideReference[] {
   const references: ReviewGuideReference[] = [];
   const add = (reference: ReviewGuideReference) => {
@@ -102,8 +103,10 @@ function chapterReferences(
       reference.endLine - reference.startLine >= 80
     )
       return;
-    if (!references.some((existing) => anchorsEqual(existing, reference)))
-      references.push(reference);
+    const existing = references.find((item) => anchorsEqual(item, reference));
+    if (!existing) references.push(reference);
+    else if (!existing.explanation.trim() && reference.explanation.trim())
+      existing.explanation = reference.explanation;
   };
   for (const value of Array.isArray(chapter.references) ? chapter.references : []) {
     const reference = asRecord(value);
@@ -121,10 +124,22 @@ function chapterReferences(
       explanation: typeof reference.explanation === "string" ? reference.explanation : "",
     });
   }
-  // Saved Guides predating ordered references still get precise excerpts from their prose links.
-  for (const segment of [...paragraphs, ...implications].flat()) {
-    if (segment.kind === "anchor")
-      add({ ...segment.anchor, title: segment.label, explanation: "" });
+  // Only legacy Guides infer snippets from prose. Reuse their actual surrounding paragraph,
+  // rather than inventing an explanation or creating a title-only code card.
+  for (const paragraph of [...paragraphs, ...implications]) {
+    const explanation = paragraph
+      .map((segment) =>
+        segment.kind === "text"
+          ? segment.text
+          : `${segment.label} (L${segment.anchor.startLine}–${segment.anchor.endLine})`,
+      )
+      .join("");
+    for (const segment of paragraph) {
+      if (segment.kind !== "anchor") continue;
+      if (legacy || references.some((reference) => anchorsEqual(reference, segment.anchor))) {
+        add({ ...segment.anchor, title: segment.label, explanation });
+      }
+    }
   }
   return references;
 }
@@ -147,7 +162,12 @@ export function normalizeGuideContent(value: unknown): GuideContent {
         .filter(Boolean)
         .map(parseGuideSegments);
       const implications = stringList(chapter.implications).map(parseGuideSegments);
-      const references = chapterReferences(chapter, paragraphs, implications);
+      const references = chapterReferences(
+        chapter,
+        paragraphs,
+        implications,
+        content?.formatVersion !== 2,
+      );
       return [
         {
           id: typeof chapter.id === "string" ? chapter.id : `chapter-${index + 1}`,

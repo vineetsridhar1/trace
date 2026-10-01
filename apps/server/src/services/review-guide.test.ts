@@ -248,6 +248,32 @@ describe("review guide contract", () => {
     expect(validated.chapters.map((ch) => ch.files)).toEqual([["src/a.ts"], ["src/a.ts"]]);
   });
 
+  it("requires explained steps for new saves even when the response omits a format version", () => {
+    expect(() => validateReviewGuide(guide({}), files, { requireExplainedSteps: true })).toThrow(
+      "needs specific code references",
+    );
+    const ref = {
+      filePath: "src/a.ts",
+      startLine: 1,
+      endLine: 4,
+      title: "Entry",
+      explanation: " ",
+    };
+    expect(() =>
+      validateReviewGuide(guide({ chapters: [chapter({ references: [ref] })] }), files, {
+        requireExplainedSteps: true,
+      }),
+    ).toThrow("needs a title and explanation");
+    const explanation = "L1–4 validate the request before this chapter's state transition.";
+    expect(
+      validateReviewGuide(
+        guide({ chapters: [chapter({ references: [{ ...ref, explanation }] })] }),
+        files,
+        { requireExplainedSteps: true },
+      ).chapters[0]?.references[0]?.explanation,
+    ).toBe(explanation);
+  });
+
   it("accepts JSON wrapped in a Markdown fence", () => {
     expect(parseGuideResponse('```json\n{"title":"Guide"}\n```')).toEqual({ title: "Guide" });
   });

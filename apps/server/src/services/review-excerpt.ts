@@ -31,7 +31,8 @@ export function sourceExcerpt(content: string, startLine: number, endLine: numbe
   }
   const lines = content.split(/\r?\n/);
   if (lines.at(-1) === "") lines.pop();
-  if (endLine > lines.length)
-    throw new ValidationError("Guide range extends beyond the snapshot file");
+  if (startLine > lines.length)
+    throw new ValidationError("Guide range starts beyond the snapshot file");
+  // A model may count the trailing newline as an extra line. Preserve the valid excerpt.
   return lines.slice(startLine - 1, endLine).join("\n");
 }
