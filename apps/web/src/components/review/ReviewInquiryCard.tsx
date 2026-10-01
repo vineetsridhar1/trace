@@ -17,6 +17,14 @@ const RESOLVE_INQUIRY = gql`
   }
 `;
 
+const ENQUEUE_FOLLOW_UP = gql`
+  mutation EnqueueReviewFollowUp($input: EnqueueReviewInquiryInput!) {
+    enqueueReviewInquiry(input: $input) {
+      id
+    }
+  }
+`;
+
 export function ReviewInquiryCard({
   inquiryId,
   queuedAheadCount,
@@ -30,6 +38,9 @@ export function ReviewInquiryCard({
   const reviewId = useEntityField("reviewInquiries", inquiryId, "reviewId") ?? "";
   const state = useEntityField("reviewInquiries", inquiryId, "state") ?? "queued";
   const question = useEntityField("reviewInquiries", inquiryId, "question") ?? "";
+  const snapshotId = useEntityField("reviewInquiries", inquiryId, "snapshotId") ?? "";
+  const anchor = useEntityField("reviewInquiries", inquiryId, "anchor");
+  const context = useEntityField("reviewInquiries", inquiryId, "context") ?? {};
   const error = useEntityField("reviewInquiries", inquiryId, "error");
   const resolvedAt = useEntityField("reviewInquiries", inquiryId, "resolvedAt");
   const answer = useEntityField("reviewInquiries", inquiryId, "responseMessage")?.text?.trim();
@@ -43,6 +54,8 @@ export function ReviewInquiryCard({
   const setCollapsed = useReviewUiStore((store) => store.setInquiryCollapsed);
   const toggleCollapsed = useReviewUiStore((store) => store.toggleInquiryCollapsed);
   const [resolving, setResolving] = useState(false);
+  const [followUp, setFollowUp] = useState("");
+  const [sendingFollowUp, setSendingFollowUp] = useState(false);
   const finished = state !== "queued" && state !== "running";
 
   const resolve = async () => {
@@ -54,6 +67,35 @@ export function ReviewInquiryCard({
       toast.error(error instanceof Error ? error.message : "Could not update AI conversation");
     } finally {
       setResolving(false);
+    }
+  };
+
+  const sendFollowUp = async () => {
+    const followUpQuestion = followUp.trim();
+    if (!followUpQuestion || !snapshotId) return;
+    setSendingFollowUp(true);
+    try {
+      await mutateReview(ENQUEUE_FOLLOW_UP, {
+        input: {
+          reviewId,
+          snapshotId,
+          sourceKind: "thread",
+          question: followUpQuestion,
+          anchor,
+          context: {
+            ...context,
+            followUpToInquiryId: inquiryId,
+            priorQuestion: question,
+            priorAnswer: answer ?? null,
+          },
+        },
+      });
+      setFollowUp("");
+      toast.success("Follow-up added to Review Chat");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not send follow-up");
+    } finally {
+      setSendingFollowUp(false);
     }
   };
 
@@ -147,6 +189,34 @@ export function ReviewInquiryCard({
             <p className="m-0 text-[11px] text-[var(--th-review-danger-light)]">
               {error ?? "Trace AI could not answer this question."}
             </p>
+          ) : null}
+
+          {finished ? (
+            <div className="border-t border-[var(--th-review-ai)]/15 pt-2.5">
+              <textarea
+                value={followUp}
+                onChange={(event) => setFollowUp(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                    event.preventDefault();
+                    void sendFollowUp();
+                  }
+                }}
+                className="h-16 w-full resize-none rounded-md border border-[var(--th-review-ai)]/20 bg-black/15 p-2 text-xs outline-none focus:border-[var(--th-review-ai)]"
+                placeholder="Ask a follow-up…"
+              />
+              <div className="mt-1.5 flex items-center justify-end gap-2">
+                <span className="mr-auto text-[10.5px] text-muted-foreground">⌘/Ctrl + Enter to send</span>
+                <button
+                  type="button"
+                  disabled={!followUp.trim() || sendingFollowUp}
+                  onClick={() => void sendFollowUp()}
+                  className="rounded-md bg-[var(--th-review-ai)]/20 px-2 py-1 text-[11px] font-medium text-[var(--th-review-ai-light)] hover:bg-[var(--th-review-ai)]/30 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {sendingFollowUp ? "Sending…" : "Send follow-up"}
+                </button>
+              </div>
+            </div>
           ) : null}
 
           <div className="mt-0.5 flex items-center justify-end gap-3 border-t border-[var(--th-review-ai)]/15 pt-2">
