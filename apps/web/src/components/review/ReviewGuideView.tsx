@@ -144,7 +144,6 @@ export function ReviewGuideView({
             guideChapterId: composer.guideChapterId,
           },
         });
-        toast.success(composer.anchor ? "Comment saved in Trace" : "Comment saved on this chapter");
       }
       setBody("");
       setComposer(null);

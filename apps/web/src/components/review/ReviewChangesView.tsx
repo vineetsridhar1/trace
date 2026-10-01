@@ -78,7 +78,6 @@ export function ReviewChangesView({
         await mutateReview(CREATE_THREAD, {
           input: { reviewId, snapshotId, scope: composer.scope, body: body.trim(), anchor },
         });
-        toast.success("Comment saved in Trace");
       } else {
         await mutateReview(ENQUEUE_INQUIRY, {
           input: {
