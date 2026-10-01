@@ -342,6 +342,7 @@ export function SessionGroupDetailView({
   const [forkEventId, setForkEventId] = useState<string | null>(null);
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
   const [applicationPanelOpen, setApplicationPanelOpen] = useState(false);
+  const [reviewTabOpen, setReviewTabOpen] = useState(true);
   const [workspaceInteractionActive, setWorkspaceInteractionActive] = useState(false);
   const [modalOverlayVisible, setModalOverlayVisible] = useState(false);
   const [groupLoadError, setGroupLoadError] = useState<string | null>(null);
@@ -363,6 +364,7 @@ export function SessionGroupDetailView({
   useEffect(() => {
     if (!groupReviewId || typeof window === "undefined") return;
     if (new URLSearchParams(window.location.search).get("review") === groupReviewId) {
+      setReviewTabOpen(true);
       setRequestedActiveWorkspaceTabId(`review:${groupReviewId}`);
     }
   }, [groupReviewId, setRequestedActiveWorkspaceTabId]);
@@ -446,6 +448,7 @@ export function SessionGroupDetailView({
         return;
       }
       navigateReview(groupReviewId, filePath);
+      setReviewTabOpen(true);
       setActiveFilePath(null);
       setActiveTerminalId(null);
       setRequestedActiveWorkspaceTabId(`review:${groupReviewId}`);
@@ -1008,7 +1011,7 @@ export function SessionGroupDetailView({
     browserTitles,
     trafficEndpointId,
     canvas: isCanvasWorkspace,
-    reviewId: groupReviewId,
+    reviewId: reviewTabOpen ? groupReviewId : null,
   });
 
   // Explicitly opened surfaces still win, but a canvas workspace with nothing
@@ -1079,6 +1082,8 @@ export function SessionGroupDetailView({
         handleCloseTerminal(tabId.slice("terminal:".length));
       } else if (tabId.startsWith("file:")) {
         handleCloseFile(tabId.slice("file:".length));
+      } else if (tabId.startsWith("review:")) {
+        setReviewTabOpen(false);
       } else if (tabId === "traffic") {
         handleCloseTrafficTab();
       }
@@ -1111,6 +1116,7 @@ export function SessionGroupDetailView({
 
   const handleOpenReview = useCallback(async () => {
     if (groupReviewId) {
+      setReviewTabOpen(true);
       setRequestedActiveWorkspaceTabId(`review:${groupReviewId}`);
       return;
     }
@@ -1126,7 +1132,10 @@ export function SessionGroupDetailView({
       return;
     }
     const opened = await fetchReviewForGroup(sessionGroupId);
-    if (opened) setRequestedActiveWorkspaceTabId(`review:${opened.id}`);
+    if (opened) {
+      setReviewTabOpen(true);
+      setRequestedActiveWorkspaceTabId(`review:${opened.id}`);
+    }
   }, [
     groupPrUrl,
     groupReviewId,

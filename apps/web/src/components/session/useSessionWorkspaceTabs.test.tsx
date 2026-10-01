@@ -58,6 +58,14 @@ describe("useSessionWorkspaceTabs", () => {
     expect(tabs[0]?.id).toBe("session:session-1");
   });
 
+  it("includes Review only while its reusable tab is open", () => {
+    const openTabs = renderTabs({ ...BASE, canvas: false, reviewId: "review-1" });
+    const closedTabs = renderTabs({ ...BASE, canvas: false, reviewId: null });
+
+    expect(openTabs.some((tab) => tab.id === "review:review-1")).toBe(true);
+    expect(closedTabs.some((tab) => tab.id.startsWith("review:"))).toBe(false);
+  });
+
   it("keeps session, terminal, file, and traffic tabs alongside the canvas", () => {
     const tabs = renderTabs({
       ...BASE,
