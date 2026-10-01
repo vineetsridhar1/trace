@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "../../ui/button";
 import type { ReviewFile } from "@trace/gql";
 import { GuideChapterAside } from "./GuideChapterAside";
@@ -12,6 +12,7 @@ import {
 } from "./guide-content";
 
 interface GuideScrollerProps {
+  notice?: ReactNode;
   reviewId: string;
   guideId: string;
   snapshotId: string;
@@ -27,6 +28,7 @@ interface GuideScrollerProps {
 }
 
 export function GuideScroller({
+  notice,
   reviewId,
   guideId,
   snapshotId,
@@ -82,6 +84,7 @@ export function GuideScroller({
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--th-review-canvas)]">
       <div ref={scrollRef} className="native-scrollbar relative min-h-0 flex-1 overflow-y-auto">
+        {notice}
         {content.chapters.map((chapter, index) => (
           <div
             key={chapter.id}

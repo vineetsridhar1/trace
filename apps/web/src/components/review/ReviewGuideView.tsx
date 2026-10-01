@@ -218,33 +218,42 @@ export function ReviewGuideView({
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      {guideSnapshotId !== snapshotId ? (
-        <div className="flex shrink-0 items-center gap-3 border-b border-[var(--th-warn)]/20 bg-[var(--th-warn)]/[0.07] px-4 py-2 text-xs text-[var(--th-review-warn-light)]">
-          <span className="min-w-0 flex-1">
-            The diff has changed since this Guide was generated. You can still read it, but it may
-            need regeneration.
-          </span>
-          <Button variant="ghost" size="sm" disabled={generating} onClick={() => void generate()}>
-            Regenerate Guide
-          </Button>
-        </div>
-      ) : null}
-      {generating ? (
-        <div
-          role="status"
-          className="shrink-0 border-b border-border px-4 py-2 text-xs text-muted-foreground"
-        >
-          Generating an updated Guide… You can keep reading this one.
-        </div>
-      ) : lastFailure && guideSnapshotId !== snapshotId ? (
-        <div
-          role="status"
-          className="shrink-0 border-b border-border px-4 py-2 text-xs text-muted-foreground"
-        >
-          Guide regeneration failed. Your saved Guide is still available.
-        </div>
-      ) : null}
       <GuideScroller
+        notice={
+          <>
+            {guideSnapshotId !== snapshotId ? (
+              <div className="flex shrink-0 items-center gap-3 border-b border-[var(--th-warn)]/20 bg-[var(--th-warn)]/[0.07] px-4 py-2 text-xs text-[var(--th-review-warn-light)]">
+                <span className="min-w-0 flex-1">
+                  The diff has changed since this Guide was generated. You can still read it, but it
+                  may need regeneration.
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={generating}
+                  onClick={() => void generate()}
+                >
+                  Regenerate Guide
+                </Button>
+              </div>
+            ) : null}
+            {generating ? (
+              <div
+                role="status"
+                className="shrink-0 border-b border-border px-4 py-2 text-xs text-muted-foreground"
+              >
+                Generating an updated Guide… You can keep reading this one.
+              </div>
+            ) : lastFailure && guideSnapshotId !== snapshotId ? (
+              <div
+                role="status"
+                className="shrink-0 border-b border-border px-4 py-2 text-xs text-muted-foreground"
+              >
+                Guide regeneration failed. Your saved Guide is still available.
+              </div>
+            ) : null}
+          </>
+        }
         reviewId={reviewId}
         guideId={guide.id}
         snapshotId={guideSnapshotId}
