@@ -212,6 +212,23 @@ describe("managed git authorization", () => {
     ).resolves.toBeTruthy();
   });
 
+  it("allows the initial clone while a provisioned workspace is preparing", async () => {
+    prismaMock.session.findFirst.mockResolvedValue({
+      repoId: REPO,
+      sessionGroup: null,
+      connection: { state: "connecting", runtimeInstanceId: "runtime-1" },
+    });
+
+    await expect(
+      managedGitService.authorizeRequest({
+        token: await tokenWith(["read", "write"]),
+        organizationId: ORG,
+        repoId: REPO,
+        service: "git-upload-pack",
+      }),
+    ).resolves.toBeTruthy();
+  });
+
   it("rejects a read-only token attempting to push", async () => {
     await expect(
       managedGitService.authorizeRequest({

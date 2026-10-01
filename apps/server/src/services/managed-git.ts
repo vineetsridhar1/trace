@@ -415,7 +415,14 @@ class ManagedGitService {
       return false;
     }
     const connection = session.connection as Record<string, unknown>;
-    const live = connection.runtimeInstanceId === auth.subject && connection.state === "connected";
+    // A provisioned runtime is authenticated before its workspace preparation
+    // begins. During that preparation the session deliberately remains
+    // "connecting", so it can perform the initial clone with its managed-git
+    // credential. Once the workspace is ready, the normal state is
+    // "connected". Both states are live bindings to the same runtime.
+    const live =
+      connection.runtimeInstanceId === auth.subject &&
+      (connection.state === "connecting" || connection.state === "connected");
     if (!live) {
       // Diagnostic for push 403s: shows exactly which side is stale — the
       // token's runtime instance vs. the session's current live runtime/state.
