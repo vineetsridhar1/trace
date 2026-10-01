@@ -44,8 +44,12 @@ interface StoredReviewPatch {
   files: ResolvedPullRequest["files"];
 }
 
-function json(value: unknown): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+export function reviewJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(
+    JSON.stringify(value, (_key, nested) =>
+      typeof nested === "bigint" ? Number(nested) : nested,
+    ),
+  ) as Prisma.InputJsonValue;
 }
 
 function checksum(body: Buffer): string {
@@ -64,7 +68,7 @@ function patchKey(reviewId: string, snapshotId: string): string {
 }
 
 function fileSummaries(pull: ResolvedPullRequest): Prisma.InputJsonValue {
-  return json(
+  return reviewJson(
     pull.files.map((file) => ({
       path: file.path,
       previousPath: file.previousPath,
@@ -79,7 +83,7 @@ function fileSummaries(pull: ResolvedPullRequest): Prisma.InputJsonValue {
 }
 
 function reviewPayload(review: ReviewWithInclude): Prisma.InputJsonValue {
-  return json({ review });
+  return reviewJson({ review });
 }
 
 function anchorRecord(value: unknown): Record<string, unknown> | null {
@@ -107,7 +111,7 @@ function validateAnchor(
   ) {
     throw new ValidationError("Invalid anchor line range");
   }
-  return json({ ...anchor, status: "current" });
+  return reviewJson({ ...anchor, status: "current" });
 }
 
 export class ReviewService {
@@ -399,8 +403,8 @@ export class ReviewService {
           sessionId: review.attachedSessionId,
           sourceKind: input.sourceKind,
           question: cleanBody(input.question, "Question"),
-          anchor: input.anchor == null ? undefined : json(input.anchor),
-          context: json({
+          anchor: input.anchor == null ? undefined : reviewJson(input.anchor),
+          context: reviewJson({
             ...(anchorRecord(input.context) ?? {}),
             requestedByActorId: input.actorId,
           }),
@@ -454,13 +458,13 @@ export class ReviewService {
           generationInquiryId: inquiry.id,
           title: validated.title,
           intent: validated.intent,
-          content: json(validated),
+          content: reviewJson(validated),
           version: (latest?.version ?? 0) + 1,
         },
       });
       await tx.reviewInquiry.update({
         where: { id: inquiry.id },
-        data: { structuredResult: json(validated) },
+        data: { structuredResult: reviewJson(validated) },
       });
       return created;
     });
@@ -666,7 +670,7 @@ export class ReviewService {
       scopeType: "review",
       scopeId: inquiry.reviewId,
       eventType: "review_inquiry_completed",
-      payload: json({ inquiry: { ...completed, responseMessage: response } }),
+      payload: reviewJson({ inquiry: { ...completed, responseMessage: response } }),
       actorType: "agent",
       actorId: event.actorId,
     });
@@ -691,7 +695,7 @@ export class ReviewService {
           scopeType: "review",
           scopeId: inquiry.reviewId,
           eventType: "review_guide_failed",
-          payload: json({ inquiry: failedInquiry, error: message }),
+          payload: reviewJson({ inquiry: failedInquiry, error: message }),
           actorType: "agent",
           actorId: event.actorId,
         });
@@ -744,7 +748,7 @@ export class ReviewService {
           patchStorageKey: key,
           patchChecksum: checksum(body),
           patchByteLength: body.byteLength,
-          providerMetadata: json({ number: pull.number, url: pull.url }),
+          providerMetadata: reviewJson({ number: pull.number, url: pull.url }),
           createdById: actor.actorId,
         },
       });
@@ -762,7 +766,7 @@ export class ReviewService {
         await tx.reviewThread.update({
           where: { id: thread.id },
           data: {
-            anchor: json({ ...original, status: "outdated" }),
+            anchor: reviewJson({ ...original, status: "outdated" }),
             ...(thread.deliveryStatus === "delivered" ? {} : { deliveryStatus: "outdated" }),
           },
         });
@@ -835,7 +839,7 @@ export class ReviewService {
         scopeType: "review",
         scopeId: reviewId,
         eventType: "review_inquiry_started",
-        payload: json({ inquiry: started }),
+        payload: reviewJson({ inquiry: started }),
         actorType: "user",
         actorId: requestingActorId,
       });
@@ -853,7 +857,7 @@ export class ReviewService {
         scopeType: "review",
         scopeId: reviewId,
         eventType: "review_inquiry_failed",
-        payload: json({ inquiry: failed }),
+        payload: reviewJson({ inquiry: failed }),
         actorType: "system",
         actorId: inquiry.review.createdById,
       });
@@ -975,7 +979,7 @@ export class ReviewService {
       scopeType: "review",
       scopeId: reviewId,
       eventType: eventType as never,
-      payload: json(payload),
+      payload: reviewJson(payload),
       actorType: actor.actorType,
       actorId: actor.actorId,
     });

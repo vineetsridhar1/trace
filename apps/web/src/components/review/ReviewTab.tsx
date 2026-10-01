@@ -31,17 +31,28 @@ const CREATE_GENERAL_THREAD = gql`
 
 export function ReviewTab({ reviewId }: { reviewId: string }) {
   const review = useEntityStore((state) => state.reviews[reviewId]) as Review | undefined;
-  const threads = useEntityStore((state) =>
-    Object.values(state.reviewThreads).filter((thread) => thread.reviewId === reviewId),
-  ) as ReviewThread[];
-  const inquiries = useEntityStore((state) =>
-    Object.values(state.reviewInquiries)
-      .filter((inquiry) => inquiry.reviewId === reviewId)
-      .sort((a, b) => a.position - b.position),
-  ) as ReviewInquiry[];
-  const guides = useEntityStore((state) =>
-    Object.values(state.reviewGuides).filter((guide) => guide.reviewId === reviewId),
-  ) as ReviewGuide[];
+  const reviewThreads = useEntityStore((state) => state.reviewThreads);
+  const reviewInquiries = useEntityStore((state) => state.reviewInquiries);
+  const reviewGuides = useEntityStore((state) => state.reviewGuides);
+  const threads = useMemo(
+    () =>
+      Object.values(reviewThreads).filter(
+        (thread) => thread.reviewId === reviewId,
+      ) as ReviewThread[],
+    [reviewId, reviewThreads],
+  );
+  const inquiries = useMemo(
+    () =>
+      (Object.values(reviewInquiries) as ReviewInquiry[])
+        .filter((inquiry) => inquiry.reviewId === reviewId)
+        .sort((a, b) => a.position - b.position),
+    [reviewId, reviewInquiries],
+  );
+  const guides = useMemo(
+    () =>
+      Object.values(reviewGuides).filter((guide) => guide.reviewId === reviewId) as ReviewGuide[],
+    [reviewGuides, reviewId],
+  );
   const ui = useReviewUiStore((state) => state.byReviewId[reviewId]);
   const patchUi = useReviewUiStore((state) => state.patch);
   const navigate = useReviewUiStore((state) => state.navigate);
