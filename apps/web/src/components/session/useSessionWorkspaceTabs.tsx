@@ -30,6 +30,8 @@ interface SessionWorkspaceTabsOptions {
   trafficEndpointId: string | null;
   canvas: boolean;
   reviewId?: string | null;
+  backgroundSessionId?: string | null;
+  showBackgroundSession?: boolean;
 }
 
 export function useSessionWorkspaceTabs({
@@ -42,6 +44,8 @@ export function useSessionWorkspaceTabs({
   trafficEndpointId,
   canvas,
   reviewId,
+  backgroundSessionId,
+  showBackgroundSession = false,
 }: SessionWorkspaceTabsOptions) {
   return useMemo<SpatialWorkspaceTab[]>(() => {
     const tabs: SpatialWorkspaceTab[] = canvas
@@ -49,12 +53,14 @@ export function useSessionWorkspaceTabs({
       : [];
 
     tabs.push(
-      ...sessions.map((session) => ({
-        id: `session:${session.id}`,
-        label: session.name,
-        icon: <Bot size={12} />,
-        status: session.agentStatus === "active" ? ("live" as const) : undefined,
-      })),
+      ...sessions
+        .filter((session) => showBackgroundSession || session.id !== backgroundSessionId)
+        .map((session) => ({
+          id: `session:${session.id}`,
+          label: session.name,
+          icon: <Bot size={12} />,
+          status: session.agentStatus === "active" ? ("live" as const) : undefined,
+        })),
     );
 
     if (reviewId) {
@@ -100,12 +106,14 @@ export function useSessionWorkspaceTabs({
     return tabs;
   }, [
     artifactIds,
+    backgroundSessionId,
     browserTitles,
     canvas,
     drafts,
     files,
     reviewId,
     sessions,
+    showBackgroundSession,
     terminals,
     trafficEndpointId,
   ]);

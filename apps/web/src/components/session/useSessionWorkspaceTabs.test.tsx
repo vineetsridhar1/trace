@@ -66,6 +66,25 @@ describe("useSessionWorkspaceTabs", () => {
     expect(closedTabs.some((tab) => tab.id.startsWith("review:"))).toBe(false);
   });
 
+  it("keeps the attached review session in the background until debugging is requested", () => {
+    const hidden = renderTabs({
+      ...BASE,
+      canvas: false,
+      reviewId: "review-1",
+      backgroundSessionId: "session-1",
+    });
+    const debugging = renderTabs({
+      ...BASE,
+      canvas: false,
+      reviewId: "review-1",
+      backgroundSessionId: "session-1",
+      showBackgroundSession: true,
+    });
+
+    expect(hidden.map((tab) => tab.id)).toEqual(["review:review-1"]);
+    expect(debugging.map((tab) => tab.id)).toEqual(["session:session-1", "review:review-1"]);
+  });
+
   it("keeps session, terminal, file, and traffic tabs alongside the canvas", () => {
     const tabs = renderTabs({
       ...BASE,

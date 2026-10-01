@@ -47,10 +47,12 @@ export function ReviewTab({
   reviewId,
   sessionGroupId,
   active,
+  onOpenAttachedSession,
 }: {
   reviewId: string;
   sessionGroupId: string;
   active: boolean;
+  onOpenAttachedSession(): void;
 }) {
   useReviewEvents(reviewId, active);
   const review = useEntityStore((state) => state.reviews[reviewId]) as Review | undefined;
@@ -215,6 +217,7 @@ export function ReviewTab({
         onView={(next) => patchUi(reviewId, { view: next })}
         onRefresh={() => void refresh()}
         onSubmit={() => setSubmissionOpen(true)}
+        onOpenAttachedSession={onOpenAttachedSession}
       />
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         {view === "changes" ? (

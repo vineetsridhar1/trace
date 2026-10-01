@@ -221,6 +221,12 @@ export function SessionGroupDetailView({
         (review) => review.sourceSessionGroupId === sessionGroupId && review.status === "open",
       )?.id,
   );
+  const groupReviewAttachedSessionId = useEntityStore(
+    (state) =>
+      Object.values(state.reviews).find(
+        (review) => review.sourceSessionGroupId === sessionGroupId && review.status === "open",
+      )?.attachedSessionId,
+  );
   const groupKind = useEntityField("sessionGroups", sessionGroupId, "kind") as
     | string
     | null
@@ -344,6 +350,7 @@ export function SessionGroupDetailView({
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
   const [applicationPanelOpen, setApplicationPanelOpen] = useState(false);
   const [reviewTabOpen, setReviewTabOpen] = useState(true);
+  const [reviewSessionDebugOpen, setReviewSessionDebugOpen] = useState(false);
   const [workspaceInteractionActive, setWorkspaceInteractionActive] = useState(false);
   const [modalOverlayVisible, setModalOverlayVisible] = useState(false);
   const [groupLoadError, setGroupLoadError] = useState<string | null>(null);
@@ -1013,6 +1020,8 @@ export function SessionGroupDetailView({
     trafficEndpointId,
     canvas: isCanvasWorkspace,
     reviewId: reviewTabOpen ? groupReviewId : null,
+    backgroundSessionId: reviewTabOpen && groupReviewId ? groupReviewAttachedSessionId : null,
+    showBackgroundSession: reviewSessionDebugOpen,
   });
 
   // Explicitly opened surfaces still win, but a canvas workspace with nothing
@@ -1027,9 +1036,24 @@ export function SessionGroupDetailView({
           ? "traffic"
           : isCanvasWorkspace
             ? CANVAS_TAB_ID
-            : selectedSession
+            : selectedSession &&
+                (reviewSessionDebugOpen || selectedSession.id !== groupReviewAttachedSessionId)
               ? `session:${selectedSession.id}`
-              : (draftWorkspaceTabs[0]?.id ?? null);
+              : reviewTabOpen && groupReviewId
+                ? `review:${groupReviewId}`
+                : (draftWorkspaceTabs[0]?.id ?? null);
+
+  const handleOpenReviewSession = useCallback(() => {
+    if (!groupReviewAttachedSessionId) return;
+    setReviewSessionDebugOpen(true);
+    openSessionTab(sessionGroupId, groupReviewAttachedSessionId);
+    setRequestedActiveWorkspaceTabId(`session:${groupReviewAttachedSessionId}`);
+  }, [
+    groupReviewAttachedSessionId,
+    openSessionTab,
+    sessionGroupId,
+    setRequestedActiveWorkspaceTabId,
+  ]);
 
   const handleActivateWorkspaceTab = useCallback(
     (tabId: string) => {
@@ -1078,7 +1102,9 @@ export function SessionGroupDetailView({
         }
         setDraftWorkspaceTabs((drafts) => drafts.filter((draft) => draft.id !== tabId));
       } else if (tabId.startsWith("session:")) {
-        handleCloseSession(tabId.slice("session:".length));
+        const sessionId = tabId.slice("session:".length);
+        if (sessionId === groupReviewAttachedSessionId) setReviewSessionDebugOpen(false);
+        handleCloseSession(sessionId);
       } else if (tabId.startsWith("artifact:")) {
         handleCloseArtifact(tabId.slice("artifact:".length));
       } else if (tabId.startsWith("terminal:")) {
@@ -1087,6 +1113,7 @@ export function SessionGroupDetailView({
         handleCloseFile(tabId.slice("file:".length));
       } else if (tabId.startsWith("review:")) {
         setReviewTabOpen(false);
+        setReviewSessionDebugOpen(false);
       } else if (tabId === "traffic") {
         handleCloseTrafficTab();
       }
@@ -1097,6 +1124,7 @@ export function SessionGroupDetailView({
       handleCloseTerminal,
       handleCloseSession,
       handleCloseTrafficTab,
+      groupReviewAttachedSessionId,
       draftWorkspaceTabs,
       sessionGroupId,
     ],
@@ -1345,6 +1373,7 @@ export function SessionGroupDetailView({
             reviewId={tabId.slice("review:".length)}
             sessionGroupId={sessionGroupId}
             active={captureTyping}
+            onOpenAttachedSession={handleOpenReviewSession}
           />
         );
       }
@@ -1393,6 +1422,7 @@ export function SessionGroupDetailView({
       groupRepo?.defaultBranch,
       groupPrUrl,
       groupSessions,
+      handleOpenReviewSession,
       handleCreateTerminal,
       handleDiffFileClick,
       handleFileClick,

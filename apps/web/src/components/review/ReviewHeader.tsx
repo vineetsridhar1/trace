@@ -1,7 +1,13 @@
-import { RefreshCw } from "lucide-react";
+import { Bot, MoreHorizontal, RefreshCw } from "lucide-react";
 import type { Review, ReviewSnapshot } from "@trace/gql";
 import { cn } from "../../lib/utils";
 import type { ReviewView } from "../../stores/review-ui";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 
 interface ReviewHeaderProps {
   review: Review;
@@ -12,6 +18,7 @@ interface ReviewHeaderProps {
   onView(view: ReviewView): void;
   onRefresh(): void;
   onSubmit(): void;
+  onOpenAttachedSession(): void;
 }
 
 export function ReviewHeader({
@@ -23,6 +30,7 @@ export function ReviewHeader({
   onView,
   onRefresh,
   onSubmit,
+  onOpenAttachedSession,
 }: ReviewHeaderProps) {
   return (
     <header className="flex h-[52px] shrink-0 items-center gap-5 border-b border-[#1f1f23] bg-[#141414] px-4">
@@ -63,6 +71,21 @@ export function ReviewHeader({
       >
         <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
       </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className="flex size-8 shrink-0 items-center justify-center rounded-md text-[#8b8b95] outline-none hover:bg-white/5 hover:text-[#d4d4d8] data-popup-open:bg-white/5"
+          aria-label="Review options"
+          title="Review options"
+        >
+          <MoreHorizontal size={16} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onClick={onOpenAttachedSession}>
+            <Bot /> Open agent session
+            <span className="ml-auto text-[10px] text-muted-foreground">Debug</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       {pendingThreadCount > 0 ? (
         <button
           type="button"
