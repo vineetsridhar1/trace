@@ -18,6 +18,7 @@ import { ReviewHeader } from "./ReviewHeader";
 import { ReviewLoadingState } from "./ReviewLoadingState";
 import { ReviewSubmissionSheet } from "./ReviewSubmissionSheet";
 import { fetchReview, mutateReview } from "./review-operations";
+import { useSidebar } from "../ui/sidebar";
 
 const REFRESH = gql`
   mutation RefreshReviewSnapshot($reviewId: ID!) {
@@ -59,11 +60,14 @@ export function ReviewTab({
   const patchUi = useReviewUiStore((state) => state.patch);
   const navigate = useReviewUiStore((state) => state.navigate);
   const openFilesSidebar = useWorkspaceSidebarStore((state) => state.openFiles);
+  const closeFilesSidebar = useWorkspaceSidebarStore((state) => state.closeFiles);
+  const { isMobile, setOpen, setOpenMobile } = useSidebar();
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [submissionOpen, setSubmissionOpen] = useState(false);
 
   const snapshot = review?.currentSnapshot ?? null;
+  const view = ui?.view ?? "changes";
   const threads = useMemo(
     () =>
       (Object.values(reviewThreads) as ReviewThreadType[]).filter(
@@ -90,8 +94,27 @@ export function ReviewTab({
     [reviewGuides, reviewId, snapshot?.id],
   );
   useEffect(() => {
-    if (active) openFilesSidebar(sessionGroupId, "changes", reviewId);
-  }, [active, openFilesSidebar, reviewId, sessionGroupId]);
+    if (!active) return;
+    if (view === "guide") {
+      closeFilesSidebar();
+      if (isMobile) setOpenMobile(false);
+      else setOpen(false);
+      return;
+    }
+    openFilesSidebar(sessionGroupId, "changes", reviewId);
+    if (isMobile) setOpenMobile(true);
+    else setOpen(true);
+  }, [
+    active,
+    closeFilesSidebar,
+    isMobile,
+    openFilesSidebar,
+    reviewId,
+    sessionGroupId,
+    setOpen,
+    setOpenMobile,
+    view,
+  ]);
 
   useEffect(() => {
     void fetchReview(reviewId).catch((reason: unknown) =>
@@ -159,7 +182,6 @@ export function ReviewTab({
     );
   if (!review || !snapshot) return <ReviewLoadingState label="Loading review…" />;
 
-  const view = ui?.view ?? "changes";
   const snapshotThreads = threads.filter(
     (thread) => thread.originSnapshotId === snapshot.id && thread.scope !== "guide_explanation",
   );
