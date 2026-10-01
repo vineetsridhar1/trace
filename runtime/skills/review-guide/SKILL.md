@@ -18,7 +18,8 @@ The Guide is read as one continuous scroll, two columns wide:
 - The left column holds one chapter's prose and stays pinned while the reader scrolls.
 - The right column shows the full diff of every file that chapter owns, in order.
 - When a chapter's last file scrolls past, the next chapter's prose takes over the left column.
-- The chapter list across the top is a table of contents, not a stepper. Readers jump around.
+- Chapters flow directly into one another as the reviewer scrolls; do not depend on a separate
+  chapter-navigation control.
 
 This layout drives the whole contract:
 

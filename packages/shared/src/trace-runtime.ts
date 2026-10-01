@@ -12,6 +12,12 @@ export type TraceRuntimePaths = {
   skillsDir: string;
 };
 
+export function bundledTraceRuntimeFile(relativePath: string): string {
+  const content = BUNDLED_TRACE_RUNTIME_FILES[relativePath];
+  if (content === undefined) throw new Error(`Missing bundled Trace runtime file: ${relativePath}`);
+  return content;
+}
+
 type RuntimeManifest = {
   schemaVersion: 1;
   version: number;

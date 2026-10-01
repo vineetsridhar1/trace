@@ -1,8 +1,11 @@
 import { type Prisma } from "@prisma/client";
+import { bundledTraceRuntimeFile } from "@trace/shared/trace-runtime";
 import { ValidationError } from "../lib/errors.js";
 
-export const REVIEW_GUIDE_SKILL_INSTRUCTION =
-  "Before generating the Guide, read $TRACE_SKILLS_DIR/review-guide/SKILL.md completely and follow it.";
+export const REVIEW_GUIDE_SKILL_INSTRUCTION = [
+  "Follow this Trace Review Guide methodology:",
+  bundledTraceRuntimeFile("skills/review-guide/SKILL.md"),
+].join("\n\n");
 
 /** Inline prose anchor: `[[label|path|startLine-endLine]]`. */
 const ANCHOR_PATTERN = /\[\[([^[\]|]+)\|([^[\]|]+)\|(\d+)-(\d+)\]\]/g;

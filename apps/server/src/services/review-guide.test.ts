@@ -111,10 +111,10 @@ describe("review guide contract", () => {
     expect(instruction).toContain("[[label|path|startLine-endLine]]");
   });
 
-  it("requires the attached session to load the Guide methodology", () => {
-    expect(REVIEW_GUIDE_SKILL_INSTRUCTION).toContain(
-      "$TRACE_SKILLS_DIR/review-guide/SKILL.md completely",
-    );
+  it("includes the Guide methodology directly in the session message", () => {
+    expect(REVIEW_GUIDE_SKILL_INSTRUCTION).toContain("# Trace Review Guide");
+    expect(REVIEW_GUIDE_SKILL_INSTRUCTION).toContain("## Build the explanation");
+    expect(REVIEW_GUIDE_SKILL_INSTRUCTION).not.toContain("$TRACE_SKILLS_DIR");
   });
 
   it("accepts JSON wrapped in a Markdown fence", () => {
