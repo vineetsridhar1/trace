@@ -18,18 +18,41 @@ describe("parseGitHubPullRequestUrl", () => {
 });
 
 describe("GitHubReviewProvider", () => {
-  it("reads a bracketed source path at the exact snapshot commit", async () => {
+  it("distinguishes a missing snapshot file from API failures", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            type: "file",
-            encoding: "base64",
-            content: Buffer.from("source").toString("base64"),
-          }),
-        ),
-      );
+      .mockResolvedValueOnce(new Response("missing", { status: 404 }))
+      .mockResolvedValueOnce(new Response("rate limited", { status: 429 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new GitHubReviewProvider();
+    await expect(
+      provider.readFileAtCommit(
+        "https://github.com/acme/widgets/pull/42",
+        "head",
+        "missing.ts",
+        "token",
+      ),
+    ).rejects.toMatchObject({ name: "NotFoundError" });
+    await expect(
+      provider.readFileAtCommit(
+        "https://github.com/acme/widgets/pull/42",
+        "head",
+        "missing.ts",
+        "token",
+      ),
+    ).rejects.toMatchObject({ status: 429 });
+  });
+
+  it("reads a bracketed source path at the exact snapshot commit", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          type: "file",
+          encoding: "base64",
+          content: Buffer.from("source").toString("base64"),
+        }),
+      ),
+    );
     vi.stubGlobal("fetch", fetchMock);
     expect(
       await new GitHubReviewProvider().readFileAtCommit(

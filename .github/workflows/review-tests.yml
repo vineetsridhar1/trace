@@ -1,0 +1,36 @@
+name: Review regression tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  review-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - name: Build shared dependencies
+        run: pnpm --filter '@trace/server^...' --filter '@trace/web^...' build
+      - name: Server typecheck
+        run: pnpm --filter @trace/server build
+      - name: Web typecheck
+        run: pnpm --filter @trace/web exec tsc -b
+      - name: Server Review regressions
+        run: pnpm --filter @trace/server exec vitest run src/services/review src/services/event.test.ts
+      - name: Web Review regressions
+        run: pnpm --filter @trace/web exec vitest run src/components/review src/stores/review-ui.test.ts src/stores/workspace-sidebar.test.ts src/components/session/useSessionWorkspaceTabs.test.tsx
+      - name: Client event regressions
+        run: pnpm --filter @trace/client-core exec vitest run test/handlers.test.ts
+      - run: pnpm runtime:check

@@ -19,6 +19,7 @@ function table(...methods: string[]) {
 function createReviewPrismaMock() {
   return {
     $transaction: vi.fn(),
+    $queryRaw: vi.fn(),
     review: table("findUnique", "findFirst", "update"),
     reviewInquiry: table(
       "findFirst",
@@ -30,7 +31,15 @@ function createReviewPrismaMock() {
     ),
     reviewGuide: table("findFirst", "create", "updateMany"),
     session: table("findUnique"),
-    reviewDelivery: table("findUnique", "findUniqueOrThrow", "create", "update", "updateMany"),
+    reviewThread: table("update", "updateMany", "findMany"),
+    reviewDelivery: table(
+      "findFirst",
+      "findUnique",
+      "findUniqueOrThrow",
+      "create",
+      "update",
+      "updateMany",
+    ),
     sessionMessage: table("findMany", "findUnique"),
   };
 }
@@ -90,6 +99,11 @@ function eventTypes(): string[] {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  db.$transaction.mockImplementation((run: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
+    run(db),
+  );
+  db.$queryRaw.mockResolvedValue([]);
+  db.reviewDelivery.findFirst.mockResolvedValue(null);
   db.reviewInquiry.updateMany.mockResolvedValue({ count: 1 });
   db.reviewInquiry.update.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
     Promise.resolve(runningInquiry(data)),
@@ -285,7 +299,65 @@ describe("turn correlation", () => {
   });
 });
 
+// Model PostgreSQL row-lock ownership, rather than serializing every mocked transaction. Removing
+// the service's FOR UPDATE therefore makes the concurrency regression tests fail.
+function modelRowLocks() {
+  let tail = Promise.resolve();
+  db.$transaction.mockImplementation(
+    async (run: (tx: Prisma.TransactionClient) => Promise<unknown>) => {
+      let release: (() => void) | undefined;
+      const tx = {
+        ...db,
+        $queryRaw: vi.fn(async () => {
+          const previous = tail;
+          tail = new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          await previous;
+        }),
+      };
+      try {
+        return await run(tx);
+      } finally {
+        release?.();
+      }
+    },
+  );
+}
+
 describe("FIFO dispatch", () => {
+  it("serializes concurrent dispatchers sharing a session", async () => {
+    modelRowLocks();
+    const queued = [1, 2].map((number) =>
+      runningInquiry({
+        id: `inquiry-${number}`,
+        state: "queued",
+        startedAt: new Date(),
+        review: { organizationId: "org-1", createdById: "user-1" },
+        snapshot: { baseSha: "base", headSha: "head", files: [] },
+      }),
+    );
+    db.reviewInquiry.groupBy.mockResolvedValue([{ sessionId: "session-1" }]);
+    db.reviewInquiry.findFirst.mockImplementation(
+      async ({ where }: { where: { state: string } }) => {
+        const result = queued.find((item) => item.state === where.state) ?? null;
+        await Promise.resolve();
+        return result;
+      },
+    );
+    db.reviewInquiry.updateMany.mockImplementation(async ({ where }: { where: { id: string } }) => {
+      const item = queued.find((item) => item.id === where.id)!;
+      item.state = "running";
+      return { count: 1 };
+    });
+    await Promise.all([
+      reviewService.recoverStuckInquiries(),
+      reviewService.recoverStuckInquiries(),
+    ]);
+    expect(sessions.sendMessage).toHaveBeenCalledTimes(1);
+    expect(queued.filter((item) => item.state === "running")).toHaveLength(1);
+  });
+
   it("does not send a prompt while the session is still on another turn", async () => {
     db.reviewInquiry.findFirst.mockResolvedValue(
       runningInquiry({ review: { organizationId: "org-1" } }),
@@ -438,6 +510,120 @@ describe("GitHub delivery", () => {
     disposition: "comment" as const,
     idempotencyKey: "key-1",
   };
+
+  it("prevents different delivery keys from posting the same thread concurrently", async () => {
+    modelRowLocks();
+    db.review.findFirst.mockResolvedValue(review);
+    db.reviewDelivery.findUnique.mockResolvedValue(null);
+    let inFlight: Record<string, unknown> | null = null;
+    db.reviewDelivery.findFirst.mockImplementation(async () => inFlight);
+    db.reviewDelivery.create.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => {
+        inFlight = { id: data.idempotencyKey, ...data };
+        return inFlight;
+      },
+    );
+    db.reviewDelivery.update.mockResolvedValue({ status: "succeeded" });
+    db.reviewThread.findMany.mockResolvedValue([]);
+    provider.resolvePullRequest.mockResolvedValue({ headSha: "head-sha", files: [] });
+    provider.submitReview.mockResolvedValue({
+      reviewId: "github-1",
+      commentIds: { "thread-1": "comment-1" },
+    });
+    const results = await Promise.allSettled([
+      service.submit({ ...submission, idempotencyKey: "browser-A" }),
+      service.submit({ ...submission, idempotencyKey: "browser-B" }),
+    ]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect(provider.submitReview).toHaveBeenCalledTimes(1);
+  });
+
+  it("delivers surviving code outside PR hunks with its source location in the review body", async () => {
+    db.review.findFirst.mockResolvedValue({
+      ...review,
+      threads: [
+        {
+          ...review.threads[0],
+          anchor: { ...review.threads[0]!.anchor, startLine: 10, endLine: 11, side: "head" },
+        },
+      ],
+    });
+    db.reviewDelivery.findUnique.mockResolvedValue(null);
+    db.reviewDelivery.create.mockResolvedValue({ id: "delivery" });
+    db.reviewDelivery.update.mockResolvedValue({ status: "succeeded" });
+    db.reviewThread.findMany.mockResolvedValue([]);
+    provider.resolvePullRequest.mockResolvedValue({
+      headSha: "head-sha",
+      files: [
+        {
+          path: "src/a.ts",
+          patch: "@@ -100 +100 @@\n-old\n+new",
+        },
+      ],
+    });
+    provider.submitReview.mockResolvedValue({ reviewId: "github-1", commentIds: {} });
+    await service.submit(submission);
+    expect(provider.submitReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining("Comment on src/a.ts:10–11:"),
+        comments: [],
+      }),
+    );
+    expect(provider.submitReview.mock.calls[0]![0].body).toContain("Needs a guard.");
+    expect(db.reviewThread.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          deliveryStatus: "delivered",
+          providerReviewId: "github-1",
+        }),
+      }),
+    );
+  });
+
+  it("keeps a valid current diff anchor inline on GitHub", async () => {
+    db.review.findFirst.mockResolvedValue({
+      ...review,
+      threads: [
+        {
+          ...review.threads[0],
+          anchor: { ...review.threads[0]!.anchor, startLine: 10, endLine: 11, side: "head" },
+        },
+      ],
+    });
+    db.reviewDelivery.findUnique.mockResolvedValue(null);
+    db.reviewDelivery.create.mockResolvedValue({ id: "delivery" });
+    db.reviewDelivery.update.mockResolvedValue({ status: "succeeded" });
+    db.reviewThread.findMany.mockResolvedValue([]);
+    provider.resolvePullRequest.mockResolvedValue({
+      headSha: "head-sha",
+      files: [
+        {
+          path: "src/a.ts",
+          patch: "@@ -10,2 +10,2 @@\n first\n second",
+        },
+      ],
+    });
+    provider.submitReview.mockResolvedValue({ reviewId: "github-1", commentIds: {} });
+    await service.submit(submission);
+    expect(provider.submitReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        comments: [
+          expect.objectContaining({ path: "src/a.ts", startLine: 10, line: 11, side: "RIGHT" }),
+        ],
+      }),
+    );
+  });
+
+  it("rechecks thread delivery after an earlier request already finished", async () => {
+    db.review.findFirst.mockResolvedValueOnce(review).mockResolvedValue({
+      ...review,
+      threads: [{ ...review.threads[0], providerReviewId: "already-delivered" }],
+    });
+    db.reviewDelivery.findUnique.mockResolvedValue(null);
+    await expect(service.submit(submission)).rejects.toThrow("Only undelivered threads");
+    expect(provider.submitReview).not.toHaveBeenCalled();
+  });
 
   it("claims a retry with one conditional write, so a race cannot double-post", async () => {
     db.review.findFirst.mockResolvedValue(review);

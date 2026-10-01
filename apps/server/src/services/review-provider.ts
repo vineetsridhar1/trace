@@ -1,3 +1,4 @@
+import { NotFoundError } from "../lib/errors.js";
 import {
   githubRepoService,
   GitHubApiError,
@@ -125,7 +126,14 @@ export class GitHubReviewProvider implements ReviewProviderAdapter {
   ): Promise<string> {
     const target = parseGitHubPullRequestUrl(pullRequestUrl);
     if (!target) throw new Error("Invalid pull request URL");
-    return githubRepoService.readFile(target.repo, commit, filePath, token);
+    try {
+      return await githubRepoService.readFile(target.repo, commit, filePath, token);
+    } catch (error) {
+      if (error instanceof GitHubApiError && error.status === 404) {
+        throw new NotFoundError("Snapshot file", filePath);
+      }
+      throw error;
+    }
   }
 
   async resolvePullRequest(url: string, token: string): Promise<ResolvedPullRequest> {

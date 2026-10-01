@@ -24,6 +24,7 @@ vi.mock("./api-token.js", () => ({
 }));
 vi.mock("../lib/storage/index.js", () => ({ storage: {} }));
 
+import { NotFoundError } from "../lib/errors.js";
 import { ReviewService } from "./review.js";
 import type { ResolvedPullRequest, ReviewProviderAdapter } from "./review-provider.js";
 
@@ -80,6 +81,7 @@ const thread = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(provider.readFileAtCommit).mockResolvedValue("");
   mocks.review.mockResolvedValue({
     id: "review",
     attachedSessionId: "session",
@@ -95,6 +97,105 @@ beforeEach(() => {
   );
 });
 describe("refresh repairs outdated anchors without another commit", () => {
+  it("keeps unchanged code that is outside the new diff hunks", async () => {
+    mocks.threads.mockResolvedValue([
+      { ...thread, anchor: { ...thread.anchor, selectedText: "still here" } },
+    ]);
+    vi.mocked(provider.readFileAtCommit).mockResolvedValue(`${"context\n".repeat(9)}still here\n`);
+    await service.refresh(input);
+    expect(provider.readFileAtCommit).toHaveBeenCalledWith(
+      pull.url,
+      pull.headSha,
+      "route.ts",
+      "token",
+    );
+    expect(mocks.update.mock.calls[0]![0].data.anchor).toMatchObject({
+      status: "current",
+      startLine: 10,
+    });
+  });
+
+  it("retains a file no longer in the diff and shares source reads across its threads", async () => {
+    const noDiff = { ...pull, files: [] };
+    vi.mocked(provider.resolvePullRequest).mockResolvedValueOnce(noDiff);
+    mocks.threads.mockResolvedValue([thread, { ...thread, id: "second" }]);
+    vi.mocked(provider.readFileAtCommit).mockResolvedValue(`${"context\n".repeat(9)}\n`);
+    await service.refresh(input);
+    expect(provider.readFileAtCommit).toHaveBeenCalledTimes(1);
+    expect(mocks.update).toHaveBeenCalledTimes(2);
+    expect(mocks.update.mock.calls[0]![0].data.anchor.status).toBe("current");
+  });
+
+  it("locates moved code in the complete source at the correct base commit", async () => {
+    mocks.threads.mockResolvedValue([
+      { ...thread, anchor: { ...thread.anchor, side: "base", selectedText: "moved" } },
+    ]);
+    vi.mocked(provider.readFileAtCommit).mockResolvedValue("context\nmoved\n");
+    await service.refresh(input);
+    expect(provider.readFileAtCommit).toHaveBeenCalledWith(
+      pull.url,
+      pull.baseSha,
+      "route.ts",
+      "token",
+    );
+    expect(mocks.update.mock.calls[0]![0].data.anchor).toMatchObject({
+      status: "relocated",
+      startLine: 2,
+    });
+  });
+
+  it("reads the original path for a renamed base-side file", async () => {
+    vi.mocked(provider.resolvePullRequest).mockResolvedValueOnce({
+      ...pull,
+      files: [
+        {
+          ...pull.files[0]!,
+          path: "renamed.ts",
+          previousPath: "route.ts",
+          status: "renamed",
+          patch: "",
+        },
+      ],
+    });
+    mocks.threads.mockResolvedValue([
+      { ...thread, anchor: { ...thread.anchor, side: "base", selectedText: "moved" } },
+    ]);
+    vi.mocked(provider.readFileAtCommit).mockResolvedValue("context\nmoved\n");
+    await service.refresh(input);
+    expect(provider.readFileAtCommit).toHaveBeenCalledWith(
+      pull.url,
+      pull.baseSha,
+      "route.ts",
+      "token",
+    );
+    expect(mocks.update.mock.calls[0]![0].data.anchor).toMatchObject({
+      status: "relocated",
+      filePath: "renamed.ts",
+      startLine: 2,
+    });
+  });
+
+  it("treats a confirmed missing source file as outdated", async () => {
+    mocks.threads.mockResolvedValue([
+      { ...thread, anchor: { ...thread.anchor, filePath: "missing.ts" } },
+    ]);
+    vi.mocked(provider.readFileAtCommit).mockRejectedValue(
+      new NotFoundError("Snapshot file", "missing.ts"),
+    );
+    await service.refresh(input);
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("does not invalidate anchors on an API failure", async () => {
+    mocks.threads.mockResolvedValue([
+      { ...thread, anchor: { ...thread.anchor, selectedText: "still here" } },
+    ]);
+    vi.mocked(provider.readFileAtCommit).mockRejectedValue(new Error("rate limited"));
+    await expect(service.refresh(input)).rejects.toThrow("rate limited");
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.emit).not.toHaveBeenCalled();
+  });
+
   it("restores the anchor and eligibility, broadcasting the full thread", async () => {
     await service.refresh(input);
     expect(mocks.access).toHaveBeenCalledWith("session", "user", "org");

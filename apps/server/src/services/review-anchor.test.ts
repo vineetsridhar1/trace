@@ -28,6 +28,47 @@ const anchor = {
 };
 
 describe("reconcileReviewAnchor", () => {
+  it("uses commit source to keep a selection outside all patch hunks", () => {
+    const source = `${"context\n".repeat(9)}${anchor.selectedText}\n`;
+    expect(
+      reconcileReviewAnchor(
+        anchor,
+        "line",
+        "snapshot-2",
+        [file("@@ -100 +100 @@\n-old\n+new")],
+        source,
+      ),
+    ).toMatchObject({ status: "current", startLine: 10, endLine: 11 });
+  });
+
+  it("does not relocate to a duplicate inside a hunk when the source still has the original", () => {
+    const source = `${"context\n".repeat(9)}${anchor.selectedText}\n`;
+    expect(
+      reconcileReviewAnchor(
+        anchor,
+        "line",
+        "snapshot-2",
+        [file("@@ -100,2 +100,2 @@\n const answer = 42;\n return answer;")],
+        source,
+      ),
+    ).toMatchObject({ status: "current", startLine: 10 });
+  });
+
+  it("keeps a selection in a file no longer included in changed files", () => {
+    const source = `${"context\n".repeat(9)}${anchor.selectedText}\n`;
+    expect(reconcileReviewAnchor(anchor, "line", "snapshot-2", [], source)).toMatchObject({
+      status: "current",
+      filePath: "src/app.ts",
+    });
+  });
+
+  it("marks code outdated only after it is absent from complete source", () => {
+    expect(
+      reconcileReviewAnchor(anchor, "line", "snapshot-2", [file("")], "other source\n").status,
+    ).toBe("outdated");
+    expect(reconcileReviewAnchor(anchor, "line", "snapshot-2", [], null).status).toBe("outdated");
+  });
+
   it("keeps an unchanged exact block current", () => {
     const result = reconcileReviewAnchor(anchor, "line", "snapshot-2", [
       file("@@ -10,2 +10,2 @@\n const answer = 42;\n return answer;"),

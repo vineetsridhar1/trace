@@ -4128,6 +4128,15 @@ export type ResolveReviewThreadMutation = {
   resolveReviewThread: { __typename?: "ReviewThread"; id: string };
 };
 
+export type GenerateReviewGuideMutationVariables = Exact<{
+  input: EnqueueReviewInquiryInput;
+}>;
+
+export type GenerateReviewGuideMutation = {
+  __typename?: "Mutation";
+  enqueueReviewInquiry: { __typename?: "ReviewInquiry"; id: string };
+};
+
 export type GuideCodeExcerptQueryVariables = Exact<{
   snapshotId: Scalars["ID"]["input"];
   filePath: Scalars["String"]["input"];
@@ -8839,6 +8848,46 @@ export const ResolveReviewThreadDocument = {
     },
   ],
 } as unknown as DocumentNode<ResolveReviewThreadMutation, ResolveReviewThreadMutationVariables>;
+export const GenerateReviewGuideDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "GenerateReviewGuide" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "EnqueueReviewInquiryInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "enqueueReviewInquiry" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<GenerateReviewGuideMutation, GenerateReviewGuideMutationVariables>;
 export const GuideCodeExcerptDocument = {
   kind: "Document",
   definitions: [

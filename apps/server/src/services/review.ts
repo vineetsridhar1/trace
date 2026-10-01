@@ -766,58 +766,106 @@ export class ReviewService {
       idempotencyKey: string;
     },
   ) {
-    const review = await this.get({ ...input, id: input.reviewId });
-    if (review.currentSnapshotId !== input.snapshotId)
-      throw new ValidationError("GitHub delivery requires the current snapshot");
-    const existing = await prisma.reviewDelivery.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
-    });
-    if (existing) {
-      if (existing.reviewId !== review.id || existing.actorId !== input.actorId)
-        throw new AuthorizationError();
-      if (existing.status === "succeeded") return existing;
-      const existingThreadIds = Array.isArray(existing.threadIds)
-        ? existing.threadIds.filter((value): value is string => typeof value === "string")
-        : [];
-      if (
-        existing.snapshotId !== input.snapshotId ||
-        existing.disposition !== input.disposition ||
-        existingThreadIds.join("\0") !== [...new Set(input.threadIds)].join("\0")
-      ) {
-        throw new ValidationError("Idempotency key was already used for a different submission");
-      }
-    }
+    // Authorization runs before acquiring the short-lived database lock.
+    await this.get({ ...input, id: input.reviewId });
     const uniqueThreadIds = [...new Set(input.threadIds)];
-    const threads = review.threads.filter((thread) => uniqueThreadIds.includes(thread.id));
-    if (threads.length !== uniqueThreadIds.length)
-      throw new ValidationError("One or more selected threads are invalid");
-    if (
-      threads.some(
-        (thread) =>
-          hasProviderDelivery(thread) || !threadAppliesToSnapshot(thread, input.snapshotId),
-      )
-    ) {
-      throw new ValidationError(
-        "Only undelivered threads from the current snapshot can be submitted",
-      );
-    }
-    const delivery = existing
-      ? await this.reclaimDelivery(existing.id)
-      : await this.claimNewDelivery({
+    const claimed = await prisma.$transaction(async (tx) => {
+      // Serialize claims across keys and replicas. The durable submitting record keeps ownership
+      // after this transaction commits, without holding a connection during the GitHub request.
+      await tx.$queryRaw`SELECT "id" FROM "Review" WHERE "id" = ${input.reviewId} FOR UPDATE`;
+      const review = await tx.review.findFirst({
+        where: { id: input.reviewId, organizationId: input.organizationId },
+        include: { currentSnapshot: true, threads: { include: THREAD_INCLUDE } },
+      });
+      if (!review) throw new NotFoundError("Review", input.reviewId);
+      if (review.currentSnapshotId !== input.snapshotId)
+        throw new ValidationError("GitHub delivery requires the current snapshot");
+      const existing = await tx.reviewDelivery.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+      });
+      if (existing) {
+        if (existing.reviewId !== review.id || existing.actorId !== input.actorId)
+          throw new AuthorizationError();
+        if (existing.status === "succeeded")
+          return { review, delivery: existing, threads: [], succeeded: true };
+        const existingThreadIds = Array.isArray(existing.threadIds)
+          ? existing.threadIds.filter((value): value is string => typeof value === "string")
+          : [];
+        if (
+          existing.snapshotId !== input.snapshotId ||
+          existing.disposition !== input.disposition ||
+          existingThreadIds.join("\0") !== [...new Set(input.threadIds)].join("\0")
+        ) {
+          throw new ValidationError("Idempotency key was already used for a different submission");
+        }
+      }
+      const threads = review.threads.filter((thread) => uniqueThreadIds.includes(thread.id));
+      if (threads.length !== uniqueThreadIds.length)
+        throw new ValidationError("One or more selected threads are invalid");
+      if (
+        threads.some(
+          (thread) =>
+            hasProviderDelivery(thread) || !threadAppliesToSnapshot(thread, input.snapshotId),
+        )
+      ) {
+        throw new ValidationError(
+          "Only undelivered threads from the current snapshot can be submitted",
+        );
+      }
+      const inFlight = await tx.reviewDelivery.findFirst({
+        where: {
           reviewId: review.id,
-          snapshotId: input.snapshotId,
-          actorId: input.actorId,
-          idempotencyKey: input.idempotencyKey,
-          disposition: input.disposition,
-          threadIds: uniqueThreadIds,
-          body: input.body ?? null,
-        });
-    await this.emit(review.id, input, "review_delivery_started", { delivery });
+          status: "submitting",
+          ...(existing ? { id: { not: existing.id } } : {}),
+        },
+        select: { id: true },
+      });
+      if (inFlight) throw new ValidationError("This review is already being sent to GitHub");
+      const delivery = existing
+        ? await this.reclaimDelivery(tx, existing.id)
+        : await this.claimNewDelivery(tx, {
+            reviewId: review.id,
+            snapshotId: input.snapshotId,
+            actorId: input.actorId,
+            idempotencyKey: input.idempotencyKey,
+            disposition: input.disposition,
+            threadIds: uniqueThreadIds,
+            body: input.body ?? null,
+          });
+      return { review, delivery, threads, succeeded: false };
+    });
+    const { review, delivery, threads } = claimed;
+    if (claimed.succeeded) return delivery;
     try {
+      await this.emit(review.id, input, "review_delivery_started", { delivery });
       const token = await this.githubToken(input.actorId);
       const pull = await this.provider.resolvePullRequest(review.pullRequestUrl, token);
       if (pull.headSha !== review.currentSnapshot?.headSha)
         throw new ValidationError("The pull request has new commits; refresh the review first");
+      // Surviving source can fall outside the new PR hunks. GitHub cannot accept those line
+      // anchors, so preserve the feedback in the review body with its source location instead.
+      const inlineThreads = threads.filter((thread) => {
+        const anchor = anchorRecord(thread.anchor);
+        const file = pull.files.find((candidate) => candidate.path === anchor?.filePath);
+        if (!file) return false;
+        if (thread.scope === "file") return true;
+        const start = Number(anchor?.startLine);
+        const end = Number(anchor?.endLine);
+        const lines = new Set(
+          patchLines(file.patch).map((line) =>
+            anchor?.side === "base" ? line.oldLine : line.newLine,
+          ),
+        );
+        return (
+          Number.isSafeInteger(start) &&
+          Number.isSafeInteger(end) &&
+          start > 0 &&
+          end >= start &&
+          lines.has(start) &&
+          lines.has(end)
+        );
+      });
+      const inlineIds = new Set(inlineThreads.map((thread) => thread.id));
       const result = await this.provider.submitReview({
         pullRequest: pull,
         token,
@@ -825,19 +873,23 @@ export class ReviewService {
         body: [
           input.body?.trim(),
           ...threads
-            .filter((thread) => thread.scope === "general")
-            .map(
-              (thread) =>
-                `${thread.comments
-                  .filter((comment) => !comment.deletedAt)
-                  .map((comment) => comment.body)
-                  .join("\n\n")}\n\n<!-- trace-thread:${thread.id} -->`,
-            ),
+            .filter((thread) => !inlineIds.has(thread.id))
+            .map((thread) => {
+              const anchor = anchorRecord(thread.anchor);
+              const location =
+                typeof anchor?.filePath === "string"
+                  ? `Comment on ${anchor.filePath}${typeof anchor.startLine === "number" ? `:${anchor.startLine}${anchor.endLine !== anchor.startLine ? `–${anchor.endLine}` : ""}` : ""}:\n\n`
+                  : "";
+              return `${location}${thread.comments
+                .filter((comment) => !comment.deletedAt)
+                .map((comment) => comment.body)
+                .join("\n\n")}\n\n<!-- trace-thread:${thread.id} -->`;
+            }),
         ]
           .filter(Boolean)
           .join("\n\n"),
         idempotencyKey: input.idempotencyKey,
-        comments: threads.flatMap((thread) => {
+        comments: inlineThreads.flatMap((thread) => {
           const anchor = anchorRecord(thread.anchor);
           const body = thread.comments
             .filter((comment) => !comment.deletedAt)
@@ -921,8 +973,8 @@ export class ReviewService {
    * updating it would let two concurrent retries both pass and both post to GitHub: the provider's
    * marker scan is itself a read followed by a POST, so it cannot be the only guard.
    */
-  private async reclaimDelivery(deliveryId: string) {
-    const claimed = await prisma.reviewDelivery.updateMany({
+  private async reclaimDelivery(tx: Prisma.TransactionClient, deliveryId: string) {
+    const claimed = await tx.reviewDelivery.updateMany({
       where: {
         id: deliveryId,
         OR: [
@@ -945,24 +997,27 @@ export class ReviewService {
     if (claimed.count !== 1) {
       throw new ValidationError("This review is already being sent to GitHub");
     }
-    return prisma.reviewDelivery.findUniqueOrThrow({ where: { id: deliveryId } });
+    return tx.reviewDelivery.findUniqueOrThrow({ where: { id: deliveryId } });
   }
 
   /**
    * First attempt for a key. The unique constraint on `idempotencyKey` is the claim: if a racing
    * request created the row first, this loses and reports the submission as already in flight.
    */
-  private async claimNewDelivery(data: {
-    reviewId: string;
-    snapshotId: string;
-    actorId: string;
-    idempotencyKey: string;
-    disposition: "comment" | "approve" | "request_changes";
-    threadIds: string[];
-    body: string | null;
-  }) {
+  private async claimNewDelivery(
+    tx: Prisma.TransactionClient,
+    data: {
+      reviewId: string;
+      snapshotId: string;
+      actorId: string;
+      idempotencyKey: string;
+      disposition: "comment" | "approve" | "request_changes";
+      threadIds: string[];
+      body: string | null;
+    },
+  ) {
     try {
-      return await prisma.reviewDelivery.create({
+      return await tx.reviewDelivery.create({
         data: { ...data, status: "submitting", startedAt: new Date(), attempts: 1 },
       });
     } catch (error) {
@@ -1143,7 +1198,7 @@ export class ReviewService {
       }
       // Re-check outdated anchors even when the commit is unchanged. This repairs anchors
       // misclassified by older matching logic without requiring another PR commit.
-      const recovered = await this.reconcileAnchors(review.id, existing.id, pull.files, true);
+      const recovered = await this.reconcileAnchors(review.id, existing.id, pull, actor, true);
       if (recovered.length) {
         const threads = await prisma.$transaction(async (tx) => {
           const updated = [];
@@ -1176,7 +1231,7 @@ export class ReviewService {
     // Matching every anchor against the new patch is CPU-bound and one write per thread, so it is
     // resolved before the transaction opens — holding an interactive transaction across it risks
     // the transaction timeout on reviews with many threads.
-    const reconciledThreads = await this.reconcileAnchors(review.id, snapshotId, pull.files);
+    const reconciledThreads = await this.reconcileAnchors(review.id, snapshotId, pull, actor);
     const updated = await prisma.$transaction(async (tx) => {
       await tx.reviewSnapshot.updateMany({
         where: { reviewId: review.id, status: "current" },
@@ -1241,7 +1296,8 @@ export class ReviewService {
   private async reconcileAnchors(
     reviewId: string,
     snapshotId: string,
-    files: ResolvedPullRequest["files"],
+    pull: ResolvedPullRequest,
+    actor: ActorInput,
     outdatedOnly = false,
   ) {
     const threads = await prisma.reviewThread.findMany({
@@ -1252,28 +1308,65 @@ export class ReviewService {
       },
       select: { id: true, anchor: true, scope: true, deliveryStatus: true },
     });
-    return threads.flatMap((thread) => {
+    // GitHub patches omit unchanged regions (and sometimes whole files). A missing patch match
+    // is not evidence of deleted code. Fetch exact commit source only when the patch is inconclusive,
+    // once per file/side, outside the database transaction. Provider errors abort refresh; they must
+    // never silently turn valid comments into outdated ones.
+    const sources = new Map<string, Promise<string | null>>();
+    let token: string | undefined;
+    const updates = [];
+    for (const thread of threads) {
       const original = anchorRecord(thread.anchor);
-      if (!original) return [];
-      const reconciled = reconcileReviewAnchor(original, thread.scope, snapshotId, files);
+      if (!original) continue;
+      let reconciled = reconcileReviewAnchor(original, thread.scope, snapshotId, pull.files);
+      if (reconciled.status !== "current" && typeof original.filePath === "string") {
+        const file = pull.files.find(
+          (candidate) =>
+            candidate.path === original.filePath || candidate.previousPath === original.filePath,
+        );
+        const path =
+          original.side === "base"
+            ? (file?.previousPath ?? file?.path ?? original.filePath)
+            : (file?.path ?? original.filePath);
+        const commit = original.side === "base" ? pull.baseSha : pull.headSha;
+        const key = `${commit}:${path}`;
+        if (!sources.has(key)) {
+          token ??= await this.githubToken(actor.actorId);
+          sources.set(
+            key,
+            this.provider
+              .readFileAtCommit(pull.url, commit, path, token)
+              .catch((error: unknown) => {
+                if (error instanceof NotFoundError) return null;
+                throw error;
+              }),
+          );
+        }
+        reconciled = reconcileReviewAnchor(
+          original,
+          thread.scope,
+          snapshotId,
+          pull.files,
+          await sources.get(key)!,
+        );
+      }
       const outdated = reconciled.status === "outdated";
-      if (outdatedOnly && outdated) return [];
-      return [
-        {
-          id: thread.id,
-          data: {
-            anchor: reviewJson(reconciled),
-            ...(thread.deliveryStatus === "delivered"
-              ? {}
-              : outdated
-                ? { deliveryStatus: "outdated" as const }
-                : thread.deliveryStatus === "outdated"
-                  ? { deliveryStatus: "trace_only" as const }
-                  : {}),
-          },
+      if (outdatedOnly && outdated) continue;
+      updates.push({
+        id: thread.id,
+        data: {
+          anchor: reviewJson(reconciled),
+          ...(thread.deliveryStatus === "delivered"
+            ? {}
+            : outdated
+              ? { deliveryStatus: "outdated" as const }
+              : thread.deliveryStatus === "outdated"
+                ? { deliveryStatus: "trace_only" as const }
+                : {}),
         },
-      ];
-    });
+      });
+    }
+    return updates;
   }
 
   private async markCurrent(reviewId: string, snapshotId: string, actor: ActorInput) {
@@ -1307,43 +1400,50 @@ export class ReviewService {
   private async advanceSession(sessionId: string) {
     // Bounded rather than recursive: a dead session can fail every queued item in one pass.
     for (let dispatched = 0; dispatched < MAX_QUEUE_ADVANCES_PER_PASS; dispatched += 1) {
-      const running = await prisma.reviewInquiry.findFirst({
-        where: { sessionId, state: "running" },
-        orderBy: { startedAt: "asc" },
-        select: { id: true, startedAt: true, review: { select: { organizationId: true } } },
+      const claim = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "Session" WHERE "id" = ${sessionId} FOR UPDATE`;
+        const running = await tx.reviewInquiry.findFirst({
+          where: { sessionId, state: "running" },
+          orderBy: { startedAt: "asc" },
+          select: { id: true, startedAt: true, review: { select: { organizationId: true } } },
+        });
+        if (running) return { kind: "running" as const, inquiry: running };
+        const inquiry = await tx.reviewInquiry.findFirst({
+          where: { sessionId, state: "queued" },
+          orderBy: [{ createdAt: "asc" }, { position: "asc" }],
+          include: { review: true, snapshot: true },
+        });
+        if (!inquiry) return null;
+        // A busy session would queue our prompt behind someone else's turn.
+        const session = await tx.session.findUnique({
+          where: { id: sessionId },
+          select: { agentStatus: true, sessionStatus: true },
+        });
+        if (
+          !session ||
+          session.agentStatus === "active" ||
+          session.sessionStatus === "needs_input"
+        ) {
+          return null;
+        }
+        const claimed = await tx.reviewInquiry.updateMany({
+          where: { id: inquiry.id, state: "queued" },
+          data: { state: "running", startedAt: new Date() },
+        });
+        return claimed.count === 1 ? { kind: "claimed" as const, inquiry } : null;
       });
-      if (running) {
-        const startedAt = running.startedAt?.getTime() ?? 0;
-        if (Date.now() - startedAt < INQUIRY_TURN_TIMEOUT_MS) return;
-        await this.failInquiry(running.id, INQUIRY_TIMEOUT_MESSAGE, {
-          organizationId: running.review.organizationId,
+      if (!claim) return;
+      if (claim.kind === "running") {
+        if (Date.now() - (claim.inquiry.startedAt?.getTime() ?? 0) < INQUIRY_TURN_TIMEOUT_MS)
+          return;
+        await this.failInquiry(claim.inquiry.id, INQUIRY_TIMEOUT_MESSAGE, {
+          organizationId: claim.inquiry.review.organizationId,
           actorId: SYSTEM_ACTOR_ID,
           actorType: "system",
         });
+        continue;
       }
-      const inquiry = await prisma.reviewInquiry.findFirst({
-        where: { sessionId, state: "queued" },
-        orderBy: [{ createdAt: "asc" }, { position: "asc" }],
-        include: { review: true, snapshot: true },
-      });
-      if (!inquiry) return;
-
-      // Only dispatch into an idle session. A prompt sent to a busy agent queues behind the turn
-      // in flight, and that turn's `result` would then be mistaken for this inquiry's answer. The
-      // recovery sweep retries, so a busy session only delays dispatch.
-      const session = await prisma.session.findUnique({
-        where: { id: sessionId },
-        select: { agentStatus: true, sessionStatus: true },
-      });
-      if (!session || session.agentStatus === "active" || session.sessionStatus === "needs_input") {
-        return;
-      }
-
-      const claimed = await prisma.reviewInquiry.updateMany({
-        where: { id: inquiry.id, state: "queued" },
-        data: { state: "running", startedAt: new Date() },
-      });
-      if (claimed.count !== 1) return;
+      const inquiry = claim.inquiry;
       const context = anchorRecord(inquiry.context);
       const requestingActorId =
         typeof context?.requestedByActorId === "string"

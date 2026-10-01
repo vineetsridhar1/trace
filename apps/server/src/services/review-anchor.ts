@@ -29,14 +29,19 @@ export function patchLines(patch: string): PatchLine[] {
 }
 
 function exactMatches(
-  file: ReviewProviderFile,
+  file: ReviewProviderFile | undefined,
   side: "base" | "head",
   selectedLines: string[],
+  source?: string,
 ): Array<{ startLine: number; endLine: number }> {
-  const numbered = patchLines(file.patch).flatMap((line) => {
-    const number = side === "base" ? line.oldLine : line.newLine;
-    return number == null ? [] : [{ number, text: line.text }];
-  });
+  const sourceLines = source?.split(/\r?\n/);
+  if (sourceLines?.at(-1) === "") sourceLines.pop();
+  const numbered = sourceLines
+    ? sourceLines.map((text, index) => ({ number: index + 1, text }))
+    : patchLines(file?.patch ?? "").flatMap((line) => {
+        const number = side === "base" ? line.oldLine : line.newLine;
+        return number == null ? [] : [{ number, text: line.text }];
+      });
   const matches: Array<{ startLine: number; endLine: number }> = [];
   for (let index = 0; index <= numbered.length - selectedLines.length; index += 1) {
     const candidate = numbered.slice(index, index + selectedLines.length);
@@ -58,6 +63,7 @@ export function reconcileReviewAnchor(
   scope: string,
   snapshotId: string,
   files: ReviewProviderFile[],
+  source?: string | null,
 ): Record<string, unknown> {
   const filePath = typeof anchor.filePath === "string" ? anchor.filePath : null;
   const side = anchor.side === "base" || anchor.side === "head" ? anchor.side : null;
@@ -65,20 +71,28 @@ export function reconcileReviewAnchor(
   const oldEnd = typeof anchor.endLine === "number" ? anchor.endLine : oldStart;
   const file = filePath
     ? files.find((candidate) => candidate.path === filePath || candidate.previousPath === filePath)
-    : null;
-  if (!file || !side || oldStart == null || oldEnd == null) {
+    : undefined;
+  if (
+    (!file && source === undefined) ||
+    source === null ||
+    !filePath ||
+    !side ||
+    oldStart == null ||
+    oldEnd == null
+  ) {
     return { ...anchor, snapshotId, status: "outdated" };
   }
 
+  const path = file?.path ?? filePath;
   if (scope === "file") {
     return {
       ...anchor,
       snapshotId,
-      filePath: file.path,
-      status: file.path === filePath ? "current" : "relocated",
+      filePath: path,
+      status: path === filePath ? "current" : "relocated",
       originalLine: anchor.originalLine ?? oldStart,
-      baseBlobId: file.baseBlobId,
-      headBlobId: file.headBlobId,
+      baseBlobId: file?.baseBlobId ?? null,
+      headBlobId: file?.headBlobId ?? null,
     };
   }
 
@@ -86,28 +100,27 @@ export function reconcileReviewAnchor(
   const selectedLines =
     typeof anchor.selectedText === "string" ? anchor.selectedText.split("\n") : null;
   if (!selectedLines || selectedLines.length !== oldEnd - oldStart + 1) {
-    return { ...anchor, snapshotId, filePath: file.path, status: "outdated" };
+    return { ...anchor, snapshotId, filePath: path, status: "outdated" };
   }
-  const matches = exactMatches(file, side, selectedLines);
+  const matches = exactMatches(file, side, selectedLines, source);
   if (matches.length === 0) {
-    return { ...anchor, snapshotId, filePath: file.path, status: "outdated" };
+    return { ...anchor, snapshotId, filePath: path, status: "outdated" };
   }
   const match =
     matches.find((candidate) => candidate.startLine === oldStart) ??
     matches.sort(
       (left, right) => Math.abs(left.startLine - oldStart) - Math.abs(right.startLine - oldStart),
     )[0]!;
-  const unchanged =
-    file.path === filePath && match.startLine === oldStart && match.endLine === oldEnd;
+  const unchanged = path === filePath && match.startLine === oldStart && match.endLine === oldEnd;
   return {
     ...anchor,
     snapshotId,
-    filePath: file.path,
+    filePath: path,
     startLine: match.startLine,
     endLine: match.endLine,
     originalLine: anchor.originalLine ?? oldStart,
     status: unchanged ? "current" : "relocated",
-    baseBlobId: file.baseBlobId,
-    headBlobId: file.headBlobId,
+    baseBlobId: file?.baseBlobId ?? null,
+    headBlobId: file?.headBlobId ?? null,
   };
 }
