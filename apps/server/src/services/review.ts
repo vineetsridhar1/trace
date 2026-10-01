@@ -548,6 +548,34 @@ export class ReviewService {
     const review = await this.get({ ...input, id: input.reviewId });
     const snapshot = review.snapshots.find((candidate) => candidate.id === input.snapshotId);
     if (!snapshot) throw new ValidationError("Snapshot does not belong to this review");
+    const context = anchorRecord(input.context) ?? {};
+    let guideContext: Record<string, unknown> = {};
+    if (input.sourceKind === "guide_anchor") {
+      if (typeof context.guideChapterId !== "string")
+        throw new ValidationError("Guide question requires a chapter");
+      const guide = await prisma.reviewGuide.findFirst({
+        where: {
+          reviewId: review.id,
+          snapshotId: snapshot.id,
+          ...(typeof context.guideId === "string" ? { id: context.guideId } : {}),
+        },
+        orderBy: { version: "desc" },
+      });
+      const content = anchorRecord(guide?.content);
+      const chapter = Array.isArray(content?.chapters)
+        ? content.chapters.find((value) => anchorRecord(value)?.id === context.guideChapterId)
+        : null;
+      if (!guide || !chapter)
+        throw new ValidationError("Guide chapter does not belong to this review snapshot");
+      // Capture the actual saved chapter so the background session can answer without guessing
+      // from a chapter ID, and a later Guide regeneration cannot change the queued context.
+      guideContext = {
+        guideId: guide.id,
+        guideChapterId: context.guideChapterId,
+        guideTitle: content?.title,
+        guideChapter: chapter,
+      };
+    }
     const inquiry = await prisma.$transaction(async (tx) => {
       const latest = await tx.reviewInquiry.findFirst({
         where: { reviewId: review.id },
@@ -563,7 +591,8 @@ export class ReviewService {
           question: cleanBody(input.question, "Question"),
           anchor: input.anchor == null ? undefined : reviewJson(input.anchor),
           context: reviewJson({
-            ...(anchorRecord(input.context) ?? {}),
+            ...context,
+            ...guideContext,
             requestedByActorId: input.actorId,
           }),
           position: (latest?.position ?? 0) + 1,

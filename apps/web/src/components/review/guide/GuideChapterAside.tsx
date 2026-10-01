@@ -1,9 +1,13 @@
 import { MessageSquare, Sparkles } from "lucide-react";
+import { GuideChapterInquiries } from "./GuideChapterInquiries";
 import { cn } from "../../../lib/utils";
 import { GuideProse } from "./GuideProse";
 import type { GuideAnchor, GuideChapterContent } from "./guide-content";
 
 export function GuideChapterAside({
+  reviewId,
+  guideId,
+  snapshotId,
   chapter,
   index,
   total,
@@ -12,6 +16,9 @@ export function GuideChapterAside({
   onAsk,
   onComment,
 }: {
+  reviewId: string;
+  guideId: string;
+  snapshotId: string;
   chapter: GuideChapterContent;
   index: number;
   total: number;
@@ -115,6 +122,12 @@ export function GuideChapterAside({
           <MessageSquare size={11} /> Comment
         </button>
       </div>
+      <GuideChapterInquiries
+        reviewId={reviewId}
+        guideId={guideId}
+        snapshotId={snapshotId}
+        chapterId={chapter.id}
+      />
     </div>
   );
 }

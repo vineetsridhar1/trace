@@ -49,7 +49,13 @@ export function ReviewInlineComposer({
           if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) onSubmit();
         }}
         className="h-20 w-full resize-none rounded-md border border-[var(--th-edge)] bg-[var(--th-surface-mid)] p-2 text-sm outline-none focus:border-[var(--th-accent)]"
-        placeholder={comment ? "Stays in Trace until you send it…" : "Ask about these lines…"}
+        placeholder={
+          comment
+            ? "Stays in Trace until you send it…"
+            : target.guideChapterId
+              ? "Ask about this chapter…"
+              : "Ask about these lines…"
+        }
       />
       <div className="mt-2 flex items-center justify-end gap-2">
         <span className="mr-auto text-[11px] text-muted-foreground">

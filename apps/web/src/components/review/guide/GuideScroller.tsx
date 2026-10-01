@@ -11,6 +11,8 @@ import {
 } from "./guide-content";
 
 interface GuideScrollerProps {
+  reviewId: string;
+  guideId: string;
   snapshotId: string;
   content: GuideContent;
   files: ReviewFile[];
@@ -23,6 +25,8 @@ interface GuideScrollerProps {
 }
 
 export function GuideScroller({
+  reviewId,
+  guideId,
   snapshotId,
   content,
   files,
@@ -83,6 +87,9 @@ export function GuideScroller({
           >
             <div className="min-w-0 border-r border-[var(--th-edge-faint)]">
               <GuideChapterAside
+                reviewId={reviewId}
+                guideId={guideId}
+                snapshotId={snapshotId}
                 chapter={chapter}
                 index={index}
                 total={content.chapters.length}

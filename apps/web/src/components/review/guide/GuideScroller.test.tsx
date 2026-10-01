@@ -65,6 +65,8 @@ describe("Guide reference navigation", () => {
     act(() => {
       renderer = create(
         <GuideScroller
+          reviewId="review"
+          guideId="guide"
           snapshotId="snapshot"
           content={content}
           files={files}

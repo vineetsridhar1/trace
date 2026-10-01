@@ -28,13 +28,6 @@ const REFRESH = gql`
     }
   }
 `;
-const ENQUEUE_INQUIRY = gql`
-  mutation EnqueueReviewInquiry($input: EnqueueReviewInquiryInput!) {
-    enqueueReviewInquiry(input: $input) {
-      id
-    }
-  }
-`;
 
 export function ReviewTab({
   reviewId,
@@ -157,32 +150,6 @@ export function ReviewTab({
     }
   }, [reviewId]);
 
-  const ask = useCallback(
-    async (
-      question: string,
-      options?: {
-        sourceKind?: "diff_anchor" | "guide_anchor" | "thread";
-        context?: Record<string, unknown>;
-      },
-    ) => {
-      if (!snapshot) return;
-      try {
-        await mutateReview(ENQUEUE_INQUIRY, {
-          input: {
-            reviewId,
-            snapshotId: snapshot.id,
-            sourceKind: options?.sourceKind ?? "thread",
-            question,
-            context: options?.context ?? {},
-          },
-        });
-      } catch (reason) {
-        toast.error(reason instanceof Error ? reason.message : "Could not queue the question");
-      }
-    },
-    [reviewId, snapshot],
-  );
-
   if (error)
     return (
       <ReviewEmptyState
@@ -245,12 +212,6 @@ export function ReviewTab({
             generating={guideGenerating}
             lastFailure={guideFailure}
             onOpenInChanges={(anchor) => navigate(reviewId, anchor)}
-            onAskAboutChapter={(chapterId) =>
-              void ask("Explain this Guide chapter in more depth.", {
-                sourceKind: "guide_anchor",
-                context: { guideChapterId: chapterId },
-              })
-            }
             onReviewAllChanges={() => patchUi(reviewId, { view: "changes" })}
           />
         )}

@@ -20,8 +20,8 @@ const CREATE_THREAD = gql`
     }
   }
 `;
-const GENERATE = gql`
-  mutation GenerateReviewGuide($input: EnqueueReviewInquiryInput!) {
+const ENQUEUE_INQUIRY = gql`
+  mutation EnqueueGuideInquiry($input: EnqueueReviewInquiryInput!) {
     enqueueReviewInquiry(input: $input) {
       id
       state
@@ -38,7 +38,6 @@ interface ReviewGuideViewProps {
   generating: boolean;
   lastFailure?: ReviewInquiry | null;
   onOpenInChanges(anchor: GuideAnchor): void;
-  onAskAboutChapter(chapterId: string): void;
   onReviewAllChanges(): void;
 }
 
@@ -50,7 +49,6 @@ export function ReviewGuideView({
   generating,
   lastFailure,
   onOpenInChanges,
-  onAskAboutChapter,
   onReviewAllChanges,
 }: ReviewGuideViewProps) {
   const guideSnapshotId = guide?.snapshotId ?? snapshotId;
@@ -71,10 +69,10 @@ export function ReviewGuideView({
   const [submitting, setSubmitting] = useState(false);
 
   const openComposer = useCallback(
-    (chapterId: string) => {
+    (chapterId: string, kind: ReviewComposerTarget["kind"]) => {
       setBody("");
       setComposer({
-        kind: "comment",
+        kind,
         scope: "guide_explanation",
         guideChapterId: chapterId,
         label:
@@ -84,24 +82,37 @@ export function ReviewGuideView({
     [content.chapters],
   );
 
-  const submitComment = async () => {
-    if (!composer?.guideChapterId || !body.trim()) return;
+  const submit = async () => {
+    if (!composer?.guideChapterId || !body.trim() || submitting) return;
     setSubmitting(true);
     try {
-      await mutateReview(CREATE_THREAD, {
-        input: {
-          reviewId,
-          snapshotId,
-          scope: "guide_explanation",
-          body: body.trim(),
-          guideChapterId: composer.guideChapterId,
-        },
-      });
-      toast.success("Comment saved on this chapter");
+      if (composer.kind === "ask") {
+        await mutateReview(ENQUEUE_INQUIRY, {
+          input: {
+            reviewId,
+            snapshotId: guideSnapshotId,
+            sourceKind: "guide_anchor",
+            question: body.trim(),
+            context: { guideId: guide?.id, guideChapterId: composer.guideChapterId },
+          },
+        });
+        toast.success("Question queued for this chapter");
+      } else {
+        await mutateReview(CREATE_THREAD, {
+          input: {
+            reviewId,
+            snapshotId: guideSnapshotId,
+            scope: "guide_explanation",
+            body: body.trim(),
+            guideChapterId: composer.guideChapterId,
+          },
+        });
+        toast.success("Comment saved on this chapter");
+      }
       setBody("");
       setComposer(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Comment failed");
+      toast.error(error instanceof Error ? error.message : "Could not submit");
     } finally {
       setSubmitting(false);
     }
@@ -109,7 +120,7 @@ export function ReviewGuideView({
 
   const generate = async () => {
     try {
-      await mutateReview(GENERATE, {
+      await mutateReview(ENQUEUE_INQUIRY, {
         input: {
           reviewId,
           snapshotId,
@@ -176,13 +187,15 @@ export function ReviewGuideView({
         </div>
       ) : null}
       <GuideScroller
+        reviewId={reviewId}
+        guideId={guide.id}
         snapshotId={guideSnapshotId}
         content={content}
         files={guideFiles ?? files}
         onOpenInChanges={guideSnapshotId === snapshotId ? onOpenInChanges : openReference}
         onOpenReference={openReference}
-        onAskAboutChapter={onAskAboutChapter}
-        onCommentOnChapter={openComposer}
+        onAskAboutChapter={(chapterId) => openComposer(chapterId, "ask")}
+        onCommentOnChapter={(chapterId) => openComposer(chapterId, "comment")}
         onReviewAllChanges={onReviewAllChanges}
         onRegenerate={() => void generate()}
       />
@@ -193,7 +206,7 @@ export function ReviewGuideView({
           submitting={submitting}
           onBody={setBody}
           onCancel={() => setComposer(null)}
-          onSubmit={() => void submitComment()}
+          onSubmit={() => void submit()}
         />
       ) : null}
     </div>

@@ -4060,11 +4060,11 @@ export type CreateReviewGuideThreadMutation = {
   createReviewThread: { __typename?: "ReviewThread"; id: string };
 };
 
-export type GenerateReviewGuideMutationVariables = Exact<{
+export type EnqueueGuideInquiryMutationVariables = Exact<{
   input: EnqueueReviewInquiryInput;
 }>;
 
-export type GenerateReviewGuideMutation = {
+export type EnqueueGuideInquiryMutation = {
   __typename?: "Mutation";
   enqueueReviewInquiry: {
     __typename?: "ReviewInquiry";
@@ -8551,13 +8551,13 @@ export const CreateReviewGuideThreadDocument = {
   CreateReviewGuideThreadMutation,
   CreateReviewGuideThreadMutationVariables
 >;
-export const GenerateReviewGuideDocument = {
+export const EnqueueGuideInquiryDocument = {
   kind: "Document",
   definitions: [
     {
       kind: "OperationDefinition",
       operation: "mutation",
-      name: { kind: "Name", value: "GenerateReviewGuide" },
+      name: { kind: "Name", value: "EnqueueGuideInquiry" },
       variableDefinitions: [
         {
           kind: "VariableDefinition",
@@ -8594,7 +8594,7 @@ export const GenerateReviewGuideDocument = {
       },
     },
   ],
-} as unknown as DocumentNode<GenerateReviewGuideMutation, GenerateReviewGuideMutationVariables>;
+} as unknown as DocumentNode<EnqueueGuideInquiryMutation, EnqueueGuideInquiryMutationVariables>;
 export const ResolveReviewInquiryDocument = {
   kind: "Document",
   definitions: [
