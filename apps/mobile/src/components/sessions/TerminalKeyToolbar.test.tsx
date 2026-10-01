@@ -32,7 +32,10 @@ vi.mock("@/theme", () => ({
 import { TerminalKeyToolbar } from "./TerminalKeyToolbar";
 
 function button(renderer: TestRenderer.ReactTestRenderer, label: string) {
-  return renderer.root.findAll((node) => node.type === "Pressable" && node.props.accessibilityLabel === label)[0];
+  // `node.type` is the host name at runtime; stringify so TypeScript accepts the comparison.
+  return renderer.root.findAll(
+    (node) => String(node.type) === "Pressable" && node.props.accessibilityLabel === label,
+  )[0];
 }
 
 describe("TerminalKeyToolbar", () => {

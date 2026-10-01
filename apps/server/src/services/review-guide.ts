@@ -48,26 +48,16 @@ function stringList(value: unknown): string[] | null {
 }
 
 /**
- * Inline anchors are what make Guide prose navigable, so they are held to the same standard as the
- * chapter's file coverage: an anchor may only point into a file the chapter owns, because the reader
- * jumps to it inside that chapter's own diff column.
+ * Inline anchors are navigation, not content. An anchor pointing outside the chapter's own files
+ * cannot be followed — the reader jumps to it inside that chapter's diff column — so it is reduced
+ * to its plain label rather than failing the whole Guide.
  */
-function validateAnchors(text: string, chapterFiles: Set<string>, label: string): void {
-  for (const match of text.matchAll(ANCHOR_PATTERN)) {
-    const [, , filePath, start, end] = match;
-    if (!chapterFiles.has(filePath!)) {
-      throw new ValidationError(
-        `${label} links to ${filePath}, which is not one of that chapter's files`,
-      );
-    }
-    if (Number(start) < 1 || Number(end) < Number(start)) {
-      throw new ValidationError(`${label} links to an invalid line range in ${filePath}`);
-    }
-  }
+function stripUnresolvableAnchors(text: string, chapterFiles: Set<string>): string {
+  return text.replace(ANCHOR_PATTERN, (match, label: string, filePath: string, start, end) => {
+    if (!chapterFiles.has(filePath)) return label;
+    return Number(start) >= 1 && Number(end) >= Number(start) ? match : label;
+  });
 }
-
-/** Keeps the prompt bounded on very large pull requests. */
-const MAX_PROMPT_PATHS = 300;
 
 export function guideGenerationInstruction(filesValue: Prisma.JsonValue): string {
   const paths = snapshotPaths(filesValue);
@@ -111,6 +101,12 @@ export function validateReviewGuide(
   const paths = snapshotPaths(filesValue);
   const allowedPaths = new Set(paths);
   const covered = new Set<string>();
+
+  // Only the Guide's structure is fatal. Every reference the model gets wrong — a path outside the
+  // changeset, a repeat, an omission, an anchor that cannot be followed — is repaired here, because
+  // the alternative is throwing away a generation that took a full coding-session turn. The agent
+  // can read the whole repository, so naming a real file that this pull request does not touch is
+  // its most likely mistake, not a sign the rest of the Guide is wrong.
   const chapters: GuideChapter[] = guide.chapters.map((chapterValue, chapterIndex) => {
     const chapter = asRecord(chapterValue);
     const id = typeof chapter?.id === "string" ? chapter.id : null;
@@ -128,7 +124,7 @@ export function validateReviewGuide(
           ? "explanation"
           : !implications
             ? "implications"
-            : !declaredFiles || declaredFiles.length === 0
+            : !declaredFiles
               ? "files"
               : null;
     if (badField || !id || !title || !explanation || !implications || !declaredFiles) {
@@ -136,36 +132,32 @@ export function validateReviewGuide(
         `Guide chapter ${chapterIndex + 1} is missing or malformed "${badField ?? "files"}"`,
       );
     }
-    // A path claimed by an earlier chapter is dropped rather than fatal: the chapter that claimed
-    // it first still explains it, so discarding a whole generation over a repeat loses far more.
-    const files: string[] = [];
-    for (const filePath of declaredFiles) {
-      if (!allowedPaths.has(filePath)) {
-        throw new ValidationError(`Guide references an unknown file: ${filePath}`);
-      }
-      if (covered.has(filePath)) continue;
+    const files = declaredFiles.filter((filePath) => {
+      if (!allowedPaths.has(filePath) || covered.has(filePath)) return false;
       covered.add(filePath);
-      files.push(filePath);
-    }
-    const chapterFiles = new Set(declaredFiles);
-    const label = `Guide chapter "${title}"`;
-    validateAnchors(explanation, chapterFiles, label);
-    implications.forEach((implication) => validateAnchors(implication, chapterFiles, label));
-    return { id, title, explanation, implications, files };
+      return true;
+    });
+    // Anchors are resolved against the files the chapter actually kept, so a stored Guide never
+    // renders a link to a file this snapshot cannot show.
+    const chapterFiles = new Set(files);
+    return {
+      id,
+      title,
+      explanation: stripUnresolvableAnchors(explanation, chapterFiles),
+      implications: implications.map((implication) =>
+        stripUnresolvableAnchors(implication, chapterFiles),
+      ),
+      files,
+    };
   });
 
-  const everythingElse = guide.everythingElse.flatMap((value): string[] => {
-    if (typeof value !== "string" || !allowedPaths.has(value)) {
-      throw new ValidationError(
-        `Guide contains an unknown file: ${typeof value === "string" ? value : JSON.stringify(value)}`,
-      );
-    }
-    if (covered.has(value)) return [];
+  const everythingElse = guide.everythingElse.filter((value): value is string => {
+    if (typeof value !== "string" || !allowedPaths.has(value) || covered.has(value)) return false;
     covered.add(value);
-    return [value];
+    return true;
   });
   // Full coverage is a property of the stored Guide, not a demand on the model: anything the
-  // chapters never claimed is filed under "everything else" instead of discarding the generation.
+  // chapters never claimed is filed under "everything else".
   everythingElse.push(...paths.filter((path) => !covered.has(path)));
 
   return {

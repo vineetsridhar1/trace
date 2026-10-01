@@ -107,7 +107,8 @@ describe("ensureTraceRuntime", () => {
     );
     expect(traceSessionSkill).toContain("session list");
     expect(traceSessionSkill).toContain("session start");
-    expect(traceSessionSkill).toContain("session convert --kind coding");
+    // Coding is the in-place default (`--channel`); only non-coding kinds take `--kind`.
+    expect(traceSessionSkill).toContain("session convert --channel");
     expect(traceSessionSkill).toContain("Bare `session start` never joins");
     expect(traceSessionSkill).toContain("always win.");
     expect(traceSessionSkill).toContain("Do not call");
