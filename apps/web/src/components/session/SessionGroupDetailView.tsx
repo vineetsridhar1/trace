@@ -1337,7 +1337,13 @@ export function SessionGroupDetailView({
       }
 
       if (tabId.startsWith("review:")) {
-        return <ReviewTab reviewId={tabId.slice("review:".length)} />;
+        return (
+          <ReviewTab
+            reviewId={tabId.slice("review:".length)}
+            sessionGroupId={sessionGroupId}
+            active={captureTyping}
+          />
+        );
       }
 
       const tabSession = tabId.startsWith("session:")

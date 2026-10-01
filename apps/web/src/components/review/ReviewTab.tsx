@@ -5,6 +5,7 @@ import type { Review, ReviewGuide, ReviewInquiry, ReviewThread } from "@trace/gq
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useReviewUiStore } from "../../stores/review-ui";
+import { useWorkspaceSidebarStore } from "../../stores/workspace-sidebar";
 import { ReviewChangesView } from "./ReviewChangesView";
 import { ReviewChatPanel } from "./ReviewChatPanel";
 import { ReviewGuideView } from "./ReviewGuideView";
@@ -29,7 +30,15 @@ const CREATE_GENERAL_THREAD = gql`
   }
 `;
 
-export function ReviewTab({ reviewId }: { reviewId: string }) {
+export function ReviewTab({
+  reviewId,
+  sessionGroupId,
+  active,
+}: {
+  reviewId: string;
+  sessionGroupId: string;
+  active: boolean;
+}) {
   const review = useEntityStore((state) => state.reviews[reviewId]) as Review | undefined;
   const reviewThreads = useEntityStore((state) => state.reviewThreads);
   const reviewInquiries = useEntityStore((state) => state.reviewInquiries);
@@ -61,6 +70,11 @@ export function ReviewTab({ reviewId }: { reviewId: string }) {
   const [submissionOpen, setSubmissionOpen] = useState(false);
   const [generalCommentOpen, setGeneralCommentOpen] = useState(false);
   const [generalComment, setGeneralComment] = useState("");
+  const openFilesSidebar = useWorkspaceSidebarStore((state) => state.openFiles);
+
+  useEffect(() => {
+    if (active) openFilesSidebar(sessionGroupId, "changes");
+  }, [active, openFilesSidebar, sessionGroupId]);
 
   useEffect(() => {
     void fetchReview(reviewId).catch((reason: unknown) =>
