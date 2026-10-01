@@ -1,6 +1,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { gql } from "@urql/core";
-import type { ReviewDiffFile, ReviewFile, ReviewThread as ReviewThreadType } from "@trace/gql";
+import type {
+  ReviewDiffFile,
+  ReviewFile,
+  ReviewInquiry,
+  ReviewThread as ReviewThreadType,
+} from "@trace/gql";
 import { client } from "../../lib/urql";
 import { hunkGapLabel, parsePatch } from "./diff-patch";
 import {
@@ -16,6 +21,8 @@ import { DiffFileHeader } from "./diff/DiffFileHeader";
 import { DiffGapRow } from "./diff/DiffGapRow";
 import { DiffLineRow, type DiffLineEmphasis } from "./diff/DiffLineRow";
 import { DiffSelectionPopover } from "./diff/DiffSelectionPopover";
+import { ReviewInquiryCard } from "./ReviewInquiryCard";
+import { inquiriesQueuedAhead, reviewInquiryAnchor } from "./review-inquiry";
 import { ReviewThread } from "./ReviewThread";
 import type { ReviewHighlight } from "../../stores/review-ui";
 
@@ -37,6 +44,7 @@ interface ReviewFileDiffProps {
   snapshotId: string;
   file: ReviewFile;
   threads: ReviewThreadType[];
+  inquiries: ReviewInquiry[];
   collapsed: boolean;
   highlight: ReviewHighlight | null;
   onToggleCollapsed(): void;
@@ -59,10 +67,32 @@ function ReviewThreadStack({ threads }: { threads: ReviewThreadType[] }) {
   );
 }
 
+function ReviewInquiryStack({
+  inquiries,
+  allInquiries,
+}: {
+  inquiries: ReviewInquiry[];
+  allInquiries: ReviewInquiry[];
+}) {
+  if (inquiries.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2 border-y border-[#a78bfa]/15 bg-[#141414] p-3 pl-16 font-sans leading-normal">
+      {inquiries.map((inquiry) => (
+        <ReviewInquiryCard
+          key={inquiry.id}
+          inquiry={inquiry}
+          queuedAhead={inquiriesQueuedAhead(inquiry, allInquiries)}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function ReviewFileDiff({
   snapshotId,
   file,
   threads,
+  inquiries,
   collapsed,
   highlight,
   onToggleCollapsed,
@@ -172,6 +202,28 @@ export function ReviewFileDiff({
     }
     return grouped;
   }, [fileThreads]);
+  const fileInquiries = useMemo(
+    () =>
+      inquiries.filter((inquiry) => {
+        const anchor = reviewInquiryAnchor(inquiry);
+        return (
+          inquiry.snapshotId === snapshotId &&
+          inquiry.sourceKind === "diff_anchor" &&
+          anchor?.filePath === file.path
+        );
+      }),
+    [file.path, inquiries, snapshotId],
+  );
+  const inquiriesByAnchor = useMemo(() => {
+    const grouped = new Map<string, ReviewInquiry[]>();
+    for (const inquiry of fileInquiries) {
+      const anchor = reviewInquiryAnchor(inquiry);
+      if (!anchor) continue;
+      const key = anchorKey(anchor.side, anchor.endLine);
+      grouped.set(key, [...(grouped.get(key) ?? []), inquiry]);
+    }
+    return grouped;
+  }, [fileInquiries]);
   const renderedAnchorKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const line of lines) {
@@ -233,6 +285,10 @@ export function ReviewFileDiff({
                   lineNumber == null
                     ? []
                     : (threadsByAnchor.get(anchorKey(side, lineNumber)) ?? []);
+                const anchoredInquiries =
+                  lineNumber == null
+                    ? []
+                    : (inquiriesByAnchor.get(anchorKey(side, lineNumber)) ?? []);
                 return (
                   <Fragment key={index}>
                     <DiffLineRow
@@ -254,6 +310,7 @@ export function ReviewFileDiff({
                       }
                     />
                     <ReviewThreadStack threads={anchoredThreads} />
+                    <ReviewInquiryStack inquiries={anchoredInquiries} allInquiries={inquiries} />
                   </Fragment>
                 );
               })}

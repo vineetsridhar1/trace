@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { gql } from "@urql/core";
-import type { ReviewFile, ReviewThread as ReviewThreadType } from "@trace/gql";
+import type { ReviewFile, ReviewInquiry, ReviewThread as ReviewThreadType } from "@trace/gql";
 import { toast } from "sonner";
 import { useReviewUiStore } from "../../stores/review-ui";
 import { ReviewFileDiff } from "./ReviewFileDiff";
@@ -33,6 +33,7 @@ interface ReviewChangesViewProps {
   pullRequestNumber: number;
   files: ReviewFile[];
   threads: ReviewThreadType[];
+  inquiries: ReviewInquiry[];
   onRefresh(): void;
 }
 
@@ -44,6 +45,7 @@ export function ReviewChangesView({
   pullRequestNumber,
   files,
   threads,
+  inquiries,
   onRefresh,
 }: ReviewChangesViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -151,6 +153,7 @@ export function ReviewChangesView({
             snapshotId={snapshotId}
             file={file}
             threads={threads}
+            inquiries={inquiries}
             collapsed={collapsed.includes(file.path)}
             highlight={selection?.highlight ?? null}
             onToggleCollapsed={() => toggleFileCollapsed(reviewId, file.path)}

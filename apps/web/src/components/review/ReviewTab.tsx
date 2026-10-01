@@ -76,14 +76,16 @@ export function ReviewTab({
       ),
     [reviewId, reviewThreads],
   );
-  const guideInquiries = useMemo(
+  const inquiries = useMemo(
     () =>
       (Object.values(reviewInquiries) as ReviewInquiry[])
-        .filter(
-          (inquiry) => inquiry.reviewId === reviewId && inquiry.sourceKind === "guide_generation",
-        )
+        .filter((inquiry) => inquiry.reviewId === reviewId)
         .sort((a, b) => a.position - b.position),
     [reviewId, reviewInquiries],
+  );
+  const guideInquiries = useMemo(
+    () => inquiries.filter((inquiry) => inquiry.sourceKind === "guide_generation"),
+    [inquiries],
   );
   const guide = useMemo(
     () =>
@@ -221,6 +223,7 @@ export function ReviewTab({
             pullRequestNumber={review.pullRequestNumber}
             files={snapshot.files}
             threads={snapshotThreads}
+            inquiries={inquiries}
             onRefresh={() => void refresh()}
           />
         ) : (
