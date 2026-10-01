@@ -2112,6 +2112,8 @@ export type Query = {
   repoWorktrees: Array<RepoWorktree>;
   repos: Array<Repo>;
   review?: Maybe<Review>;
+  /** Read at most 80 lines from the immutable snapshot head, including files outside the diff. */
+  reviewCodeExcerpt: ReviewCodeExcerpt;
   reviewDiffFile: ReviewDiffFile;
   reviewForSessionGroup?: Maybe<Review>;
   searchMessages: Array<MessageSearchHit>;
@@ -2366,6 +2368,13 @@ export type QueryReposArgs = {
 
 export type QueryReviewArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type QueryReviewCodeExcerptArgs = {
+  endLine: Scalars["Int"]["input"];
+  filePath: Scalars["String"]["input"];
+  snapshotId: Scalars["ID"]["input"];
+  startLine: Scalars["Int"]["input"];
 };
 
 export type QueryReviewDiffFileArgs = {
@@ -2750,6 +2759,17 @@ export type ReviewAnchorInput = {
 
 export type ReviewAnchorStatus = "ambiguous" | "current" | "outdated" | "relocated";
 
+/** Exact head-commit source for a bounded Guide reference, including which lines were added. */
+export type ReviewCodeExcerpt = {
+  __typename?: "ReviewCodeExcerpt";
+  addedLines: Array<Scalars["Int"]["output"]>;
+  content: Scalars["String"]["output"];
+  endLine: Scalars["Int"]["output"];
+  path: Scalars["String"]["output"];
+  snapshotId: Scalars["ID"]["output"];
+  startLine: Scalars["Int"]["output"];
+};
+
 export type ReviewComment = {
   __typename?: "ReviewComment";
   author: User;
@@ -2830,6 +2850,16 @@ export type ReviewGuide = {
   status: ReviewGuideStatus;
   title: Scalars["String"]["output"];
   version: Scalars["Int"]["output"];
+};
+
+/** A focused, ordered step in a Guide's code walkthrough. Line numbers refer to the head commit. */
+export type ReviewGuideReference = {
+  __typename?: "ReviewGuideReference";
+  endLine: Scalars["Int"]["output"];
+  explanation: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  startLine: Scalars["Int"]["output"];
+  title: Scalars["String"]["output"];
 };
 
 export type ReviewGuideStatus = "earlier" | "ready";
@@ -4098,21 +4128,23 @@ export type ResolveReviewThreadMutation = {
   resolveReviewThread: { __typename?: "ReviewThread"; id: string };
 };
 
-export type GuideDiffFileQueryVariables = Exact<{
+export type GuideCodeExcerptQueryVariables = Exact<{
   snapshotId: Scalars["ID"]["input"];
   filePath: Scalars["String"]["input"];
+  startLine: Scalars["Int"]["input"];
+  endLine: Scalars["Int"]["input"];
 }>;
 
-export type GuideDiffFileQuery = {
+export type GuideCodeExcerptQuery = {
   __typename?: "Query";
-  reviewDiffFile: {
-    __typename?: "ReviewDiffFile";
+  reviewCodeExcerpt: {
+    __typename?: "ReviewCodeExcerpt";
     snapshotId: string;
     path: string;
-    additions: number;
-    deletions: number;
-    patch: string;
-    truncated: boolean;
+    startLine: number;
+    endLine: number;
+    content: string;
+    addedLines: Array<number>;
   };
 };
 
@@ -8807,13 +8839,13 @@ export const ResolveReviewThreadDocument = {
     },
   ],
 } as unknown as DocumentNode<ResolveReviewThreadMutation, ResolveReviewThreadMutationVariables>;
-export const GuideDiffFileDocument = {
+export const GuideCodeExcerptDocument = {
   kind: "Document",
   definitions: [
     {
       kind: "OperationDefinition",
       operation: "query",
-      name: { kind: "Name", value: "GuideDiffFile" },
+      name: { kind: "Name", value: "GuideCodeExcerpt" },
       variableDefinitions: [
         {
           kind: "VariableDefinition",
@@ -8831,13 +8863,29 @@ export const GuideDiffFileDocument = {
             type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
           },
         },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "startLine" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "endLine" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+          },
+        },
       ],
       selectionSet: {
         kind: "SelectionSet",
         selections: [
           {
             kind: "Field",
-            name: { kind: "Name", value: "reviewDiffFile" },
+            name: { kind: "Name", value: "reviewCodeExcerpt" },
             arguments: [
               {
                 kind: "Argument",
@@ -8849,16 +8897,26 @@ export const GuideDiffFileDocument = {
                 name: { kind: "Name", value: "filePath" },
                 value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
               },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "startLine" },
+                value: { kind: "Variable", name: { kind: "Name", value: "startLine" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "endLine" },
+                value: { kind: "Variable", name: { kind: "Name", value: "endLine" } },
+              },
             ],
             selectionSet: {
               kind: "SelectionSet",
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "snapshotId" } },
                 { kind: "Field", name: { kind: "Name", value: "path" } },
-                { kind: "Field", name: { kind: "Name", value: "additions" } },
-                { kind: "Field", name: { kind: "Name", value: "deletions" } },
-                { kind: "Field", name: { kind: "Name", value: "patch" } },
-                { kind: "Field", name: { kind: "Name", value: "truncated" } },
+                { kind: "Field", name: { kind: "Name", value: "startLine" } },
+                { kind: "Field", name: { kind: "Name", value: "endLine" } },
+                { kind: "Field", name: { kind: "Name", value: "content" } },
+                { kind: "Field", name: { kind: "Name", value: "addedLines" } },
               ],
             },
           },
@@ -8866,7 +8924,7 @@ export const GuideDiffFileDocument = {
       },
     },
   ],
-} as unknown as DocumentNode<GuideDiffFileQuery, GuideDiffFileQueryVariables>;
+} as unknown as DocumentNode<GuideCodeExcerptQuery, GuideCodeExcerptQueryVariables>;
 export const ReviewWorkspaceDocument = {
   kind: "Document",
   definitions: [

@@ -1,4 +1,9 @@
-import { GitHubApiError, parseGitHubRepo, type GitHubRepoRef } from "./github-repo.js";
+import {
+  githubRepoService,
+  GitHubApiError,
+  parseGitHubRepo,
+  type GitHubRepoRef,
+} from "./github-repo.js";
 
 export interface ReviewProviderFile {
   path: string;
@@ -43,6 +48,12 @@ export interface ProviderDeliveryResult {
 }
 
 export interface ReviewProviderAdapter {
+  readFileAtCommit(
+    pullRequestUrl: string,
+    commit: string,
+    filePath: string,
+    token: string,
+  ): Promise<string>;
   resolvePullRequest(url: string, token: string): Promise<ResolvedPullRequest>;
   submitReview(input: {
     pullRequest: ResolvedPullRequest;
@@ -106,6 +117,17 @@ export function parseGitHubPullRequestUrl(
 }
 
 export class GitHubReviewProvider implements ReviewProviderAdapter {
+  async readFileAtCommit(
+    pullRequestUrl: string,
+    commit: string,
+    filePath: string,
+    token: string,
+  ): Promise<string> {
+    const target = parseGitHubPullRequestUrl(pullRequestUrl);
+    if (!target) throw new Error("Invalid pull request URL");
+    return githubRepoService.readFile(target.repo, commit, filePath, token);
+  }
+
   async resolvePullRequest(url: string, token: string): Promise<ResolvedPullRequest> {
     const target = parseGitHubPullRequestUrl(url);
     if (!target) throw new Error("A canonical GitHub pull request URL is required");

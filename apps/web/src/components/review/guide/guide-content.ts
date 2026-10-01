@@ -1,3 +1,5 @@
+import type { ReviewGuideReference } from "@trace/gql";
+
 export interface GuideAnchor {
   filePath: string;
   startLine: number;
@@ -14,6 +16,7 @@ export interface GuideChapterContent {
   paragraphs: GuideSegment[][];
   implications: GuideSegment[][];
   files: string[];
+  references: ReviewGuideReference[];
 }
 
 export interface GuideContent {
@@ -84,6 +87,52 @@ function chapterFiles(chapter: Record<string, unknown>): string[] {
   return derived;
 }
 
+function chapterReferences(
+  chapter: Record<string, unknown>,
+  paragraphs: GuideSegment[][],
+  implications: GuideSegment[][],
+): ReviewGuideReference[] {
+  const references: ReviewGuideReference[] = [];
+  const add = (reference: ReviewGuideReference) => {
+    if (
+      !Number.isSafeInteger(reference.startLine) ||
+      !Number.isSafeInteger(reference.endLine) ||
+      reference.startLine < 1 ||
+      reference.endLine < reference.startLine ||
+      reference.endLine - reference.startLine >= 80
+    )
+      return;
+    if (!references.some((existing) => anchorsEqual(existing, reference)))
+      references.push(reference);
+  };
+  for (const value of Array.isArray(chapter.references) ? chapter.references : []) {
+    const reference = asRecord(value);
+    if (
+      typeof reference?.filePath !== "string" ||
+      typeof reference.startLine !== "number" ||
+      typeof reference.endLine !== "number"
+    )
+      continue;
+    add({
+      filePath: reference.filePath,
+      startLine: reference.startLine,
+      endLine: reference.endLine,
+      title: typeof reference.title === "string" ? reference.title : reference.filePath,
+      explanation: typeof reference.explanation === "string" ? reference.explanation : "",
+    });
+  }
+  // Saved Guides predating ordered references still get precise excerpts from their prose links.
+  for (const segment of [...paragraphs, ...implications].flat()) {
+    if (segment.kind === "anchor")
+      add({ ...segment.anchor, title: segment.label, explanation: "" });
+  }
+  return references;
+}
+
+export function guideReferenceKey(anchor: GuideAnchor): string {
+  return JSON.stringify([anchor.filePath, anchor.startLine, anchor.endLine]);
+}
+
 export function normalizeGuideContent(value: unknown): GuideContent {
   const content = asRecord(value);
   const chapters = Array.isArray(content?.chapters) ? content.chapters : [];
@@ -92,17 +141,26 @@ export function normalizeGuideContent(value: unknown): GuideContent {
       const chapter = asRecord(chapterValue);
       if (!chapter || typeof chapter.title !== "string") return [];
       const explanation = typeof chapter.explanation === "string" ? chapter.explanation : "";
+      const paragraphs = explanation
+        .split(/\n{2,}/)
+        .map((paragraph) => paragraph.trim())
+        .filter(Boolean)
+        .map(parseGuideSegments);
+      const implications = stringList(chapter.implications).map(parseGuideSegments);
+      const references = chapterReferences(chapter, paragraphs, implications);
       return [
         {
           id: typeof chapter.id === "string" ? chapter.id : `chapter-${index + 1}`,
           title: chapter.title,
-          paragraphs: explanation
-            .split(/\n{2,}/)
-            .map((paragraph) => paragraph.trim())
-            .filter(Boolean)
-            .map(parseGuideSegments),
-          implications: stringList(chapter.implications).map(parseGuideSegments),
-          files: chapterFiles(chapter),
+          paragraphs,
+          implications,
+          references,
+          files: [
+            ...new Set([
+              ...chapterFiles(chapter),
+              ...references.map((reference) => reference.filePath),
+            ]),
+          ],
         },
       ];
     }),

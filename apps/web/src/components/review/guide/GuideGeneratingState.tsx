@@ -13,9 +13,9 @@ export function GuideGeneratingState({ fileCount }: { fileCount: number }) {
         <div className="mt-1.5 flex flex-col gap-[7px] text-xs">
           {[
             "Reading the snapshot diff",
-            "Grouping the change into chapters",
+            "Tracing behaviors through the code",
             "Writing explanations",
-            "Checking file coverage",
+            "Verifying focused code ranges",
           ].map((step, index) => (
             <span
               key={step}

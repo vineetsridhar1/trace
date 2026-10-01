@@ -3,15 +3,49 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReviewFile } from "@trace/gql";
 import { GuideScroller } from "./GuideScroller";
 import { GuideChapterAside } from "./GuideChapterAside";
-import { GuideFileDiff } from "./GuideFileDiff";
+import { GuideCodeExcerpt } from "./GuideCodeExcerpt";
 import { normalizeGuideContent } from "./guide-content";
 
-vi.mock("./GuideFileDiff", () => ({ GuideFileDiff: () => null }));
+vi.mock("./GuideCodeExcerpt", () => ({ GuideCodeExcerpt: () => null }));
 vi.mock("./GuideChapterAside", () => ({ GuideChapterAside: () => null }));
 
 const content = normalizeGuideContent({
   chapters: [
-    { id: "one", title: "One", explanation: "Context", files: ["src/a.ts", "src/context.ts"] },
+    {
+      id: "one",
+      title: "One",
+      explanation: "Context",
+      references: [
+        {
+          filePath: "src/a.ts",
+          startLine: 4,
+          endLine: 9,
+          title: "Validate",
+          explanation: "Validate before writing",
+        },
+        {
+          filePath: "src/context.ts",
+          startLine: 8,
+          endLine: 12,
+          title: "Persist",
+          explanation: "Store the result",
+        },
+      ],
+    },
+    {
+      id: "two",
+      title: "Two",
+      explanation: "Same file, separate behavior",
+      references: [
+        {
+          filePath: "src/a.ts",
+          startLine: 40,
+          endLine: 49,
+          title: "Notify",
+          explanation: "Notify subscribers",
+        },
+      ],
+    },
   ],
   everythingElse: ["src/b.ts"],
 });
@@ -22,7 +56,7 @@ describe("Guide reference navigation", () => {
   const openSource = vi.fn();
   const openChanges = vi.fn();
   const scrollIntoView = vi.fn();
-  const querySelector = vi.fn(() => ({ scrollIntoView }));
+  const querySelector = vi.fn((_selector: string) => ({ scrollIntoView }));
 
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -39,6 +73,7 @@ describe("Guide reference navigation", () => {
           onAskAboutChapter={vi.fn()}
           onCommentOnChapter={vi.fn()}
           onReviewAllChanges={vi.fn()}
+          onRegenerate={vi.fn()}
         />,
         { createNodeMock: () => ({ querySelector }) },
       );
@@ -50,27 +85,35 @@ describe("Guide reference navigation", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders only changed files as diffs and keeps context as a source link", () => {
-    expect(renderer.root.findAllByType(GuideFileDiff).map((node) => node.props.filePath)).toEqual([
-      "src/a.ts",
+  it("renders ordered precise excerpts, including context and repeated files", () => {
+    const cards = renderer.root.findAllByType(GuideCodeExcerpt);
+    expect(
+      cards.map((card) => [card.props.filePath, card.props.startLine, card.props.endLine]),
+    ).toEqual([
+      ["src/a.ts", 4, 9],
+      ["src/context.ts", 8, 12],
+      ["src/a.ts", 40, 49],
     ]);
-    expect(JSON.stringify(renderer.toJSON())).toContain("Context file");
-    const button = renderer.root
-      .findAllByType("button")
-      .find((node) =>
-        node.findAllByType("span").some((span) => span.children.includes("src/context.ts")),
-      );
-    act(() => button!.props.onClick());
-    expect(openSource).toHaveBeenCalledWith({
-      filePath: "src/context.ts",
-      startLine: 1,
-      endLine: 1,
-    });
+    act(() => cards[1]!.props.onOpen());
+    expect(openSource).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: "src/context.ts", startLine: 8, endLine: 12 }),
+    );
+  });
+
+  it("targets the current chapter when the same file occurs more than once", () => {
+    const anchor = { filePath: "src/a.ts", startLine: 40, endLine: 49 };
+    act(() => renderer.root.findAllByType(GuideChapterAside)[1]!.props.onAnchor(anchor));
+    expect(querySelector.mock.calls[0]?.[0]).toContain('[data-guide-chapter="1"]');
+    expect(renderer.root.findAllByType(GuideCodeExcerpt).map((card) => card.props.active)).toEqual([
+      false,
+      false,
+      true,
+    ]);
   });
 
   it("opens a contextual prose anchor at its source range", () => {
     const anchor = { filePath: "src/helper.ts", startLine: 4, endLine: 9 };
-    act(() => renderer.root.findByType(GuideChapterAside).props.onAnchor(anchor));
+    act(() => renderer.root.findAllByType(GuideChapterAside)[0]!.props.onAnchor(anchor));
     expect(openSource).toHaveBeenCalledWith(anchor);
     expect(openChanges).not.toHaveBeenCalled();
     expect(querySelector).not.toHaveBeenCalled();
@@ -78,16 +121,16 @@ describe("Guide reference navigation", () => {
 
   it("opens unassigned changed files in Changes", () => {
     const anchor = { filePath: "src/b.ts", startLine: 4, endLine: 9 };
-    act(() => renderer.root.findByType(GuideChapterAside).props.onAnchor(anchor));
+    act(() => renderer.root.findAllByType(GuideChapterAside)[0]!.props.onAnchor(anchor));
     expect(openChanges).toHaveBeenCalledWith(anchor);
     expect(openSource).not.toHaveBeenCalled();
   });
 
   it("scrolls to a chapter diff instead of opening external source", () => {
     const anchor = { filePath: "src/a.ts", startLine: 4, endLine: 9 };
-    act(() => renderer.root.findByType(GuideChapterAside).props.onAnchor(anchor));
+    act(() => renderer.root.findAllByType(GuideChapterAside)[0]!.props.onAnchor(anchor));
     expect(scrollIntoView).toHaveBeenCalled();
-    expect(renderer.root.findByType(GuideFileDiff).props.highlight).toEqual(anchor);
+    expect(renderer.root.findAllByType(GuideCodeExcerpt)[0]!.props.active).toBe(true);
     expect(openSource).not.toHaveBeenCalled();
     expect(openChanges).not.toHaveBeenCalled();
   });

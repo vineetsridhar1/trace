@@ -2110,6 +2110,8 @@ export type Query = {
   repoWorktrees: Array<RepoWorktree>;
   repos: Array<Repo>;
   review?: Maybe<Review>;
+  /** Read at most 80 lines from the immutable snapshot head, including files outside the diff. */
+  reviewCodeExcerpt: ReviewCodeExcerpt;
   reviewDiffFile: ReviewDiffFile;
   reviewForSessionGroup?: Maybe<Review>;
   searchMessages: Array<MessageSearchHit>;
@@ -2364,6 +2366,13 @@ export type QueryReposArgs = {
 
 export type QueryReviewArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type QueryReviewCodeExcerptArgs = {
+  endLine: Scalars["Int"]["input"];
+  filePath: Scalars["String"]["input"];
+  snapshotId: Scalars["ID"]["input"];
+  startLine: Scalars["Int"]["input"];
 };
 
 export type QueryReviewDiffFileArgs = {
@@ -2748,6 +2757,17 @@ export type ReviewAnchorInput = {
 
 export type ReviewAnchorStatus = "ambiguous" | "current" | "outdated" | "relocated";
 
+/** Exact head-commit source for a bounded Guide reference, including which lines were added. */
+export type ReviewCodeExcerpt = {
+  __typename?: "ReviewCodeExcerpt";
+  addedLines: Array<Scalars["Int"]["output"]>;
+  content: Scalars["String"]["output"];
+  endLine: Scalars["Int"]["output"];
+  path: Scalars["String"]["output"];
+  snapshotId: Scalars["ID"]["output"];
+  startLine: Scalars["Int"]["output"];
+};
+
 export type ReviewComment = {
   __typename?: "ReviewComment";
   author: User;
@@ -2828,6 +2848,16 @@ export type ReviewGuide = {
   status: ReviewGuideStatus;
   title: Scalars["String"]["output"];
   version: Scalars["Int"]["output"];
+};
+
+/** A focused, ordered step in a Guide's code walkthrough. Line numbers refer to the head commit. */
+export type ReviewGuideReference = {
+  __typename?: "ReviewGuideReference";
+  endLine: Scalars["Int"]["output"];
+  explanation: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  startLine: Scalars["Int"]["output"];
+  title: Scalars["String"]["output"];
 };
 
 export type ReviewGuideStatus = "earlier" | "ready";

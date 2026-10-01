@@ -177,8 +177,8 @@ describe("review guide contract", () => {
   it("tells the coding session the exact paths, coverage rule, and anchor syntax", () => {
     const instruction = guideGenerationInstruction(files);
     expect(instruction).toContain('["src/a.ts","src/b.ts"]');
-    expect(instruction).toContain("at most one chapter");
-    expect(instruction).toContain('"files":["..."]');
+    expect(instruction).toContain("same file may appear in multiple chapters");
+    expect(instruction).toContain('"references":[{');
     expect(instruction).toContain("[[label|path|startLine-endLine]]");
   });
 
@@ -186,6 +186,66 @@ describe("review guide contract", () => {
     expect(REVIEW_GUIDE_SKILL_INSTRUCTION).toContain("# Trace Review Guide");
     expect(REVIEW_GUIDE_SKILL_INSTRUCTION).toContain("## Build the explanation");
     expect(REVIEW_GUIDE_SKILL_INSTRUCTION).not.toContain("$TRACE_SKILLS_DIR");
+  });
+
+  it("preserves ordered steps and the same file in multiple chapters", () => {
+    const reference = {
+      filePath: "src/a.ts",
+      startLine: 10,
+      endLine: 20,
+      title: "Validate input",
+      explanation: "Reject invalid input before writing.",
+    };
+    const validated = validateReviewGuide(
+      guide({
+        formatVersion: 2,
+        chapters: [
+          chapter({ references: [reference, { ...reference, filePath: "src/context.ts" }] }),
+          chapter({
+            id: "b",
+            references: [{ ...reference, startLine: 40, endLine: 48, title: "Notify listeners" }],
+          }),
+        ],
+      }),
+      files,
+    );
+    expect(validated.chapters[0]?.references.map((ref) => ref.filePath)).toEqual([
+      "src/a.ts",
+      "src/context.ts",
+    ]);
+    expect(validated.chapters[1]?.files).toEqual(["src/a.ts"]);
+    expect(validated.chapters[1]?.references[0]?.startLine).toBe(40);
+    expect(validated.everythingElse).toEqual(["src/b.ts"]);
+  });
+
+  it("requires precise explained references in the new format", () => {
+    expect(() => validateReviewGuide(guide({ formatVersion: 2 }), files)).toThrow(
+      "needs specific code references",
+    );
+    const reference = { filePath: "src/a.ts", startLine: 1, endLine: 5 };
+    expect(() =>
+      validateReviewGuide(
+        guide({ formatVersion: 2, chapters: [chapter({ references: [reference] })] }),
+        files,
+      ),
+    ).toThrow("needs a title and explanation");
+    expect(() =>
+      validateReviewGuide(
+        guide({
+          formatVersion: 2,
+          chapters: [chapter({ references: [{ ...reference, endLine: 81 }] })],
+        }),
+        files,
+      ),
+    ).toThrow("exceeds 80 lines");
+  });
+
+  it("does not suppress the same file in legacy chapters", () => {
+    const validated = validateReviewGuide(
+      guide({ chapters: [chapter({}), chapter({ id: "b" })] }),
+      files,
+    );
+    expect(validated.chapters.map((ch) => ch.files)).toEqual([["src/a.ts"], ["src/a.ts"]]);
   });
 
   it("accepts JSON wrapped in a Markdown fence", () => {

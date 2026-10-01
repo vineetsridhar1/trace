@@ -18,7 +18,8 @@ import {
   type ResolvedPullRequest,
   type ReviewProviderAdapter,
 } from "./review-provider.js";
-import { reconcileReviewAnchor } from "./review-anchor.js";
+import { sourceExcerpt, validateExcerptRange } from "./review-excerpt.js";
+import { patchLines, reconcileReviewAnchor } from "./review-anchor.js";
 import { sessionService } from "./session.js";
 import {
   guideGenerationInstruction,
@@ -346,6 +347,62 @@ export class ReviewService {
       originalContent: null,
       modifiedContent: null,
       truncated: !file.patch,
+    };
+  }
+
+  async codeExcerpt(
+    input: ActorInput & {
+      snapshotId: string;
+      filePath: string;
+      startLine: number;
+      endLine: number;
+    },
+  ) {
+    validateExcerptRange(input.filePath, input.startLine, input.endLine);
+    const snapshot = await prisma.reviewSnapshot.findFirst({
+      where: { id: input.snapshotId, review: { organizationId: input.organizationId } },
+      include: { review: true },
+    });
+    if (!snapshot) throw new NotFoundError("Review snapshot", input.snapshotId);
+    await assertSessionAccess(
+      snapshot.review.attachedSessionId,
+      input.actorId,
+      input.organizationId,
+    );
+    const stored = JSON.parse(
+      (await storage.getObject(snapshot.patchStorageKey)).toString("utf8"),
+    ) as StoredReviewPatch;
+    const file = stored.files.find((candidate) => candidate.path === input.filePath);
+    const lines = patchLines(file?.patch ?? "").filter(
+      (line) =>
+        line.newLine !== null && line.newLine >= input.startLine && line.newLine <= input.endLine,
+    );
+    const complete =
+      lines.length === input.endLine - input.startLine + 1 &&
+      lines.every((line, index) => line.newLine === input.startLine + index);
+    // Reuse immutable patch text where possible. Unchanged code and contextual files require
+    // repository source at this snapshot's SHA, never the session's current working tree.
+    const content = complete
+      ? lines.map((line) => line.text).join("\n")
+      : sourceExcerpt(
+          await this.provider.readFileAtCommit(
+            snapshot.review.pullRequestUrl,
+            snapshot.headSha,
+            input.filePath,
+            await this.githubToken(input.actorId),
+          ),
+          input.startLine,
+          input.endLine,
+        );
+    return {
+      snapshotId: snapshot.id,
+      path: input.filePath,
+      startLine: input.startLine,
+      endLine: input.endLine,
+      content,
+      addedLines: lines.flatMap((line) =>
+        line.oldLine === null && line.newLine !== null ? [line.newLine] : [],
+      ),
     };
   }
 

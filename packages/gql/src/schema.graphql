@@ -1489,6 +1489,25 @@ type ReviewFile {
   commentCount: Int!
 }
 
+"A focused, ordered step in a Guide's code walkthrough. Line numbers refer to the head commit."
+type ReviewGuideReference {
+  filePath: String!
+  startLine: Int!
+  endLine: Int!
+  title: String!
+  explanation: String!
+}
+
+"Exact head-commit source for a bounded Guide reference, including which lines were added."
+type ReviewCodeExcerpt {
+  snapshotId: ID!
+  path: String!
+  startLine: Int!
+  endLine: Int!
+  content: String!
+  addedLines: [Int!]!
+}
+
 type ReviewDiffFile {
   snapshotId: ID!
   path: String!
@@ -2174,6 +2193,8 @@ type Query {
   sessionGroup(id: ID!): SessionGroup
   review(id: ID!): Review
   reviewForSessionGroup(sessionGroupId: ID!): Review
+  "Read at most 80 lines from the immutable snapshot head, including files outside the diff."
+  reviewCodeExcerpt(snapshotId: ID!, filePath: String!, startLine: Int!, endLine: Int!): ReviewCodeExcerpt!
   reviewDiffFile(snapshotId: ID!, filePath: String!): ReviewDiffFile!
   hiddenSessionTabs(sessionGroupId: ID!): [HiddenSessionTab!]!
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!

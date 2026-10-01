@@ -1,5 +1,4 @@
 import { MessageSquare, Sparkles } from "lucide-react";
-import type { ReviewFile } from "@trace/gql";
 import { cn } from "../../../lib/utils";
 import { GuideProse } from "./GuideProse";
 import type { GuideAnchor, GuideChapterContent } from "./guide-content";
@@ -9,10 +8,7 @@ export function GuideChapterAside({
   index,
   total,
   activeAnchor,
-  activeFilePath,
-  filesByPath,
   onAnchor,
-  onFile,
   onAsk,
   onComment,
 }: {
@@ -20,10 +16,7 @@ export function GuideChapterAside({
   index: number;
   total: number;
   activeAnchor: GuideAnchor | null;
-  activeFilePath: string | null;
-  filesByPath: Map<string, ReviewFile>;
   onAnchor(anchor: GuideAnchor): void;
-  onFile(filePath: string): void;
   onAsk(): void;
   onComment(): void;
 }) {
@@ -66,19 +59,22 @@ export function GuideChapterAside({
           ))}
         </div>
       ) : null}
-      {chapter.files.length > 0 ? (
+      {chapter.references.length > 0 ? (
         <div className="flex flex-col gap-0.5 pt-1">
           <span className="pb-1.5 text-[10.5px] font-semibold tracking-[0.08em] text-muted-foreground">
-            FILES IN THIS CHAPTER
+            CODE PATH
           </span>
-          {chapter.files.map((path) => {
-            const file = filesByPath.get(path);
-            const active = activeFilePath === path;
+          {chapter.references.map((reference, step) => {
+            const path = reference.filePath;
+            const active =
+              activeAnchor?.filePath === path &&
+              activeAnchor.startLine === reference.startLine &&
+              activeAnchor.endLine === reference.endLine;
             return (
               <button
-                key={path}
+                key={`${path}:${reference.startLine}:${reference.endLine}`}
                 type="button"
-                onClick={() => onFile(path)}
+                onClick={() => onAnchor(reference)}
                 className={cn(
                   "flex items-center gap-2.5 py-[5px] text-left font-mono text-xs",
                   active
@@ -92,12 +88,12 @@ export function GuideChapterAside({
                     active ? "bg-[var(--th-accent)]" : "bg-[var(--th-review-edge-raised)]",
                   )}
                 />
-                <span className="min-w-0 flex-1 truncate">{path}</span>
-                {file ? (
-                  <span className="shrink-0 text-[11px] text-[var(--th-success)]">
-                    +{file.additions}
-                  </span>
-                ) : null}
+                <span className="min-w-0 flex-1 truncate" title={path}>
+                  {step + 1}. {reference.title}
+                </span>
+                <span className="shrink-0 text-[11px] text-muted-foreground">
+                  L{reference.startLine}–{reference.endLine}
+                </span>
               </button>
             );
           })}

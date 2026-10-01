@@ -90,6 +90,51 @@ describe("normalizeGuideContent", () => {
     expect(content.chapters[0]?.implications).toHaveLength(1);
   });
 
+  it("keeps specific steps in order even when they reuse a file", () => {
+    const reference = {
+      filePath: "src/a.ts",
+      startLine: 2,
+      endLine: 8,
+      title: "Entry",
+      explanation: "Start here",
+    };
+    const content = normalizeGuideContent({
+      chapters: [
+        { title: "One", references: [reference, { ...reference, startLine: 40, endLine: 50 }] },
+        { title: "Two", references: [reference] },
+      ],
+    });
+    expect(content.chapters[0]?.references.map((ref) => ref.startLine)).toEqual([2, 40]);
+    expect(content.chapters[1]?.references).toEqual([reference]);
+  });
+
+  it("extracts ranges from legacy prose without expanding unreferenced files", () => {
+    const content = normalizeGuideContent({
+      chapters: [
+        {
+          title: "Legacy",
+          files: ["src/a.ts", "src/b.ts"],
+          explanation: "See [[entry|src/a.ts|2-8]].",
+        },
+      ],
+    });
+    expect(content.chapters[0]?.references).toEqual([
+      { filePath: "src/a.ts", startLine: 2, endLine: 8, title: "entry", explanation: "" },
+    ]);
+    expect(
+      normalizeGuideContent({ chapters: [{ title: "Files only", files: ["src/a.ts"] }] })
+        .chapters[0]?.references,
+    ).toEqual([]);
+  });
+
+  it("never expands a legacy whole-file range into a large code card", () => {
+    expect(
+      normalizeGuideContent({
+        chapters: [{ title: "Broad", explanation: "[[all|src/a.ts|1-900]]" }],
+      }).chapters[0]?.references,
+    ).toEqual([]);
+  });
+
   it("tolerates missing or malformed content", () => {
     expect(normalizeGuideContent(null)).toEqual({ chapters: [], everythingElse: [] });
     expect(normalizeGuideContent({ chapters: [{ id: "x" }] }).chapters).toEqual([]);

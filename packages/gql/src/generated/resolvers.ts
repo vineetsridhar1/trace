@@ -2113,6 +2113,8 @@ export type Query = {
   repoWorktrees: Array<RepoWorktree>;
   repos: Array<Repo>;
   review?: Maybe<Review>;
+  /** Read at most 80 lines from the immutable snapshot head, including files outside the diff. */
+  reviewCodeExcerpt: ReviewCodeExcerpt;
   reviewDiffFile: ReviewDiffFile;
   reviewForSessionGroup?: Maybe<Review>;
   searchMessages: Array<MessageSearchHit>;
@@ -2367,6 +2369,13 @@ export type QueryReposArgs = {
 
 export type QueryReviewArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type QueryReviewCodeExcerptArgs = {
+  endLine: Scalars["Int"]["input"];
+  filePath: Scalars["String"]["input"];
+  snapshotId: Scalars["ID"]["input"];
+  startLine: Scalars["Int"]["input"];
 };
 
 export type QueryReviewDiffFileArgs = {
@@ -2751,6 +2760,17 @@ export type ReviewAnchorInput = {
 
 export type ReviewAnchorStatus = "ambiguous" | "current" | "outdated" | "relocated";
 
+/** Exact head-commit source for a bounded Guide reference, including which lines were added. */
+export type ReviewCodeExcerpt = {
+  __typename?: "ReviewCodeExcerpt";
+  addedLines: Array<Scalars["Int"]["output"]>;
+  content: Scalars["String"]["output"];
+  endLine: Scalars["Int"]["output"];
+  path: Scalars["String"]["output"];
+  snapshotId: Scalars["ID"]["output"];
+  startLine: Scalars["Int"]["output"];
+};
+
 export type ReviewComment = {
   __typename?: "ReviewComment";
   author: User;
@@ -2831,6 +2851,16 @@ export type ReviewGuide = {
   status: ReviewGuideStatus;
   title: Scalars["String"]["output"];
   version: Scalars["Int"]["output"];
+};
+
+/** A focused, ordered step in a Guide's code walkthrough. Line numbers refer to the head commit. */
+export type ReviewGuideReference = {
+  __typename?: "ReviewGuideReference";
+  endLine: Scalars["Int"]["output"];
+  explanation: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  startLine: Scalars["Int"]["output"];
+  title: Scalars["String"]["output"];
 };
 
 export type ReviewGuideStatus = "earlier" | "ready";
@@ -3785,6 +3815,7 @@ export type ResolversTypes = ResolversObject<{
   ReviewAnchor: ResolverTypeWrapper<ReviewAnchor>;
   ReviewAnchorInput: ReviewAnchorInput;
   ReviewAnchorStatus: ReviewAnchorStatus;
+  ReviewCodeExcerpt: ResolverTypeWrapper<ReviewCodeExcerpt>;
   ReviewComment: ResolverTypeWrapper<ReviewComment>;
   ReviewDelivery: ResolverTypeWrapper<ReviewDelivery>;
   ReviewDeliveryStatus: ReviewDeliveryStatus;
@@ -3793,6 +3824,7 @@ export type ResolversTypes = ResolversObject<{
   ReviewDisposition: ReviewDisposition;
   ReviewFile: ResolverTypeWrapper<ReviewFile>;
   ReviewGuide: ResolverTypeWrapper<ReviewGuide>;
+  ReviewGuideReference: ResolverTypeWrapper<ReviewGuideReference>;
   ReviewGuideStatus: ReviewGuideStatus;
   ReviewInquiry: ResolverTypeWrapper<ReviewInquiry>;
   ReviewInquirySourceKind: ReviewInquirySourceKind;
@@ -3973,11 +4005,13 @@ export type ResolversParentTypes = ResolversObject<{
   Review: Review;
   ReviewAnchor: ReviewAnchor;
   ReviewAnchorInput: ReviewAnchorInput;
+  ReviewCodeExcerpt: ReviewCodeExcerpt;
   ReviewComment: ReviewComment;
   ReviewDelivery: ReviewDelivery;
   ReviewDiffFile: ReviewDiffFile;
   ReviewFile: ReviewFile;
   ReviewGuide: ReviewGuide;
+  ReviewGuideReference: ReviewGuideReference;
   ReviewInquiry: ReviewInquiry;
   ReviewSnapshot: ReviewSnapshot;
   ReviewThread: ReviewThread;
@@ -6161,6 +6195,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QueryReviewArgs, "id">
   >;
+  reviewCodeExcerpt?: Resolver<
+    ResolversTypes["ReviewCodeExcerpt"],
+    ParentType,
+    ContextType,
+    RequireFields<QueryReviewCodeExcerptArgs, "endLine" | "filePath" | "snapshotId" | "startLine">
+  >;
   reviewDiffFile?: Resolver<
     ResolversTypes["ReviewDiffFile"],
     ParentType,
@@ -6547,6 +6587,20 @@ export type ReviewAnchorResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type ReviewCodeExcerptResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ReviewCodeExcerpt"] =
+    ResolversParentTypes["ReviewCodeExcerpt"],
+> = ResolversObject<{
+  addedLines?: Resolver<Array<ResolversTypes["Int"]>, ParentType, ContextType>;
+  content?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  endLine?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  path?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  snapshotId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  startLine?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type ReviewCommentResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["ReviewComment"] = ResolversParentTypes["ReviewComment"],
@@ -6632,6 +6686,19 @@ export type ReviewGuideResolvers<
   status?: Resolver<ResolversTypes["ReviewGuideStatus"], ParentType, ContextType>;
   title?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   version?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ReviewGuideReferenceResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ReviewGuideReference"] =
+    ResolversParentTypes["ReviewGuideReference"],
+> = ResolversObject<{
+  endLine?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  explanation?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  filePath?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  startLine?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  title?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -7369,11 +7436,13 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   RepoWorktree?: RepoWorktreeResolvers<ContextType>;
   Review?: ReviewResolvers<ContextType>;
   ReviewAnchor?: ReviewAnchorResolvers<ContextType>;
+  ReviewCodeExcerpt?: ReviewCodeExcerptResolvers<ContextType>;
   ReviewComment?: ReviewCommentResolvers<ContextType>;
   ReviewDelivery?: ReviewDeliveryResolvers<ContextType>;
   ReviewDiffFile?: ReviewDiffFileResolvers<ContextType>;
   ReviewFile?: ReviewFileResolvers<ContextType>;
   ReviewGuide?: ReviewGuideResolvers<ContextType>;
+  ReviewGuideReference?: ReviewGuideReferenceResolvers<ContextType>;
   ReviewInquiry?: ReviewInquiryResolvers<ContextType>;
   ReviewSnapshot?: ReviewSnapshotResolvers<ContextType>;
   ReviewThread?: ReviewThreadResolvers<ContextType>;

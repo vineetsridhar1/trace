@@ -8,7 +8,7 @@ interface PatchLine {
 
 const HUNK_PATTERN = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
-function patchLines(patch: string): PatchLine[] {
+export function patchLines(patch: string): PatchLine[] {
   const lines: PatchLine[] = [];
   let oldLine = 0;
   let newLine = 0;

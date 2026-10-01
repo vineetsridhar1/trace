@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Button } from "../../ui/button";
 import type { ReviewFile } from "@trace/gql";
 import { GuideChapterAside } from "./GuideChapterAside";
-import { GuideFileDiff } from "./GuideFileDiff";
-import { anchorsEqual, type GuideAnchor, type GuideContent } from "./guide-content";
+import { GuideCodeExcerpt } from "./GuideCodeExcerpt";
+import {
+  anchorsEqual,
+  guideReferenceKey,
+  type GuideAnchor,
+  type GuideContent,
+} from "./guide-content";
 
 interface GuideScrollerProps {
   snapshotId: string;
@@ -13,6 +19,7 @@ interface GuideScrollerProps {
   onAskAboutChapter(chapterId: string): void;
   onCommentOnChapter(chapterId: string): void;
   onReviewAllChanges(): void;
+  onRegenerate(): void;
 }
 
 export function GuideScroller({
@@ -24,18 +31,18 @@ export function GuideScroller({
   onAskAboutChapter,
   onCommentOnChapter,
   onReviewAllChanges,
+  onRegenerate,
 }: GuideScrollerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [activeChapter, setActiveChapter] = useState(0);
-  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
-  const [anchor, setAnchor] = useState<GuideAnchor | null>(null);
+  const [anchor, setAnchor] = useState<(GuideAnchor & { chapterIndex: number }) | null>(null);
   const filesByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files]);
-  const coveredCount = useMemo(
+  const referencedCount = useMemo(
     () =>
-      content.chapters.reduce(
-        (total, chapter) => total + chapter.files.filter((path) => filesByPath.has(path)).length,
-        0,
-      ),
+      new Set(
+        content.chapters
+          .flatMap((chapter) => chapter.references.map((reference) => reference.filePath))
+          .filter((path) => filesByPath.has(path)),
+      ).size,
     [content.chapters, filesByPath],
   );
 
@@ -46,63 +53,28 @@ export function GuideScroller({
     });
   }, []);
 
-  // The pinned chapter and the active file both follow scroll position, exactly like the sidebar
-  // follows the Changes view, so the reader always knows where they are in the walkthrough. The
-  // measurement reads one rect per chapter and per file, so it is coalesced onto an animation
-  // frame rather than run on every scroll event.
-  const frameRef = useRef<number | null>(null);
-  const handleScroll = useCallback(() => {
-    if (frameRef.current !== null) return;
-    frameRef.current = requestAnimationFrame(() => {
-      frameRef.current = null;
-      const container = scrollRef.current;
-      if (!container) return;
-      const top = container.getBoundingClientRect().top;
-      let chapter = 0;
-      let file: string | null = activeFilePath;
-      for (const element of container.querySelectorAll<HTMLElement>("[data-guide-chapter]")) {
-        if (element.getBoundingClientRect().top - top <= 40)
-          chapter = Number(element.dataset.guideChapter);
-      }
-      for (const element of container.querySelectorAll<HTMLElement>("[data-guide-file]")) {
-        if (element.getBoundingClientRect().top - top <= 260)
-          file = element.dataset.guideFile ?? null;
-      }
-      if (chapter !== activeChapter) setActiveChapter(chapter);
-      if (file !== activeFilePath) setActiveFilePath(file);
-    });
-  }, [activeChapter, activeFilePath]);
-  useEffect(
-    () => () => {
-      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
-    },
-    [],
-  );
-
   const jumpToAnchor = useCallback(
-    (next: GuideAnchor) => {
-      if (!filesByPath.has(next.filePath)) {
-        onOpenReference(next);
-        return;
-      }
-      if (!content.chapters.some((chapter) => chapter.files.includes(next.filePath))) {
-        onOpenInChanges(next);
-        return;
-      }
-      setAnchor((current) => (anchorsEqual(current, next) ? current : next));
-      setActiveFilePath(next.filePath);
-      scrollToSelector(`[data-guide-file="${CSS.escape(next.filePath)}"]`);
+    (next: GuideAnchor, preferredChapter?: number) => {
+      const contains = (index: number) =>
+        content.chapters[index]?.references.some((reference) => anchorsEqual(reference, next));
+      const chapterIndex =
+        preferredChapter !== undefined && contains(preferredChapter)
+          ? preferredChapter
+          : content.chapters.findIndex((_, index) => contains(index));
+      if (chapterIndex >= 0) {
+        setAnchor({ ...next, chapterIndex });
+        scrollToSelector(
+          `[data-guide-chapter="${chapterIndex}"] [data-guide-reference="${CSS.escape(guideReferenceKey(next))}"]`,
+        );
+      } else if (filesByPath.has(next.filePath)) onOpenInChanges(next);
+      else onOpenReference(next);
     },
-    [scrollToSelector, filesByPath, content.chapters, onOpenReference, onOpenInChanges],
+    [content.chapters, filesByPath, onOpenInChanges, onOpenReference, scrollToSelector],
   );
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--th-review-canvas)]">
-      <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className="native-scrollbar relative min-h-0 flex-1 overflow-y-auto"
-      >
+      <div ref={scrollRef} className="native-scrollbar relative min-h-0 flex-1 overflow-y-auto">
         {content.chapters.map((chapter, index) => (
           <div
             key={chapter.id}
@@ -114,47 +86,38 @@ export function GuideScroller({
                 chapter={chapter}
                 index={index}
                 total={content.chapters.length}
-                activeAnchor={anchor}
-                activeFilePath={activeChapter === index ? activeFilePath : null}
-                filesByPath={filesByPath}
-                onAnchor={jumpToAnchor}
-                onFile={(filePath) => jumpToAnchor({ filePath, startLine: 1, endLine: 1 })}
+                activeAnchor={anchor?.chapterIndex === index ? anchor : null}
+                onAnchor={(next) => jumpToAnchor(next, index)}
                 onAsk={() => onAskAboutChapter(chapter.id)}
                 onComment={() => onCommentOnChapter(chapter.id)}
               />
             </div>
             <div className="flex flex-col gap-[18px] bg-[var(--th-review-card-deep)] px-5 pb-7 pt-5">
-              {chapter.files.map((filePath) =>
-                filesByPath.has(filePath) ? (
-                  <GuideFileDiff
-                    // Same reason as the Changes cards: a new snapshot must remount so the card
-                    // cannot keep serving the previous commit's cached patch.
-                    key={`${snapshotId}:${filePath}`}
-                    snapshotId={snapshotId}
-                    filePath={filePath}
-                    highlight={anchor?.filePath === filePath ? anchor : null}
-                    onOpenInChanges={() =>
-                      onOpenInChanges(
-                        anchor?.filePath === filePath
-                          ? anchor
-                          : { filePath, startLine: 1, endLine: 1 },
-                      )
-                    }
-                  />
-                ) : (
-                  <button
-                    key={filePath}
-                    type="button"
-                    onClick={() => onOpenReference({ filePath, startLine: 1, endLine: 1 })}
-                    className="min-w-0 rounded-md border border-[var(--th-edge)] p-4 text-left text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    <span className="block break-all font-mono">{filePath}</span>
-                    <span className="mt-1 block text-xs">
-                      Context file · outside this PR’s changes · Open source ↗
-                    </span>
-                  </button>
-                ),
-              )}
+              {chapter.references.map((reference, step) => (
+                <GuideCodeExcerpt
+                  key={`${snapshotId}:${guideReferenceKey(reference)}`}
+                  snapshotId={snapshotId}
+                  filePath={reference.filePath}
+                  startLine={reference.startLine}
+                  endLine={reference.endLine}
+                  title={reference.title}
+                  explanation={reference.explanation}
+                  step={step + 1}
+                  active={anchor?.chapterIndex === index && anchorsEqual(anchor, reference)}
+                  inChanges={filesByPath.has(reference.filePath)}
+                  onOpen={() =>
+                    filesByPath.has(reference.filePath)
+                      ? onOpenInChanges(reference)
+                      : onOpenReference(reference)
+                  }
+                />
+              ))}
+              {chapter.references.length === 0 ? (
+                <p className="p-4 text-sm text-muted-foreground">
+                  This chapter has no precise code references. Regenerate the Guide for a code
+                  walkthrough.
+                </p>
+              ) : null}
             </div>
           </div>
         ))}
@@ -183,7 +146,7 @@ export function GuideScroller({
           </span>
           <span className="text-[12.5px] text-muted-foreground">
             {content.chapters.length} chapter{content.chapters.length === 1 ? "" : "s"} &middot;{" "}
-            {coveredCount} of {files.length} file{files.length === 1 ? "" : "s"} covered
+            {referencedCount} changed file{referencedCount === 1 ? "" : "s"} referenced
           </span>
           <button
             type="button"
@@ -192,6 +155,9 @@ export function GuideScroller({
           >
             Review all changes &rarr;
           </button>
+          <Button variant="ghost" size="sm" onClick={onRegenerate}>
+            Regenerate Guide
+          </Button>
         </div>
       </div>
     </div>

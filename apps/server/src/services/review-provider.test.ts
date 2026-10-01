@@ -18,6 +18,32 @@ describe("parseGitHubPullRequestUrl", () => {
 });
 
 describe("GitHubReviewProvider", () => {
+  it("reads a bracketed source path at the exact snapshot commit", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            type: "file",
+            encoding: "base64",
+            content: Buffer.from("source").toString("base64"),
+          }),
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    expect(
+      await new GitHubReviewProvider().readFileAtCommit(
+        "https://github.com/acme/widgets/pull/42",
+        "abc123",
+        String.raw`app/\[id\]/page.tsx`,
+        "token",
+      ),
+    ).toBe("source");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://api.github.com/repos/acme/widgets/contents/app/%5C%5Bid%5C%5D/page.tsx?ref=abc123",
+    );
+  });
+
   it("resolves immutable base/head metadata and file patches", async () => {
     const fetchMock = vi
       .fn()

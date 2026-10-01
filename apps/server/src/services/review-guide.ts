@@ -1,3 +1,5 @@
+import type { ReviewGuideReference } from "@trace/gql";
+import { validateExcerptRange } from "./review-excerpt.js";
 import { type Prisma } from "@prisma/client";
 import { bundledTraceRuntimeFile } from "@trace/shared/trace-runtime";
 import { ValidationError } from "../lib/errors.js";
@@ -17,9 +19,11 @@ interface GuideChapter {
   explanation: string;
   implications: string[];
   files: string[];
+  references: ReviewGuideReference[];
 }
 
 export interface ValidatedReviewGuide {
+  formatVersion: number;
   title: string;
   intent: string;
   chapters: GuideChapter[];
@@ -79,16 +83,17 @@ export function guideGenerationInstruction(filesValue: Prisma.JsonValue): string
   const listed = paths.slice(0, MAX_PROMPT_PATHS);
   return [
     "Return only JSON, with no Markdown fence or commentary.",
-    'Use this exact shape: {"title":"...","intent":"...","chapters":[{"id":"...","title":"...","explanation":"...","implications":["..."],"files":["..."]}],"everythingElse":["..."]}.',
+    'Use this exact shape: {"formatVersion":2,"title":"...","intent":"...","chapters":[{"id":"...","title":"...","explanation":"...","implications":["..."],"references":[{"filePath":"...","startLine":10,"endLine":20,"title":"...","explanation":"..."}]}],"everythingElse":["..."]}.',
     `The authoritative changed-file paths are: ${JSON.stringify(listed)}.`,
     ...(paths.length > listed.length
       ? [
           `That list is truncated to the first ${MAX_PROMPT_PATHS} of ${paths.length} paths; cover what you can and leave the rest out.`,
         ]
       : []),
-    "Assign each changed path to the files of at most one chapter, or to everythingElse. You may also include real repository files outside the PR when needed for context. Do not invent paths.",
+    "Chapters explain behaviors, not files. Give each chapter ordered references tracing its code path, with a title and explanation for each step. The same file may appear in multiple chapters and steps. Include unchanged code when it helps explain the flow.",
+    "Every reference must name an exact head-commit range, typically 5-25 lines and at most 80. Do not use whole files as filler. Do not invent code, paths, or line numbers.",
     "Anything you do not assign is filed under everythingElse automatically, so prefer omitting a path over guessing at it.",
-    "Inside explanation and implications, link to specific code with [[label|path|startLine-endLine]]. Links may target any repository file, including files outside the PR or in another chapter. Use exact paths (preserving literal brackets and backslashes) and head-commit line numbers. startLine must be positive, and endLine must be at least startLine.",
+    "Inside explanation and implications, link to specific code with [[label|path|startLine-endLine]]. Each link should match a reference's exact range in this chapter. References may target any repository file, including files outside the PR or used in another chapter. Use exact paths (preserving literal brackets and backslashes) and head-commit line numbers. startLine must be positive, and endLine must be at least startLine.",
   ].join("\n");
 }
 
@@ -116,6 +121,7 @@ export function validateReviewGuide(
   const paths = snapshotPaths(filesValue);
   const resolvePath = pathResolver(paths);
   const covered = new Set<string>();
+  const chapterIds = new Set<string>();
 
   // Coverage concerns changed files; contextual repository references remain valid.
   const chapters: GuideChapter[] = guide.chapters.map((chapterValue, chapterIndex) => {
@@ -143,17 +149,85 @@ export function validateReviewGuide(
         `Guide chapter ${chapterIndex + 1} is missing or malformed "${badField ?? "files"}"`,
       );
     }
-    const files = declaredFiles.map(resolvePath).filter((filePath) => {
-      if (covered.has(filePath)) return false;
-      covered.add(filePath);
-      return true;
-    });
+    if (chapterIds.has(id)) throw new ValidationError(`Guide repeats chapter id "${id}"`);
+    chapterIds.add(id);
+    if (
+      guide.formatVersion === 2 &&
+      (!Array.isArray(chapter?.references) || chapter.references.length === 0)
+    ) {
+      throw new ValidationError(`Guide chapter "${title}" needs specific code references`);
+    }
+    const references: ReviewGuideReference[] = [];
+    const addReference = (reference: ReviewGuideReference) => {
+      if (
+        !references.some(
+          (existing) =>
+            existing.filePath === reference.filePath &&
+            existing.startLine === reference.startLine &&
+            existing.endLine === reference.endLine,
+        )
+      )
+        references.push(reference);
+    };
+    for (const value of Array.isArray(chapter?.references) ? chapter.references : []) {
+      const ref = asRecord(value);
+      if (
+        typeof ref?.filePath !== "string" ||
+        typeof ref.startLine !== "number" ||
+        typeof ref.endLine !== "number"
+      ) {
+        throw new ValidationError(`Guide chapter "${title}" has a malformed code reference`);
+      }
+      const filePath = resolvePath(ref.filePath);
+      validateExcerptRange(filePath, ref.startLine, ref.endLine);
+      if (
+        guide.formatVersion === 2 &&
+        (typeof ref.title !== "string" ||
+          !ref.title.trim() ||
+          typeof ref.explanation !== "string" ||
+          !ref.explanation.trim())
+      ) {
+        throw new ValidationError(`Guide reference in ${filePath} needs a title and explanation`);
+      }
+      addReference({
+        filePath,
+        startLine: ref.startLine,
+        endLine: ref.endLine,
+        title: typeof ref.title === "string" ? ref.title : filePath,
+        explanation: typeof ref.explanation === "string" ? ref.explanation : "",
+      });
+    }
+    // Older Guides expressed ranges only as prose links. Preserve these as focused excerpts,
+    // but never fall back to rendering an entire file when a range is absent or too broad.
+    if (guide.formatVersion !== 2) {
+      for (const text of [explanation, ...implications]) {
+        for (const match of text.matchAll(ANCHOR_PATTERN)) {
+          const filePath = resolvePath(match[2]!);
+          const startLine = Number(match[3]);
+          const endLine = Number(match[4]);
+          try {
+            validateExcerptRange(filePath, startLine, endLine);
+          } catch {
+            continue;
+          }
+          addReference({ filePath, startLine, endLine, title: match[1]!, explanation: "" });
+        }
+      }
+    }
+    const files = [
+      ...new Set([
+        ...(guide.formatVersion === 2 ? [] : declaredFiles.map(resolvePath)),
+        ...references.map((reference) => reference.filePath),
+      ]),
+    ];
+    files.forEach((filePath) => covered.add(filePath));
     return {
       id,
       title,
       explanation: normalizeAnchors(explanation, resolvePath),
       implications: implications.map((implication) => normalizeAnchors(implication, resolvePath)),
       files,
+      references,
     };
   });
 
@@ -170,6 +244,7 @@ export function validateReviewGuide(
   everythingElse.push(...paths.filter((path) => !covered.has(path)));
 
   return {
+    formatVersion: guide.formatVersion === 2 ? 2 : 1,
     title: guide.title,
     intent: guide.intent,
     chapters,

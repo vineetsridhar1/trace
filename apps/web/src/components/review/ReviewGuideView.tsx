@@ -53,8 +53,10 @@ export function ReviewGuideView({
   onAskAboutChapter,
   onReviewAllChanges,
 }: ReviewGuideViewProps) {
+  const guideSnapshotId = guide?.snapshotId ?? snapshotId;
+  const guideFiles = useEntityField("reviewSnapshots", guideSnapshotId, "files");
   const pullRequestUrl = useEntityField("reviews", reviewId, "pullRequestUrl");
-  const headSha = useEntityField("reviewSnapshots", guide?.snapshotId ?? snapshotId, "headSha");
+  const headSha = useEntityField("reviewSnapshots", guideSnapshotId, "headSha");
   const openReference = useCallback(
     (anchor: GuideAnchor) => {
       const url = guideSourceUrl(pullRequestUrl ?? "", headSha ?? "", anchor);
@@ -174,14 +176,15 @@ export function ReviewGuideView({
         </div>
       ) : null}
       <GuideScroller
-        snapshotId={snapshotId}
+        snapshotId={guideSnapshotId}
         content={content}
-        files={files}
-        onOpenInChanges={onOpenInChanges}
+        files={guideFiles ?? files}
+        onOpenInChanges={guideSnapshotId === snapshotId ? onOpenInChanges : openReference}
         onOpenReference={openReference}
         onAskAboutChapter={onAskAboutChapter}
         onCommentOnChapter={openComposer}
         onReviewAllChanges={onReviewAllChanges}
+        onRegenerate={() => void generate()}
       />
       {composer ? (
         <ReviewInlineComposer

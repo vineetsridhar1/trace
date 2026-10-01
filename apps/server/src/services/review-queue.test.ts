@@ -367,6 +367,7 @@ describe("FIFO dispatch", () => {
 describe("GitHub delivery", () => {
   // A stub provider so a lost claim can be proven to never reach GitHub.
   const provider = {
+    readFileAtCommit: vi.fn(),
     resolvePullRequest: vi.fn(),
     submitReview: vi.fn(),
   };

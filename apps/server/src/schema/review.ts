@@ -50,6 +50,11 @@ export const reviewQueries = {
     mapError(() =>
       reviewService.getForSessionGroup({ ...actor(ctx), sessionGroupId: args.sessionGroupId }),
     ),
+  reviewCodeExcerpt: (
+    _: unknown,
+    args: { snapshotId: string; filePath: string; startLine: number; endLine: number },
+    ctx: Context,
+  ) => mapError(() => reviewService.codeExcerpt({ ...actor(ctx), ...args })),
   reviewDiffFile: (_: unknown, args: { snapshotId: string; filePath: string }, ctx: Context) =>
     mapError(() => reviewService.diffFile({ ...actor(ctx), ...args })),
 };
