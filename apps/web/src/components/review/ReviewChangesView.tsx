@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { gql } from "@urql/core";
 import type { ReviewFile, ReviewThread as ReviewThreadType } from "@trace/gql";
@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { useReviewUiStore } from "../../stores/review-ui";
 import { Button } from "../ui/button";
 import { ReviewDiff, type ReviewLineSelection } from "./ReviewDiff";
-import { ReviewFileList } from "./ReviewFileList";
 import { mutateReview } from "./review-operations";
 import { ReviewThread } from "./ReviewThread";
 
@@ -71,15 +70,6 @@ export function ReviewChangesView({
       patchUi(reviewId, { activeFilePath: file.path });
   }, [files, patchUi, reviewId, selection?.activeFilePath, virtualizer.getVirtualItems()]);
 
-  const selectFile = useCallback(
-    (path: string) => {
-      const index = files.findIndex((file) => file.path === path);
-      if (index >= 0) virtualizer.scrollToIndex(index, { align: "start" });
-      patchUi(reviewId, { activeFilePath: path });
-    },
-    [files, patchUi, reviewId, virtualizer],
-  );
-
   const virtualItems = virtualizer.getVirtualItems();
   const submit = async () => {
     if (!composer || !body.trim()) return;
@@ -118,11 +108,6 @@ export function ReviewChangesView({
 
   return (
     <div className="flex min-h-0 flex-1">
-      <ReviewFileList
-        files={files}
-        activePath={selection?.activeFilePath ?? files[0]?.path ?? null}
-        onSelect={selectFile}
-      />
       <div
         ref={parentRef}
         className="native-scrollbar relative min-w-0 flex-1 overflow-y-auto bg-background p-3"

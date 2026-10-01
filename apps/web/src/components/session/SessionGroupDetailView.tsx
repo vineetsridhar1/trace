@@ -1043,6 +1043,7 @@ export function SessionGroupDetailView({
         setActiveArtifactId(null);
         setActiveFilePath(null);
         setActiveTerminalId(null);
+        openFilesSidebar(sessionGroupId, "changes");
       } else if (tabId === "traffic") {
         handleSelectTrafficTab();
       }
@@ -1053,6 +1054,8 @@ export function SessionGroupDetailView({
       handleSelectSession,
       handleSelectTerminalTab,
       handleSelectTrafficTab,
+      openFilesSidebar,
+      sessionGroupId,
       workspaceTerminals,
       setActiveArtifactId,
       setActiveFilePath,
