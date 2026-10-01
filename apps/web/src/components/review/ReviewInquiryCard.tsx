@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { gql } from "@urql/core";
 import { useEntityField } from "@trace/client-core";
-import { CheckCircle2, ChevronDown, Clock3, EyeOff, LoaderCircle, Sparkles } from "lucide-react";
+import { CheckCircle2, ChevronDown, Clock3, Trash2, LoaderCircle, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "../../lib/utils";
 import { useReviewUiStore } from "../../stores/review-ui";
@@ -35,8 +35,12 @@ export function ReviewInquiryCard({
   const answer = useEntityField("reviewInquiries", inquiryId, "responseMessage")?.text?.trim();
   const presentation = inquiryPresentation(state, queuedAheadCount === 0);
   const collapsed = useReviewUiStore(
-    (store) => store.byReviewId[reviewId]?.collapsedInquiryIds.includes(inquiryId) ?? false,
+    (store) =>
+      store.byReviewId[reviewId]?.inquiryCollapsedOverrides[inquiryId] ?? Boolean(resolvedAt),
   );
+  const deleted = useReviewUiStore((store) => store.deletedInquiryIds.includes(inquiryId));
+  const deleteInquiry = useReviewUiStore((store) => store.deleteInquiry);
+  const setCollapsed = useReviewUiStore((store) => store.setInquiryCollapsed);
   const toggleCollapsed = useReviewUiStore((store) => store.toggleInquiryCollapsed);
   const [resolving, setResolving] = useState(false);
   const finished = state !== "queued" && state !== "running";
@@ -45,12 +49,15 @@ export function ReviewInquiryCard({
     setResolving(true);
     try {
       await mutateReview(RESOLVE_INQUIRY, { inquiryId, resolved: !resolvedAt });
+      setCollapsed(reviewId, inquiryId, !resolvedAt);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not update AI conversation");
     } finally {
       setResolving(false);
     }
   };
+
+  if (deleted) return null;
 
   if (collapsed) {
     return (
@@ -66,10 +73,18 @@ export function ReviewInquiryCard({
         ) : null}
         <button
           type="button"
-          onClick={() => toggleCollapsed(reviewId, inquiryId)}
+          onClick={() => toggleCollapsed(reviewId, inquiryId, Boolean(resolvedAt))}
           className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-[var(--th-review-ai-light)] hover:text-[var(--th-review-ai-lighter)]"
         >
           <ChevronDown size={11} /> Show
+        </button>
+        <button
+          type="button"
+          aria-label="Delete AI conversation"
+          onClick={() => deleteInquiry(inquiryId)}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 size={11} />
         </button>
       </div>
     );
@@ -137,10 +152,10 @@ export function ReviewInquiryCard({
           <div className="mt-0.5 flex items-center justify-end gap-3 border-t border-[var(--th-review-ai)]/15 pt-2">
             <button
               type="button"
-              onClick={() => toggleCollapsed(reviewId, inquiryId)}
+              onClick={() => deleteInquiry(inquiryId)}
               className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--th-review-text-dim)] hover:text-[var(--th-heading)]"
             >
-              <EyeOff size={11} /> Hide
+              <Trash2 size={11} /> Delete
             </button>
             {finished ? (
               <button
@@ -149,7 +164,7 @@ export function ReviewInquiryCard({
                 onClick={() => void resolve()}
                 className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--th-review-ai-light)] hover:text-[var(--th-review-ai-lighter)] disabled:opacity-50"
               >
-                <CheckCircle2 size={11} /> {resolvedAt ? "Unresolve" : "Resolve"}
+                <CheckCircle2 size={11} /> {resolvedAt ? "Reopen" : "Resolve"}
               </button>
             ) : null}
           </div>

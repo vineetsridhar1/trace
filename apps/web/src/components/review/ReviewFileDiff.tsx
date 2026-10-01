@@ -15,6 +15,7 @@ import { DiffGapRow } from "./diff/DiffGapRow";
 import { DiffLineRow, type DiffLineEmphasis } from "./diff/DiffLineRow";
 import { DiffSelectionPopover } from "./diff/DiffSelectionPopover";
 import { ReviewInquiryCard } from "./ReviewInquiryCard";
+import { useReviewUiStore } from "../../stores/review-ui";
 import { inquiriesQueuedAhead, inquiryQueueLabel, reviewInquiryAnchor } from "./review-inquiry";
 import { VirtualDiffRows, visibleDiffLines } from "./diff/VirtualDiffRows";
 import { useReviewLineSelection } from "./useReviewLineSelection";
@@ -78,10 +79,12 @@ function ReviewInquiryStack({
   inquiries: ReviewInquiry[];
   allInquiries: ReviewInquiry[];
 }) {
-  if (inquiries.length === 0) return null;
+  const deletedIds = useReviewUiStore((store) => store.deletedInquiryIds);
+  const visible = inquiries.filter((inquiry) => !deletedIds.includes(inquiry.id));
+  if (visible.length === 0) return null;
   return (
     <div className="flex flex-col gap-2 border-y border-[var(--th-review-ai)]/15 bg-[var(--th-review-canvas)] p-3 pl-16 font-sans leading-normal">
-      {inquiries.map((inquiry) => {
+      {visible.map((inquiry) => {
         const ahead = inquiriesQueuedAhead(inquiry, allInquiries);
         return (
           <ReviewInquiryCard

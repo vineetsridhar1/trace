@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useEntityStore } from "@trace/client-core";
 import type { ReviewInquiry } from "@trace/gql";
+import { useReviewUiStore } from "../../../stores/review-ui";
 import { ReviewInquiryCard } from "../ReviewInquiryCard";
 import { inquiriesQueuedAhead, inquiryQueueLabel } from "../review-inquiry";
 
@@ -15,6 +16,7 @@ export function GuideChapterInquiries({
   snapshotId: string;
   chapterId: string;
 }) {
+  const deletedIds = useReviewUiStore((store) => store.deletedInquiryIds);
   const table = useEntityStore((state) => state.reviewInquiries);
   const inquiries = useMemo(
     () =>
@@ -27,6 +29,7 @@ export function GuideChapterInquiries({
         .filter((inquiry) => {
           const context = inquiry.context;
           return (
+            !deletedIds.includes(inquiry.id) &&
             inquiry.sourceKind === "guide_anchor" &&
             inquiry.snapshotId === snapshotId &&
             context !== null &&
@@ -37,7 +40,7 @@ export function GuideChapterInquiries({
           );
         })
         .sort((a, b) => a.position - b.position),
-    [inquiries, snapshotId, chapterId, guideId],
+    [inquiries, snapshotId, chapterId, guideId, deletedIds],
   );
 
   if (chapterInquiries.length === 0) return null;

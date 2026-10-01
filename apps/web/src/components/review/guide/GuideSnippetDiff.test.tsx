@@ -5,6 +5,7 @@ import type { ReviewThread as Thread, ReviewInquiry } from "@trace/gql";
 import { GuideSnippetDiff } from "./GuideSnippetDiff";
 import { DiffLineRow } from "../diff/DiffLineRow";
 import { DiffSelectionPopover } from "../diff/DiffSelectionPopover";
+import { useReviewUiStore } from "../../../stores/review-ui";
 import { ReviewInquiryCard } from "../ReviewInquiryCard";
 import { ReviewThread } from "../ReviewThread";
 vi.mock("../../../lib/urql", () => ({ client: {} }));
@@ -16,6 +17,7 @@ beforeEach(() => {
   vi.stubGlobal("window", new EventTarget());
   vi.stubGlobal("document", new EventTarget());
   vi.stubGlobal("Element", class {});
+  useReviewUiStore.setState({ byReviewId: {}, deletedInquiryIds: [] });
   useEntityStore.setState({ reviewThreads: {}, reviewInquiries: {} });
   comment.mockReset();
   ask.mockReset();
@@ -118,4 +120,8 @@ it("renders event-driven comments and AI state updates only at the matching snap
     useEntityStore.setState({ reviewInquiries: { question: { ...inquiry, state: "running" } } }),
   );
   expect(JSON.stringify(renderer.toJSON())).toContain("Thinking…");
+  act(() => useReviewUiStore.getState().deleteInquiry("question"));
+  expect(renderer.root.findAllByType(ReviewInquiryCard)).toHaveLength(0);
+  expect(renderer.root.findAllByType(ReviewThread)).toHaveLength(1);
+  expect(useEntityStore.getState().reviewInquiries.question?.state).toBe("running");
 });

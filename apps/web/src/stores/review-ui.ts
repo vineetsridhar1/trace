@@ -19,18 +19,21 @@ interface ReviewUiSelection {
   highlight: ReviewHighlight | null;
   /** Missing entries use file metadata defaults; explicit choices survive virtualized remounts. */
   fileCollapsedOverrides: Record<string, boolean>;
-  collapsedInquiryIds: string[];
+  inquiryCollapsedOverrides: Record<string, boolean>;
 }
 
 interface ReviewUiState {
   /** Drafts survive virtualized thread cards leaving the viewport. */
   replyDrafts: Record<string, string>;
   setReplyDraft(threadId: string, body: string): void;
+  deletedInquiryIds: string[];
+  deleteInquiry(inquiryId: string): void;
   byReviewId: Record<string, ReviewUiSelection>;
   patch(reviewId: string, value: Partial<ReviewUiSelection>): void;
   navigate(reviewId: string, highlight: ReviewHighlight): void;
   toggleFileCollapsed(reviewId: string, filePath: string, defaultCollapsed?: boolean): void;
-  toggleInquiryCollapsed(reviewId: string, inquiryId: string): void;
+  setInquiryCollapsed(reviewId: string, inquiryId: string, collapsed: boolean): void;
+  toggleInquiryCollapsed(reviewId: string, inquiryId: string, defaultCollapsed?: boolean): void;
 }
 
 const emptySelection = (): ReviewUiSelection => ({
@@ -41,8 +44,21 @@ const emptySelection = (): ReviewUiSelection => ({
   requestedLine: null,
   highlight: null,
   fileCollapsedOverrides: {},
-  collapsedInquiryIds: [],
+  inquiryCollapsedOverrides: {},
 });
+
+const DELETED_INQUIRIES_KEY = "trace.review.deleted-inquiries.v1";
+
+function deletedInquiries(): string[] {
+  try {
+    const value: unknown = JSON.parse(
+      globalThis.localStorage?.getItem(DELETED_INQUIRIES_KEY) ?? "[]",
+    );
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 export const useReviewUiStore = create<ReviewUiState>((set) => ({
   replyDrafts: {},
@@ -52,6 +68,18 @@ export const useReviewUiStore = create<ReviewUiState>((set) => ({
       if (body) replyDrafts[threadId] = body;
       else delete replyDrafts[threadId];
       return { replyDrafts };
+    }),
+  deletedInquiryIds: deletedInquiries(),
+  deleteInquiry: (inquiryId) =>
+    set((state) => {
+      if (state.deletedInquiryIds.includes(inquiryId)) return state;
+      const deletedInquiryIds = [...state.deletedInquiryIds, inquiryId];
+      try {
+        globalThis.localStorage?.setItem(DELETED_INQUIRIES_KEY, JSON.stringify(deletedInquiryIds));
+      } catch {
+        // Still dismiss locally when browser storage is unavailable.
+      }
+      return { deletedInquiryIds };
     }),
   byReviewId: {},
   patch: (reviewId, value) =>
@@ -96,18 +124,35 @@ export const useReviewUiStore = create<ReviewUiState>((set) => ({
         },
       };
     }),
-  toggleInquiryCollapsed: (reviewId, inquiryId) =>
+  setInquiryCollapsed: (reviewId, inquiryId, collapsed) =>
     set((state) => {
       const current = state.byReviewId[reviewId] ?? emptySelection();
-      const collapsed = current.collapsedInquiryIds.includes(inquiryId);
       return {
         byReviewId: {
           ...state.byReviewId,
           [reviewId]: {
             ...current,
-            collapsedInquiryIds: collapsed
-              ? current.collapsedInquiryIds.filter((id) => id !== inquiryId)
-              : [...current.collapsedInquiryIds, inquiryId],
+            inquiryCollapsedOverrides: {
+              ...current.inquiryCollapsedOverrides,
+              [inquiryId]: collapsed,
+            },
+          },
+        },
+      };
+    }),
+  toggleInquiryCollapsed: (reviewId, inquiryId, defaultCollapsed = false) =>
+    set((state) => {
+      const current = state.byReviewId[reviewId] ?? emptySelection();
+      const collapsed = current.inquiryCollapsedOverrides[inquiryId] ?? defaultCollapsed;
+      return {
+        byReviewId: {
+          ...state.byReviewId,
+          [reviewId]: {
+            ...current,
+            inquiryCollapsedOverrides: {
+              ...current.inquiryCollapsedOverrides,
+              [inquiryId]: !collapsed,
+            },
           },
         },
       };

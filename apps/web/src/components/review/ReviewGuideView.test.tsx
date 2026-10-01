@@ -54,7 +54,7 @@ describe("Guide Ask about this", () => {
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     useEntityStore.setState({ reviewInquiries: {} });
-    useReviewUiStore.setState({ byReviewId: {} });
+    useReviewUiStore.setState({ byReviewId: {}, deletedInquiryIds: [] });
     mutate.mockReset();
     mutate.mockResolvedValue({});
     act(() => {
@@ -213,7 +213,7 @@ describe("Guide Ask about this", () => {
     expect(renderer.root.findByType(ReviewInlineComposer).props.body).toBe("Why?");
   });
 
-  it("renders live queue and answer updates on the chapter and supports hiding the answer", () => {
+  it("renders live queue and answer updates on the chapter and supports deleting the conversation locally", () => {
     act(() =>
       useEntityStore.setState({
         reviewInquiries: {
@@ -248,9 +248,9 @@ describe("Guide Ask about this", () => {
       }),
     );
     expect(JSON.stringify(renderer.toJSON())).toContain("Validation protects shared state.");
-    click("Hide");
+    click("Delete");
     expect(JSON.stringify(renderer.toJSON())).not.toContain("Validation protects shared state.");
-    click("Show");
-    expect(JSON.stringify(renderer.toJSON())).toContain("Validation protects shared state.");
+    expect(renderer.root.findAllByType(ReviewInquiryCard)).toHaveLength(0);
+    expect(useEntityStore.getState().reviewInquiries.question).toBeDefined();
   });
 });
