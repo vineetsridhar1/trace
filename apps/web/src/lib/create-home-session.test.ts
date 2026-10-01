@@ -6,6 +6,23 @@ const repo = { id: "repo-1", name: "trace" } as Repo;
 const channel = { id: "channel-1", name: "Trace", type: "coding", repo } as Channel;
 
 describe("buildHomeStartInput", () => {
+  it("starts a coding session in cloud when no local bridge is selected", () => {
+    expect(
+      buildHomeStartInput({
+        prompt: "Fix the composer",
+        kind: "coding",
+        tool: "codex",
+        model: null,
+        reasoningEffort: null,
+        interactionMode: "code",
+        channel,
+        projectId: null,
+        repoId: "repo-1",
+        runtimeInstanceId: null,
+      }),
+    ).toMatchObject({ kind: "coding", hosting: "cloud", channelId: "channel-1" });
+  });
+
   it("uses a selected local runtime for a general session", () => {
     expect(
       buildHomeStartInput({

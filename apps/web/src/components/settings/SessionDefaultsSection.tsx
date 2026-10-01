@@ -13,6 +13,7 @@ import {
 } from "../session/modelOptions";
 import { Info, SlidersHorizontal } from "lucide-react";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
+import { DefaultSessionEnvironment } from "./DefaultSessionEnvironment";
 
 const TOOL_OPTIONS = [
   { value: "claude_code", label: "Claude Code" },
@@ -144,6 +145,7 @@ export function SessionDefaultsSection() {
 
       <div className="rounded-xl border border-border bg-card p-5">
         <p className="text-[13px] font-semibold text-foreground">New sessions start with</p>
+        <DefaultSessionEnvironment />
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
             <label className="mb-1.5 block text-xs font-medium text-muted-foreground">

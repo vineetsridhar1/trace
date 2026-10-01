@@ -18,7 +18,6 @@ import { UPDATE_SESSION_GROUP_VISIBILITY_MUTATION, useAuthStore } from "@trace/c
 import type { AuthState } from "@trace/client-core";
 import { useAttachedCheckoutForGroup } from "../../stores/bridges";
 import { SessionListName } from "../channel/SessionListName";
-import { SessionPullRequestIndicators } from "../session/SessionPullRequestIndicators";
 import { SessionStatusIndicator } from "../channel/SessionStatusIndicator";
 import type { SessionGroupRow } from "../channel/sessions-table-types";
 import { useSessionGroupRows } from "../channel/useSessionGroupRows";
@@ -314,9 +313,6 @@ function OwnedSessionGroupItem({
         )}
         {attached && <SpotlightBridgeIndicator attached={attached} />}
         <SessionApplicationRunningIndicator sessionGroupId={record.id} />
-        {record.status === "in_review" && (
-          <SessionPullRequestIndicators sessionGroupId={record.id} />
-        )}
         <span className="shrink-0 text-[11px] text-foreground group-hover/session-row:hidden group-focus-within/session-row:hidden">
           {activityLabel}
         </span>
@@ -352,6 +348,7 @@ function OwnedSessionGroupItem({
           <SidebarSessionHoverCard
             sessionGroupId={record.id}
             sessionId={record.latestSessionId}
+            agentStatus={record.row.displayAgentStatus}
             trigger={row}
           />
         </ContextMenuTrigger>

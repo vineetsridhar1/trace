@@ -1,6 +1,5 @@
 import { SessionListName } from "./SessionListName";
 import { navigateToSessionGroup } from "../../stores/ui";
-import { SessionPullRequestIndicators } from "../session/SessionPullRequestIndicators";
 import { TerminalSquare } from "lucide-react";
 import { timeAgo } from "../../lib/utils";
 import { useAttachedCheckoutForGroup } from "../../stores/bridges";
@@ -50,9 +49,6 @@ export function SessionCompactSummaryCell({
         )}
         {attached && <SpotlightBridgeIndicator attached={attached} />}
         <SessionApplicationRunningIndicator sessionGroupId={row.id} />
-        {row.displaySessionStatus === "in_review" && (
-          <SessionPullRequestIndicators sessionGroupId={row.id} />
-        )}
         {row.visibility === "private" && (
           <PrivateSessionLock
             className="h-3.5 w-3.5 text-muted-foreground"
