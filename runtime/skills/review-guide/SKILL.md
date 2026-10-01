@@ -105,7 +105,8 @@ For each chapter:
   together. Separate paragraphs with a blank line.
 - `implications`: specific consequences for behavior, users, API/data contracts, performance,
   operations, or future work. Reviewers read these as the chapter's "worth a look" list, so keep each
-  one short and concrete. Do not invent risks unsupported by the diff.
+  one short and concrete. Do not invent risks unsupported by the diff; leave the list empty when a
+  chapter genuinely has none.
 - `files`: every changed path this chapter covers, in reading order.
 
 Use `everythingElse` only for real changed files whose contribution is too small or mechanical to
@@ -156,29 +157,33 @@ Return only one JSON object. Do not wrap it in a Markdown fence or add commentar
 }
 ```
 
-Hard requirements:
+Hard requirements — Trace rejects the Guide if any of these is broken:
 
 - Copy every path exactly from Trace's authoritative changed-file list.
-- Account for every authoritative path exactly once across all chapter `files` and `everythingElse`.
-- Never repeat a path in another chapter or in `everythingElse`.
 - Never mention an unchanged or invented path.
 - Every inline link must target a path in its own chapter's `files`, with integer line numbers
   greater than zero and `endLine >= startLine`.
-- Ensure every chapter has at least one file and at least one implication.
+- Give every chapter at least one file.
 - Keep `title` to one line and `intent` to one or two sentences.
 - Use unique, stable, snake-case chapter IDs.
+
+Trace repairs these for you, so aim for them but never stall on them:
+
+- Assign each path to at most one chapter, or to `everythingElse`. A path you repeat is kept by the
+  chapter that claimed it first and dropped from the rest.
+- Any authoritative path you do not assign is filed under `everythingElse` automatically. Prefer
+  omitting a path over guessing at what it does.
+- `implications` may be empty when a chapter genuinely has none.
 
 ## Validate before responding
 
 Perform this check silently:
 
-1. List the authoritative paths from the request.
-2. List every chapter `files` entry and every `everythingElse` entry from the draft.
-3. Confirm the lists are identical as sets and have the same length.
-4. Confirm no path appears more than once.
-5. For every `[[...]]` link, confirm the path is in that chapter's own `files`, and that the range is
+1. Confirm every path you used appears verbatim in the authoritative list from the request.
+2. Confirm no path appears more than once, and that every chapter has at least one file.
+3. For every `[[...]]` link, confirm the path is in that chapter's own `files`, and that the range is
    a positive ordered pair of head-side line numbers taken from the diff.
-6. Confirm the prose explains the change rather than reviewing its quality.
-7. Confirm the response contains JSON only.
+4. Confirm the prose explains the change rather than reviewing its quality.
+5. Confirm the response contains JSON only.
 
 Fix any mismatch before returning the final object.

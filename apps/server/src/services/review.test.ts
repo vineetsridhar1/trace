@@ -77,10 +77,7 @@ describe("threadAppliesToSnapshot", () => {
   it("uses the reconciled live anchor rather than immutable origin", () => {
     expect(
       threadAppliesToSnapshot(
-        {
-          originSnapshotId: "snapshot-1",
-          anchor: { snapshotId: "snapshot-2", status: "relocated" },
-        },
+        { scope: "line", anchor: { snapshotId: "snapshot-2", status: "relocated" } },
         "snapshot-2",
       ),
     ).toBe(true);
@@ -89,12 +86,28 @@ describe("threadAppliesToSnapshot", () => {
   it("rejects an outdated live anchor", () => {
     expect(
       threadAppliesToSnapshot(
-        {
-          originSnapshotId: "snapshot-1",
-          anchor: { snapshotId: "snapshot-2", status: "outdated" },
-        },
+        { scope: "line", anchor: { snapshotId: "snapshot-2", status: "outdated" } },
         "snapshot-2",
       ),
+    ).toBe(false);
+  });
+
+  it("rejects an anchor still pointing at an earlier snapshot", () => {
+    expect(
+      threadAppliesToSnapshot(
+        { scope: "line", anchor: { snapshotId: "snapshot-1", status: "current" } },
+        "snapshot-2",
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps an unanchored review-level comment deliverable after a new snapshot", () => {
+    expect(threadAppliesToSnapshot({ scope: "general", anchor: null }, "snapshot-2")).toBe(true);
+  });
+
+  it("never delivers a Guide annotation", () => {
+    expect(
+      threadAppliesToSnapshot({ scope: "guide_explanation", anchor: null }, "snapshot-1"),
     ).toBe(false);
   });
 });

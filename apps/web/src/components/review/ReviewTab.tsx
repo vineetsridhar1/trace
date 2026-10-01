@@ -35,13 +35,6 @@ const ENQUEUE_INQUIRY = gql`
     }
   }
 `;
-const CREATE_THREAD = gql`
-  mutation CreateReviewThread($input: CreateReviewThreadInput!) {
-    createReviewThread(input: $input) {
-      id
-    }
-  }
-`;
 
 export function ReviewTab({
   reviewId,
@@ -70,6 +63,7 @@ export function ReviewTab({
   const [submissionOpen, setSubmissionOpen] = useState(false);
 
   const snapshot = review?.currentSnapshot ?? null;
+  const snapshotId = snapshot?.id ?? "";
   const view = ui?.view ?? "changes";
   const threads = useMemo(
     () =>
@@ -77,6 +71,25 @@ export function ReviewTab({
         (thread) => thread.reviewId === reviewId,
       ),
     [reviewId, reviewThreads],
+  );
+  // Memoized rather than derived in the render body: this array is the `threads` prop of every
+  // file card, so a fresh identity each render would invalidate their own memos.
+  const snapshotThreads = useMemo(
+    () =>
+      threads.filter(
+        (thread) =>
+          thread.scope !== "guide_explanation" &&
+          // An unanchored review-level comment is not tied to a snapshot, so it always shows.
+          (!thread.anchor || thread.anchor.snapshotId === snapshotId),
+      ),
+    [snapshotId, threads],
+  );
+  const pendingThreads = useMemo(
+    () =>
+      snapshotId
+        ? snapshotThreads.filter((thread) => isPendingGitHubThread(thread, snapshotId))
+        : [],
+    [snapshotId, snapshotThreads],
   );
   const inquiries = useMemo(
     () =>
@@ -187,15 +200,6 @@ export function ReviewTab({
     );
   if (!review || !snapshot) return <ReviewLoadingState label="Loading review…" />;
 
-  const snapshotThreads = threads.filter(
-    (thread) =>
-      (thread.anchor?.snapshotId === snapshot.id ||
-        (!thread.anchor && thread.originSnapshotId === snapshot.id)) &&
-      thread.scope !== "guide_explanation",
-  );
-  const pendingThreads = snapshotThreads.filter((thread) =>
-    isPendingGitHubThread(thread, snapshot.id),
-  );
   const guideGenerating = guideInquiries.some(
     (inquiry) =>
       inquiry.snapshotId === snapshot.id &&
@@ -207,10 +211,10 @@ export function ReviewTab({
       .at(-1) ?? null;
 
   return (
-    <div className="relative flex h-full min-w-0 flex-col overflow-hidden bg-[#141414]">
+    <div className="relative flex h-full min-w-0 flex-col overflow-hidden bg-[var(--th-review-canvas)]">
       <ReviewHeader
-        review={review}
-        snapshot={snapshot}
+        reviewId={reviewId}
+        fileCount={snapshot.files.length}
         view={view}
         refreshing={refreshing}
         pendingThreadCount={pendingThreads.length}
@@ -246,19 +250,6 @@ export function ReviewTab({
                 sourceKind: "guide_anchor",
                 context: { guideChapterId: chapterId },
               })
-            }
-            onCommentOnChapter={(chapterId) =>
-              void mutateReview(CREATE_THREAD, {
-                input: {
-                  reviewId,
-                  snapshotId: snapshot.id,
-                  scope: "guide_explanation",
-                  body: "",
-                  guideChapterId: chapterId,
-                },
-              }).catch((reason) =>
-                toast.error(reason instanceof Error ? reason.message : "Comment failed"),
-              )
             }
             onReviewAllChanges={() => patchUi(reviewId, { view: "changes" })}
           />

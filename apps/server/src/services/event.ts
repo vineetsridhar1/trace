@@ -141,9 +141,20 @@ export class EventService {
 
   private correlateReviewResponse(event: PrismaEvent): void {
     if (event.scopeType !== "session" || event.eventType !== "session_output") return;
+    // Narrow to turn-end before loading the review service: every session in the org streams
+    // assistant and tool output through here, and only `result` can complete a review inquiry.
+    const payload = event.payload;
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      Array.isArray(payload) ||
+      (payload as Record<string, unknown>).type !== "result"
+    ) {
+      return;
+    }
     setImmediate(() => {
       void import("./review.js")
-        .then(({ reviewService }) => reviewService.handleSessionAssistantEvent(event))
+        .then(({ reviewService }) => reviewService.handleSessionOutputEvent(event))
         .catch((error: unknown) => {
           console.error("[review] response correlation failed", error);
         });

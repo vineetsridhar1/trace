@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReviewFile } from "@trace/gql";
 import { GuideChapterAside } from "./GuideChapterAside";
 import { GuideFileDiff } from "./GuideFileDiff";
@@ -41,24 +41,37 @@ export function GuideScroller({
   }, []);
 
   // The pinned chapter and the active file both follow scroll position, exactly like the sidebar
-  // follows the Changes view, so the reader always knows where they are in the walkthrough.
+  // follows the Changes view, so the reader always knows where they are in the walkthrough. The
+  // measurement reads one rect per chapter and per file, so it is coalesced onto an animation
+  // frame rather than run on every scroll event.
+  const frameRef = useRef<number | null>(null);
   const handleScroll = useCallback(() => {
-    const container = scrollRef.current;
-    if (!container) return;
-    const top = container.getBoundingClientRect().top;
-    let chapter = 0;
-    let file: string | null = activeFilePath;
-    for (const element of container.querySelectorAll<HTMLElement>("[data-guide-chapter]")) {
-      if (element.getBoundingClientRect().top - top <= 40)
-        chapter = Number(element.dataset.guideChapter);
-    }
-    for (const element of container.querySelectorAll<HTMLElement>("[data-guide-file]")) {
-      if (element.getBoundingClientRect().top - top <= 260)
-        file = element.dataset.guideFile ?? null;
-    }
-    if (chapter !== activeChapter) setActiveChapter(chapter);
-    if (file !== activeFilePath) setActiveFilePath(file);
+    if (frameRef.current !== null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      const container = scrollRef.current;
+      if (!container) return;
+      const top = container.getBoundingClientRect().top;
+      let chapter = 0;
+      let file: string | null = activeFilePath;
+      for (const element of container.querySelectorAll<HTMLElement>("[data-guide-chapter]")) {
+        if (element.getBoundingClientRect().top - top <= 40)
+          chapter = Number(element.dataset.guideChapter);
+      }
+      for (const element of container.querySelectorAll<HTMLElement>("[data-guide-file]")) {
+        if (element.getBoundingClientRect().top - top <= 260)
+          file = element.dataset.guideFile ?? null;
+      }
+      if (chapter !== activeChapter) setActiveChapter(chapter);
+      if (file !== activeFilePath) setActiveFilePath(file);
+    });
   }, [activeChapter, activeFilePath]);
+  useEffect(
+    () => () => {
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    },
+    [],
+  );
 
   const jumpToAnchor = useCallback(
     (next: GuideAnchor) => {
@@ -70,7 +83,7 @@ export function GuideScroller({
   );
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#141414]">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--th-review-canvas)]">
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -80,7 +93,7 @@ export function GuideScroller({
           <div
             key={chapter.id}
             data-guide-chapter={index}
-            className="grid border-b border-[#26262a] [grid-template-columns:minmax(0,560px)_minmax(0,1fr)]"
+            className="grid border-b border-[var(--th-review-edge)] [grid-template-columns:minmax(0,560px)_minmax(0,1fr)]"
           >
             <GuideChapterAside
               chapter={chapter}
@@ -94,7 +107,7 @@ export function GuideScroller({
               onAsk={() => onAskAboutChapter(chapter.id)}
               onComment={() => onCommentOnChapter(chapter.id)}
             />
-            <div className="flex flex-col gap-[18px] bg-[#101011] px-5 pb-7 pt-5">
+            <div className="flex flex-col gap-[18px] bg-[var(--th-review-card-deep)] px-5 pb-7 pt-5">
               {chapter.files.map((filePath) => (
                 <GuideFileDiff
                   key={filePath}
@@ -114,7 +127,7 @@ export function GuideScroller({
           </div>
         ))}
         {content.everythingElse.length > 0 ? (
-          <div className="flex flex-col gap-2.5 border-b border-[#26262a] px-11 py-7">
+          <div className="flex flex-col gap-2.5 border-b border-[var(--th-review-edge)] px-11 py-7">
             <span className="text-[10.5px] font-semibold tracking-[0.08em] text-muted-foreground">
               EVERYTHING ELSE
             </span>
@@ -124,7 +137,7 @@ export function GuideScroller({
                   key={path}
                   type="button"
                   onClick={() => onOpenInChanges({ filePath: path, startLine: 1, endLine: 1 })}
-                  className="rounded-md border border-[#262626] px-2 py-1 font-mono text-[11px] text-[#a1a1aa] hover:text-foreground"
+                  className="rounded-md border border-[var(--th-edge)] px-2 py-1 font-mono text-[11px] text-[var(--th-primary)] hover:text-foreground"
                 >
                   {path}
                 </button>
@@ -133,7 +146,9 @@ export function GuideScroller({
           </div>
         ) : null}
         <div className="flex h-[220px] flex-col items-center justify-center gap-2.5">
-          <span className="text-[15px] font-semibold text-[#ededef]">End of guide</span>
+          <span className="text-[15px] font-semibold text-[var(--th-review-text)]">
+            End of guide
+          </span>
           <span className="text-[12.5px] text-muted-foreground">
             {content.chapters.length} chapter{content.chapters.length === 1 ? "" : "s"} &middot;{" "}
             {coveredCount} of {files.length} file{files.length === 1 ? "" : "s"} covered
@@ -141,7 +156,7 @@ export function GuideScroller({
           <button
             type="button"
             onClick={onReviewAllChanges}
-            className="mt-1.5 flex h-[30px] items-center rounded-[7px] border border-[#262626] px-3 text-xs font-medium text-[#d4d4d8] hover:bg-white/5"
+            className="mt-1.5 flex h-[30px] items-center rounded-[7px] border border-[var(--th-edge)] px-3 text-xs font-medium text-[var(--th-heading)] hover:bg-white/5"
           >
             Review all changes &rarr;
           </button>

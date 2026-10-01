@@ -4021,6 +4021,15 @@ export type ReviewDiffFileQuery = {
   };
 };
 
+export type CreateReviewGuideThreadMutationVariables = Exact<{
+  input: CreateReviewThreadInput;
+}>;
+
+export type CreateReviewGuideThreadMutation = {
+  __typename?: "Mutation";
+  createReviewThread: { __typename?: "ReviewThread"; id: string };
+};
+
 export type GenerateReviewGuideMutationVariables = Exact<{
   input: EnqueueReviewInquiryInput;
 }>;
@@ -8467,6 +8476,49 @@ export const ReviewDiffFileDocument = {
     },
   ],
 } as unknown as DocumentNode<ReviewDiffFileQuery, ReviewDiffFileQueryVariables>;
+export const CreateReviewGuideThreadDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateReviewGuideThread" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "CreateReviewThreadInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createReviewThread" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  CreateReviewGuideThreadMutation,
+  CreateReviewGuideThreadMutationVariables
+>;
 export const GenerateReviewGuideDocument = {
   kind: "Document",
   definitions: [

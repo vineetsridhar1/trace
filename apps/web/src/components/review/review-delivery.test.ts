@@ -25,10 +25,19 @@ describe("isPendingGitHubThread", () => {
     expect(isPendingGitHubThread(thread(), "snapshot-latest")).toBe(true);
   });
 
-  it("excludes comments from an earlier snapshot", () => {
+  it("keeps an unanchored review-level comment deliverable across snapshots", () => {
     expect(
-      isPendingGitHubThread(thread({ originSnapshotId: "snapshot-old" }), "snapshot-latest"),
-    ).toBe(false);
+      isPendingGitHubThread(
+        thread({ scope: "general", originSnapshotId: "snapshot-old" }),
+        "snapshot-latest",
+      ),
+    ).toBe(true);
+  });
+
+  it("excludes guide annotations, which are Trace-internal", () => {
+    expect(isPendingGitHubThread(thread({ scope: "guide_explanation" }), "snapshot-latest")).toBe(
+      false,
+    );
   });
 
   it("includes an older comment reconciled onto the latest snapshot", () => {

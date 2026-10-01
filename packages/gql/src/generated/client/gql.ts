@@ -33,6 +33,7 @@ type Documents = {
   "\n  mutation CreateReviewThread($input: CreateReviewThreadInput!) {\n    createReviewThread(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateReviewThreadDocument;
   "\n  mutation EnqueueReviewInquiry($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n    }\n  }\n": typeof types.EnqueueReviewInquiryDocument;
   "\n  query ReviewDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      status\n      additions\n      deletions\n      patch\n      truncated\n    }\n  }\n": typeof types.ReviewDiffFileDocument;
+  "\n  mutation CreateReviewGuideThread($input: CreateReviewThreadInput!) {\n    createReviewThread(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateReviewGuideThreadDocument;
   "\n  mutation GenerateReviewGuide($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n      state\n      position\n    }\n  }\n": typeof types.GenerateReviewGuideDocument;
   "\n  mutation ResolveReviewInquiry($inquiryId: ID!, $resolved: Boolean!) {\n    resolveReviewInquiry(inquiryId: $inquiryId, resolved: $resolved) {\n      id\n    }\n  }\n": typeof types.ResolveReviewInquiryDocument;
   "\n  mutation SubmitReview($input: SubmitReviewInput!) {\n    submitReviewToProvider(input: $input) {\n      id\n      status\n      error\n      providerReviewId\n    }\n  }\n": typeof types.SubmitReviewDocument;
@@ -190,6 +191,8 @@ const documents: Documents = {
     types.EnqueueReviewInquiryDocument,
   "\n  query ReviewDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      status\n      additions\n      deletions\n      patch\n      truncated\n    }\n  }\n":
     types.ReviewDiffFileDocument,
+  "\n  mutation CreateReviewGuideThread($input: CreateReviewThreadInput!) {\n    createReviewThread(input: $input) {\n      id\n    }\n  }\n":
+    types.CreateReviewGuideThreadDocument,
   "\n  mutation GenerateReviewGuide($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n      state\n      position\n    }\n  }\n":
     types.GenerateReviewGuideDocument,
   "\n  mutation ResolveReviewInquiry($inquiryId: ID!, $resolved: Boolean!) {\n    resolveReviewInquiry(inquiryId: $inquiryId, resolved: $resolved) {\n      id\n    }\n  }\n":
@@ -554,6 +557,12 @@ export function graphql(
 export function graphql(
   source: "\n  query ReviewDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      status\n      additions\n      deletions\n      patch\n      truncated\n    }\n  }\n",
 ): (typeof documents)["\n  query ReviewDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      status\n      additions\n      deletions\n      patch\n      truncated\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation CreateReviewGuideThread($input: CreateReviewThreadInput!) {\n    createReviewThread(input: $input) {\n      id\n    }\n  }\n",
+): (typeof documents)["\n  mutation CreateReviewGuideThread($input: CreateReviewThreadInput!) {\n    createReviewThread(input: $input) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

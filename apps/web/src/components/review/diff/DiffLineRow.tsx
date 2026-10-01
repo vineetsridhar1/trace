@@ -9,29 +9,31 @@ export type DiffLineEmphasis = "none" | "selected" | "asked";
 function rowClasses(kind: DiffLine["kind"], emphasis: DiffLineEmphasis) {
   if (emphasis === "selected")
     return {
-      row: "bg-[#3b82f6]/[0.14]",
-      gutter: "bg-[#3b82f6]/[0.22] text-[#93c5fd] shadow-[inset_2px_0_0_#3b82f6]",
-      marker: "text-[#60a5fa]",
+      row: "bg-[var(--th-accent)]/[0.14]",
+      gutter:
+        "bg-[var(--th-accent)]/[0.22] text-[var(--th-review-comment)] shadow-[inset_2px_0_0_#3b82f6]",
+      marker: "text-[var(--th-accent-light)]",
     };
   if (emphasis === "asked")
     return {
-      row: "bg-[#a78bfa]/[0.09]",
-      gutter: "bg-[#a78bfa]/[0.16] text-[#c4b5fd] shadow-[inset_2px_0_0_#a78bfa]",
-      marker: "text-[#a78bfa]",
+      row: "bg-[var(--th-review-ai)]/[0.09]",
+      gutter:
+        "bg-[var(--th-review-ai)]/[0.16] text-[var(--th-review-ai-light)] shadow-[inset_2px_0_0_#a78bfa]",
+      marker: "text-[var(--th-review-ai)]",
     };
   if (kind === "add")
     return {
-      row: "bg-[#34d399]/[0.05]",
-      gutter: "bg-[#34d399]/[0.08] text-[#5c5c66]",
-      marker: "text-[#34d399]/60",
+      row: "bg-[var(--th-success)]/[0.05]",
+      gutter: "bg-[var(--th-success)]/[0.08] text-[var(--th-review-text-ghost)]",
+      marker: "text-[var(--th-success)]/60",
     };
   if (kind === "delete")
     return {
-      row: "bg-[#f87171]/[0.07]",
-      gutter: "bg-[#f87171]/[0.1] text-[#5c5c66]",
-      marker: "text-[#f87171]",
+      row: "bg-[var(--destructive)]/[0.07]",
+      gutter: "bg-[var(--destructive)]/[0.1] text-[var(--th-review-text-ghost)]",
+      marker: "text-[var(--destructive)]",
     };
-  return { row: "", gutter: "text-[#5c5c66]", marker: "text-transparent" };
+  return { row: "", gutter: "text-[var(--th-review-text-ghost)]", marker: "text-transparent" };
 }
 
 export const DiffLineRow = forwardRef<

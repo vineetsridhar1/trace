@@ -25,14 +25,26 @@ export function anchorPresentation(anchor: ReviewAnchor): StatePresentation {
         anchor.originalLine != null && anchor.originalLine !== anchor.startLine
           ? `Moved L${anchor.originalLine}→L${anchor.startLine}`
           : "Relocated",
-      text: "text-[#93c5fd]",
-      dot: "bg-[#60a5fa]",
+      text: "text-[var(--th-review-comment)]",
+      dot: "bg-[var(--th-accent-light)]",
     };
   if (status === "ambiguous")
-    return { label: "Ambiguous", text: "text-[#c4b5fd]", dot: "bg-[#a78bfa]" };
+    return {
+      label: "Ambiguous",
+      text: "text-[var(--th-review-ai-light)]",
+      dot: "bg-[var(--th-review-ai)]",
+    };
   if (status === "outdated")
-    return { label: "Line no longer exists", text: "text-[#fbbf24]", dot: "bg-[#fbbf24]" };
-  return { label: anchorRangeLabel(anchor), text: "text-[#6ee7b7]", dot: "bg-[#34d399]" };
+    return {
+      label: "Line no longer exists",
+      text: "text-[var(--th-warn)]",
+      dot: "bg-[var(--th-warn)]",
+    };
+  return {
+    label: anchorRangeLabel(anchor),
+    text: "text-[var(--th-review-success-light)]",
+    dot: "bg-[var(--th-success)]",
+  };
 }
 
 export function anchorRangeLabel(anchor: ReviewAnchor): string {
@@ -44,26 +56,38 @@ export function anchorRangeLabel(anchor: ReviewAnchor): string {
 export function deliveryPresentation(status: ReviewDeliveryStatus): StatePresentation {
   switch (status) {
     case "selected":
-      return { label: "In GitHub review", text: "text-[#93c5fd]", dot: "bg-[#3b82f6]" };
+      return {
+        label: "In GitHub review",
+        text: "text-[var(--th-review-comment)]",
+        dot: "bg-[var(--th-accent)]",
+      };
     case "delivered":
-      return { label: "Delivered", text: "text-[#6ee7b7]", dot: "bg-[#34d399]" };
+      return {
+        label: "Delivered",
+        text: "text-[var(--th-review-success-light)]",
+        dot: "bg-[var(--th-success)]",
+      };
     case "delivery_failed":
-      return { label: "Failed", text: "text-[#fca5a5]", dot: "bg-[#f87171]" };
+      return {
+        label: "Failed",
+        text: "text-[var(--th-review-danger-light)]",
+        dot: "bg-[var(--destructive)]",
+      };
     case "outdated":
-      return { label: "Outdated", text: "text-[#fbbf24]", dot: "bg-[#fbbf24]" };
+      return { label: "Outdated", text: "text-[var(--th-warn)]", dot: "bg-[var(--th-warn)]" };
     default:
-      return { label: "Private", text: "text-muted-foreground", dot: "bg-[#52525b]" };
+      return { label: "Private", text: "text-muted-foreground", dot: "bg-[var(--th-faint)]" };
   }
 }
 
 export function deliveryBorderClass(status: ReviewDeliveryStatus): string {
   switch (status) {
     case "selected":
-      return "border-[#3b82f6]/30 bg-[#3b82f6]/[0.06]";
+      return "border-[var(--th-accent)]/30 bg-[var(--th-accent)]/[0.06]";
     case "delivery_failed":
-      return "border-[#f87171]/30";
+      return "border-[var(--destructive)]/30";
     case "outdated":
-      return "border-dashed border-[#fbbf24]/35";
+      return "border-dashed border-[var(--th-warn)]/35";
     default:
       return "border-border";
   }
@@ -72,18 +96,34 @@ export function deliveryBorderClass(status: ReviewDeliveryStatus): string {
 export function inquiryPresentation(state: ReviewInquiryState, isNext: boolean): StatePresentation {
   switch (state) {
     case "running":
-      return { label: "Running", text: "text-[#93c5fd]", dot: "bg-[#60a5fa]" };
+      return {
+        label: "Running",
+        text: "text-[var(--th-review-comment)]",
+        dot: "bg-[var(--th-accent-light)]",
+      };
     case "completed":
-      return { label: "Answered", text: "text-[#6ee7b7]", dot: "bg-[#34d399]" };
+      return {
+        label: "Answered",
+        text: "text-[var(--th-review-success-light)]",
+        dot: "bg-[var(--th-success)]",
+      };
     case "failed":
-      return { label: "Failed", text: "text-[#fca5a5]", dot: "bg-[#f87171]" };
+      return {
+        label: "Failed",
+        text: "text-[var(--th-review-danger-light)]",
+        dot: "bg-[var(--destructive)]",
+      };
     case "cancelled":
-      return { label: "Cancelled", text: "text-[#71717a]", dot: "bg-[#3f3f46]" };
+      return {
+        label: "Cancelled",
+        text: "text-[var(--th-review-text-faint)]",
+        dot: "bg-[var(--th-review-edge-raised)]",
+      };
     default:
       return {
         label: isNext ? "Queued · next" : "Queued",
         text: "text-muted-foreground",
-        dot: "bg-[#52525b]",
+        dot: "bg-[var(--th-faint)]",
       };
   }
 }

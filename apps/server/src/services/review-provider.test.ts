@@ -108,4 +108,51 @@ describe("GitHubReviewProvider", () => {
       fetchMock.mock.calls.some((call) => (call[1] as RequestInit | undefined)?.method === "POST"),
     ).toBe(false);
   });
+  it("finds the delivery marker past the first page of reviews", async () => {
+    const marker = "<!-- trace-review-delivery:delivery-key -->";
+    // A full first page forces pagination; the marker only exists on page two.
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+      id: index + 1,
+      body: "unrelated review",
+    }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(firstPage), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ id: 700, body: marker }]), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([{ id: 701, body: "comment\n<!-- trace-thread:thread-1 -->" }]),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await new GitHubReviewProvider().submitReview({
+      pullRequest: {
+        provider: "github",
+        remoteId: "99",
+        number: 42,
+        url: "https://github.com/acme/widgets/pull/42",
+        title: "Review",
+        description: "Review description",
+        repository: { owner: "acme", repo: "widgets" },
+        baseSha: "base",
+        headSha: "head",
+        baseRef: "main",
+        headRef: "feature",
+        files: [],
+      },
+      token: "token",
+      disposition: "comment",
+      comments: [{ threadId: "thread-1", body: "comment" }],
+      idempotencyKey: "delivery-key",
+    });
+
+    expect(result).toEqual({ reviewId: "700", commentIds: { "thread-1": "701" } });
+    expect(
+      fetchMock.mock.calls.some((call) => (call[1] as RequestInit | undefined)?.method === "POST"),
+    ).toBe(false);
+  });
 });

@@ -8,7 +8,17 @@ import { ReviewEmptyState } from "./ReviewEmptyState";
 import { ReviewInlineComposer, type ReviewComposerTarget } from "./ReviewInlineComposer";
 import { ReviewOverview } from "./ReviewOverview";
 import { mutateReview } from "./review-operations";
-import type { ReviewLineSelection } from "./review-selection";
+import { selectionRangeLabel, type ReviewLineSelection } from "./review-selection";
+
+function composerLabel(scope: "line" | "file", anchor: ReviewLineSelection): string {
+  const fileName = anchor.filePath.split("/").at(-1) ?? anchor.filePath;
+  if (scope === "file") return `${fileName} · whole file`;
+  return `${fileName} · ${selectionRangeLabel({
+    side: anchor.side,
+    start: anchor.startLine,
+    end: anchor.endLine,
+  })}`;
+}
 
 const CREATE_THREAD = gql`
   mutation CreateReviewThread($input: CreateReviewThreadInput!) {
@@ -66,31 +76,44 @@ export function ReviewChangesView({
     patchUi(reviewId, { requestedFilePath: null });
   }, [patchUi, requestedFilePath, reviewId]);
 
-  // Scrolling the continuous diff is what tells the shared sidebar which file is in view.
+  // Scrolling the continuous diff is what tells the shared sidebar which file is in view. The
+  // measurement reads one rect per file card, so it is coalesced onto an animation frame rather
+  // than run on every scroll event.
   const activeFilePath = selection?.activeFilePath ?? null;
+  const frameRef = useRef<number | null>(null);
   const handleScroll = useCallback(() => {
-    const container = scrollRef.current;
-    if (!container) return;
-    const top = container.getBoundingClientRect().top;
-    let next: string | null = null;
-    for (const element of container.querySelectorAll<HTMLElement>("[data-review-file]")) {
-      if (element.getBoundingClientRect().top - top <= 48)
-        next = element.dataset.reviewFile ?? null;
-    }
-    if (next && next !== activeFilePath) patchUi(reviewId, { activeFilePath: next });
+    if (frameRef.current !== null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      const container = scrollRef.current;
+      if (!container) return;
+      const top = container.getBoundingClientRect().top;
+      let next: string | null = null;
+      for (const element of container.querySelectorAll<HTMLElement>("[data-review-file]")) {
+        if (element.getBoundingClientRect().top - top <= 48)
+          next = element.dataset.reviewFile ?? null;
+      }
+      if (next && next !== activeFilePath) patchUi(reviewId, { activeFilePath: next });
+    });
   }, [activeFilePath, patchUi, reviewId]);
+  useEffect(
+    () => () => {
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    },
+    [],
+  );
 
   const openComposer = useCallback(
-    (kind: ReviewComposerTarget["kind"], scope: ReviewComposerTarget["scope"]) =>
+    (kind: ReviewComposerTarget["kind"], scope: "line" | "file") =>
       (anchor: ReviewLineSelection) => {
         setBody("");
-        setComposer({ kind, scope, anchor });
+        setComposer({ kind, scope, anchor, label: composerLabel(scope, anchor) });
       },
     [],
   );
 
   const submit = async () => {
-    if (!composer || !body.trim()) return;
+    if (!composer?.anchor || !body.trim()) return;
     setSubmitting(true);
     const anchor = { snapshotId, ...composer.anchor };
     try {
@@ -140,7 +163,7 @@ export function ReviewChangesView({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="native-scrollbar flex min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto bg-[#141414] px-[18px] pb-10 pt-4"
+        className="native-scrollbar flex min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto bg-[var(--th-review-canvas)] px-[18px] pb-10 pt-4"
       >
         <ReviewOverview
           title={title}
@@ -151,7 +174,10 @@ export function ReviewChangesView({
           <ReviewFileDiff
             key={file.path}
             snapshotId={snapshotId}
-            file={file}
+            filePath={file.path}
+            status={file.status}
+            additions={file.additions}
+            deletions={file.deletions}
             threads={threads}
             inquiries={inquiries}
             collapsed={collapsed.includes(file.path)}

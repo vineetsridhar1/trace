@@ -1137,6 +1137,7 @@ model ReviewDelivery {
   attempts           Int               @default(0)
   error              String?
   createdAt          DateTime          @default(now())
+  startedAt          DateTime?
   completedAt        DateTime?
 
   @@index([reviewId, createdAt])

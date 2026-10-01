@@ -67,6 +67,7 @@ import { realtimeBackplane } from "./lib/realtime-backplane.js";
 import { runtimeDirectory } from "./lib/runtime-directory.js";
 import { publishedAppGateway } from "./services/published-app-gateway.js";
 import { appDeploymentService } from "./services/app-deployment.js";
+import { reviewService } from "./services/review.js";
 import { reconcilePendingStorageObjectDeletions } from "./services/storage-object-deletion.js";
 
 // A single proxied response is base64-framed over the bridge WS; bound a single
@@ -93,6 +94,8 @@ const RUNTIME_PREVIEW_RECONCILE_LOCK_KEY = "trace:jobs:runtime-preview-reconcile
 const DESIGN_SYSTEM_ARTIFACT_RECONCILE_LOCK_KEY = "trace:jobs:design-system-artifact-reconcile";
 const APP_DEPLOYMENT_DISPATCH_INTERVAL_MS = 30 * 1000;
 const APP_DEPLOYMENT_DISPATCH_LOCK_KEY = "trace:jobs:app-deployment-dispatch";
+const REVIEW_INQUIRY_RECOVERY_INTERVAL_MS = 60 * 1000;
+const REVIEW_INQUIRY_RECOVERY_LOCK_KEY = "trace:jobs:review-inquiry-recovery";
 const STORAGE_OBJECT_DELETION_INTERVAL_MS = 30 * 1000;
 const STORAGE_OBJECT_DELETION_LOCK_KEY = "trace:jobs:storage-object-deletion";
 
@@ -621,6 +624,23 @@ async function main() {
   }, APP_DEPLOYMENT_DISPATCH_INTERVAL_MS);
   appDeploymentDispatchReconciler.unref();
 
+  // A review's AI queue only advances on enqueue and turn completion, so a crashed server or a
+  // dead agent would otherwise wedge it permanently.
+  const reviewInquiryRecovery = setInterval(() => {
+    void withRedisJobLock({
+      enabled: !localMode,
+      key: REVIEW_INQUIRY_RECOVERY_LOCK_KEY,
+      ttlMs: REVIEW_INQUIRY_RECOVERY_INTERVAL_MS * 2,
+      run: () => reviewService.recoverStuckInquiries(),
+    }).catch((error: unknown) => {
+      console.warn(
+        "[review-inquiry-recovery] iteration failed",
+        error instanceof Error ? error.message : String(error),
+      );
+    });
+  }, REVIEW_INQUIRY_RECOVERY_INTERVAL_MS);
+  reviewInquiryRecovery.unref();
+
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     if (!lifecycle.isReady()) {
@@ -738,6 +758,7 @@ async function main() {
               clearInterval(endpointTrafficCleanup);
               clearInterval(appDeploymentDispatchReconciler);
               clearInterval(storageObjectDeletionReconciler);
+              clearInterval(reviewInquiryRecovery);
 
               // Code 1012 tells bridges to reconnect to the replacement task
               // immediately. The persisted generation/lastSeen fences make the

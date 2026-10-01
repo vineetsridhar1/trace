@@ -108,12 +108,12 @@ export function highlightCode(source: string): CodeToken[] {
 }
 
 export const CODE_TOKEN_CLASS: Record<CodeTokenKind, string> = {
-  plain: "text-[#d4d4d8]",
-  punctuation: "text-[#9a9aa3]",
-  string: "text-[#a9d9a4]",
-  keyword: "text-[#c9a8f7]",
-  type: "text-[#7cc4f0]",
-  number: "text-[#f2b48a]",
-  call: "text-[#e9cf9f]",
-  comment: "text-[#6b7a99] italic",
+  plain: "text-[var(--th-code-plain)]",
+  punctuation: "text-[var(--th-code-punctuation)]",
+  string: "text-[var(--th-code-string)]",
+  keyword: "text-[var(--th-code-keyword)]",
+  type: "text-[var(--th-code-type)]",
+  number: "text-[var(--th-code-number)]",
+  call: "text-[var(--th-code-call)]",
+  comment: "text-[var(--th-code-comment)] italic",
 };

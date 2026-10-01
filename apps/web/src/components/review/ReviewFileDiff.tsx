@@ -1,11 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { gql } from "@urql/core";
-import type {
-  ReviewDiffFile,
-  ReviewFile,
-  ReviewInquiry,
-  ReviewThread as ReviewThreadType,
-} from "@trace/gql";
+import type { ReviewDiffFile, ReviewInquiry, ReviewThread as ReviewThreadType } from "@trace/gql";
 import { client } from "../../lib/urql";
 import { hunkGapLabel, parsePatch } from "./diff-patch";
 import {
@@ -22,7 +17,7 @@ import { DiffGapRow } from "./diff/DiffGapRow";
 import { DiffLineRow, type DiffLineEmphasis } from "./diff/DiffLineRow";
 import { DiffSelectionPopover } from "./diff/DiffSelectionPopover";
 import { ReviewInquiryCard } from "./ReviewInquiryCard";
-import { inquiriesQueuedAhead, reviewInquiryAnchor } from "./review-inquiry";
+import { inquiriesQueuedAhead, inquiryQueueLabel, reviewInquiryAnchor } from "./review-inquiry";
 import { ReviewThread } from "./ReviewThread";
 import type { ReviewHighlight } from "../../stores/review-ui";
 
@@ -42,7 +37,10 @@ const DIFF_QUERY = gql`
 
 interface ReviewFileDiffProps {
   snapshotId: string;
-  file: ReviewFile;
+  filePath: string;
+  status: string;
+  additions: number;
+  deletions: number;
   threads: ReviewThreadType[];
   inquiries: ReviewInquiry[];
   collapsed: boolean;
@@ -56,12 +54,12 @@ function anchorKey(side: string, line: number): string {
   return `${side}:${line}`;
 }
 
-function ReviewThreadStack({ threads }: { threads: ReviewThreadType[] }) {
-  if (threads.length === 0) return null;
+function ReviewThreadStack({ threadIds }: { threadIds: string[] }) {
+  if (threadIds.length === 0) return null;
   return (
-    <div className="flex flex-col gap-2 border-y border-[#1f1f23] bg-[#141414] p-3 pl-16 font-sans leading-normal">
-      {threads.map((thread) => (
-        <ReviewThread key={thread.id} thread={thread} />
+    <div className="flex flex-col gap-2 border-y border-[var(--th-edge-faint)] bg-[var(--th-review-canvas)] p-3 pl-16 font-sans leading-normal">
+      {threadIds.map((threadId) => (
+        <ReviewThread key={threadId} threadId={threadId} />
       ))}
     </div>
   );
@@ -76,21 +74,28 @@ function ReviewInquiryStack({
 }) {
   if (inquiries.length === 0) return null;
   return (
-    <div className="flex flex-col gap-2 border-y border-[#a78bfa]/15 bg-[#141414] p-3 pl-16 font-sans leading-normal">
-      {inquiries.map((inquiry) => (
-        <ReviewInquiryCard
-          key={inquiry.id}
-          inquiry={inquiry}
-          queuedAhead={inquiriesQueuedAhead(inquiry, allInquiries)}
-        />
-      ))}
+    <div className="flex flex-col gap-2 border-y border-[var(--th-review-ai)]/15 bg-[var(--th-review-canvas)] p-3 pl-16 font-sans leading-normal">
+      {inquiries.map((inquiry) => {
+        const ahead = inquiriesQueuedAhead(inquiry, allInquiries);
+        return (
+          <ReviewInquiryCard
+            key={inquiry.id}
+            inquiryId={inquiry.id}
+            queuedAheadCount={ahead.length}
+            blockerLabel={ahead[0] ? inquiryQueueLabel(ahead[0]) : null}
+          />
+        );
+      })}
     </div>
   );
 }
 
 export function ReviewFileDiff({
   snapshotId,
-  file,
+  filePath,
+  status,
+  additions,
+  deletions,
   threads,
   inquiries,
   collapsed,
@@ -127,7 +132,7 @@ export function ReviewFileDiff({
     if (!visible || collapsed || diff || error) return;
     let cancelled = false;
     void client
-      .query(DIFF_QUERY, { snapshotId, filePath: file.path })
+      .query(DIFF_QUERY, { snapshotId, filePath: filePath })
       .toPromise()
       .then((result) => {
         if (cancelled) return;
@@ -137,11 +142,11 @@ export function ReviewFileDiff({
     return () => {
       cancelled = true;
     };
-  }, [collapsed, diff, error, file.path, snapshotId, visible]);
+  }, [collapsed, diff, error, filePath, snapshotId, visible]);
 
   const lines = useMemo(() => parsePatch(diff?.patch ?? ""), [diff?.patch]);
-  const selection = range ? selectionFromLines(file.path, lines, range) : null;
-  const highlighted = highlight?.filePath === file.path ? highlight : null;
+  const selection = range ? selectionFromLines(filePath, lines, range) : null;
+  const highlighted = highlight?.filePath === filePath ? highlight : null;
 
   useEffect(() => {
     if (!highlighted || lines.length === 0) return;
@@ -190,15 +195,15 @@ export function ReviewFileDiff({
   );
 
   const fileThreads = useMemo(
-    () => threads.filter((thread) => thread.anchor?.filePath === file.path),
-    [file.path, threads],
+    () => threads.filter((thread) => thread.anchor?.filePath === filePath),
+    [filePath, threads],
   );
   const threadsByAnchor = useMemo(() => {
-    const grouped = new Map<string, ReviewThreadType[]>();
+    const grouped = new Map<string, string[]>();
     for (const thread of fileThreads) {
       if (!thread.anchor || thread.scope !== "line") continue;
       const key = anchorKey(thread.anchor.side, thread.anchor.endLine);
-      grouped.set(key, [...(grouped.get(key) ?? []), thread]);
+      grouped.set(key, [...(grouped.get(key) ?? []), thread.id]);
     }
     return grouped;
   }, [fileThreads]);
@@ -209,10 +214,10 @@ export function ReviewFileDiff({
         return (
           inquiry.snapshotId === snapshotId &&
           inquiry.sourceKind === "diff_anchor" &&
-          anchor?.filePath === file.path
+          anchor?.filePath === filePath
         );
       }),
-    [file.path, inquiries, snapshotId],
+    [filePath, inquiries, snapshotId],
   );
   const inquiriesByAnchor = useMemo(() => {
     const grouped = new Map<string, ReviewInquiry[]>();
@@ -234,22 +239,30 @@ export function ReviewFileDiff({
     }
     return keys;
   }, [lines]);
-  const trailingThreads = fileThreads.filter((thread) => {
-    if (!thread.anchor || thread.scope !== "line") return true;
-    return !renderedAnchorKeys.has(anchorKey(thread.anchor.side, thread.anchor.endLine));
-  });
+  const trailingThreadIds = useMemo(
+    () =>
+      fileThreads
+        .filter(
+          (thread) =>
+            !thread.anchor ||
+            thread.scope !== "line" ||
+            !renderedAnchorKeys.has(anchorKey(thread.anchor.side, thread.anchor.endLine)),
+        )
+        .map((thread) => thread.id),
+    [fileThreads, renderedAnchorKeys],
+  );
 
   return (
     <section
       ref={cardRef}
-      data-review-file={file.path}
-      className="relative min-w-0 shrink-0 overflow-clip rounded-[9px] border border-[#232326] bg-[#0f0f10]"
+      data-review-file={filePath}
+      className="relative min-w-0 shrink-0 overflow-clip rounded-[9px] border border-[var(--th-review-card-edge)] bg-[var(--th-review-card)]"
     >
       <DiffFileHeader
-        filePath={file.path}
-        status={file.status}
-        additions={file.additions}
-        deletions={file.deletions}
+        filePath={filePath}
+        status={status}
+        additions={additions}
+        deletions={deletions}
         threadCount={fileThreads.length}
         collapsed={collapsed}
         onToggleCollapsed={onToggleCollapsed}
@@ -281,7 +294,7 @@ export function ReviewFileDiff({
                   : isHighlighted
                     ? "asked"
                     : "none";
-                const anchoredThreads =
+                const anchoredThreadIds =
                   lineNumber == null
                     ? []
                     : (threadsByAnchor.get(anchorKey(side, lineNumber)) ?? []);
@@ -309,7 +322,7 @@ export function ReviewFileDiff({
                         lineNumber == null ? undefined : () => extendSelection(side, lineNumber)
                       }
                     />
-                    <ReviewThreadStack threads={anchoredThreads} />
+                    <ReviewThreadStack threadIds={anchoredThreadIds} />
                     <ReviewInquiryStack inquiries={anchoredInquiries} allInquiries={inquiries} />
                   </Fragment>
                 );
@@ -335,7 +348,7 @@ export function ReviewFileDiff({
           ) : null}
         </>
       )}
-      {!collapsed ? <ReviewThreadStack threads={trailingThreads} /> : null}
+      {!collapsed ? <ReviewThreadStack threadIds={trailingThreadIds} /> : null}
     </section>
   );
 }

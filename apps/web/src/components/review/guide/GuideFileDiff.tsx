@@ -79,23 +79,25 @@ export function GuideFileDiff({
     <div
       ref={cardRef}
       data-guide-file={filePath}
-      className="min-w-0 overflow-clip rounded-[9px] border border-[#232326] bg-[#0f0f10]"
+      className="min-w-0 overflow-clip rounded-[9px] border border-[var(--th-review-card-edge)] bg-[var(--th-review-card)]"
     >
-      <header className="sticky top-0 z-[1] flex h-10 items-center gap-2.5 border-b border-[#232326] bg-[#171717] px-3.5">
+      <header className="sticky top-0 z-[1] flex h-10 items-center gap-2.5 border-b border-[var(--th-review-card-edge)] bg-[var(--th-surface)] px-3.5">
         <span className="min-w-0 truncate font-mono text-[12.5px] text-muted-foreground">
           {lastSlash === -1 ? "" : filePath.slice(0, lastSlash + 1)}
-          <span className="font-medium text-[#ededef]">{filePath.slice(lastSlash + 1)}</span>
+          <span className="font-medium text-[var(--th-review-text)]">
+            {filePath.slice(lastSlash + 1)}
+          </span>
         </span>
         {diff ? (
           <span className="ml-auto shrink-0 font-mono text-[11.5px] font-medium">
-            <span className="text-[#34d399]">+{diff.additions}</span>{" "}
-            <span className="text-[#f87171]">&minus;{diff.deletions}</span>
+            <span className="text-[var(--th-success)]">+{diff.additions}</span>{" "}
+            <span className="text-[var(--destructive)]">&minus;{diff.deletions}</span>
           </span>
         ) : null}
         <button
           type="button"
           onClick={onOpenInChanges}
-          className="ml-auto flex shrink-0 items-center gap-1 text-[11.5px] font-medium text-[#93c5fd] hover:underline"
+          className="ml-auto flex shrink-0 items-center gap-1 text-[11.5px] font-medium text-[var(--th-review-comment)] hover:underline"
         >
           Open in Changes <ExternalLink size={9} />
         </button>

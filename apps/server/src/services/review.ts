@@ -27,6 +27,17 @@ import {
   validateReviewGuide,
 } from "./review-guide.js";
 
+/**
+ * A review question runs a full coding-session turn, which can legitimately involve many tool
+ * calls, so this is a wedge detector rather than a latency budget.
+ */
+const INQUIRY_TURN_TIMEOUT_MS = 30 * 60 * 1000;
+const INQUIRY_TIMEOUT_MESSAGE = "The coding session never finished this turn";
+const MAX_QUEUE_ADVANCES_PER_PASS = 50;
+/** How long a GitHub submission may be in flight before a retry is allowed to supersede it. */
+const DELIVERY_IN_FLIGHT_TIMEOUT_MS = 2 * 60 * 1000;
+const SYSTEM_ACTOR_ID = "system";
+
 const REVIEW_INCLUDE = {
   repository: true,
   channel: true,
@@ -46,6 +57,11 @@ const REVIEW_INCLUDE = {
 } satisfies Prisma.ReviewInclude;
 
 type ReviewWithInclude = Prisma.ReviewGetPayload<{ include: typeof REVIEW_INCLUDE }>;
+
+const THREAD_INCLUDE = {
+  author: true,
+  comments: { include: { author: true }, orderBy: { createdAt: "asc" as const } },
+} satisfies Prisma.ReviewThreadInclude;
 
 type ActorInput = { organizationId: string; actorId: string; actorType: ActorType };
 
@@ -92,11 +108,14 @@ export function isFinishedInquiryState(state: ReviewInquiryState): boolean {
 }
 
 export function threadAppliesToSnapshot(
-  thread: { originSnapshotId: string; anchor: unknown },
+  thread: { scope: string; anchor: unknown },
   snapshotId: string,
 ): boolean {
+  // Guide annotations are Trace-internal commentary on the walkthrough, never PR feedback.
+  if (thread.scope === "guide_explanation") return false;
   const anchor = anchorRecord(thread.anchor);
-  if (!anchor) return thread.originSnapshotId === snapshotId;
+  // Review-level comments are not tied to code, so a new snapshot cannot invalidate them.
+  if (!anchor) return true;
   return anchor.snapshotId === snapshotId && anchor.status !== "outdated";
 }
 
@@ -119,7 +138,41 @@ function fileSummaries(pull: ResolvedPullRequest): Prisma.InputJsonValue {
   );
 }
 
-function reviewPayload(review: ReviewWithInclude): Prisma.InputJsonValue {
+type ReviewEventEntity = Omit<
+  ReviewWithInclude,
+  | "snapshots"
+  | "threads"
+  | "inquiries"
+  | "guides"
+  | "repository"
+  | "channel"
+  | "sourceSessionGroup"
+  | "attachedSession"
+>;
+
+/**
+ * Projects a loaded review down to what an event needs to carry. Every review event is persisted
+ * forever and republished on the org stream, so embedding the transitive closure — all snapshots,
+ * threads, comments, inquiries and guide bodies — would grow each event without bound. Related
+ * entities reach the client through their own payloads; the client only reads scalars and
+ * `currentSnapshot` off this entity.
+ */
+function reviewEntity(review: ReviewWithInclude): ReviewEventEntity {
+  const {
+    snapshots: _snapshots,
+    threads: _threads,
+    inquiries: _inquiries,
+    guides: _guides,
+    repository: _repository,
+    channel: _channel,
+    sourceSessionGroup: _sourceSessionGroup,
+    attachedSession: _attachedSession,
+    ...entity
+  } = review;
+  return entity;
+}
+
+function reviewPayload(review: { id: string }): Prisma.InputJsonValue {
   return reviewJson({ review });
 }
 
@@ -148,7 +201,22 @@ function validateAnchor(
   ) {
     throw new ValidationError("Invalid anchor line range");
   }
-  return reviewJson({ ...anchor, status: "current" });
+  // Built field-by-field rather than spread: the anchor is client-supplied JSON that reconciliation
+  // later reads back, so only the known keys are allowed to persist.
+  return reviewJson({
+    snapshotId,
+    filePath: anchor.filePath,
+    side: anchor.side,
+    startLine: anchor.startLine,
+    endLine: anchor.endLine,
+    status: "current",
+    originalLine: Number.isInteger(anchor.originalLine) ? anchor.originalLine : anchor.startLine,
+    selectedText: typeof anchor.selectedText === "string" ? anchor.selectedText : "",
+    context: typeof anchor.context === "string" ? anchor.context : null,
+    hunkId: typeof anchor.hunkId === "string" ? anchor.hunkId : null,
+    baseBlobId: typeof anchor.baseBlobId === "string" ? anchor.baseBlobId : null,
+    headBlobId: typeof anchor.headBlobId === "string" ? anchor.headBlobId : null,
+  });
 }
 
 export class ReviewService {
@@ -234,7 +302,7 @@ export class ReviewService {
         scopeType: "review",
         scopeId: review.id,
         eventType: "review_opened",
-        payload: reviewPayload(review),
+        payload: reviewPayload(reviewEntity(review)),
         actorType: input.actorType,
         actorId: input.actorId,
       });
@@ -244,7 +312,7 @@ export class ReviewService {
         data: { attachedSessionId: session.id, status: "open" },
         include: REVIEW_INCLUDE,
       });
-      await this.emit(review.id, input, "review_updated", { review });
+      await this.emit(review.id, input, "review_updated", { review: reviewEntity(review) });
     }
     return this.captureSnapshot(review, pull, input);
   }
@@ -313,7 +381,7 @@ export class ReviewService {
         guideChapterId: input.guideChapterId,
         comments: { create: { authorId: input.actorId, body: cleanBody(input.body) } },
       },
-      include: { author: true, comments: { include: { author: true } } },
+      include: THREAD_INCLUDE,
     });
     await this.emit(review.id, input, "review_thread_created", { thread });
     return thread;
@@ -327,10 +395,7 @@ export class ReviewService {
     });
     const updatedThread = await prisma.reviewThread.findUniqueOrThrow({
       where: { id: thread.id },
-      include: {
-        author: true,
-        comments: { include: { author: true }, orderBy: { createdAt: "asc" } },
-      },
+      include: THREAD_INCLUDE,
     });
     await this.emit(thread.reviewId, input, "review_comment_created", {
       comment,
@@ -354,10 +419,7 @@ export class ReviewService {
     });
     const updatedThread = await prisma.reviewThread.findUniqueOrThrow({
       where: { id: existing.threadId },
-      include: {
-        author: true,
-        comments: { include: { author: true }, orderBy: { createdAt: "asc" } },
-      },
+      include: THREAD_INCLUDE,
     });
     await this.emit(existing.thread.reviewId, input, "review_thread_updated", {
       comment,
@@ -373,7 +435,7 @@ export class ReviewService {
       data: input.resolved
         ? { resolvedAt: new Date(), resolvedById: input.actorId }
         : { resolvedAt: null, resolvedById: null },
-      include: { author: true, comments: { include: { author: true } } },
+      include: THREAD_INCLUDE,
     });
     await this.emit(existing.reviewId, input, "review_thread_resolved", { thread });
     return thread;
@@ -386,7 +448,7 @@ export class ReviewService {
     const thread = await prisma.reviewThread.update({
       where: { id: existing.id },
       data: { deliveryStatus: input.selected ? "selected" : "trace_only", deliveryError: null },
-      include: { author: true, comments: { include: { author: true } } },
+      include: THREAD_INCLUDE,
     });
     await this.emit(existing.reviewId, input, "review_thread_updated", { thread });
     return thread;
@@ -410,7 +472,7 @@ export class ReviewService {
         anchor: validateAnchor(input.anchor, snapshot.id, paths),
         deliveryStatus: "trace_only",
       },
-      include: { author: true, comments: { include: { author: true } } },
+      include: THREAD_INCLUDE,
     });
     await this.emit(existing.reviewId, input, "review_thread_reanchored", { thread });
     return thread;
@@ -461,8 +523,14 @@ export class ReviewService {
   async cancelInquiry(input: ActorInput & { inquiryId: string }) {
     const inquiry = await prisma.reviewInquiry.findFirst({
       where: { id: input.inquiryId, review: { organizationId: input.organizationId } },
+      include: { review: { select: { attachedSessionId: true } } },
     });
     if (!inquiry) throw new NotFoundError("Review inquiry", input.inquiryId);
+    await assertSessionAccess(
+      inquiry.review.attachedSessionId,
+      input.actorId,
+      input.organizationId,
+    );
     if (inquiry.state !== "queued")
       throw new ValidationError("Only queued inquiries can be cancelled");
     const cancelled = await prisma.reviewInquiry.update({
@@ -499,6 +567,24 @@ export class ReviewService {
   }
 
   async saveGuide(input: ActorInput & { inquiryId: string; content: unknown }) {
+    const inquiry = await prisma.reviewInquiry.findFirst({
+      where: { id: input.inquiryId, review: { organizationId: input.organizationId } },
+      select: { review: { select: { attachedSessionId: true } } },
+    });
+    if (!inquiry) throw new NotFoundError("Guide inquiry", input.inquiryId);
+    await assertSessionAccess(
+      inquiry.review.attachedSessionId,
+      input.actorId,
+      input.organizationId,
+    );
+    return this.persistGuide(input);
+  }
+
+  /**
+   * Shared by the client mutation and by turn correlation. The correlation path runs as the system
+   * actor, which has no session membership, so authorization lives in `saveGuide` instead.
+   */
+  private async persistGuide(input: ActorInput & { inquiryId: string; content: unknown }) {
     const inquiry = await prisma.reviewInquiry.findFirst({
       where: { id: input.inquiryId, review: { organizationId: input.organizationId } },
       include: { snapshot: true },
@@ -556,6 +642,15 @@ export class ReviewService {
       if (existing.reviewId !== review.id || existing.actorId !== input.actorId)
         throw new AuthorizationError();
       if (existing.status === "succeeded") return existing;
+      // A delivery already in flight must not be re-sent. The provider's marker scan would usually
+      // catch the duplicate, but only after GitHub has already accepted the first review.
+      if (
+        existing.status === "submitting" &&
+        Date.now() - (existing.startedAt ?? existing.createdAt).getTime() <
+          DELIVERY_IN_FLIGHT_TIMEOUT_MS
+      ) {
+        throw new ValidationError("This review is already being sent to GitHub");
+      }
       const existingThreadIds = Array.isArray(existing.threadIds)
         ? existing.threadIds.filter((value): value is string => typeof value === "string")
         : [];
@@ -587,6 +682,7 @@ export class ReviewService {
           data: {
             status: "submitting",
             error: null,
+            startedAt: new Date(),
             completedAt: null,
             attempts: { increment: 1 },
           },
@@ -601,6 +697,7 @@ export class ReviewService {
             threadIds: uniqueThreadIds,
             body: input.body,
             status: "submitting",
+            startedAt: new Date(),
             attempts: 1,
           },
         });
@@ -677,10 +774,7 @@ export class ReviewService {
       });
       const deliveredThreads = await prisma.reviewThread.findMany({
         where: { id: { in: uniqueThreadIds } },
-        include: {
-          author: true,
-          comments: { include: { author: true }, orderBy: { createdAt: "asc" } },
-        },
+        include: THREAD_INCLUDE,
       });
       await this.emit(review.id, input, "review_delivery_succeeded", {
         delivery: completed,
@@ -701,10 +795,7 @@ export class ReviewService {
       });
       const failedThreads = await prisma.reviewThread.findMany({
         where: { id: { in: uniqueThreadIds } },
-        include: {
-          author: true,
-          comments: { include: { author: true }, orderBy: { createdAt: "asc" } },
-        },
+        include: THREAD_INCLUDE,
       });
       await this.emit(review.id, input, "review_delivery_failed", {
         delivery: failed,
@@ -714,58 +805,147 @@ export class ReviewService {
     }
   }
 
-  async handleSessionAssistantEvent(event: PrismaEvent): Promise<void> {
+  /**
+   * Turn-terminal correlation. Coding tools emit one assistant output per message in a turn, so the
+   * first of them is usually preamble before a tool call — never the answer. Every adapter emits a
+   * single `result` output when the turn actually ends, so that is the only safe completion signal:
+   * correlating earlier would answer with preamble and would release the FIFO slot while the
+   * session is still working.
+   */
+  async handleSessionOutputEvent(event: PrismaEvent): Promise<void> {
     if (event.scopeType !== "session" || event.eventType !== "session_output") return;
     const payload = anchorRecord(event.payload);
-    if (payload?.type !== "assistant") return;
+    if (payload?.type !== "result") return;
     const inquiry = await prisma.reviewInquiry.findFirst({
       where: { sessionId: event.scopeId, state: "running" },
       orderBy: { startedAt: "asc" },
     });
     if (!inquiry) return;
-    const response = await prisma.sessionMessage.findUnique({ where: { sourceEventId: event.id } });
-    if (!response) return;
-    const completed = await prisma.reviewInquiry.update({
-      where: { id: inquiry.id },
+    const actor = {
+      organizationId: event.organizationId,
+      actorId: event.actorId,
+      actorType: "agent" as const,
+    };
+
+    // Only messages from this inquiry's own turn can be its answer. `startedAt` is stamped when the
+    // inquiry is claimed, before its prompt is sent, so it bounds the turn from below.
+    const turnMessages = inquiry.startedAt
+      ? await prisma.sessionMessage.findMany({
+          where: {
+            sessionId: event.scopeId,
+            role: "assistant",
+            createdAt: { gte: inquiry.startedAt },
+          },
+          orderBy: { createdAt: "asc" },
+        })
+      : [];
+
+    if (payload.subtype === "error") {
+      await this.failInquiry(inquiry.id, "The coding session ended this turn with an error", actor);
+      await this.advanceSession(event.scopeId);
+      return;
+    }
+    if (turnMessages.length === 0) {
+      await this.failInquiry(inquiry.id, "The coding session produced no answer", actor);
+      await this.advanceSession(event.scopeId);
+      return;
+    }
+
+    // Guides must parse, and agents often append a closing remark after the JSON, so search the
+    // turn newest-first for the message that actually carries the payload.
+    let guideContent: unknown;
+    let response = turnMessages[turnMessages.length - 1]!;
+    if (inquiry.sourceKind === "guide_generation") {
+      const parsed = [...turnMessages].reverse().flatMap((message) => {
+        try {
+          return [{ message, content: parseGuideResponse(message.text) }];
+        } catch {
+          return [];
+        }
+      })[0];
+      if (!parsed) {
+        await this.failInquiry(
+          inquiry.id,
+          "The coding session did not return Guide JSON for this turn",
+          actor,
+        );
+        await this.advanceSession(event.scopeId);
+        return;
+      }
+      response = parsed.message;
+      guideContent = parsed.content;
+    }
+
+    // Guarded on `running` so a duplicate `result` cannot complete the inquiry twice, which would
+    // double-save the Guide and advance the queue twice.
+    const claimed = await prisma.reviewInquiry.updateMany({
+      where: { id: inquiry.id, state: "running" },
       data: { state: "completed", responseMessageId: response.id, completedAt: new Date() },
     });
-    await eventService.create({
-      organizationId: event.organizationId,
-      scopeType: "review",
-      scopeId: inquiry.reviewId,
-      eventType: "review_inquiry_completed",
-      payload: reviewJson({ inquiry: { ...completed, responseMessage: response } }),
-      actorType: "agent",
-      actorId: event.actorId,
+    if (claimed.count !== 1) return;
+    const completed = await prisma.reviewInquiry.findUniqueOrThrow({ where: { id: inquiry.id } });
+    await this.emit(inquiry.reviewId, actor, "review_inquiry_completed", {
+      inquiry: { ...completed, responseMessage: response },
     });
+
     if (inquiry.sourceKind === "guide_generation") {
       try {
-        const content = parseGuideResponse(response.text);
-        await this.saveGuide({
-          organizationId: event.organizationId,
-          actorId: event.actorId,
-          actorType: "agent",
-          inquiryId: inquiry.id,
-          content,
-        });
+        await this.persistGuide({ ...actor, inquiryId: inquiry.id, content: guideContent });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const failedInquiry = await prisma.reviewInquiry.update({
           where: { id: inquiry.id },
           data: { state: "failed", error: message, completedAt: new Date() },
         });
-        await eventService.create({
-          organizationId: event.organizationId,
-          scopeType: "review",
-          scopeId: inquiry.reviewId,
-          eventType: "review_guide_failed",
-          payload: reviewJson({ inquiry: failedInquiry, error: message }),
-          actorType: "agent",
-          actorId: event.actorId,
+        await this.emit(inquiry.reviewId, actor, "review_guide_failed", {
+          inquiry: failedInquiry,
+          error: message,
         });
       }
     }
-    await this.advanceQueue(inquiry.reviewId);
+    await this.advanceSession(event.scopeId);
+  }
+
+  /** Releases a wedged or unanswerable inquiry so the session's FIFO slot is never lost. */
+  private async failInquiry(inquiryId: string, message: string, actor: ActorInput) {
+    const failed = await prisma.reviewInquiry.updateMany({
+      where: { id: inquiryId, state: { in: ["queued", "running"] } },
+      data: { state: "failed", error: message, completedAt: new Date() },
+    });
+    if (failed.count !== 1) return;
+    const inquiry = await prisma.reviewInquiry.findUniqueOrThrow({ where: { id: inquiryId } });
+    await this.emit(inquiry.reviewId, actor, "review_inquiry_failed", { inquiry });
+  }
+
+  /**
+   * Fails inquiries whose turn never produced a `result` and restarts any session whose queue has
+   * work but nothing in flight. Without this a crashed server or dead agent wedges a review's queue
+   * permanently, because dispatch is otherwise only triggered by enqueue and completion.
+   */
+  async recoverStuckInquiries(): Promise<void> {
+    const stale = await prisma.reviewInquiry.findMany({
+      where: {
+        state: "running",
+        startedAt: { lt: new Date(Date.now() - INQUIRY_TURN_TIMEOUT_MS) },
+      },
+      select: { id: true, sessionId: true, review: { select: { organizationId: true } } },
+    });
+    for (const inquiry of stale) {
+      await this.failInquiry(inquiry.id, INQUIRY_TIMEOUT_MESSAGE, {
+        organizationId: inquiry.review.organizationId,
+        actorId: SYSTEM_ACTOR_ID,
+        actorType: "system",
+      });
+    }
+    const pending = await prisma.reviewInquiry.groupBy({
+      by: ["sessionId"],
+      where: { state: "queued" },
+    });
+    for (const group of pending) {
+      await this.advanceSession(group.sessionId).catch((error: unknown) =>
+        console.error("[review] failed to advance inquiry queue", error),
+      );
+    }
   }
 
   private async captureSnapshot(
@@ -789,7 +969,7 @@ export class ReviewService {
       if (review.currentSnapshotId !== existing.id) {
         await this.markCurrent(review.id, existing.id, actor);
       } else if (metadataChanged) {
-        await this.emit(review.id, actor, "review_updated", { review });
+        await this.emit(review.id, actor, "review_updated", { review: reviewEntity(review) });
       }
       return this.get({ ...actor, id: review.id });
     }
@@ -804,6 +984,10 @@ export class ReviewService {
     );
     const key = patchKey(review.id, snapshotId);
     await storage.putObject(key, body, "application/json", { ifAbsent: true });
+    // Matching every anchor against the new patch is CPU-bound and one write per thread, so it is
+    // resolved before the transaction opens — holding an interactive transaction across it risks
+    // the transaction timeout on reviews with many threads.
+    const reconciledThreads = await this.reconcileAnchors(review.id, snapshotId, pull.files);
     const updated = await prisma.$transaction(async (tx) => {
       await tx.reviewSnapshot.updateMany({
         where: { reviewId: review.id, status: "current" },
@@ -833,32 +1017,8 @@ export class ReviewService {
           createdById: actor.actorId,
         },
       });
-      const anchoredThreads = await tx.reviewThread.findMany({
-        where: {
-          reviewId: review.id,
-          originSnapshotId: { not: snapshot.id },
-          anchor: { not: Prisma.JsonNull },
-        },
-        select: { id: true, anchor: true, scope: true, deliveryStatus: true },
-      });
-      for (const thread of anchoredThreads) {
-        const original = anchorRecord(thread.anchor);
-        if (!original) continue;
-        const reconciled = reconcileReviewAnchor(original, thread.scope, snapshot.id, pull.files);
-        const outdated = reconciled.status === "outdated";
-        await tx.reviewThread.update({
-          where: { id: thread.id },
-          data: {
-            anchor: reviewJson(reconciled),
-            ...(thread.deliveryStatus === "delivered"
-              ? {}
-              : outdated
-                ? { deliveryStatus: "outdated" }
-                : thread.deliveryStatus === "outdated"
-                  ? { deliveryStatus: "trace_only" }
-                  : {}),
-          },
-        });
+      for (const thread of reconciledThreads) {
+        await tx.reviewThread.update({ where: { id: thread.id }, data: thread.data });
       }
       await tx.review.update({
         where: { id: review.id },
@@ -873,9 +1033,56 @@ export class ReviewService {
     const latest = await this.get({ ...actor, id: review.id });
     await this.emit(review.id, actor, "review_snapshot_created", {
       snapshot: updated,
-      review: latest,
+      review: reviewEntity(latest),
+      threads: reconciledThreads.length
+        ? await prisma.reviewThread.findMany({
+            where: { id: { in: reconciledThreads.map((thread) => thread.id) } },
+            include: THREAD_INCLUDE,
+          })
+        : [],
     });
     return latest;
+  }
+
+  /**
+   * Re-points each live anchor at the incoming snapshot. Origin stays immutable: a thread is only
+   * excluded from delivery when its code genuinely no longer exists, and a thread previously marked
+   * outdated becomes eligible again if its code reappears.
+   */
+  private async reconcileAnchors(
+    reviewId: string,
+    snapshotId: string,
+    files: ResolvedPullRequest["files"],
+  ) {
+    const threads = await prisma.reviewThread.findMany({
+      where: {
+        reviewId,
+        originSnapshotId: { not: snapshotId },
+        anchor: { not: Prisma.JsonNull },
+      },
+      select: { id: true, anchor: true, scope: true, deliveryStatus: true },
+    });
+    return threads.flatMap((thread) => {
+      const original = anchorRecord(thread.anchor);
+      if (!original) return [];
+      const reconciled = reconcileReviewAnchor(original, thread.scope, snapshotId, files);
+      const outdated = reconciled.status === "outdated";
+      return [
+        {
+          id: thread.id,
+          data: {
+            anchor: reviewJson(reconciled),
+            ...(thread.deliveryStatus === "delivered"
+              ? {}
+              : outdated
+                ? { deliveryStatus: "outdated" as const }
+                : thread.deliveryStatus === "outdated"
+                  ? { deliveryStatus: "trace_only" as const }
+                  : {}),
+          },
+        },
+      ];
+    });
   }
 
   private async markCurrent(reviewId: string, snapshotId: string, actor: ActorInput) {
@@ -888,73 +1095,92 @@ export class ReviewService {
       await tx.review.update({ where: { id: reviewId }, data: { currentSnapshotId: snapshotId } });
     });
     const review = await this.get({ ...actor, id: reviewId });
-    await this.emit(reviewId, actor, "review_snapshot_marked_current", { review });
+    await this.emit(reviewId, actor, "review_snapshot_marked_current", {
+      review: reviewEntity(review),
+    });
   }
 
   private async advanceQueue(reviewId: string) {
-    const running = await prisma.reviewInquiry.findFirst({ where: { reviewId, state: "running" } });
-    if (running) return;
-    const inquiry = await prisma.reviewInquiry.findFirst({
-      where: { reviewId, state: "queued" },
-      orderBy: { position: "asc" },
-      include: { review: true, snapshot: true },
+    const review = await prisma.review.findUnique({
+      where: { id: reviewId },
+      select: { attachedSessionId: true },
     });
-    if (!inquiry) return;
-    const claimed = await prisma.reviewInquiry.updateMany({
-      where: { id: inquiry.id, state: "queued" },
-      data: { state: "running", startedAt: new Date() },
-    });
-    if (claimed.count !== 1) return;
-    try {
+    if (review) await this.advanceSession(review.attachedSessionId);
+  }
+
+  /**
+   * Dispatch is gated on the attached *session*, not the review: two reviews can share one coding
+   * session, and sending both their prompts at once would interleave two turns in one transcript.
+   * Ordering by enqueue time keeps each review's own queue FIFO while serializing across them.
+   */
+  private async advanceSession(sessionId: string) {
+    // Bounded rather than recursive: a dead session can fail every queued item in one pass.
+    for (let dispatched = 0; dispatched < MAX_QUEUE_ADVANCES_PER_PASS; dispatched += 1) {
+      const running = await prisma.reviewInquiry.findFirst({
+        where: { sessionId, state: "running" },
+        orderBy: { startedAt: "asc" },
+        select: { id: true, startedAt: true, review: { select: { organizationId: true } } },
+      });
+      if (running) {
+        const startedAt = running.startedAt?.getTime() ?? 0;
+        if (Date.now() - startedAt < INQUIRY_TURN_TIMEOUT_MS) return;
+        await this.failInquiry(running.id, INQUIRY_TIMEOUT_MESSAGE, {
+          organizationId: running.review.organizationId,
+          actorId: SYSTEM_ACTOR_ID,
+          actorType: "system",
+        });
+      }
+      const inquiry = await prisma.reviewInquiry.findFirst({
+        where: { sessionId, state: "queued" },
+        orderBy: [{ createdAt: "asc" }, { position: "asc" }],
+        include: { review: true, snapshot: true },
+      });
+      if (!inquiry) return;
+      const claimed = await prisma.reviewInquiry.updateMany({
+        where: { id: inquiry.id, state: "queued" },
+        data: { state: "running", startedAt: new Date() },
+      });
+      if (claimed.count !== 1) return;
       const context = anchorRecord(inquiry.context);
       const requestingActorId =
         typeof context?.requestedByActorId === "string"
           ? context.requestedByActorId
           : inquiry.review.createdById;
-      const event = await sessionService.sendMessage({
-        sessionId: inquiry.sessionId,
-        text: this.inquiryPrompt(inquiry),
-        actorType: "user",
-        actorId: requestingActorId,
-        interactionMode: "ask",
-        clientMutationId: `review-inquiry:${inquiry.id}`,
-        clientSource: "internal:review",
-      });
-      const message = await prisma.sessionMessage.findUnique({
-        where: { sourceEventId: event.id },
-      });
-      const started = await prisma.reviewInquiry.update({
-        where: { id: inquiry.id },
-        data: { sessionMessageId: message?.id },
-      });
-      await eventService.create({
-        organizationId: inquiry.review.organizationId,
-        scopeType: "review",
-        scopeId: reviewId,
-        eventType: "review_inquiry_started",
-        payload: reviewJson({ inquiry: started }),
-        actorType: "user",
-        actorId: requestingActorId,
-      });
-    } catch (error) {
-      const failed = await prisma.reviewInquiry.update({
-        where: { id: inquiry.id },
-        data: {
-          state: "failed",
-          error: error instanceof Error ? error.message : String(error),
-          completedAt: new Date(),
-        },
-      });
-      await eventService.create({
-        organizationId: inquiry.review.organizationId,
-        scopeType: "review",
-        scopeId: reviewId,
-        eventType: "review_inquiry_failed",
-        payload: reviewJson({ inquiry: failed }),
-        actorType: "system",
-        actorId: inquiry.review.createdById,
-      });
-      await this.advanceQueue(reviewId);
+      try {
+        const event = await sessionService.sendMessage({
+          sessionId: inquiry.sessionId,
+          text: this.inquiryPrompt(inquiry),
+          actorType: "user",
+          actorId: requestingActorId,
+          interactionMode: "ask",
+          clientMutationId: `review-inquiry:${inquiry.id}`,
+          clientSource: "internal:review",
+        });
+        const message = await prisma.sessionMessage.findUnique({
+          where: { sourceEventId: event.id },
+        });
+        const started = await prisma.reviewInquiry.update({
+          where: { id: inquiry.id },
+          data: { sessionMessageId: message?.id },
+        });
+        await this.emit(
+          inquiry.reviewId,
+          {
+            organizationId: inquiry.review.organizationId,
+            actorId: requestingActorId,
+            actorType: "user",
+          },
+          "review_inquiry_started",
+          { inquiry: started },
+        );
+        return;
+      } catch (error) {
+        await this.failInquiry(inquiry.id, error instanceof Error ? error.message : String(error), {
+          organizationId: inquiry.review.organizationId,
+          actorId: SYSTEM_ACTOR_ID,
+          actorType: "system",
+        });
+      }
     }
   }
 

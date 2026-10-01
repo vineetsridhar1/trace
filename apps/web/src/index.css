@@ -86,6 +86,41 @@
   --th-kind-system: var(--chart-3);
   --th-hover-rgb: 38, 38, 38;
   --th-code-bg: #0a0a0a;
+
+  /* Review: diff canvas, anchored threads, AI conversations, and diff syntax */
+  --th-review-canvas: #141414;
+  --th-review-card: #0f0f10;
+  --th-review-card-deep: #101011;
+  --th-review-card-edge: #232326;
+  --th-review-edge: #26262a;
+  --th-review-edge-mid: #2a2a2f;
+  --th-review-edge-strong: #3a3a40;
+  --th-review-edge-raised: #3f3f46;
+  --th-review-text: #ededef;
+  --th-review-text-mid: #bdbdc4;
+  --th-review-text-soft: #b8b8c2;
+  --th-review-text-dim: #8b8b95;
+  --th-review-text-faint: #71717a;
+  --th-review-text-ghost: #5c5c66;
+  --th-review-ai: var(--th-kind-design);
+  --th-review-ai-light: #c4b5fd;
+  --th-review-ai-lighter: #ddd6fe;
+  --th-review-comment: #93c5fd;
+  --th-review-success-light: #6ee7b7;
+  --th-review-danger-light: #fca5a5;
+  --th-review-warn-light: #fcd34d;
+  --th-review-accent-bright: #4d8ff8;
+  --th-review-accent-deep: #2f6fd8;
+  --th-review-accent-tint: #cfe0ff;
+  --th-review-accent-edge: #2a4a7a;
+  --th-code-plain: #d4d4d8;
+  --th-code-punctuation: #9a9aa3;
+  --th-code-string: #a9d9a4;
+  --th-code-keyword: #c9a8f7;
+  --th-code-type: #7cc4f0;
+  --th-code-number: #f2b48a;
+  --th-code-call: #e9cf9f;
+  --th-code-comment: #6b7a99;
   --trace-window-bg: rgb(39 39 42 / 0.74);
 }
 

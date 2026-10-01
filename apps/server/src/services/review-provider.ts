@@ -86,6 +86,8 @@ interface GitHubReviewCommentResponse {
 }
 
 const API_VERSION = "2022-11-28";
+const PER_PAGE = 100;
+const MAX_PAGES = 30;
 
 export function parseGitHubPullRequestUrl(
   url: string,
@@ -197,10 +199,10 @@ export class GitHubReviewProvider implements ReviewProviderAdapter {
 
   private async fetchFiles(repo: GitHubRepoRef, number: number, token: string) {
     const files: ReviewProviderFile[] = [];
-    for (let page = 1; page <= 30; page += 1) {
+    for (let page = 1; page <= MAX_PAGES; page += 1) {
       const response = await this.request<GitHubFileResponse[]>(
         repo,
-        `/pulls/${number}/files?per_page=100&page=${page}`,
+        `/pulls/${number}/files?per_page=${PER_PAGE}&page=${page}`,
         token,
       );
       for (const file of response) {
@@ -216,26 +218,46 @@ export class GitHubReviewProvider implements ReviewProviderAdapter {
           headBlobId: typeof file.sha === "string" ? file.sha : null,
         });
       }
-      if (response.length < 100) break;
+      if (response.length < PER_PAGE) break;
     }
     return files;
   }
 
+  /**
+   * The delivery marker is what makes a retry safe, so every page has to be searched: missing it
+   * because the match sat on page two would publish the review a second time.
+   */
   private async findExistingReview(
     repo: GitHubRepoRef,
     number: number,
     marker: string,
     token: string,
   ): Promise<ProviderDeliveryResult | null> {
-    const reviews = await this.request<GitHubReviewResponse[]>(
+    for await (const review of this.paginate<GitHubReviewResponse>(
       repo,
-      `/pulls/${number}/reviews?per_page=100`,
+      `/pulls/${number}/reviews`,
       token,
-    );
-    const match = reviews.find(
-      (review) => typeof review.body === "string" && review.body.includes(marker),
-    );
-    return typeof match?.id === "number" ? this.reviewResult(repo, number, match.id, token) : null;
+    )) {
+      if (typeof review.body === "string" && review.body.includes(marker)) {
+        return typeof review.id === "number"
+          ? this.reviewResult(repo, number, review.id, token)
+          : null;
+      }
+    }
+    return null;
+  }
+
+  private async *paginate<T>(repo: GitHubRepoRef, path: string, token: string): AsyncGenerator<T> {
+    const separator = path.includes("?") ? "&" : "?";
+    for (let page = 1; page <= MAX_PAGES; page += 1) {
+      const response = await this.request<T[]>(
+        repo,
+        `${path}${separator}per_page=${PER_PAGE}&page=${page}`,
+        token,
+      );
+      for (const item of response) yield item;
+      if (response.length < PER_PAGE) return;
+    }
   }
 
   private async reviewResult(
@@ -244,13 +266,14 @@ export class GitHubReviewProvider implements ReviewProviderAdapter {
     reviewId: number,
     token: string,
   ): Promise<ProviderDeliveryResult> {
-    const comments = await this.request<GitHubReviewCommentResponse[]>(
-      repo,
-      `/pulls/${number}/reviews/${reviewId}/comments?per_page=100`,
-      token,
-    );
     const commentIds: Record<string, string> = {};
-    for (const comment of comments) {
+    // Paginated so a large review still records a provider id for every thread it delivered —
+    // a thread marked delivered without one can never be reconciled back to its GitHub comment.
+    for await (const comment of this.paginate<GitHubReviewCommentResponse>(
+      repo,
+      `/pulls/${number}/reviews/${reviewId}/comments`,
+      token,
+    )) {
       const match =
         typeof comment.body === "string"
           ? /<!-- trace-thread:([^ ]+) -->/.exec(comment.body)

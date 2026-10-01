@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { gql } from "@urql/core";
-import type { ReviewThread as ReviewThreadType } from "@trace/gql";
+import { useEntityField } from "@trace/client-core";
 import { Check, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
@@ -33,23 +33,34 @@ function initials(name: string): string {
 }
 
 export function ReviewThread({
-  thread,
+  threadId,
   onAsk,
 }: {
-  thread: ReviewThreadType;
-  onAsk?(thread: ReviewThreadType): void;
+  threadId: string;
+  onAsk?(threadId: string): void;
 }) {
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
-  const anchor = thread.anchor ? anchorPresentation(thread.anchor) : null;
-  const delivery = deliveryPresentation(thread.deliveryStatus);
-  const first = thread.comments.find((comment) => !comment.deletedAt);
+  const authorName = useEntityField("reviewThreads", threadId, "author")?.name ?? "";
+  const scope = useEntityField("reviewThreads", threadId, "scope");
+  const rawAnchor = useEntityField("reviewThreads", threadId, "anchor");
+  const deliveryStatus = useEntityField("reviewThreads", threadId, "deliveryStatus");
+  const deliveryError = useEntityField("reviewThreads", threadId, "deliveryError");
+  const resolvedAt = useEntityField("reviewThreads", threadId, "resolvedAt");
+  const comments = useEntityField("reviewThreads", threadId, "comments");
+  const anchor = rawAnchor ? anchorPresentation(rawAnchor) : null;
+  const delivery = deliveryPresentation(deliveryStatus ?? "trace_only");
+  const visible = useMemo(
+    () => (comments ?? []).filter((comment) => !comment.deletedAt),
+    [comments],
+  );
+  const [first, ...replies] = visible;
 
   const submitReply = async () => {
     if (!reply.trim()) return;
     setSending(true);
     try {
-      await mutateReview(REPLY, { threadId: thread.id, body: reply.trim() });
+      await mutateReview(REPLY, { threadId, body: reply.trim() });
       setReply("");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Reply failed");
@@ -59,14 +70,14 @@ export function ReviewThread({
   };
 
   return (
-    <article className="max-w-[720px] overflow-hidden rounded-[9px] border border-[#2e2e33] bg-[#1c1c1f]">
+    <article className="max-w-[720px] overflow-hidden rounded-[9px] border border-[var(--th-edge-strong)] bg-[var(--th-raised)]">
       <div className="flex gap-2.5 p-3.5">
-        <span className="size-6 shrink-0 rounded-full bg-[#2a4a7a] text-center text-[10px] font-semibold leading-6 text-[#cfe0ff]">
-          {initials(thread.author.name)}
+        <span className="size-6 shrink-0 rounded-full bg-[var(--th-review-accent-edge)] text-center text-[10px] font-semibold leading-6 text-[var(--th-review-accent-tint)]">
+          {initials(authorName)}
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
-            <span className="text-[#ededef]">{thread.author.name}</span>
+            <span className="text-[var(--th-review-text)]">{authorName}</span>
             {anchor ? (
               <span
                 className={cn(
@@ -79,44 +90,41 @@ export function ReviewThread({
               </span>
             ) : (
               <span className="text-[10.5px] text-muted-foreground">
-                {thread.scope.replace("_", " ")}
+                {scope?.replace("_", " ")}
               </span>
             )}
             <span
               className={cn(
                 "ml-auto flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px]",
-                thread.deliveryStatus === "selected" || thread.deliveryStatus === "delivered"
-                  ? "bg-[#3b82f6]/[0.14]"
+                deliveryStatus === "selected" || deliveryStatus === "delivered"
+                  ? "bg-[var(--th-accent)]/[0.14]"
                   : "bg-white/[0.04]",
                 delivery.text,
               )}
             >
-              {thread.deliveryStatus === "delivered" ? <Check size={10} /> : null}
+              {deliveryStatus === "delivered" ? <Check size={10} /> : null}
               {delivery.label}
             </span>
           </div>
           {first ? <ReviewThreadBody body={first.body} /> : null}
-          {thread.comments.filter((comment) => !comment.deletedAt && comment !== first).length >
-          0 ? (
-            <div className="mt-1 flex flex-col gap-2 border-l border-[#2e2e33] pl-3">
-              {thread.comments
-                .filter((comment) => !comment.deletedAt && comment !== first)
-                .map((comment) => (
-                  <div key={comment.id}>
-                    <span className="mr-2 text-[10.5px] font-medium text-muted-foreground">
-                      {comment.author.name}
-                    </span>
-                    <ReviewThreadBody body={comment.body} />
-                  </div>
-                ))}
+          {replies.length > 0 ? (
+            <div className="mt-1 flex flex-col gap-2 border-l border-[var(--th-edge-strong)] pl-3">
+              {replies.map((comment) => (
+                <div key={comment.id}>
+                  <span className="mr-2 text-[10.5px] font-medium text-muted-foreground">
+                    {comment.author.name}
+                  </span>
+                  <ReviewThreadBody body={comment.body} />
+                </div>
+              ))}
             </div>
           ) : null}
-          {thread.deliveryError ? (
-            <p className="text-[11px] text-[#fca5a5]">{thread.deliveryError}</p>
+          {deliveryError ? (
+            <p className="text-[11px] text-[var(--th-review-danger-light)]">{deliveryError}</p>
           ) : null}
         </div>
       </div>
-      <div className="flex items-center gap-2 border-t border-[#262626] py-2.5 pl-12 pr-3.5 text-xs font-medium">
+      <div className="flex items-center gap-2 border-t border-[var(--th-edge)] py-2.5 pl-12 pr-3.5 text-xs font-medium">
         <input
           value={reply}
           onChange={(event) => setReply(event.target.value)}
@@ -127,7 +135,7 @@ export function ReviewThread({
             }
           }}
           placeholder="Reply…"
-          className="h-7 min-w-0 flex-1 rounded-md border border-[#262626] bg-[#111] px-2.5 font-normal outline-none placeholder:text-[#5c5c66] focus:border-[#3b82f6]"
+          className="h-7 min-w-0 flex-1 rounded-md border border-[var(--th-edge)] bg-[var(--th-surface-mid)] px-2.5 font-normal outline-none placeholder:text-[var(--th-review-text-ghost)] focus:border-[var(--th-accent)]"
         />
         {reply.trim() ? (
           <Button
@@ -142,8 +150,8 @@ export function ReviewThread({
         {onAsk ? (
           <button
             type="button"
-            onClick={() => onAsk(thread)}
-            className="flex h-7 items-center gap-1.5 rounded-md border border-[#a78bfa]/30 px-2.5 text-[#c4b5fd] hover:bg-[#a78bfa]/10"
+            onClick={() => onAsk(threadId)}
+            className="flex h-7 items-center gap-1.5 rounded-md border border-[var(--th-review-ai)]/30 px-2.5 text-[var(--th-review-ai-light)] hover:bg-[var(--th-review-ai)]/10"
           >
             <Sparkles size={11} /> Ask session
           </button>
@@ -151,16 +159,13 @@ export function ReviewThread({
         <button
           type="button"
           onClick={() =>
-            void mutateReview(RESOLVE, {
-              threadId: thread.id,
-              resolved: !thread.resolvedAt,
-            }).catch((error) =>
+            void mutateReview(RESOLVE, { threadId, resolved: !resolvedAt }).catch((error) =>
               toast.error(error instanceof Error ? error.message : "Update failed"),
             )
           }
-          className="flex h-7 items-center rounded-md border border-[#262626] px-2.5 text-[#d4d4d8] hover:bg-white/5"
+          className="flex h-7 items-center rounded-md border border-[var(--th-edge)] px-2.5 text-[var(--th-heading)] hover:bg-white/5"
         >
-          {thread.resolvedAt ? "Unresolve" : "Resolve"}
+          {resolvedAt ? "Unresolve" : "Resolve"}
         </button>
       </div>
     </article>

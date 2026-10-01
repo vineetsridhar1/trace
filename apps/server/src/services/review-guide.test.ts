@@ -85,10 +85,14 @@ describe("review guide contract", () => {
     ).toThrow('Guide chapter "A" links to an invalid line range in src/a.ts');
   });
 
-  it("rejects a file repeated between a chapter and everything else", () => {
-    expect(() =>
-      validateReviewGuide(guide({ everythingElse: ["src/a.ts", "src/b.ts"] }), files),
-    ).toThrow("Guide repeats changed file: src/a.ts");
+  it("drops a repeated path instead of discarding the generation", () => {
+    const validated = validateReviewGuide(
+      guide({ everythingElse: ["src/a.ts", "src/b.ts"] }),
+      files,
+    );
+
+    expect(validated.chapters[0]?.files).toEqual(["src/a.ts"]);
+    expect(validated.everythingElse).toEqual(["src/b.ts"]);
   });
 
   it("rejects a chapter file that is not in the snapshot", () => {
@@ -97,16 +101,34 @@ describe("review guide contract", () => {
     ).toThrow("Guide references an unknown file: src/missing.ts");
   });
 
-  it("rejects a snapshot file no chapter accounts for", () => {
-    expect(() => validateReviewGuide(guide({ everythingElse: [] }), files)).toThrow(
-      "Guide omits changed file: src/b.ts",
+  it("files an unaccounted snapshot path under everything else", () => {
+    const validated = validateReviewGuide(guide({ everythingElse: [] }), files);
+
+    expect(validated.everythingElse).toEqual(["src/b.ts"]);
+  });
+
+  it("accepts a chapter with no implications", () => {
+    const validated = validateReviewGuide(
+      guide({ chapters: [chapter({ implications: [] })] }),
+      files,
     );
+
+    expect(validated.chapters[0]?.implications).toEqual([]);
+  });
+
+  it("names the field a malformed chapter is missing", () => {
+    expect(() =>
+      validateReviewGuide(
+        guide({ chapters: [{ id: "a", title: "A", files: ["src/a.ts"] }] }),
+        files,
+      ),
+    ).toThrow('Guide chapter 1 is missing or malformed "explanation"');
   });
 
   it("tells the coding session the exact paths, coverage rule, and anchor syntax", () => {
     const instruction = guideGenerationInstruction(files);
     expect(instruction).toContain('["src/a.ts","src/b.ts"]');
-    expect(instruction).toContain("exactly once");
+    expect(instruction).toContain("at most one chapter");
     expect(instruction).toContain('"files":["..."]');
     expect(instruction).toContain("[[label|path|startLine-endLine]]");
   });

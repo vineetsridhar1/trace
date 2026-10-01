@@ -39,11 +39,12 @@ function snapshotPaths(filesValue: Prisma.JsonValue): string[] {
   });
 }
 
+/** Accepts a single string or an array of them; returns null only when the shape is wrong. */
 function stringList(value: unknown): string[] | null {
-  if (typeof value === "string") return value.trim() ? [value.trim()] : null;
+  if (value == null) return [];
+  if (typeof value === "string") return value.trim() ? [value.trim()] : [];
   if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) return null;
-  const items = value.map((item) => item.trim()).filter(Boolean);
-  return items.length > 0 ? items : null;
+  return value.map((item) => item.trim()).filter(Boolean);
 }
 
 /**
@@ -65,14 +66,23 @@ function validateAnchors(text: string, chapterFiles: Set<string>, label: string)
   }
 }
 
+/** Keeps the prompt bounded on very large pull requests. */
+const MAX_PROMPT_PATHS = 300;
+
 export function guideGenerationInstruction(filesValue: Prisma.JsonValue): string {
   const paths = snapshotPaths(filesValue);
+  const listed = paths.slice(0, MAX_PROMPT_PATHS);
   return [
     "Return only JSON, with no Markdown fence or commentary.",
     'Use this exact shape: {"title":"...","intent":"...","chapters":[{"id":"...","title":"...","explanation":"...","implications":["..."],"files":["..."]}],"everythingElse":["..."]}.',
-    `The authoritative changed-file paths are: ${JSON.stringify(paths)}.`,
-    "Every authoritative path must occur exactly once across the entire response: either in the files of exactly one chapter or in everythingElse.",
-    "Never repeat a path in another chapter or in everythingElse. Do not invent paths.",
+    `The authoritative changed-file paths are: ${JSON.stringify(listed)}.`,
+    ...(paths.length > listed.length
+      ? [
+          `That list is truncated to the first ${MAX_PROMPT_PATHS} of ${paths.length} paths; cover what you can and leave the rest out.`,
+        ]
+      : []),
+    "Assign each path to the files of at most one chapter, or to everythingElse. Do not invent paths.",
+    "Anything you do not assign is filed under everythingElse automatically, so prefer omitting a path over guessing at it.",
     "Inside explanation and implications, link to specific code with [[label|path|startLine-endLine]]. The path must be one of that same chapter's files, startLine must be positive, and endLine must be at least startLine.",
   ].join("\n");
 }
@@ -103,54 +113,60 @@ export function validateReviewGuide(
   const covered = new Set<string>();
   const chapters: GuideChapter[] = guide.chapters.map((chapterValue, chapterIndex) => {
     const chapter = asRecord(chapterValue);
+    const id = typeof chapter?.id === "string" ? chapter.id : null;
+    const title = typeof chapter?.title === "string" ? chapter.title : null;
+    const explanation = typeof chapter?.explanation === "string" ? chapter.explanation : null;
     const implications = stringList(chapter?.implications);
-    const files = stringList(chapter?.files);
-    if (
-      !chapter ||
-      typeof chapter.id !== "string" ||
-      typeof chapter.title !== "string" ||
-      typeof chapter.explanation !== "string" ||
-      !implications ||
-      !files
-    ) {
-      throw new ValidationError(`Guide chapter ${chapterIndex + 1} is invalid`);
+    const declaredFiles = stringList(chapter?.files);
+    // Name the offending field: "chapter N is invalid" sent readers hunting through the whole
+    // payload for one missing key.
+    const badField = !id
+      ? "id"
+      : !title
+        ? "title"
+        : !explanation
+          ? "explanation"
+          : !implications
+            ? "implications"
+            : !declaredFiles || declaredFiles.length === 0
+              ? "files"
+              : null;
+    if (badField || !id || !title || !explanation || !implications || !declaredFiles) {
+      throw new ValidationError(
+        `Guide chapter ${chapterIndex + 1} is missing or malformed "${badField ?? "files"}"`,
+      );
     }
-    for (const filePath of files) {
+    // A path claimed by an earlier chapter is dropped rather than fatal: the chapter that claimed
+    // it first still explains it, so discarding a whole generation over a repeat loses far more.
+    const files: string[] = [];
+    for (const filePath of declaredFiles) {
       if (!allowedPaths.has(filePath)) {
         throw new ValidationError(`Guide references an unknown file: ${filePath}`);
       }
-      if (covered.has(filePath)) {
-        throw new ValidationError(`Guide repeats changed file: ${filePath}`);
-      }
+      if (covered.has(filePath)) continue;
       covered.add(filePath);
+      files.push(filePath);
     }
-    const chapterFiles = new Set(files);
-    const label = `Guide chapter "${chapter.title}"`;
-    validateAnchors(chapter.explanation, chapterFiles, label);
+    const chapterFiles = new Set(declaredFiles);
+    const label = `Guide chapter "${title}"`;
+    validateAnchors(explanation, chapterFiles, label);
     implications.forEach((implication) => validateAnchors(implication, chapterFiles, label));
-    return {
-      id: chapter.id,
-      title: chapter.title,
-      explanation: chapter.explanation,
-      implications,
-      files,
-    };
+    return { id, title, explanation, implications, files };
   });
 
-  const everythingElse = guide.everythingElse.map((value) => {
+  const everythingElse = guide.everythingElse.flatMap((value): string[] => {
     if (typeof value !== "string" || !allowedPaths.has(value)) {
-      throw new ValidationError("Guide contains an unknown file");
+      throw new ValidationError(
+        `Guide contains an unknown file: ${typeof value === "string" ? value : JSON.stringify(value)}`,
+      );
     }
-    if (covered.has(value)) throw new ValidationError(`Guide repeats changed file: ${value}`);
+    if (covered.has(value)) return [];
     covered.add(value);
-    return value;
+    return [value];
   });
-  const missing = paths.filter((path) => !covered.has(path));
-  if (missing.length > 0) {
-    throw new ValidationError(
-      `Guide omits changed file${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}`,
-    );
-  }
+  // Full coverage is a property of the stored Guide, not a demand on the model: anything the
+  // chapters never claimed is filed under "everything else" instead of discarding the generation.
+  everythingElse.push(...paths.filter((path) => !covered.has(path)));
 
   return {
     title: guide.title,

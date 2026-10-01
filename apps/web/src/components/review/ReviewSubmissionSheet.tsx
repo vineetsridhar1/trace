@@ -105,8 +105,8 @@ export function ReviewSubmissionSheet({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[80vh] max-w-[600px] flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="gap-1 border-b border-[#262626] px-5 pb-3.5 pt-[18px]">
-          <DialogTitle className="text-[15px] font-semibold text-[#ededef]">
+        <DialogHeader className="gap-1 border-b border-[var(--th-edge)] px-5 pb-3.5 pt-[18px]">
+          <DialogTitle className="text-[15px] font-semibold text-[var(--th-review-text)]">
             Send review to GitHub
           </DialogTitle>
           <p className="m-0 text-xs text-muted-foreground">
@@ -120,7 +120,7 @@ export function ReviewSubmissionSheet({
             <button
               type="button"
               onClick={() => setSelected(eligible.filter(postable).map((thread) => thread.id))}
-              className="text-[11px] font-medium tracking-normal text-[#93c5fd] hover:underline"
+              className="text-[11px] font-medium tracking-normal text-[var(--th-review-comment)] hover:underline"
             >
               Select all current
             </button>
@@ -148,16 +148,18 @@ export function ReviewSubmissionSheet({
                 className={cn(
                   "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left",
                   outdated
-                    ? "border border-dashed border-[#fbbf24]/35"
+                    ? "border border-dashed border-[var(--th-warn)]/35"
                     : checked
-                      ? "border border-[#2e2e33] bg-[#1c1c1f]"
-                      : "border border-[#262626]",
+                      ? "border border-[var(--th-edge-strong)] bg-[var(--th-raised)]"
+                      : "border border-[var(--th-edge)]",
                 )}
               >
                 <span
                   className={cn(
                     "flex size-3.5 shrink-0 items-center justify-center rounded",
-                    checked ? "bg-[#3b82f6] text-white" : "border border-[#52525b]",
+                    checked
+                      ? "bg-[var(--th-accent)] text-white"
+                      : "border border-[var(--th-faint)]",
                     outdated && "opacity-50",
                   )}
                 >
@@ -166,7 +168,7 @@ export function ReviewSubmissionSheet({
                 <span
                   className={cn(
                     "w-[118px] shrink-0 truncate font-mono text-[11px] font-medium",
-                    outdated ? "text-[#fbbf24]" : "text-muted-foreground",
+                    outdated ? "text-[var(--th-warn)]" : "text-muted-foreground",
                   )}
                 >
                   {thread.anchor
@@ -176,7 +178,7 @@ export function ReviewSubmissionSheet({
                 <span
                   className={cn(
                     "min-w-0 flex-1 truncate text-[12.5px]",
-                    checked ? "text-[#d4d4d8]" : "text-[#a1a1aa]",
+                    checked ? "text-[var(--th-heading)]" : "text-[var(--th-primary)]",
                   )}
                 >
                   {outdated
@@ -184,7 +186,7 @@ export function ReviewSubmissionSheet({
                     : (thread.comments.find((comment) => !comment.deletedAt)?.body ?? "")}
                 </span>
                 {!checked && !outdated ? (
-                  <span className="shrink-0 text-[11px] font-medium text-[#71717a]">
+                  <span className="shrink-0 text-[11px] font-medium text-[var(--th-review-text-faint)]">
                     stays private
                   </span>
                 ) : null}
@@ -206,8 +208,8 @@ export function ReviewSubmissionSheet({
                   className={cn(
                     "rounded-lg px-3 py-2.5",
                     disposition === item.id
-                      ? "border border-[#3b82f6] bg-[#3b82f6]/10 text-[#ededef]"
-                      : "border border-[#262626] text-[#a1a1aa] hover:text-foreground",
+                      ? "border border-[var(--th-accent)] bg-[var(--th-accent)]/10 text-[var(--th-review-text)]"
+                      : "border border-[var(--th-edge)] text-[var(--th-primary)] hover:text-foreground",
                   )}
                 >
                   {item.label}
@@ -219,14 +221,16 @@ export function ReviewSubmissionSheet({
             value={body}
             onChange={(event) => setBody(event.target.value)}
             placeholder="Optional summary…"
-            className="mt-1.5 h-[58px] resize-none rounded-lg border border-[#262626] bg-[#111] px-3 py-2.5 text-[12.5px] outline-none placeholder:text-[#5c5c66] focus:border-[#3b82f6]"
+            className="mt-1.5 h-[58px] resize-none rounded-lg border border-[var(--th-edge)] bg-[var(--th-surface-mid)] px-3 py-2.5 text-[12.5px] outline-none placeholder:text-[var(--th-review-text-ghost)] focus:border-[var(--th-accent)]"
           />
 
           {delivery.phase === "posting" ? (
-            <div className="mt-2 flex flex-col gap-2 rounded-[10px] border border-[#2e2e33] bg-[#171717] p-3">
-              <span className="text-xs font-medium text-[#ededef]">Posting to GitHub…</span>
-              <div className="h-1 overflow-hidden rounded bg-[#262626]">
-                <div className="h-full w-1/2 animate-pulse rounded bg-[#3b82f6]" />
+            <div className="mt-2 flex flex-col gap-2 rounded-[10px] border border-[var(--th-edge-strong)] bg-[var(--th-surface)] p-3">
+              <span className="text-xs font-medium text-[var(--th-review-text)]">
+                Posting to GitHub…
+              </span>
+              <div className="h-1 overflow-hidden rounded bg-[var(--th-edge)]">
+                <div className="h-full w-1/2 animate-pulse rounded bg-[var(--th-accent)]" />
               </div>
               <span className="text-[11px] text-muted-foreground">
                 {selected.length} thread{selected.length === 1 ? "" : "s"}
@@ -234,8 +238,8 @@ export function ReviewSubmissionSheet({
             </div>
           ) : null}
           {delivery.phase === "done" ? (
-            <div className="mt-2 flex flex-col gap-2 rounded-[10px] border border-[#34d399]/30 bg-[#171717] p-3">
-              <span className="flex items-center gap-1.5 text-xs font-medium text-[#6ee7b7]">
+            <div className="mt-2 flex flex-col gap-2 rounded-[10px] border border-[var(--th-success)]/30 bg-[var(--th-surface)] p-3">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--th-review-success-light)]">
                 <Check size={12} /> Review posted
               </span>
               <span className="text-[11px] leading-[1.45] text-muted-foreground">
@@ -244,7 +248,7 @@ export function ReviewSubmissionSheet({
                   href={pullRequestUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-[#93c5fd]"
+                  className="inline-flex items-center gap-1 text-[var(--th-review-comment)]"
                 >
                   View on GitHub <ExternalLink size={9} />
                 </a>
@@ -252,8 +256,10 @@ export function ReviewSubmissionSheet({
             </div>
           ) : null}
           {delivery.phase === "failed" ? (
-            <div className="mt-2 flex flex-col gap-2 rounded-[10px] border border-[#f87171]/35 bg-[#171717] p-3">
-              <span className="text-xs font-medium text-[#fca5a5]">Delivery failed</span>
+            <div className="mt-2 flex flex-col gap-2 rounded-[10px] border border-[var(--destructive)]/35 bg-[var(--th-surface)] p-3">
+              <span className="text-xs font-medium text-[var(--th-review-danger-light)]">
+                Delivery failed
+              </span>
               <span className="text-[11px] leading-[1.45] text-muted-foreground">
                 {delivery.message} Retrying won&rsquo;t duplicate the review.
               </span>
@@ -261,7 +267,7 @@ export function ReviewSubmissionSheet({
           ) : null}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2.5 border-t border-[#262626] bg-[#141414] px-5 py-3">
+        <div className="flex shrink-0 items-center gap-2.5 border-t border-[var(--th-edge)] bg-[var(--th-review-canvas)] px-5 py-3">
           <span className="flex-1 text-xs text-muted-foreground">
             {selected.length} thread{selected.length === 1 ? "" : "s"} post &middot;{" "}
             {eligible.length - selected.length} stay
@@ -270,7 +276,7 @@ export function ReviewSubmissionSheet({
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="flex h-8 items-center rounded-[7px] border border-[#262626] px-3 text-[12.5px] font-medium text-[#d4d4d8] hover:bg-white/5"
+            className="flex h-8 items-center rounded-[7px] border border-[var(--th-edge)] px-3 text-[12.5px] font-medium text-[var(--th-heading)] hover:bg-white/5"
           >
             {delivery.phase === "done" ? "Close" : "Cancel"}
           </button>
@@ -279,7 +285,7 @@ export function ReviewSubmissionSheet({
               type="button"
               onClick={() => void submit()}
               disabled={posting || (selected.length === 0 && !body.trim())}
-              className="flex h-8 items-center rounded-[7px] bg-gradient-to-b from-[#4d8ff8] to-[#2f6fd8] px-3.5 text-[12.5px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,.18),0_1px_3px_rgba(0,0,0,.4)] disabled:opacity-40"
+              className="flex h-8 items-center rounded-[7px] bg-gradient-to-b from-[var(--th-review-accent-bright)] to-[var(--th-review-accent-deep)] px-3.5 text-[12.5px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,.18),0_1px_3px_rgba(0,0,0,.4)] disabled:opacity-40"
             >
               {delivery.phase === "failed"
                 ? "Retry"

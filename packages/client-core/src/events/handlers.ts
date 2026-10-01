@@ -28,7 +28,6 @@ import type {
   ReviewComment,
   ReviewInquiry,
   ReviewGuide,
-  ReviewDelivery,
 } from "@trace/gql";
 import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
 import { useAuthStore } from "../stores/auth.js";

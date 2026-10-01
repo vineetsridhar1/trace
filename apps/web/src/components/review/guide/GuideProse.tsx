@@ -31,8 +31,8 @@ export function GuideProse({
               "whitespace-nowrap rounded px-1.5 font-mono font-medium",
               size === "body" ? "text-[12.5px]" : "text-xs",
               anchorsEqual(activeAnchor, segment.anchor)
-                ? "bg-[#3b82f6]/[0.34] text-white ring-1 ring-[#3b82f6]"
-                : "bg-[#3b82f6]/10 text-[#93c5fd] hover:bg-[#3b82f6]/20",
+                ? "bg-[var(--th-accent)]/[0.34] text-white ring-1 ring-[var(--th-accent)]"
+                : "bg-[var(--th-accent)]/10 text-[var(--th-review-comment)] hover:bg-[var(--th-accent)]/20",
             )}
           >
             {segment.label}
