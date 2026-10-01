@@ -271,6 +271,17 @@ export class ReviewService {
     }
     const token = await this.githubToken(input.actorId);
     const pull = await this.provider.resolvePullRequest(input.pullRequestUrl, token);
+    const reviewSession = await sessionService.start({
+      organizationId: input.organizationId,
+      createdById: input.actorId,
+      actorType: input.actorType,
+      sourceSessionId: session.id,
+      tool: session.tool,
+      model: session.model,
+      reasoningEffort: session.reasoningEffort,
+      name: `Review: ${pull.title}`,
+      clientSource: "web",
+    });
     let review = await prisma.review.findFirst({
       where: {
         organizationId: input.organizationId,
@@ -287,7 +298,7 @@ export class ReviewService {
           repositoryId: repo.id,
           channelId: session.channelId,
           sourceSessionGroupId: session.sessionGroupId,
-          attachedSessionId: session.id,
+          attachedSessionId: reviewSession.id,
           provider: "github",
           remotePullRequestId: pull.remoteId,
           pullRequestNumber: pull.number,
@@ -307,10 +318,10 @@ export class ReviewService {
         actorType: input.actorType,
         actorId: input.actorId,
       });
-    } else if (review.attachedSessionId !== session.id || review.status !== "open") {
+    } else if (review.attachedSessionId !== reviewSession.id || review.status !== "open") {
       review = await prisma.review.update({
         where: { id: review.id },
-        data: { attachedSessionId: session.id, status: "open" },
+        data: { attachedSessionId: reviewSession.id, status: "open" },
         include: REVIEW_INCLUDE,
       });
       await this.emit(review.id, input, "review_updated", { review: reviewEntity(review) });
