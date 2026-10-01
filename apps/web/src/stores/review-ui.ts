@@ -1,8 +1,6 @@
 import { create } from "zustand";
 
 export type ReviewView = "changes" | "guide";
-export type ReviewRailTab = "chat" | "threads";
-export type ReviewThreadFilter = "all" | "private" | "selected" | "delivered";
 
 export interface ReviewHighlight {
   filePath: string;
@@ -12,10 +10,7 @@ export interface ReviewHighlight {
 
 interface ReviewUiSelection {
   view: ReviewView;
-  railTab: ReviewRailTab;
-  threadFilter: ReviewThreadFilter;
   activeFilePath: string | null;
-  activeThreadId: string | null;
   /** Set to ask the Changes view to scroll; cleared once it has. */
   requestedFilePath: string | null;
   requestedLine: number | null;
@@ -33,10 +28,7 @@ interface ReviewUiState {
 
 const emptySelection = (): ReviewUiSelection => ({
   view: "changes",
-  railTab: "chat",
-  threadFilter: "all",
   activeFilePath: null,
-  activeThreadId: null,
   requestedFilePath: null,
   requestedLine: null,
   highlight: null,

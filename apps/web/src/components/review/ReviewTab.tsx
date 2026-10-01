@@ -6,7 +6,6 @@ import type {
   ReviewGuide,
   ReviewInquiry,
   ReviewThread as ReviewThreadType,
-  Session,
 } from "@trace/gql";
 import { toast } from "sonner";
 import { useReviewUiStore } from "../../stores/review-ui";
@@ -17,9 +16,7 @@ import { ReviewGuideView } from "./ReviewGuideView";
 import { ReviewHeader } from "./ReviewHeader";
 import { ReviewLoadingState } from "./ReviewLoadingState";
 import { ReviewSubmissionSheet } from "./ReviewSubmissionSheet";
-import { ReviewRail } from "./rail/ReviewRail";
 import { fetchReview, mutateReview } from "./review-operations";
-import type { ReviewLineSelection } from "./review-selection";
 
 const REFRESH = gql`
   mutation RefreshReviewSnapshot($reviewId: ID!) {
@@ -56,14 +53,12 @@ export function ReviewTab({
   const reviewThreads = useEntityStore((state) => state.reviewThreads);
   const reviewInquiries = useEntityStore((state) => state.reviewInquiries);
   const reviewGuides = useEntityStore((state) => state.reviewGuides);
-  const sessions = useEntityStore((state) => state.sessions);
   const ui = useReviewUiStore((state) => state.byReviewId[reviewId]);
   const patchUi = useReviewUiStore((state) => state.patch);
   const navigate = useReviewUiStore((state) => state.navigate);
   const openFilesSidebar = useWorkspaceSidebarStore((state) => state.openFiles);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [asking, setAsking] = useState(false);
   const [submissionOpen, setSubmissionOpen] = useState(false);
 
   const snapshot = review?.currentSnapshot ?? null;
@@ -73,15 +68,6 @@ export function ReviewTab({
         (thread) => thread.reviewId === reviewId,
       ),
     [reviewId, reviewThreads],
-  );
-  const inquiries = useMemo(
-    () =>
-      (Object.values(reviewInquiries) as ReviewInquiry[])
-        .filter(
-          (inquiry) => inquiry.reviewId === reviewId && inquiry.sourceKind !== "guide_generation",
-        )
-        .sort((a, b) => a.position - b.position),
-    [reviewId, reviewInquiries],
   );
   const guideInquiries = useMemo(
     () =>
@@ -101,10 +87,6 @@ export function ReviewTab({
         .sort((a, b) => b.version - a.version)[0] ?? null,
     [reviewGuides, reviewId, snapshot?.id],
   );
-  const attachedSession = review?.attachedSessionId
-    ? (sessions[review.attachedSessionId] as Session | undefined)
-    : undefined;
-
   useEffect(() => {
     if (active) openFilesSidebar(sessionGroupId, "changes", reviewId);
   }, [active, openFilesSidebar, reviewId, sessionGroupId]);
@@ -132,7 +114,6 @@ export function ReviewTab({
     }
   }, [reviewId]);
 
-  const [attachment, setAttachment] = useState<ReviewLineSelection | null>(null);
   const ask = useCallback(
     async (
       question: string,
@@ -142,35 +123,21 @@ export function ReviewTab({
       },
     ) => {
       if (!snapshot) return;
-      setAsking(true);
       try {
         await mutateReview(ENQUEUE_INQUIRY, {
           input: {
             reviewId,
             snapshotId: snapshot.id,
-            sourceKind: options?.sourceKind ?? (attachment ? "diff_anchor" : "thread"),
+            sourceKind: options?.sourceKind ?? "thread",
             question,
-            anchor: attachment ? { snapshotId: snapshot.id, ...attachment } : null,
-            context: {
-              ...(attachment
-                ? {
-                    selectedText: attachment.selectedText,
-                    surroundingContext: attachment.context,
-                  }
-                : {}),
-              ...options?.context,
-            },
+            context: options?.context ?? {},
           },
         });
-        setAttachment(null);
-        patchUi(reviewId, { railTab: "chat" });
       } catch (reason) {
         toast.error(reason instanceof Error ? reason.message : "Could not queue the question");
-      } finally {
-        setAsking(false);
       }
     },
-    [attachment, patchUi, reviewId, snapshot],
+    [reviewId, snapshot],
   );
 
   if (error)
@@ -252,60 +219,13 @@ export function ReviewTab({
                   body: "",
                   guideChapterId: chapterId,
                 },
-              })
-                .then(() => patchUi(reviewId, { railTab: "threads" }))
-                .catch((reason) =>
-                  toast.error(reason instanceof Error ? reason.message : "Comment failed"),
-                )
+              }).catch((reason) =>
+                toast.error(reason instanceof Error ? reason.message : "Comment failed"),
+              )
             }
             onReviewAllChanges={() => patchUi(reviewId, { view: "changes" })}
           />
         )}
-        <ReviewRail
-          tab={ui?.railTab ?? "chat"}
-          threadFilter={ui?.threadFilter ?? "all"}
-          inquiries={inquiries}
-          threads={snapshotThreads}
-          attachment={attachment}
-          sessionLabel={attachedSession?.name ?? "attached coding session"}
-          submitting={asking}
-          selectedCount={selectedCount}
-          onTab={(tab) => patchUi(reviewId, { railTab: tab })}
-          onThreadFilter={(filter) => patchUi(reviewId, { threadFilter: filter })}
-          onClearAttachment={() => setAttachment(null)}
-          onAsk={(question) => void ask(question)}
-          onOpenReference={(filePath, startLine) =>
-            navigate(reviewId, { filePath, startLine, endLine: startLine })
-          }
-          onTurnIntoComment={(inquiry) => {
-            const anchor = inquiry.anchor as ReviewLineSelection | null;
-            void mutateReview(CREATE_THREAD, {
-              input: {
-                reviewId,
-                snapshotId: snapshot.id,
-                scope: anchor ? "line" : "general",
-                body: inquiry.responseMessage?.text ?? inquiry.question,
-                anchor: anchor ? { snapshotId: snapshot.id, ...anchor } : null,
-              },
-            })
-              .then(() => {
-                patchUi(reviewId, { railTab: "threads" });
-                toast.success("Saved as a Trace thread");
-              })
-              .catch((reason) =>
-                toast.error(reason instanceof Error ? reason.message : "Could not save the thread"),
-              );
-          }}
-          onOpenThread={(thread) => {
-            if (!thread.anchor) return;
-            navigate(reviewId, {
-              filePath: thread.anchor.filePath,
-              startLine: thread.anchor.startLine,
-              endLine: thread.anchor.endLine,
-            });
-          }}
-          onSubmitReview={() => setSubmissionOpen(true)}
-        />
       </div>
       <ReviewSubmissionSheet
         open={submissionOpen}
