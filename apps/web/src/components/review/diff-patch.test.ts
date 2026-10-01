@@ -30,6 +30,7 @@ describe("parsePatch", () => {
     const metas = parsePatch(patch).filter((line) => line.kind === "meta");
     expect(metas[0]?.gapLines).toBeUndefined();
     expect(metas[1]?.gapLines).toBe(15);
+    expect(metas[1]).toMatchObject({ gapStartLine: 6, gapEndLine: 20 });
   });
 
   it("treats a hunk header without a count as one line", () => {

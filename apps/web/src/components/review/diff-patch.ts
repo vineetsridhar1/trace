@@ -14,6 +14,9 @@ export interface DiffLine {
   hunk?: DiffHunk;
   /** Set on `meta` rows only: unchanged lines collapsed before this hunk, if any. */
   gapLines?: number;
+  /** The head-file range represented by a collapsed gap. */
+  gapStartLine?: number;
+  gapEndLine?: number;
 }
 
 const HUNK_PATTERN = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
@@ -22,7 +25,7 @@ export function parsePatch(patch: string): DiffLine[] {
   const lines: DiffLine[] = [];
   let oldLine = 0;
   let newLine = 0;
-  let previousHunkEnd = 1;
+  let previousNewHunkEnd = 1;
   for (const text of patch.split("\n")) {
     const match = HUNK_PATTERN.exec(text);
     if (match) {
@@ -34,15 +37,17 @@ export function parsePatch(patch: string): DiffLine[] {
       };
       oldLine = hunk.oldStart;
       newLine = hunk.newStart;
-      const gapLines = hunk.oldStart - previousHunkEnd;
-      previousHunkEnd = hunk.oldStart + hunk.oldCount;
+      const gapLines = hunk.newStart - previousNewHunkEnd;
+      const gapStartLine = previousNewHunkEnd;
+      const gapEndLine = hunk.newStart - 1;
+      previousNewHunkEnd = hunk.newStart + hunk.newCount;
       lines.push({
         kind: "meta",
         text,
         oldLine: null,
         newLine: null,
         hunk,
-        ...(gapLines > 0 ? { gapLines } : {}),
+        ...(gapLines > 0 ? { gapLines, gapStartLine, gapEndLine } : {}),
       });
       continue;
     }
