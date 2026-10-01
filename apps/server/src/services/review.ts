@@ -583,7 +583,15 @@ export class ReviewService {
     const review = await this.get({ ...input, id: input.reviewId });
     const snapshot = review.snapshots.find((candidate) => candidate.id === input.snapshotId);
     if (!snapshot) throw new ValidationError("Snapshot does not belong to this review");
-    const context = anchorRecord(input.context) ?? {};
+    const context = { ...(anchorRecord(input.context) ?? {}) };
+    if (input.sourceKind === "guide_generation" && context.guideInstructions !== undefined) {
+      if (typeof context.guideInstructions !== "string")
+        throw new ValidationError("Guide instructions must be text");
+      const instructions = context.guideInstructions.trim();
+      if (instructions.length > 10_000)
+        throw new ValidationError("Guide instructions must be at most 10,000 characters");
+      context.guideInstructions = instructions;
+    }
     let guideContext: Record<string, unknown> = {};
     if (
       input.sourceKind === "guide_anchor" ||
@@ -1383,9 +1391,13 @@ export class ReviewService {
     inquiry: Prisma.ReviewInquiryGetPayload<{ include: { review: true; snapshot: true } }>,
   ): string {
     const anchor = anchorRecord(inquiry.anchor);
+    const instructions = anchorRecord(inquiry.context)?.guideInstructions;
     const format =
       inquiry.sourceKind === "guide_generation"
-        ? guideGenerationInstruction(inquiry.snapshot.files)
+        ? guideGenerationInstruction(
+            inquiry.snapshot.files,
+            typeof instructions === "string" ? instructions : "",
+          )
         : "Answer concisely in plain text and cite the anchored lines when relevant.";
     return [
       "This is review assistance, not an implementation request.",

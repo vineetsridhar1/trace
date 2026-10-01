@@ -59,6 +59,35 @@ beforeEach(() => {
 });
 
 describe("Guide chapter questions", () => {
+  it("persists reviewer instructions in the queue and emitted event", async () => {
+    const inquiry = await service.enqueueInquiry({
+      ...input,
+      sourceKind: "guide_generation",
+      context: { guideInstructions: "  Ignore frontend; explain syncing in depth only.  " },
+    });
+    expect(inquiry).toMatchObject({
+      sourceKind: "guide_generation",
+      context: { guideInstructions: "Ignore frontend; explain syncing in depth only." },
+    });
+    expect(mocks.emit).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "review_inquiry_enqueued", payload: { inquiry } }),
+    );
+  });
+
+  it.each([42, "x".repeat(10_001)])(
+    "rejects invalid Guide instructions",
+    async (guideInstructions) => {
+      await expect(
+        service.enqueueInquiry({
+          ...input,
+          sourceKind: "guide_generation",
+          context: { guideInstructions },
+        }),
+      ).rejects.toThrow("Guide instructions");
+      expect(mocks.create).not.toHaveBeenCalled();
+    },
+  );
+
   it("queues the saved chapter and its exact ranges and emits the complete inquiry", async () => {
     const inquiry = await service.enqueueInquiry({
       ...input,

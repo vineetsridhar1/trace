@@ -9,6 +9,7 @@ import { ReviewEmptyState } from "./ReviewEmptyState";
 import { ReviewInlineComposer, type ReviewComposerTarget } from "./ReviewInlineComposer";
 import { selectionRangeLabel, type ReviewLineSelection } from "./review-selection";
 import { mutateReview } from "./review-operations";
+import { GuideGenerationDialog } from "./guide/GuideGenerationDialog";
 import { GuideGeneratingState } from "./guide/GuideGeneratingState";
 import { guideSourceUrl } from "./guide/guide-source";
 import { GuideScroller } from "./guide/GuideScroller";
@@ -42,7 +43,30 @@ interface ReviewGuideViewProps {
   onReviewAllChanges(): void;
 }
 
-export function ReviewGuideView({
+export function ReviewGuideView(props: ReviewGuideViewProps) {
+  const [generationOpen, setGenerationOpen] = useState(false);
+  const previousInquiryId =
+    props.lastFailure &&
+    (!props.guide || Date.parse(props.lastFailure.createdAt) > Date.parse(props.guide.createdAt))
+      ? props.lastFailure.id
+      : (props.guide?.generationInquiryId ?? "");
+  return (
+    <>
+      <ReviewGuideContent {...props} onGenerate={() => setGenerationOpen(true)} />
+      <GuideGenerationDialog
+        open={generationOpen}
+        onOpenChange={setGenerationOpen}
+        reviewId={props.reviewId}
+        snapshotId={props.snapshotId}
+        previousInquiryId={previousInquiryId}
+        generating={props.generating}
+        regenerating={!!props.guide || !!props.lastFailure}
+      />
+    </>
+  );
+}
+
+function ReviewGuideContent({
   reviewId,
   snapshotId,
   files,
@@ -51,7 +75,8 @@ export function ReviewGuideView({
   lastFailure,
   onOpenInChanges,
   onReviewAllChanges,
-}: ReviewGuideViewProps) {
+  onGenerate,
+}: ReviewGuideViewProps & { onGenerate(): void }) {
   const guideSnapshotId = guide?.snapshotId ?? snapshotId;
   const guideFiles = useEntityField("reviewSnapshots", guideSnapshotId, "files");
   const pullRequestUrl = useEntityField("reviews", reviewId, "pullRequestUrl");
@@ -154,24 +179,6 @@ export function ReviewGuideView({
     }
   };
 
-  const generate = async () => {
-    if (generating) return;
-    try {
-      await mutateReview(ENQUEUE_INQUIRY, {
-        input: {
-          reviewId,
-          snapshotId,
-          sourceKind: "guide_generation",
-          question: "Generate an explanation-first Guide for this immutable review snapshot.",
-          context: {},
-        },
-      });
-      toast.success("Guide generation queued");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not queue Guide generation");
-    }
-  };
-
   if (generating && !guide) return <GuideGeneratingState fileCount={files.length} />;
 
   if (!guide && lastFailure)
@@ -181,7 +188,7 @@ export function ReviewGuideView({
         description={`${lastFailure.error ?? "The session's response did not match the Guide contract."} Nothing was saved.`}
         tone="warning"
         actionLabel="Regenerate"
-        onAction={() => void generate()}
+        onAction={onGenerate}
       />
     );
 
@@ -197,7 +204,7 @@ export function ReviewGuideView({
             The attached coding session writes a chaptered walkthrough of this snapshot. It runs
             through the same Review Chat queue as your questions.
           </p>
-          <Button className="mt-4" onClick={() => void generate()}>
+          <Button className="mt-4" onClick={onGenerate}>
             <Sparkles size={13} />
             Generate Guide
           </Button>
@@ -212,7 +219,7 @@ export function ReviewGuideView({
         description="The saved Guide could not be read. Regenerate it against the current snapshot."
         tone="warning"
         actionLabel="Regenerate"
-        onAction={() => void generate()}
+        onAction={onGenerate}
       />
     );
 
@@ -227,12 +234,7 @@ export function ReviewGuideView({
                   The diff has changed since this Guide was generated. You can still read it, but it
                   may need regeneration.
                 </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={generating}
-                  onClick={() => void generate()}
-                >
+                <Button variant="ghost" size="sm" disabled={generating} onClick={onGenerate}>
                   Regenerate Guide
                 </Button>
               </div>
@@ -265,7 +267,7 @@ export function ReviewGuideView({
         onAskAboutChapter={(chapterId) => openComposer(chapterId, "ask")}
         onCommentOnChapter={(chapterId) => openComposer(chapterId, "comment")}
         onReviewAllChanges={onReviewAllChanges}
-        onRegenerate={() => void generate()}
+        onRegenerate={onGenerate}
       />
       {composer ? (
         <ReviewInlineComposer

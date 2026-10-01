@@ -317,6 +317,33 @@ describe("FIFO dispatch", () => {
     expect(eventTypes()).toContain("review_inquiry_started");
   });
 
+  it("delivers saved Guide preferences to the attached session with the output contract", async () => {
+    db.reviewInquiry.groupBy.mockResolvedValue([{ sessionId: "session-1" }]);
+    db.reviewInquiry.findFirst.mockResolvedValueOnce(null).mockResolvedValue(
+      runningInquiry({
+        state: "queued",
+        sourceKind: "guide_generation",
+        question: "Generate Guide",
+        context: { guideInstructions: "Ignore frontend; explain syncing in depth only." },
+        review: { organizationId: "org-1", createdById: "user-1" },
+        snapshot: { baseSha: "base", headSha: "head", files: [] },
+      }),
+    );
+    await reviewService.recoverStuckInquiries();
+    expect(sessions.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        text: expect.stringContaining(
+          'Reviewer instructions: "Ignore frontend; explain syncing in depth only."',
+        ),
+        interactionMode: "ask",
+      }),
+    );
+    const text = sessions.sendMessage.mock.calls[0]![0].text;
+    expect(text).toContain("instead of the default whole-PR overview");
+    expect(text).toContain("Return only JSON");
+  });
+
   it("does not dispatch into a session the agent is still working in", async () => {
     db.reviewInquiry.findFirst.mockResolvedValue(null);
     db.reviewInquiry.groupBy.mockResolvedValue([{ sessionId: "session-1" }]);

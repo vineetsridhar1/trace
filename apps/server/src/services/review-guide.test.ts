@@ -26,6 +26,19 @@ const guide = (overrides: Record<string, unknown>) => ({
 });
 
 describe("review guide contract", () => {
+  it("prioritizes reviewer scope without weakening the reference contract", () => {
+    const prompt = guideGenerationInstruction(
+      files,
+      "Ignore frontend. Explain syncing in depth only.",
+    );
+    expect(prompt).toContain("Ignore frontend. Explain syncing in depth only.");
+    expect(prompt).toContain("instead of the default whole-PR overview");
+    expect(prompt).toContain("Omit excluded topics");
+    expect(prompt).toContain("at most 80");
+    expect(prompt).toContain("Return only JSON");
+    expect(guideGenerationInstruction(files)).not.toContain("Reviewer instructions:");
+  });
+
   it("normalizes bracketed cross-file links inside snippet explanations", () => {
     const path = String.raw`app/\[id\]/route.ts`;
     const result = validateReviewGuide(

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useEntityStore } from "@trace/client-core";
 import type { ReviewGuide, ReviewInquiry, SessionMessage } from "@trace/gql";
 import { ReviewGuideView } from "./ReviewGuideView";
+import { GuideGenerationDialog } from "./guide/GuideGenerationDialog";
 import { GuideScroller } from "./guide/GuideScroller";
 import { ReviewInlineComposer } from "./ReviewInlineComposer";
 import { ReviewInquiryCard } from "./ReviewInquiryCard";
@@ -10,6 +11,7 @@ import { useReviewUiStore } from "../../stores/review-ui";
 
 const mutate = vi.hoisted(() => vi.fn());
 vi.mock("./review-operations", () => ({ mutateReview: mutate }));
+vi.mock("./guide/GuideGenerationDialog", () => ({ GuideGenerationDialog: () => null }));
 vi.mock("./guide/GuideCodeExcerpt", () => ({ GuideCodeExcerpt: () => null }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -88,11 +90,11 @@ describe("Guide Ask about this", () => {
     expect(JSON.stringify(renderer.toJSON())).toContain("The diff has changed");
     expect(renderer.root.findByType(GuideScroller).props.snapshotId).toBe("old-snapshot");
     await act(async () => click("Regenerate Guide"));
-    expect(mutate).toHaveBeenCalledWith(expect.anything(), {
-      input: expect.objectContaining({
-        snapshotId: "latest-snapshot",
-        sourceKind: "guide_generation",
-      }),
+    expect(mutate).not.toHaveBeenCalled();
+    expect(renderer.root.findByType(GuideGenerationDialog).props).toMatchObject({
+      open: true,
+      snapshotId: "latest-snapshot",
+      regenerating: true,
     });
   });
 

@@ -78,10 +78,21 @@ function normalizeAnchors(text: string, resolvePath: (path: string) => string): 
   });
 }
 
-export function guideGenerationInstruction(filesValue: Prisma.JsonValue): string {
+export function guideGenerationInstruction(
+  filesValue: Prisma.JsonValue,
+  instructions = "",
+): string {
   const paths = snapshotPaths(filesValue);
   const listed = paths.slice(0, MAX_PROMPT_PATHS);
   return [
+    ...(instructions.trim()
+      ? [
+          "Reviewer instructions control the Guide's scope, exclusions, and depth. Follow them instead of the default whole-PR overview. Keep the read-only constraints and JSON/reference contract.",
+          "Omit excluded topics from chapters and excerpts. Unreferenced changed files may remain in everythingElse without explanation. For a deep dive, trace the requested behavior through its dependencies, state transitions, failure paths, and relevant tests. Include excluded areas only as a minimal dependency needed to explain the requested flow.",
+          "Make the title and intent describe this focused walkthrough, not imply a complete review. If the requested topic is absent, explain that honestly using verified related code; do not invent references.",
+          `Reviewer instructions: ${JSON.stringify(instructions.trim())}`,
+        ]
+      : []),
     "Return only JSON, with no Markdown fence or commentary.",
     'Use this exact shape: {"formatVersion":2,"title":"...","intent":"...","chapters":[{"id":"...","title":"...","explanation":"...","implications":["..."],"references":[{"filePath":"...","startLine":10,"endLine":20,"title":"...","explanation":"..."}]}],"everythingElse":["..."]}.',
     `The authoritative changed-file paths are: ${JSON.stringify(listed)}.`,

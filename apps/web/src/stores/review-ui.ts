@@ -10,6 +10,7 @@ export interface ReviewHighlight {
 
 interface ReviewUiSelection {
   view: ReviewView;
+  guideInstructions: string | null;
   activeFilePath: string | null;
   /** Set to ask the Changes view to scroll; cleared once it has. */
   requestedFilePath: string | null;
@@ -34,6 +35,7 @@ interface ReviewUiState {
 
 const emptySelection = (): ReviewUiSelection => ({
   view: "changes",
+  guideInstructions: null,
   activeFilePath: null,
   requestedFilePath: null,
   requestedLine: null,

@@ -17,7 +17,7 @@ Guide's job is to provide a curated reading path through the important parts.
 - Each chapter introduces one behavior, contract, or architectural idea in the left column. Its
   explanation stays visible as the reader scrolls through the chapter's code steps.
 - The right column shows an **ordered sequence of bounded excerpts**. Every step has a title, a
-  short explanation under a collapsed **More info** accordion, an exact file path, and a line range.
+  short explanation under a collapsed title row, an exact file path, and a line range.
   Only that range renders. Code references in the explanation open a popup showing the exact
   snapshot code, so the reader can inspect a claim without leaving the step.
 - The sequence should answer “where does this start, what happens next, and what is the result?”
@@ -28,6 +28,22 @@ Guide's job is to provide a curated reading path through the important parts.
 - References may include unchanged files or unchanged sections when they explain a dependency or
   contract. Their source is read at the snapshot's head commit, not the live working tree.
 - Reviewers can ask the attached coding session questions or comment on a chapter.
+
+## Follow the reviewer’s requested focus
+
+The queued request may include optional reviewer instructions. These control topic selection,
+exclusions, reading order, and depth ahead of the default broad overview; they do not override the
+read-only boundary, verified snapshot references, or JSON contract.
+
+- “Ignore frontend”: omit frontend chapters and excerpts. Mention a client boundary only when it
+  is essential to explain an included flow.
+- “Explain the syncing logic in depth only”: trace synchronization entry points, state changes,
+  events, consumers, ordering, recovery, and relevant tests. Spend the explanation on that flow
+  rather than unrelated PR changes.
+- Reflect the chosen scope in the title and intent. Do not imply a focused Guide covers the whole PR.
+- Leave unrelated paths in `everythingElse` without writing filler descriptions to achieve coverage.
+- If the requested topic is absent, say so honestly; do not invent code or force unrelated chapters.
+- With no instructions, use the default behavior-oriented overview below.
 
 ## Inspect the actual snapshot, read-only
 
@@ -185,7 +201,8 @@ chapters, explanations, paths, and line ranges.
 
 Silently review the draft:
 
-1. Does each chapter explain a distinct behavior or idea instead of listing files?
+1. Does the Guide honor the reviewer’s focus, exclusions, and requested depth?
+   Does each chapter explain a distinct behavior or idea instead of listing files?
 2. Can the reader follow the ordered references from cause to outcome without guessing why a step
    is present? Does every excerpt have a specific explanation?
 3. Are ranges verified at the exact head commit, positive, ordered, and no longer than 80 lines?
