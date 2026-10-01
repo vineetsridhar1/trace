@@ -14,7 +14,6 @@ export function DiffFileHeader({
   deletions,
   threadCount,
   collapsed,
-  viewed,
   onToggleCollapsed,
 }: {
   filePath: string;
@@ -23,7 +22,6 @@ export function DiffFileHeader({
   deletions: number;
   threadCount: number;
   collapsed: boolean;
-  viewed: boolean;
   onToggleCollapsed(): void;
 }) {
   const lastSlash = filePath.lastIndexOf("/");
@@ -69,15 +67,6 @@ export function DiffFileHeader({
           {threadCount} thread{threadCount === 1 ? "" : "s"}
         </span>
       ) : null}
-      <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium text-muted-foreground">
-        <span
-          className={cn(
-            "size-3 rounded-[3px] border",
-            viewed ? "border-[#34d399] bg-[#34d399]/20" : "border-[#3f3f46]",
-          )}
-        />
-        Viewed
-      </span>
     </header>
   );
 }

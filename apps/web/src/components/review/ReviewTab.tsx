@@ -219,7 +219,7 @@ export function ReviewTab({
         onRefresh={() => void refresh()}
         onSubmit={() => setSubmissionOpen(true)}
       />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         {view === "changes" ? (
           <ReviewChangesView
             reviewId={reviewId}

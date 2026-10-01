@@ -79,7 +79,7 @@ export function GuideFileDiff({
     <div
       ref={cardRef}
       data-guide-file={filePath}
-      className="rounded-[9px] border border-[#232326] bg-[#0f0f10]"
+      className="min-w-0 overflow-hidden rounded-[9px] border border-[#232326] bg-[#0f0f10]"
     >
       <header className="sticky top-0 z-[1] flex h-10 items-center gap-2.5 rounded-t-[9px] border-b border-[#232326] bg-[#171717] px-3.5">
         <span className="min-w-0 truncate font-mono text-[12.5px] text-muted-foreground">
@@ -103,7 +103,7 @@ export function GuideFileDiff({
       {error ? <p className="p-4 text-xs text-destructive">{error}</p> : null}
       {!error && !diff ? <div className="h-40 animate-pulse bg-muted/10" /> : null}
       {diff ? (
-        <div className="py-1 font-mono text-xs leading-5">
+        <div className="min-w-0 overflow-x-hidden py-1 font-mono text-xs leading-5">
           {lines.map((line, index) => {
             if (line.kind === "meta") {
               const label = hunkGapLabel(line);

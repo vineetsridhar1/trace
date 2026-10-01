@@ -127,11 +127,11 @@ export function ReviewChangesView({
 
   const collapsed = selection?.collapsedFilePaths ?? [];
   return (
-    <div className="relative flex min-h-0 min-w-0 flex-1">
+    <div className="relative flex min-h-0 min-w-0 flex-1 overflow-x-hidden">
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="native-scrollbar flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto bg-[#141414] px-[18px] pb-10 pt-4"
+        className="native-scrollbar flex min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto bg-[#141414] px-[18px] pb-10 pt-4"
       >
         {files.map((file) => (
           <ReviewFileDiff

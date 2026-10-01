@@ -51,7 +51,11 @@ export const DiffLineRow = forwardRef<
       ref={ref}
       onPointerDown={onPointerDown}
       onPointerEnter={onPointerEnter}
-      className={cn("flex h-5 select-none", classes.row, lineNumber != null && "cursor-text")}
+      className={cn(
+        "flex h-5 min-w-0 select-none overflow-hidden",
+        classes.row,
+        lineNumber != null && "cursor-text",
+      )}
     >
       <span
         className={cn(
@@ -62,7 +66,7 @@ export const DiffLineRow = forwardRef<
         {lineNumber ?? ""}
       </span>
       <span className={cn("w-[18px] shrink-0 text-center", classes.marker)}>{marker}</span>
-      <span className="flex-1 whitespace-pre pr-4">
+      <span className="min-w-0 flex-1 overflow-hidden whitespace-pre pr-4">
         {highlightCode(line.text).map((token, index) => (
           <span key={index} className={CODE_TOKEN_CLASS[token.kind]}>
             {token.text}
