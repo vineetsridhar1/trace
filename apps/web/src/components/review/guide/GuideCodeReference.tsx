@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { X } from "lucide-react";
+import { cn } from "../../../lib/utils";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "../../ui/popover";
 import { DiffLineRow } from "../diff/DiffLineRow";
 import type { DiffLine } from "../diff-patch";
@@ -36,7 +37,12 @@ export function GuideCodeReference({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         title={`${filePath}:${startLine}–${endLine}`}
-        className="inline rounded px-0.5 text-[var(--th-review-comment)] underline decoration-dotted underline-offset-4 hover:bg-[var(--th-accent)]/10 focus-visible:outline-2 focus-visible:outline-ring"
+        className={cn(
+          "whitespace-nowrap rounded px-1.5 font-mono text-[12.5px] font-medium focus-visible:outline-2 focus-visible:outline-ring",
+          open
+            ? "bg-[var(--th-accent)]/[0.34] text-white ring-1 ring-[var(--th-accent)]"
+            : "bg-[var(--th-accent)]/10 text-[var(--th-review-comment)] hover:bg-[var(--th-accent)]/20",
+        )}
       >
         {label}
       </PopoverTrigger>
