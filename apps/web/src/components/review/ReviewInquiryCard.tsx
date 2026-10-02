@@ -45,7 +45,9 @@ export function ReviewInquiryCard({
   const resolvedAt = useEntityField("reviewInquiries", inquiryId, "resolvedAt");
   const answer = useEntityField("reviewInquiries", inquiryId, "responseMessage")?.text?.trim();
   const anchorFilePath =
-    anchor && typeof anchor.filePath === "string" ? anchor.filePath : undefined;
+    anchor && typeof anchor === "object" && !Array.isArray(anchor) && typeof anchor.filePath === "string"
+      ? anchor.filePath
+      : undefined;
   const presentation = inquiryPresentation(state, queuedAheadCount === 0);
   const collapsed = useReviewUiStore(
     (store) =>
@@ -85,7 +87,7 @@ export function ReviewInquiryCard({
           question: followUpQuestion,
           anchor,
           context: {
-            ...context,
+            ...(typeof context === "object" && !Array.isArray(context) ? context : {}),
             followUpToInquiryId: inquiryId,
             priorQuestion: question,
             priorAnswer: answer ?? null,
