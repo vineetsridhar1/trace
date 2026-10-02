@@ -39,6 +39,7 @@ export function ReviewInquiryCard({
   const state = useEntityField("reviewInquiries", inquiryId, "state") ?? "queued";
   const question = useEntityField("reviewInquiries", inquiryId, "question") ?? "";
   const snapshotId = useEntityField("reviewInquiries", inquiryId, "snapshotId") ?? "";
+  const sourceKind = useEntityField("reviewInquiries", inquiryId, "sourceKind");
   const anchor = useEntityField("reviewInquiries", inquiryId, "anchor");
   const context = useEntityField("reviewInquiries", inquiryId, "context") ?? {};
   const error = useEntityField("reviewInquiries", inquiryId, "error");
@@ -76,14 +77,14 @@ export function ReviewInquiryCard({
 
   const sendFollowUp = async () => {
     const followUpQuestion = followUp.trim();
-    if (!followUpQuestion || !snapshotId) return;
+    if (!followUpQuestion || !snapshotId || !sourceKind || sendingFollowUp) return;
     setSendingFollowUp(true);
     try {
       await mutateReview(ENQUEUE_FOLLOW_UP, {
         input: {
           reviewId,
           snapshotId,
-          sourceKind: "thread",
+          sourceKind,
           question: followUpQuestion,
           anchor,
           context: {

@@ -2,7 +2,8 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useReviewUiStore } from "../../stores/review-ui";
 import { useEntityStore } from "@trace/client-core";
-import type { ReviewFile, ReviewThread } from "@trace/gql";
+import type { ReviewFile, ReviewInquiry, ReviewThread } from "@trace/gql";
+import { ReviewInquiryCard } from "./ReviewInquiryCard";
 
 const query = vi.fn();
 
@@ -46,6 +47,7 @@ function patchFor(snapshotId: string, body: string) {
 describe("ReviewChangesView snapshot refresh", () => {
   let renderer: ReactTestRenderer | undefined;
   let threads: ReviewThread[] = [];
+  let inquiries: ReviewInquiry[] = [];
   const listeners = new Set<() => void>();
   const scrollNode = {
     scrollTop: 0,
@@ -81,8 +83,9 @@ describe("ReviewChangesView snapshot refresh", () => {
     );
     vi.stubGlobal("cancelAnimationFrame", clearTimeout);
     useReviewUiStore.setState({ byReviewId: {}, replyDrafts: {} });
-    useEntityStore.setState({ reviewThreads: {} });
+    useEntityStore.setState({ reviewThreads: {}, reviewInquiries: {} });
     threads = [];
+    inquiries = [];
     scrollNode.scrollTop = 0;
     listeners.clear();
     query.mockReset();
@@ -104,7 +107,7 @@ describe("ReviewChangesView snapshot refresh", () => {
         pullRequestNumber={7}
         files={files}
         threads={threads}
-        inquiries={[]}
+        inquiries={inquiries}
         onRefresh={() => {}}
       />
     );
@@ -133,6 +136,64 @@ describe("ReviewChangesView snapshot refresh", () => {
       });
     }
   }
+
+  it("shows an enqueued follow-up and its event-driven answer beside the original diff question", async () => {
+    const original: ReviewInquiry = {
+      id: "original",
+      reviewId: "review-1",
+      snapshotId: "snapshot-1",
+      sessionId: "session",
+      createdAt: "2026-10-02T12:00:00Z",
+      context: {},
+      sourceKind: "diff_anchor",
+      state: "completed",
+      position: 1,
+      question: "What does this do?",
+      anchor: { filePath: "src/retry.ts", side: "head", startLine: 1, endLine: 1 },
+      responseMessage: {
+        id: "answer",
+        sessionId: "session",
+        sourceEventId: "answer-event",
+        role: "assistant",
+        actor: { id: "assistant", type: "agent", name: "Trace AI" },
+        content: {},
+        createdAt: "2026-10-02T12:00:00Z",
+        text: "It retries the request.",
+      },
+    };
+    const followUp: ReviewInquiry = {
+      ...original,
+      id: "follow-up",
+      position: 2,
+      state: "queued",
+      question: "What if it fails?",
+      context: { followUpToInquiryId: original.id },
+      responseMessage: null,
+    };
+    inquiries = [original];
+    useEntityStore.getState().upsert("reviewInquiries", original.id, original);
+    query.mockReturnValue(patchFor("snapshot-1", "retry()"));
+    render("snapshot-1");
+    await settle();
+    act(() => {
+      useEntityStore.getState().upsert("reviewInquiries", followUp.id, followUp);
+      inquiries = [original, followUp];
+      renderer?.update(view("snapshot-1"));
+    });
+    expect(renderer?.root.findAllByType(ReviewInquiryCard)).toHaveLength(2);
+    expect(JSON.stringify(renderer?.toJSON())).toContain(followUp.question);
+    act(() => {
+      useEntityStore.getState().upsert("reviewInquiries", followUp.id, {
+        ...followUp,
+        state: "completed",
+        responseMessage: {
+          ...original.responseMessage!,
+          text: "The error is returned to the caller.",
+        },
+      });
+    });
+    expect(JSON.stringify(renderer?.toJSON())).toContain("The error is returned to the caller.");
+  });
 
   it("refetches the patch when the review advances to a new snapshot", async () => {
     query

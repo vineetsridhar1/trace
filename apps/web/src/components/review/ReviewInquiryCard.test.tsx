@@ -2,6 +2,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useEntityStore } from "@trace/client-core";
 import type { ReviewInquiry } from "@trace/gql";
+import { toast } from "sonner";
 import { useReviewUiStore } from "../../stores/review-ui";
 
 const mutate = vi.hoisted(() => vi.fn());
@@ -9,7 +10,7 @@ vi.mock("./review-operations", () => ({ mutateReview: mutate }));
 vi.mock("./ReviewThreadBody", () => ({
   ReviewThreadBody: ({ body }: { body: string }) => <p>{body}</p>,
 }));
-vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { ReviewInquiryCard } from "./ReviewInquiryCard";
 
 describe("AI conversation actions", () => {
@@ -32,6 +33,7 @@ describe("AI conversation actions", () => {
     vi.stubGlobal("localStorage", storage);
     storage.setItem.mockClear();
     mutate.mockReset().mockResolvedValue({});
+    vi.mocked(toast.error).mockClear();
     useReviewUiStore.setState({ byReviewId: {}, deletedInquiryIds: [] });
     useEntityStore.setState({ reviewInquiries: { question: inquiry } });
     act(() => {
@@ -53,6 +55,68 @@ describe("AI conversation actions", () => {
       )!;
   const answerVisible = () =>
     JSON.stringify(renderer.toJSON()).includes("Because access is checked first.");
+
+  it.each(["diff_anchor", "guide_anchor", "thread"] as const)(
+    "keeps a %s follow-up at its original location with the previous answer",
+    async (sourceKind) => {
+      const anchor = { filePath: "src/access.ts", side: "head", startLine: 1, endLine: 2 };
+      const context = {
+        guideId: "guide",
+        guideChapterId: "chapter",
+        selectedText: "checkAccess()",
+      };
+      act(() => {
+        useEntityStore.setState({
+          reviewInquiries: { question: { ...inquiry, sourceKind, anchor, context } },
+        });
+        renderer.root
+          .findByType("textarea")
+          .props.onChange({ target: { value: " What if access fails? " } });
+      });
+      await act(async () => {
+        renderer.root.findByType("textarea").props.onKeyDown({
+          key: "Enter",
+          shiftKey: false,
+          preventDefault: vi.fn(),
+        });
+      });
+      expect(mutate).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+        input: {
+          reviewId: "review",
+          snapshotId: "snapshot",
+          sourceKind,
+          question: "What if access fails?",
+          anchor,
+          context: {
+            ...context,
+            followUpToInquiryId: "question",
+            priorQuestion: inquiry.question,
+            priorAnswer: inquiry.responseMessage?.text,
+          },
+        },
+      });
+      expect(renderer.root.findByType("textarea").props.value).toBe("");
+      expect(toast.error).not.toHaveBeenCalled();
+    },
+  );
+
+  it("preserves the follow-up draft when submission fails", async () => {
+    mutate.mockRejectedValue(new Error("unavailable"));
+    act(() => {
+      renderer.root
+        .findByType("textarea")
+        .props.onChange({ target: { value: "What if access fails?" } });
+    });
+    await act(async () => {
+      renderer.root.findByType("textarea").props.onKeyDown({
+        key: "Enter",
+        shiftKey: false,
+        preventDefault: vi.fn(),
+      });
+    });
+    expect(renderer.root.findByType("textarea").props.value).toBe("What if access fails?");
+    expect(toast.error).toHaveBeenCalledWith("unavailable");
+  });
 
   it("resolves into a compact row, allows viewing it, and reopens it", async () => {
     expect(answerVisible()).toBe(true);
