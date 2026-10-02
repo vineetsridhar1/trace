@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { useThemeStore } from "../../stores/theme";
 import { renderMermaid } from "./mermaidRenderer";
 
 export function MermaidDiagram({ source }: { source: string }) {
-  const theme = useThemeStore((state) => state.theme);
+  const theme = "dark";
   const [result, setResult] = useState<{
     source: string;
     theme: string;
@@ -41,11 +40,7 @@ export function MermaidDiagram({ source }: { source: string }) {
       {current?.image ? (
         <>
           <div className="max-h-[720px] overflow-auto">
-            <img
-              src={current.image}
-              alt="Mermaid diagram"
-              className="mx-auto h-auto max-w-none"
-            />
+            <img src={current.image} alt="Mermaid diagram" className="mx-auto h-auto max-w-none" />
           </div>
           <details className="mt-2 text-xs text-muted-foreground">
             <summary className="cursor-pointer">Diagram source</summary>

@@ -19,6 +19,8 @@ describe("buildHomeStartInput", () => {
         projectId: null,
         repoId: "repo-1",
         runtimeInstanceId: null,
+        designSystemVersionId: null,
+        designSessionGroupId: null,
       }),
     ).toMatchObject({ kind: "coding", hosting: "cloud", channelId: "channel-1" });
   });

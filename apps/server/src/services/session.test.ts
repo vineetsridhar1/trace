@@ -276,7 +276,6 @@ function makeSession(overrides: Record<string, unknown> = {}) {
     | Record<string, unknown>
     | null
     | undefined;
-  const sessionConnection = connection as Record<string, unknown>;
   const shouldAdoptSessionConnection =
     overrides.connection !== undefined &&
     providedConnection !== null &&
@@ -5972,19 +5971,22 @@ describe("SessionService", () => {
   });
 
   describe("complete", () => {
-    it("ignores completion from a superseded invocation", async () => {
-      prismaMock.session.findUnique.mockResolvedValueOnce({
-        agentStatus: "active",
-        sessionStatus: "in_progress",
-        sessionGroupId: "group-1",
-        activeInvocationId: "invocation-current",
-      });
+    it.each(["done", "failed"] as const)(
+      "ignores %s completion from a superseded invocation",
+      async (agentStatus) => {
+        prismaMock.session.findUnique.mockResolvedValueOnce({
+          agentStatus: "active",
+          sessionStatus: "in_progress",
+          sessionGroupId: "group-1",
+          activeInvocationId: "invocation-current",
+        });
 
-      await service.complete("session-1", { invocationId: "invocation-stale" });
+        await service.complete("session-1", { invocationId: "invocation-stale", agentStatus });
 
-      expect(prismaMock.session.update).not.toHaveBeenCalled();
-      expect(eventServiceMock.create).not.toHaveBeenCalled();
-    });
+        expect(prismaMock.session.update).not.toHaveBeenCalled();
+        expect(eventServiceMock.create).not.toHaveBeenCalled();
+      },
+    );
 
     it("does not complete when its invocation was replaced during finalization", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce({
@@ -9510,6 +9512,13 @@ describe("SessionService", () => {
     });
 
     it("retries a competing wakeup after the first drain releases its lock", async () => {
+      const { withDistributedLock: acquire } = await vi.importActual<
+        typeof import("../lib/distributed-lock.js")
+      >("../lib/distributed-lock.js");
+      withDistributedLockMock
+        .mockImplementationOnce(acquire)
+        .mockImplementationOnce(acquire)
+        .mockImplementationOnce(acquire);
       vi.useFakeTimers();
       prismaMock.session.findUnique.mockResolvedValue({
         agentStatus: "done",

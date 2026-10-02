@@ -1,9 +1,7 @@
-import type { ThemePreference } from "../../stores/theme";
-
 let renderQueue: Promise<unknown> = Promise.resolve();
 let nextDiagramId = 0;
 
-export function renderMermaid(source: string, theme: ThemePreference): Promise<string> {
+export function renderMermaid(source: string, theme: "dark" | "light"): Promise<string> {
   // Mermaid has global configuration and a shared rendering DOM. Serialize the
   // entire operation so concurrent diagrams cannot change each other's theme.
   const result = renderQueue.then(async () => {

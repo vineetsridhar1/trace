@@ -1258,7 +1258,10 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             ...(msg.outcome === "failed" && {
               drainPending: false,
               agentStatus: "failed" as const,
-              reason: msg.reason === "runtime_memory_pressure" ? "runtime_memory_pressure" : "bridge_failed",
+              reason:
+                msg.reason === "runtime_memory_pressure"
+                  ? "runtime_memory_pressure"
+                  : "bridge_failed",
             }),
           });
         });

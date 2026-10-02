@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MermaidDiagram } from "./MermaidDiagram";
 import { MarkdownPre } from "./MarkdownPre";
 import { renderMermaid } from "./mermaidRenderer";
-import { useThemeStore } from "../../stores/theme";
 
 vi.mock("./mermaidRenderer", () => ({ renderMermaid: vi.fn() }));
 
@@ -15,7 +14,6 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.mocked(renderMermaid).mockReset();
-  useThemeStore.setState({ theme: "dark" });
 });
 
 afterEach(() => {
@@ -57,13 +55,6 @@ describe("Mermaid Markdown", () => {
     expect(view.root.findByProps({ className: "max-h-[720px] overflow-auto" })).toBeDefined();
     expect(view.root.findByType("code").children).toEqual(["graph TD; A-->B"]);
     expect(renderMermaid).toHaveBeenCalledWith("graph TD; A-->B", "dark");
-    await act(async () => {
-      useThemeStore.setState({ theme: "light" });
-    });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(200);
-    });
-    expect(renderMermaid).toHaveBeenLastCalledWith("graph TD; A-->B", "light");
   });
 
   it("falls back to source on errors and recovers when streaming completes", async () => {

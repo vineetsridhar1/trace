@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getAuthHeaders } from "@trace/client-core";
 import { TraceLoader } from "../ui/trace-loader";
 import { artifactFileUrl } from "./artifact-file-url";
-import { PLAN_IFRAME_SANDBOX, sandboxedPlanHtml } from "./plan-html";
+import { sandboxedPlanHtml } from "./plan-html";
 
 export function HtmlArtifact({ artifactId }: { artifactId: string }) {
   const [html, setHtml] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export function HtmlArtifact({ artifactId }: { artifactId: string }) {
     <iframe
       title="index.html"
       srcDoc={sandboxedPlanHtml(html)}
-      sandbox={PLAN_IFRAME_SANDBOX}
+      sandbox=""
       className="size-full min-h-[60vh] border-0 bg-background"
     />
   );

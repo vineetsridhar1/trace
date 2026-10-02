@@ -131,6 +131,7 @@ export class ContainerBridge implements IBridgeClient {
   private pendingInputToolUseIds = new Map<string, string>();
   private sessionRunSequence = new Map<string, number>();
   private activeRuns = new Map<string, number>();
+  private activeRunInvocationIds = new Map<string, string>();
   private memoryPressureRuns = new Map<string, number>();
   private memoryPressureActive = false;
   private memoryPressureSnapshot: CgroupMemorySnapshot | null = null;
@@ -285,7 +286,11 @@ export class ContainerBridge implements IBridgeClient {
         sessionId,
         outcome: "failed",
         reason: "runtime_memory_pressure",
+        ...(this.activeRunInvocationIds.has(sessionId) && {
+          invocationId: this.activeRunInvocationIds.get(sessionId),
+        }),
       });
+      this.activeRunInvocationIds.delete(sessionId);
     }
     this.memoryPressureRuns.clear();
   }
@@ -293,7 +298,9 @@ export class ContainerBridge implements IBridgeClient {
   private suspendRunForMemoryPressure(
     sessionId: string,
     snapshot: CgroupMemorySnapshot | null,
+    invocationId?: string,
   ): void {
+    if (invocationId) this.activeRunInvocationIds.set(sessionId, invocationId);
     if (this.memoryPressureRuns.has(sessionId)) return;
     // Invalidate callbacks from the aborted adapter while continuing to report
     // the session as active. The server therefore cannot drain queued work back
@@ -305,6 +312,9 @@ export class ContainerBridge implements IBridgeClient {
     this.send({
       type: "session_output",
       sessionId,
+      ...(this.activeRunInvocationIds.has(sessionId) && {
+        invocationId: this.activeRunInvocationIds.get(sessionId),
+      }),
       data: {
         type: "error",
         message: snapshot
@@ -408,7 +418,9 @@ export class ContainerBridge implements IBridgeClient {
     }
   }
 
-  private startRun(sessionId: string): number {
+  private startRun(sessionId: string, invocationId?: string): number {
+    if (invocationId) this.activeRunInvocationIds.set(sessionId, invocationId);
+    else this.activeRunInvocationIds.delete(sessionId);
     const runId = (this.sessionRunSequence.get(sessionId) ?? 0) + 1;
     this.sessionRunSequence.set(sessionId, runId);
     this.activeRuns.set(sessionId, runId);
@@ -418,11 +430,13 @@ export class ContainerBridge implements IBridgeClient {
   private finishRun(sessionId: string, runId: number): void {
     if (this.activeRuns.get(sessionId) === runId) {
       this.activeRuns.delete(sessionId);
+      this.activeRunInvocationIds.delete(sessionId);
     }
   }
 
   private cancelRun(sessionId: string): void {
     this.activeRuns.delete(sessionId);
+    this.activeRunInvocationIds.delete(sessionId);
   }
 
   private beginWorkspacePreparation(sessionId: string, sessionGroupId?: string | null): number {
@@ -572,7 +586,11 @@ export class ContainerBridge implements IBridgeClient {
       switch (cmd.type) {
         case "run":
         case "send":
-          this.suspendRunForMemoryPressure(cmd.sessionId, this.memoryPressureSnapshot);
+          this.suspendRunForMemoryPressure(
+            cmd.sessionId,
+            this.memoryPressureSnapshot,
+            cmd.runtimeEnv?.TRACE_INVOCATION_ID,
+          );
           return;
         case "setup_script_run":
           this.send({
@@ -1467,7 +1485,7 @@ export class ContainerBridge implements IBridgeClient {
       }
     };
 
-    const runId = this.startRun(sessionId);
+    const runId = this.startRun(sessionId, runtimeEnv?.TRACE_INVOCATION_ID);
     adapter.abort();
 
     let browserCleanupStarted = false;

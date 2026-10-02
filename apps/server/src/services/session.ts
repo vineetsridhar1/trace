@@ -10050,7 +10050,7 @@ export class SessionService {
         })
       : session.repo;
     assertCloudRepoRemoteAvailable(targetHosting, targetRepo);
-    let sourceCloudRuntimeSession =
+    const sourceCloudRuntimeSession =
       session.hosting === "cloud" && (targetHosting === "local" || !reuseCloudRuntime)
         ? await this.withGroupRuntimeState(session)
         : null;
@@ -10179,7 +10179,6 @@ export class SessionService {
     const { session, targetHosting, conversion, actorType, actorId } = params;
     const {
       sessionsToMove,
-      sourceRuntimeId,
       bootstrapPrompt,
       sourceBranch,
       sourceConnection,

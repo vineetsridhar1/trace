@@ -1073,6 +1073,7 @@ describe("bridge handler auth", () => {
       sessionId: "session-1",
       outcome: "failed",
       reason: "runtime_memory_pressure",
+      invocationId: "invocation-1",
     });
 
     await vi.waitFor(() =>
@@ -1080,6 +1081,7 @@ describe("bridge handler auth", () => {
         drainPending: false,
         agentStatus: "failed",
         reason: "runtime_memory_pressure",
+        invocationId: "invocation-1",
       }),
     );
   });

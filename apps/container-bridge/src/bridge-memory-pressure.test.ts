@@ -55,6 +55,7 @@ describe("ContainerBridge memory pressure", () => {
     const internals = bridge as unknown as {
       adapters: Map<string, CodingToolAdapter>;
       activeRuns: Map<string, number>;
+      startRun: (sessionId: string, invocationId?: string) => number;
       send: (message: BridgeMessage) => void;
       terminalManager: { destroyAll: (signal?: string) => void };
       managedProcessManager: {
@@ -63,7 +64,7 @@ describe("ContainerBridge memory pressure", () => {
       };
     };
     internals.adapters.set("session-1", { abort } as unknown as CodingToolAdapter);
-    internals.activeRuns.set("session-1", 1);
+    internals.startRun("session-1", "invocation-1");
     internals.send = (message) => sent.push(message);
     internals.terminalManager = { destroyAll: terminalDestroyAll };
     internals.managedProcessManager = {
@@ -103,6 +104,7 @@ describe("ContainerBridge memory pressure", () => {
       sessionId: "session-1",
       outcome: "failed",
       reason: "runtime_memory_pressure",
+      invocationId: "invocation-1",
     });
   });
 });

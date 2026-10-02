@@ -51,7 +51,28 @@ rows cannot prevent an old API replica from writing stale group state.
   psql -X -v ON_ERROR_STOP=1 -d <test-database> -f apps/server/test/session-group-runtime-migration.sql
   ```
 
-- Compare the full server suite with unchanged base `b4db36a4e`. That baseline has
+- Compare the full server suite with unchanged base `89d49b523`. That baseline has
   existing failures; passing new regressions is not a claim that the whole suite
   is green or that distributed production behavior is bug-free. The live multi-replica
   smoke test above is still required before deployment.
+
+## Runtime pressure and logging changes
+
+This port also includes upstream #221. Deploy both the server and container-bridge
+images so the memory-pressure failure handshake is available on both sides. Failed
+runs preserve their invocation identity and never automatically drain queued work.
+
+Apply the Slack deduplication and process-log sequence migrations during the same
+maintenance window. The log sequence trigger accepts both old replicas' proposed
+sequences and new replicas' zero-valued inserts; the group ownership migration
+still requires draining old API writers before deployment.
+
+The transaction acquisition wait is now ten seconds. High-volume process-log
+writes no longer acquire interactive transactions, and stale-runtime disconnect
+persistence runs serially. A longer acquisition wait alone is not the fix.
+
+Validate the added migrations in PostgreSQL without persisting schema or data:
+
+```sh
+psql -X -v ON_ERROR_STOP=1 -d <test-database> -f apps/server/test/upstream-fixes-migrations.sql
+```
