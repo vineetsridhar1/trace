@@ -12,6 +12,7 @@ vi.mock("./ReviewThreadBody", () => ({
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { ReviewInquiryCard } from "./ReviewInquiryCard";
+import { GuideChapterInquiries } from "./guide/GuideChapterInquiries";
 
 describe("AI conversation actions", () => {
   let renderer: ReactTestRenderer;
@@ -55,6 +56,126 @@ describe("AI conversation actions", () => {
       )!;
   const answerVisible = () =>
     JSON.stringify(renderer.toJSON()).includes("Because access is checked first.");
+
+  function addFollowUps(state: ReviewInquiry["state"] = "completed") {
+    const followUp = {
+      ...inquiry,
+      id: "follow-up",
+      position: 2,
+      question: "What if it fails?",
+      context: { followUpToInquiryId: inquiry.id },
+      responseMessage: { ...inquiry.responseMessage!, text: "It throws." },
+    };
+    const next = {
+      ...followUp,
+      id: "next",
+      position: 3,
+      state,
+      question: "Who catches it?",
+      context: { followUpToInquiryId: followUp.id },
+      responseMessage: { ...inquiry.responseMessage!, text: "The caller catches it." },
+    };
+    act(() => useEntityStore.getState().upsertMany("reviewInquiries", [followUp, next]));
+  }
+
+  it("keeps nested follow-ups in one container and continues from the latest answer", async () => {
+    addFollowUps();
+    expect(renderer.root.findAllByType("article")).toHaveLength(1);
+    expect(renderer.root.findAllByType("textarea")).toHaveLength(1);
+    expect(JSON.stringify(renderer.toJSON())).toContain("What if it fails?");
+    expect(JSON.stringify(renderer.toJSON())).toContain("Who catches it?");
+    expect(JSON.stringify(renderer.toJSON())).toContain("The caller catches it.");
+    act(() => renderer.root.findByType("textarea").props.onChange({ target: { value: "How?" } }));
+    await act(async () =>
+      renderer.root.findByType("textarea").props.onKeyDown({
+        key: "Enter",
+        shiftKey: false,
+        preventDefault: vi.fn(),
+      }),
+    );
+    expect(mutate).toHaveBeenCalledWith(expect.anything(), {
+      input: expect.objectContaining({
+        context: {
+          followUpToInquiryId: "next",
+          priorQuestion: "Who catches it?",
+          priorAnswer: "The caller catches it.",
+        },
+      }),
+    });
+  });
+
+  it("resolves and reopens the whole conversation with one control", async () => {
+    addFollowUps();
+    await act(async () => button("Resolve").props.onClick());
+    expect(mutate.mock.calls.map((call) => call[1])).toEqual([
+      { inquiryId: "question", resolved: true },
+      { inquiryId: "follow-up", resolved: true },
+      { inquiryId: "next", resolved: true },
+    ]);
+    expect(renderer.root.findAllByType("article")).toHaveLength(0);
+    act(() => {
+      for (const question of Object.values(useEntityStore.getState().reviewInquiries))
+        useEntityStore
+          .getState()
+          .upsert("reviewInquiries", question.id, { ...question, resolvedAt: "now" });
+      button("Show").props.onClick();
+    });
+    expect(renderer.root.findAllByType("article")).toHaveLength(1);
+    await act(async () => button("Reopen").props.onClick());
+    expect(mutate.mock.calls.slice(-3).map((call) => call[1])).toEqual([
+      { inquiryId: "question", resolved: false },
+      { inquiryId: "follow-up", resolved: false },
+      { inquiryId: "next", resolved: false },
+    ]);
+  });
+
+  it("keeps running follow-ups visible and waits for their completion before resolving", () => {
+    addFollowUps("running");
+    expect(JSON.stringify(renderer.toJSON())).toContain("Thinking…");
+    expect(renderer.root.findAllByType("textarea")).toHaveLength(0);
+    expect(button("Resolve")).toBeUndefined();
+    act(() =>
+      useEntityStore.getState().upsert("reviewInquiries", "next", {
+        ...useEntityStore.getState().reviewInquiries.next!,
+        state: "completed",
+      }),
+    );
+    expect(renderer.root.findAllByType("textarea")).toHaveLength(1);
+    expect(button("Resolve")).toBeDefined();
+  });
+
+  it("groups older thread follow-ups in their Guide container and deletes the whole conversation", () => {
+    const root = {
+      ...inquiry,
+      sourceKind: "guide_anchor" as const,
+      context: { guideId: "guide", guideChapterId: "chapter" },
+    };
+    act(() => {
+      useEntityStore.getState().upsert("reviewInquiries", root.id, root);
+      useEntityStore.getState().upsert("reviewInquiries", "follow-up", {
+        ...root,
+        id: "follow-up",
+        sourceKind: "thread",
+        position: 2,
+        question: "Follow-up in Guide",
+        context: { ...root.context, followUpToInquiryId: root.id },
+      });
+      renderer.update(
+        <GuideChapterInquiries
+          reviewId="review"
+          guideId="guide"
+          snapshotId="snapshot"
+          chapterId="chapter"
+        />,
+      );
+    });
+    expect(renderer.root.findAllByType("article")).toHaveLength(1);
+    expect(JSON.stringify(renderer.toJSON())).toContain("Follow-up in Guide");
+    act(() => button("Delete").props.onClick());
+    expect(renderer.toJSON()).toBeNull();
+    expect(useEntityStore.getState().reviewInquiries["follow-up"]).toBeDefined();
+    expect(mutate).not.toHaveBeenCalled();
+  });
 
   it.each(["diff_anchor", "guide_anchor", "thread"] as const)(
     "keeps a %s follow-up at its original location with the previous answer",

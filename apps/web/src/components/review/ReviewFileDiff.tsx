@@ -8,6 +8,7 @@ import {
   type RefObject,
 } from "react";
 import { gql } from "@urql/core";
+import { useShallow } from "zustand/react/shallow";
 import type {
   ReviewCodeExcerpt,
   ReviewDiffFile,
@@ -29,7 +30,12 @@ import { DiffLineRow, type DiffLineEmphasis } from "./diff/DiffLineRow";
 import { DiffSelectionPopover } from "./diff/DiffSelectionPopover";
 import { ReviewInquiryCard } from "./ReviewInquiryCard";
 import { useReviewUiStore } from "../../stores/review-ui";
-import { inquiriesQueuedAhead, inquiryQueueLabel, reviewInquiryAnchor } from "./review-inquiry";
+import {
+  conversationRoots,
+  inquiriesQueuedAhead,
+  inquiryQueueLabel,
+  reviewInquiryAnchor,
+} from "./review-inquiry";
 import { VirtualDiffRows } from "./diff/VirtualDiffRows";
 import { useReviewLineSelection } from "./useReviewLineSelection";
 import { ReviewThread } from "./ReviewThread";
@@ -97,10 +103,13 @@ function gapKey(line: DiffLine): string | null {
 }
 
 function ReviewThreadStack({ threadIds }: { threadIds: string[] }) {
-  if (threadIds.length === 0) return null;
+  const visibleIds = useReviewUiStore(
+    useShallow((store) => threadIds.filter((id) => !store.deletedThreadIds.includes(id))),
+  );
+  if (visibleIds.length === 0) return null;
   return (
     <div className="flex flex-col gap-2 border-y border-[var(--th-edge-faint)] bg-[var(--th-review-canvas)] p-3 pl-16 font-sans leading-normal">
-      {threadIds.map((threadId) => (
+      {visibleIds.map((threadId) => (
         <ReviewThread key={threadId} threadId={threadId} />
       ))}
     </div>
@@ -115,7 +124,9 @@ function ReviewInquiryStack({
   allInquiries: ReviewInquiry[];
 }) {
   const deletedIds = useReviewUiStore((store) => store.deletedInquiryIds);
-  const visible = inquiries.filter((inquiry) => !deletedIds.includes(inquiry.id));
+  const visible = conversationRoots(inquiries, allInquiries).filter(
+    (inquiry) => !deletedIds.includes(inquiry.id),
+  );
   if (visible.length === 0) return null;
   return (
     <div className="flex flex-col gap-2 border-y border-[var(--th-review-ai)]/15 bg-[var(--th-review-canvas)] p-3 pl-16 font-sans leading-normal">

@@ -180,7 +180,8 @@ describe("ReviewChangesView snapshot refresh", () => {
       inquiries = [original, followUp];
       renderer?.update(view("snapshot-1"));
     });
-    expect(renderer?.root.findAllByType(ReviewInquiryCard)).toHaveLength(2);
+    expect(renderer?.root.findAllByType(ReviewInquiryCard)).toHaveLength(1);
+    expect(renderer?.root.findAllByType("article")).toHaveLength(1);
     expect(JSON.stringify(renderer?.toJSON())).toContain(followUp.question);
     act(() => {
       useEntityStore.getState().upsert("reviewInquiries", followUp.id, {
