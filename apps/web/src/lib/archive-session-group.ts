@@ -13,12 +13,13 @@ export function archiveSessionGroup(groupId: string, groupName: string) {
   pendingArchives.add(groupId);
   let cancelled = false;
   let started = false;
+  let contextChanged = false;
   const { user, activeOrgId } = useAuthStore.getState();
   const sessionGroup = useEntityStore.getState().sessionGroups[groupId];
   useEntityStore.getState().remove("sessionGroups", groupId);
 
   const restore = () => {
-    if (!sessionGroup || useEntityStore.getState().sessionGroups[groupId]) return;
+    if (contextChanged || !sessionGroup || useEntityStore.getState().sessionGroups[groupId]) return;
     useEntityStore.getState().upsert("sessionGroups", groupId, sessionGroup);
   };
 
@@ -33,24 +34,26 @@ export function archiveSessionGroup(groupId: string, groupName: string) {
   const archive = async () => {
     if (cancelled || started) return;
     started = true;
-    unsubscribe();
     try {
       const result = await client
         .mutation(ARCHIVE_SESSION_GROUP_MUTATION, { id: groupId })
         .toPromise();
       if (result.error) throw result.error;
     } catch (error) {
+      if (contextChanged) return;
       restore();
       toast.error("Failed to archive workspace", {
         description: error instanceof Error ? error.message : "Please try again.",
       });
     } finally {
+      unsubscribe();
       pendingArchives.delete(groupId);
     }
   };
 
   const unsubscribe = useAuthStore.subscribe((state) => {
     if (state.user?.id !== user?.id || state.activeOrgId !== activeOrgId || state.loading) {
+      contextChanged = true;
       cancel();
       toast.dismiss(toastId);
     }

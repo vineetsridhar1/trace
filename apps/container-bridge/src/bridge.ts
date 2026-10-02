@@ -134,6 +134,7 @@ export class ContainerBridge implements IBridgeClient {
   private activeRunInvocationIds = new Map<string, string>();
   private memoryPressureRuns = new Map<string, number>();
   private memoryPressureActive = false;
+  private memoryPressureGeneration = 0;
   private memoryPressureSnapshot: CgroupMemorySnapshot | null = null;
   private playwrightSessions = new Map<string, PlaywrightInvocationSession>();
   private outbox = new BridgeOutbox();
@@ -237,6 +238,7 @@ export class ContainerBridge implements IBridgeClient {
    */
   handleMemoryPressure(snapshot: CgroupMemorySnapshot): void {
     this.memoryPressureActive = true;
+    this.memoryPressureGeneration++;
     this.memoryPressureSnapshot = snapshot;
     const activeSessionIds = [...this.activeRuns.keys()];
     console.error(
@@ -460,8 +462,13 @@ export class ContainerBridge implements IBridgeClient {
     return this.workspacePreparations.wait(this.workspaces.workspaceKey(sessionId));
   }
 
-  private async runAfterWorkspacePreparation(cmd: BridgeRunCommand | BridgeSendCommand) {
-    if (!(await this.waitForWorkspacePreparation(cmd.sessionId))) return;
+  private async runAfterWorkspacePreparation(cmd: BridgeRunCommand | BridgeSendCommand, runId: number) {
+    const prepared = await this.waitForWorkspacePreparation(cmd.sessionId);
+    if (this.activeRuns.get(cmd.sessionId) !== runId) return;
+    if (!prepared) {
+      this.finishRun(cmd.sessionId, runId);
+      return;
+    }
     const workdir = resolveBridgeWorkdir({
       workspaceMode: cmd.workspaceMode,
       cwd: cmd.cwd,
@@ -469,6 +476,7 @@ export class ContainerBridge implements IBridgeClient {
       homeDir: os.homedir(),
     });
     if (!workdir) {
+      this.finishRun(cmd.sessionId, runId);
       this.send({
         type: "workspace_failed",
         sessionId: cmd.sessionId,
@@ -477,6 +485,7 @@ export class ContainerBridge implements IBridgeClient {
       return;
     }
     await this.runPrompt({
+      runId,
       sessionId: cmd.sessionId,
       prompt: cmd.prompt ?? "",
       appendSystemPrompt: cmd.appendSystemPrompt,
@@ -493,7 +502,17 @@ export class ContainerBridge implements IBridgeClient {
   }
 
   private async createTerminalAfterWorkspacePreparation(cmd: BridgeTerminalCreateCommand) {
-    if (!(await this.waitForWorkspacePreparation(cmd.sessionId))) {
+    const generation = this.memoryPressureGeneration;
+    const prepared = await this.waitForWorkspacePreparation(cmd.sessionId);
+    if (this.memoryPressureActive || generation !== this.memoryPressureGeneration) {
+      this.send({
+        type: "terminal_error",
+        terminalId: cmd.terminalId,
+        error: "Terminal launch cancelled by runtime memory pressure",
+      });
+      return;
+    }
+    if (!prepared) {
       this.send({
         type: "terminal_error",
         terminalId: cmd.terminalId,
@@ -529,23 +548,32 @@ export class ContainerBridge implements IBridgeClient {
   private async runManagedProcessAfterWorkspacePreparation(
     sessionId: string,
     run: () => void,
-    fail: () => void,
+    fail: (error: string) => void,
   ) {
-    if (await this.waitForWorkspacePreparation(sessionId)) {
+    const generation = this.memoryPressureGeneration;
+    const prepared = await this.waitForWorkspacePreparation(sessionId);
+    if (this.memoryPressureActive || generation !== this.memoryPressureGeneration) {
+      fail("Process launch cancelled by runtime memory pressure");
+    } else if (prepared) {
       run();
     } else {
-      fail();
+      fail("Session workspace preparation failed");
     }
   }
 
   private async preparePlaywrightSession(
     sessionId: string,
     invocationId: string | undefined,
+    runId: number,
   ): Promise<PlaywrightInvocationSession | null> {
     await this.cleanupPlaywrightSession(sessionId);
-    if (!invocationId) return null;
+    if (!invocationId || this.activeRuns.get(sessionId) !== runId) return null;
 
     const session = await createPlaywrightInvocationSession({ invocationId });
+    if (this.activeRuns.get(sessionId) !== runId) {
+      await cleanupPlaywrightInvocationSession(session);
+      return null;
+    }
     this.playwrightSessions.set(sessionId, session);
     return session;
   }
@@ -625,7 +653,13 @@ export class ContainerBridge implements IBridgeClient {
 
       case "run":
       case "send": {
-        this.runAfterWorkspacePreparation(cmd).catch((err) => {
+        // Admission owns the entire asynchronous preparation, not just the
+        // eventual adapter process. Pressure/cancellation invalidates this run
+        // before any delayed preparation can launch a new workload.
+        const runId = this.startRun(cmd.sessionId, cmd.runtimeEnv?.TRACE_INVOCATION_ID);
+        this.runAfterWorkspacePreparation(cmd, runId).catch((err) => {
+          if (this.activeRuns.get(cmd.sessionId) !== runId) return;
+          this.finishRun(cmd.sessionId, runId);
           console.error(`[container-bridge] runPrompt failed for ${cmd.sessionId}:`, err);
           void this.cleanupPlaywrightSession(cmd.sessionId);
           this.send({
@@ -1009,12 +1043,12 @@ export class ContainerBridge implements IBridgeClient {
               cwd: cmd.cwd,
               env: cmd.env,
             }),
-          () =>
+          (error) =>
             this.send({
               type: "setup_script_result",
               requestId: cmd.requestId,
               exitCode: 1,
-              error: "Session workspace preparation failed",
+              error,
             }),
         );
         break;
@@ -1034,12 +1068,12 @@ export class ContainerBridge implements IBridgeClient {
               env: cmd.env,
               ports: cmd.ports.map((port) => port.port),
             }),
-          () =>
+          (error) =>
             this.send({
               type: "app_process_error",
               requestId: cmd.requestId,
               processInstanceId: cmd.processInstanceId,
-              error: "Session workspace preparation failed",
+              error,
             }),
         );
         break;
@@ -1384,6 +1418,7 @@ export class ContainerBridge implements IBridgeClient {
   }
 
   private async runPrompt({
+    runId,
     sessionId,
     prompt,
     appendSystemPrompt,
@@ -1397,6 +1432,7 @@ export class ContainerBridge implements IBridgeClient {
     imageUrls,
     runtimeEnv,
   }: {
+    runId: number;
     sessionId: string;
     prompt: string;
     appendSystemPrompt?: string;
@@ -1412,11 +1448,15 @@ export class ContainerBridge implements IBridgeClient {
   }): Promise<void> {
     const resolvedTool = tool ?? this.defaultTool;
     await ensureToolReady(resolvedTool);
+    if (this.activeRuns.get(sessionId) !== runId) return;
     const traceRuntime = await this.traceRuntime;
+    if (this.activeRuns.get(sessionId) !== runId) return;
     const playwrightSession = await this.preparePlaywrightSession(
       sessionId,
       runtimeEnv?.TRACE_INVOCATION_ID,
+      runId,
     );
+    if (this.activeRuns.get(sessionId) !== runId) return;
     const invocationEnv = buildTraceInvocationEnv({
       runtimeEnv: { ...runtimeEnv, ...playwrightSession?.env },
       serverUrl: this.serverUrl,
@@ -1485,7 +1525,10 @@ export class ContainerBridge implements IBridgeClient {
       }
     };
 
-    const runId = this.startRun(sessionId, runtimeEnv?.TRACE_INVOCATION_ID);
+    if (this.activeRuns.get(sessionId) !== runId) {
+      cleanupImages();
+      return;
+    }
     adapter.abort();
 
     let browserCleanupStarted = false;

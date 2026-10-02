@@ -11,8 +11,12 @@ BEGIN
     FROM "SessionGroup" g JOIN "Session" s ON s."sessionGroupId" = g.id
     WHERE g.connection IS NULL OR g.connection = 'null'::jsonb
     GROUP BY g.id
-    HAVING COUNT(DISTINCT s.connection->>'runtimeInstanceId') > 1
-      OR COUNT(DISTINCT s.connection->>'providerRuntimeId') > 1
+    -- Compare complete ownership tuples, including cleared bindings. Ignoring
+    -- NULL identifiers would treat a live binding and {} as unambiguous and
+    -- could silently discard ownership based on unrelated session updates.
+    HAVING COUNT(DISTINCT jsonb_build_array(
+      s.connection->>'runtimeInstanceId', s.connection->>'providerRuntimeId'
+    )) FILTER (WHERE s.connection IS NOT NULL AND s.connection <> 'null'::jsonb) > 1
   ) THEN
     RAISE EXCEPTION 'Ambiguous legacy group runtime ownership; reconcile missing group connections before retrying';
   END IF;

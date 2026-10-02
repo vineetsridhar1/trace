@@ -8370,7 +8370,7 @@ export class SessionService {
         include: SESSION_INCLUDE,
       });
 
-      const setupScript = await this.getChannelSetupScript(updated.channelId);
+      const setupScript = await this.getChannelSetupScript(updated.channelId, tx);
       if (prev.sessionGroupId) {
         const groupData = {
           workdir,
@@ -12061,9 +12061,10 @@ export class SessionService {
 
   private async getChannelSetupScript(
     channelId: string | null | undefined,
+    tx: Pick<Prisma.TransactionClient, "channel">,
   ): Promise<string | null> {
     if (!channelId) return null;
-    const channel = await prisma.channel.findUnique({
+    const channel = await tx.channel.findUnique({
       where: { id: channelId },
       select: { setupScript: true },
     });

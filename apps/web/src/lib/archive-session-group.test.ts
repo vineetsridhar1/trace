@@ -28,11 +28,7 @@ vi.mock("@trace/client-core", async () => {
   };
 });
 
-import {
-  useAuthStore,
-  useEntityStore,
-  type SessionGroupEntity,
-} from "@trace/client-core";
+import { useAuthStore, useEntityStore, type SessionGroupEntity } from "@trace/client-core";
 
 import { archiveSessionGroup } from "./archive-session-group";
 
@@ -88,6 +84,32 @@ describe("archiveSessionGroup", () => {
       archiveSessionGroup("auth-change", "Workspace");
       expect(notify).toHaveBeenCalledTimes(2);
       options().action.onClick();
+    },
+  );
+
+  it.each([{ activeOrgId: "other-org" }, { user: null }, { loading: true }])(
+    "does not restore an in-flight archive into a changed auth context: %j",
+    async (change) => {
+      const original = useAuthStore.getState();
+      const group = { id: "late-failure", name: "Workspace" } as SessionGroupEntity;
+      useEntityStore.setState({ sessionGroups: { "late-failure": group } });
+      let reject!: (error: Error) => void;
+      mutation.mockReturnValue({
+        toPromise: () =>
+          new Promise((_resolve, fail) => {
+            reject = fail;
+          }),
+      });
+      archiveSessionGroup("late-failure", "Workspace");
+      const request = options().onAutoClose();
+      useAuthStore.setState(change);
+      useEntityStore.setState({ sessionGroups: {} });
+      // Returning to the original context does not make the old cache valid.
+      useAuthStore.setState(original);
+      reject(new Error("Late request failure"));
+      await request;
+      expect(useEntityStore.getState().sessionGroups["late-failure"]).toBeUndefined();
+      expect(error).not.toHaveBeenCalled();
     },
   );
 

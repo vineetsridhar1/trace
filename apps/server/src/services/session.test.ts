@@ -10725,6 +10725,21 @@ describe("SessionService", () => {
   });
 
   describe("workspaceReady", () => {
+    it("uses the held transaction for setup lookup instead of acquiring another pool connection", async () => {
+      const channelLookup = vi.fn().mockResolvedValue({ setupScript: null });
+      const tx = { ...prismaMock, channel: { ...prismaMock.channel, findUnique: channelLookup } };
+      prismaMock.$transaction.mockImplementationOnce(async (run: (client: typeof tx) => Promise<unknown>) => run(tx));
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(makeSession());
+      prismaMock.session.update.mockResolvedValueOnce(makeSession({ workdir: "/tmp/prepared" }));
+
+      await service.workspaceReady("session-1", "/tmp/prepared");
+
+      expect(channelLookup).toHaveBeenCalledWith({
+        where: { id: "channel-1" }, select: { setupScript: true },
+      });
+      expect(prismaMock.channel.findUnique).not.toHaveBeenCalled();
+    });
+
     it("auto-starts design sessions through the shared application service", async () => {
       const startApplication = vi
         .spyOn(sessionApplicationService, "startApplication")

@@ -76,3 +76,16 @@ Validate the added migrations in PostgreSQL without persisting schema or data:
 ```sh
 psql -X -v ON_ERROR_STOP=1 -d <test-database> -f apps/server/test/upstream-fixes-migrations.sql
 ```
+
+Review hardening:
+
+- Missing group ownership must have one consistent runtime/provider binding
+  across non-null session snapshots. A cleared binding mixed with a live one,
+  or inconsistent partial identifiers, blocks migration for reconciliation.
+- Workspace readiness reads setup configuration through its transaction client;
+  it does not request a second pool connection while holding the group lock.
+- Agent admission begins before asynchronous workspace/tool/browser preparation.
+  Memory pressure invalidates delayed agent, terminal, setup, and application
+  launches even if memory recovers before preparation finishes. Late browser
+  resources are cleaned up, and stale preparation failures cannot complete a
+  newer invocation.

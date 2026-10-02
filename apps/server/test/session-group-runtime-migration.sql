@@ -31,4 +31,23 @@ BEGIN
     RAISE EXCEPTION 'Session projections disagree with canonical ownership';
   END IF;
 END $$;
+-- A missing group with a bound snapshot and a cleared snapshot has no
+-- authoritative owner. Never choose one solely by the session update time.
+SAVEPOINT conflicting_ownership;
+DROP INDEX "SessionGroup_connection_deprovision_idx";
+INSERT INTO "SessionGroup" VALUES ('conflicting', NULL);
+INSERT INTO "Session" VALUES
+  ('bound', 'conflicting', '{"runtimeInstanceId":"bound-runtime"}', now() - interval '1 minute'),
+  ('newer-cleared', 'conflicting', '{}', now());
+\set ON_ERROR_STOP off
+\ir ../prisma/migrations/20260909120000_session_group_runtime_authority/migration.sql
+\set migration_failed :ERROR
+\set ON_ERROR_STOP on
+ROLLBACK TO SAVEPOINT conflicting_ownership;
+\if :migration_failed
+\else
+  DO $$ BEGIN
+    RAISE EXCEPTION 'Migration accepted conflicting cleared/bound legacy ownership';
+  END $$;
+\endif
 ROLLBACK;

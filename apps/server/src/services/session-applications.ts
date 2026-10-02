@@ -1129,10 +1129,8 @@ export class SessionApplicationService {
     return process;
   }
 
-  // Log chunks for one process arrive concurrently (stdout + stderr) over a
-  // single runtime connection bound to this server instance. Serialize the
-  // read-then-write sequence assignment per process so concurrent chunks can't
-  // collide on the same sequence number and corrupt pagination.
+  // Preserve chunk arrival and publication order within this server. The
+  // database trigger allocates unique sequences across all server replicas.
   async appendProcessLog(
     processId: string,
     organizationId: string,
