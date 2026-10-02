@@ -1,5 +1,34 @@
 import type { ReviewAnchor, ReviewInquiry } from "@trace/gql";
 
+export function inquiryConversationRoot(
+  inquiry: ReviewInquiry,
+  inquiries: Record<string, ReviewInquiry>,
+): string {
+  const visited = new Set<string>([inquiry.id]);
+  let current = inquiry;
+  while (true) {
+    const context = current.context;
+    const parentId =
+      context && typeof context === "object" && !Array.isArray(context)
+        ? context.followUpToInquiryId
+        : null;
+    if (typeof parentId !== "string" || visited.has(parentId)) return current.id;
+    const parent = inquiries[parentId];
+    if (!parent || parent.reviewId !== inquiry.reviewId || parent.snapshotId !== inquiry.snapshotId)
+      return current.id;
+    visited.add(parentId);
+    current = parent;
+  }
+}
+
+export function conversationRoots(
+  inquiries: ReviewInquiry[],
+  allInquiries: ReviewInquiry[],
+): ReviewInquiry[] {
+  const byId = Object.fromEntries(allInquiries.map((inquiry) => [inquiry.id, inquiry]));
+  return inquiries.filter((inquiry) => inquiryConversationRoot(inquiry, byId) === inquiry.id);
+}
+
 export function reviewInquiryAnchor(
   inquiry: Pick<ReviewInquiry, "anchor">,
 ): Pick<ReviewAnchor, "filePath" | "side" | "startLine" | "endLine"> | null {

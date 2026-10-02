@@ -20,6 +20,8 @@ interface ReviewUiSelection {
   /** Missing entries use file metadata defaults; explicit choices survive virtualized remounts. */
   fileCollapsedOverrides: Record<string, boolean>;
   inquiryCollapsedOverrides: Record<string, boolean>;
+  inquiryExpandedTurnOverrides: Record<string, string | null>;
+  threadCollapsedOverrides: Record<string, boolean>;
 }
 
 interface ReviewUiState {
@@ -28,12 +30,21 @@ interface ReviewUiState {
   setReplyDraft(threadId: string, body: string): void;
   deletedInquiryIds: string[];
   deleteInquiry(inquiryId: string): void;
+  deletedThreadIds: string[];
+  deleteThread(threadId: string): void;
   byReviewId: Record<string, ReviewUiSelection>;
   patch(reviewId: string, value: Partial<ReviewUiSelection>): void;
   navigate(reviewId: string, highlight: ReviewHighlight): void;
   toggleFileCollapsed(reviewId: string, filePath: string, defaultCollapsed?: boolean): void;
   setInquiryCollapsed(reviewId: string, inquiryId: string, collapsed: boolean): void;
   toggleInquiryCollapsed(reviewId: string, inquiryId: string, defaultCollapsed?: boolean): void;
+  setInquiryExpandedTurn(
+    reviewId: string,
+    inquiryId: string,
+    turnId: string | null | undefined,
+  ): void;
+  setThreadCollapsed(reviewId: string, threadId: string, collapsed: boolean): void;
+  toggleThreadCollapsed(reviewId: string, threadId: string, defaultCollapsed?: boolean): void;
 }
 
 const emptySelection = (): ReviewUiSelection => ({
@@ -45,15 +56,16 @@ const emptySelection = (): ReviewUiSelection => ({
   highlight: null,
   fileCollapsedOverrides: {},
   inquiryCollapsedOverrides: {},
+  inquiryExpandedTurnOverrides: {},
+  threadCollapsedOverrides: {},
 });
 
 const DELETED_INQUIRIES_KEY = "trace.review.deleted-inquiries.v1";
+const DELETED_THREADS_KEY = "trace.review.deleted-threads.v1";
 
-function deletedInquiries(): string[] {
+function deletedIds(key: string): string[] {
   try {
-    const value: unknown = JSON.parse(
-      globalThis.localStorage?.getItem(DELETED_INQUIRIES_KEY) ?? "[]",
-    );
+    const value: unknown = JSON.parse(globalThis.localStorage?.getItem(key) ?? "[]");
     return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
   } catch {
     return [];
@@ -69,7 +81,7 @@ export const useReviewUiStore = create<ReviewUiState>((set) => ({
       else delete replyDrafts[threadId];
       return { replyDrafts };
     }),
-  deletedInquiryIds: deletedInquiries(),
+  deletedInquiryIds: deletedIds(DELETED_INQUIRIES_KEY),
   deleteInquiry: (inquiryId) =>
     set((state) => {
       if (state.deletedInquiryIds.includes(inquiryId)) return state;
@@ -80,6 +92,18 @@ export const useReviewUiStore = create<ReviewUiState>((set) => ({
         // Still dismiss locally when browser storage is unavailable.
       }
       return { deletedInquiryIds };
+    }),
+  deletedThreadIds: deletedIds(DELETED_THREADS_KEY),
+  deleteThread: (threadId) =>
+    set((state) => {
+      if (state.deletedThreadIds.includes(threadId)) return state;
+      const deletedThreadIds = [...state.deletedThreadIds, threadId];
+      try {
+        globalThis.localStorage?.setItem(DELETED_THREADS_KEY, JSON.stringify(deletedThreadIds));
+      } catch {
+        // Still dismiss locally when browser storage is unavailable.
+      }
+      return { deletedThreadIds };
     }),
   byReviewId: {},
   patch: (reviewId, value) =>
@@ -152,6 +176,52 @@ export const useReviewUiStore = create<ReviewUiState>((set) => ({
             inquiryCollapsedOverrides: {
               ...current.inquiryCollapsedOverrides,
               [inquiryId]: !collapsed,
+            },
+          },
+        },
+      };
+    }),
+  setInquiryExpandedTurn: (reviewId, inquiryId, turnId) =>
+    set((state) => {
+      const current = state.byReviewId[reviewId] ?? emptySelection();
+      const inquiryExpandedTurnOverrides = { ...current.inquiryExpandedTurnOverrides };
+      if (turnId === undefined) delete inquiryExpandedTurnOverrides[inquiryId];
+      else inquiryExpandedTurnOverrides[inquiryId] = turnId;
+      return {
+        byReviewId: {
+          ...state.byReviewId,
+          [reviewId]: { ...current, inquiryExpandedTurnOverrides },
+        },
+      };
+    }),
+  setThreadCollapsed: (reviewId, threadId, collapsed) =>
+    set((state) => {
+      const current = state.byReviewId[reviewId] ?? emptySelection();
+      return {
+        byReviewId: {
+          ...state.byReviewId,
+          [reviewId]: {
+            ...current,
+            threadCollapsedOverrides: {
+              ...current.threadCollapsedOverrides,
+              [threadId]: collapsed,
+            },
+          },
+        },
+      };
+    }),
+  toggleThreadCollapsed: (reviewId, threadId, defaultCollapsed = false) =>
+    set((state) => {
+      const current = state.byReviewId[reviewId] ?? emptySelection();
+      const collapsed = current.threadCollapsedOverrides[threadId] ?? defaultCollapsed;
+      return {
+        byReviewId: {
+          ...state.byReviewId,
+          [reviewId]: {
+            ...current,
+            threadCollapsedOverrides: {
+              ...current.threadCollapsedOverrides,
+              [threadId]: !collapsed,
             },
           },
         },

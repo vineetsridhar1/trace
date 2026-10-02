@@ -14,6 +14,10 @@ const comment = vi.fn(),
 let renderer: ReactTestRenderer;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
+    setTimeout(() => callback(0), 0),
+  );
+  vi.stubGlobal("cancelAnimationFrame", clearTimeout);
   vi.stubGlobal("window", new EventTarget());
   vi.stubGlobal("document", new EventTarget());
   vi.stubGlobal("Element", class {});
@@ -36,7 +40,15 @@ beforeEach(() => {
         onComment={comment}
         onAsk={ask}
       />,
-      { createNodeMock: () => ({ getBoundingClientRect: () => ({ top: 100 }) }) },
+      {
+        createNodeMock: (element) =>
+          element.type === "button" ||
+          (typeof element.props === "object" &&
+            element.props !== null &&
+            "data-slot" in element.props)
+            ? null
+            : { getBoundingClientRect: () => ({ top: 100 }) },
+      },
     );
   });
 });

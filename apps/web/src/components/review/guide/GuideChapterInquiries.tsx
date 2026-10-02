@@ -3,7 +3,7 @@ import { useEntityStore } from "@trace/client-core";
 import type { ReviewInquiry } from "@trace/gql";
 import { useReviewUiStore } from "../../../stores/review-ui";
 import { ReviewInquiryCard } from "../ReviewInquiryCard";
-import { inquiriesQueuedAhead, inquiryQueueLabel } from "../review-inquiry";
+import { conversationRoots, inquiriesQueuedAhead, inquiryQueueLabel } from "../review-inquiry";
 
 export function GuideChapterInquiries({
   reviewId,
@@ -25,7 +25,7 @@ export function GuideChapterInquiries({
   );
   const chapterInquiries = useMemo(
     () =>
-      inquiries
+      conversationRoots(inquiries, inquiries)
         .filter((inquiry) => {
           const context = inquiry.context;
           return (

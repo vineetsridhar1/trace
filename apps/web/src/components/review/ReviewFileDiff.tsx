@@ -1,8 +1,22 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { gql } from "@urql/core";
-import type { ReviewDiffFile, ReviewInquiry, ReviewThread as ReviewThreadType } from "@trace/gql";
+import { useShallow } from "zustand/react/shallow";
+import type {
+  ReviewCodeExcerpt,
+  ReviewDiffFile,
+  ReviewInquiry,
+  ReviewThread as ReviewThreadType,
+} from "@trace/gql";
 import { client } from "../../lib/urql";
-import { hunkGapLabel, parsePatch } from "./diff-patch";
+import { hunkGapLabel, parsePatch, type DiffLine } from "./diff-patch";
 import {
   lineNumberForSide,
   lineSide,
@@ -16,8 +30,13 @@ import { DiffLineRow, type DiffLineEmphasis } from "./diff/DiffLineRow";
 import { DiffSelectionPopover } from "./diff/DiffSelectionPopover";
 import { ReviewInquiryCard } from "./ReviewInquiryCard";
 import { useReviewUiStore } from "../../stores/review-ui";
-import { inquiriesQueuedAhead, inquiryQueueLabel, reviewInquiryAnchor } from "./review-inquiry";
-import { VirtualDiffRows, visibleDiffLines } from "./diff/VirtualDiffRows";
+import {
+  conversationRoots,
+  inquiriesQueuedAhead,
+  inquiryQueueLabel,
+  reviewInquiryAnchor,
+} from "./review-inquiry";
+import { VirtualDiffRows } from "./diff/VirtualDiffRows";
 import { useReviewLineSelection } from "./useReviewLineSelection";
 import { ReviewThread } from "./ReviewThread";
 import type { ReviewHighlight } from "../../stores/review-ui";
@@ -35,6 +54,23 @@ const DIFF_QUERY = gql`
     }
   }
 `;
+
+const CODE_EXCERPT_QUERY = gql`
+  query ReviewHiddenDiffLines($snapshotId: ID!, $filePath: String!, $startLine: Int!, $endLine: Int!) {
+    reviewCodeExcerpt(
+      snapshotId: $snapshotId
+      filePath: $filePath
+      startLine: $startLine
+      endLine: $endLine
+    ) {
+      startLine
+      endLine
+      content
+    }
+  }
+`;
+
+const MAX_EXPANDED_GAP_LINES = 80;
 
 interface ReviewFileDiffProps {
   requestedLine: number | null;
@@ -61,11 +97,19 @@ function anchorKey(side: string, line: number): string {
   return `${side}:${line}`;
 }
 
+function gapKey(line: DiffLine): string | null {
+  if (line.gapStartLine === undefined || line.gapEndLine === undefined) return null;
+  return `${line.gapStartLine}:${line.gapEndLine}`;
+}
+
 function ReviewThreadStack({ threadIds }: { threadIds: string[] }) {
-  if (threadIds.length === 0) return null;
+  const visibleIds = useReviewUiStore(
+    useShallow((store) => threadIds.filter((id) => !store.deletedThreadIds.includes(id))),
+  );
+  if (visibleIds.length === 0) return null;
   return (
     <div className="flex flex-col gap-2 border-y border-[var(--th-edge-faint)] bg-[var(--th-review-canvas)] p-3 pl-16 font-sans leading-normal">
-      {threadIds.map((threadId) => (
+      {visibleIds.map((threadId) => (
         <ReviewThread key={threadId} threadId={threadId} />
       ))}
     </div>
@@ -80,7 +124,9 @@ function ReviewInquiryStack({
   allInquiries: ReviewInquiry[];
 }) {
   const deletedIds = useReviewUiStore((store) => store.deletedInquiryIds);
-  const visible = inquiries.filter((inquiry) => !deletedIds.includes(inquiry.id));
+  const visible = conversationRoots(inquiries, allInquiries).filter(
+    (inquiry) => !deletedIds.includes(inquiry.id),
+  );
   if (visible.length === 0) return null;
   return (
     <div className="flex flex-col gap-2 border-y border-[var(--th-review-ai)]/15 bg-[var(--th-review-canvas)] p-3 pl-16 font-sans leading-normal">
@@ -124,6 +170,8 @@ export function ReviewFileDiff({
     collapsed ? null : (patchCache.get(filePath) ?? null),
   );
   const [error, setError] = useState<string | null>(null);
+  const [expandedGaps, setExpandedGaps] = useState<Record<string, DiffLine[]>>({});
+  const [loadingGaps, setLoadingGaps] = useState<Record<string, boolean>>({});
 
   // The patch belongs to one immutable snapshot. Callers remount this card when the review
   // advances, but the comparison is kept here too: serving a cached patch under a newer snapshot
@@ -160,9 +208,68 @@ export function ReviewFileDiff({
 
   useEffect(() => setError(null), [snapshotId]);
 
+  useEffect(() => {
+    setExpandedGaps({});
+    setLoadingGaps({});
+  }, [current?.patch, snapshotId]);
+
   const lines = useMemo(
-    () => (collapsed ? [] : visibleDiffLines(parsePatch(current?.patch ?? ""))),
-    [collapsed, current?.patch],
+    () => {
+      if (collapsed) return [];
+      const expandGapLine = (line: DiffLine): DiffLine[] => {
+        const key = gapKey(line);
+        const expanded = key ? expandedGaps[key] : undefined;
+        if (expanded && expanded.length > 0) {
+          const nextStartLine = (line.gapStartLine ?? 0) + expanded.length;
+          return nextStartLine <= (line.gapEndLine ?? 0)
+            ? [
+                ...expanded,
+                ...expandGapLine({
+                  ...line,
+                  gapLines: line.gapEndLine! - nextStartLine + 1,
+                  gapStartLine: nextStartLine,
+                }),
+              ]
+            : expanded;
+        }
+        return line.kind !== "meta" || hunkGapLabel(line) !== null ? [line] : [];
+      };
+      return parsePatch(current?.patch ?? "").flatMap(expandGapLine);
+    },
+    [collapsed, current?.patch, expandedGaps],
+  );
+  const expandGap = useCallback(
+    (line: DiffLine) => {
+      const key = gapKey(line);
+      if (!key || line.gapStartLine === undefined || line.gapEndLine === undefined) return;
+      const endLine = Math.min(line.gapEndLine, line.gapStartLine + MAX_EXPANDED_GAP_LINES - 1);
+      setLoadingGaps((gaps) => ({ ...gaps, [key]: true }));
+      void client
+        .query<{ reviewCodeExcerpt: Pick<ReviewCodeExcerpt, "content"> }>(CODE_EXCERPT_QUERY, {
+          snapshotId,
+          filePath,
+          startLine: line.gapStartLine,
+          endLine,
+        })
+        .toPromise()
+        .then((result) => {
+          const content = result.data?.reviewCodeExcerpt?.content;
+          if (result.error || content === undefined) return;
+          const expanded = content.split("\n");
+          if (expanded.length === 0 || (expanded.length === 1 && expanded[0] === "")) return;
+          setExpandedGaps((gaps) => ({
+            ...gaps,
+            [key]: expanded.map((text, index) => ({
+              kind: "context",
+              text,
+              oldLine: line.gapStartLine! + index,
+              newLine: line.gapStartLine! + index,
+            })),
+          }));
+        })
+        .finally(() => setLoadingGaps((gaps) => ({ ...gaps, [key]: false })));
+    },
+    [filePath, snapshotId],
   );
   const { range, selection, popoverTop, beginSelection, extendSelection, clearSelection } =
     useReviewLineSelection(filePath, lines, cardRef);
@@ -259,7 +366,16 @@ export function ReviewFileDiff({
             renderLine={(line, index) => {
               if (line.kind === "meta") {
                 const label = hunkGapLabel(line);
-                return label ? <DiffGapRow key={index} label={label} position="between" /> : null;
+                const key = gapKey(line);
+                return label ? (
+                  <DiffGapRow
+                    key={index}
+                    label={label}
+                    position="between"
+                    onExpand={key ? () => expandGap(line) : undefined}
+                    loading={key ? loadingGaps[key] === true : false}
+                  />
+                ) : null;
               }
               const side = lineSide(line);
               const lineNumber = lineNumberForSide(line, side);
