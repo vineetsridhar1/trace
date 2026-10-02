@@ -36,7 +36,10 @@ beforeEach(() => {
         onComment={comment}
         onAsk={ask}
       />,
-      { createNodeMock: () => ({ getBoundingClientRect: () => ({ top: 100 }) }) },
+      {
+        createNodeMock: (element) =>
+          element.type === "button" ? null : { getBoundingClientRect: () => ({ top: 100 }) },
+      },
     );
   });
 });

@@ -248,7 +248,12 @@ describe("Guide Ask about this", () => {
       }),
     );
     expect(JSON.stringify(renderer.toJSON())).toContain("Validation protects shared state.");
-    click("Delete");
+    act(() =>
+      renderer.root
+        .findAllByType("button")
+        .find((node) => node.props["aria-label"] === "Delete AI conversation")!
+        .props.onClick(),
+    );
     expect(JSON.stringify(renderer.toJSON())).not.toContain("Validation protects shared state.");
     expect(renderer.root.findAllByType(ReviewInquiryCard)).toHaveLength(0);
     expect(useEntityStore.getState().reviewInquiries.question).toBeDefined();

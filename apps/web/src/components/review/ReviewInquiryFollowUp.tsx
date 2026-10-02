@@ -2,6 +2,8 @@ import { useState } from "react";
 import { gql } from "@urql/core";
 import { useEntityField } from "@trace/client-core";
 import { toast } from "sonner";
+import { ArrowUp, LoaderCircle } from "lucide-react";
+import { Button } from "../ui/button";
 import { mutateReview } from "./review-operations";
 
 const ENQUEUE_FOLLOW_UP = gql`
@@ -52,7 +54,7 @@ export function ReviewInquiryFollowUp({ inquiryId }: { inquiryId: string }) {
   };
 
   return (
-    <div className="border-t border-[var(--th-review-ai)]/15 pt-2.5">
+    <div className="mt-4 flex items-end gap-2 rounded-lg border border-[var(--th-review-edge-strong)] bg-[var(--th-surface-deep)] p-2 focus-within:border-[var(--th-review-comment)]/50">
       <textarea
         value={followUp}
         onChange={(event) => setFollowUp(event.target.value)}
@@ -63,10 +65,20 @@ export function ReviewInquiryFollowUp({ inquiryId }: { inquiryId: string }) {
           }
         }}
         disabled={sendingFollowUp}
-        className="h-12 w-full resize-none rounded-md border border-[var(--th-review-ai)]/20 bg-black/15 p-2 text-xs outline-none placeholder:text-muted-foreground focus:border-[var(--th-review-ai)] disabled:cursor-wait disabled:opacity-50"
-        placeholder="Ask a follow-up…"
+        rows={1}
+        className="field-sizing-content max-h-32 min-h-8 min-w-0 flex-1 resize-none bg-transparent px-1 py-1.5 text-[13px] text-[var(--th-review-text)] outline-none placeholder:text-muted-foreground disabled:cursor-wait disabled:opacity-50"
+        placeholder="Ask a follow-up about this change"
         aria-label="Ask a follow-up"
       />
+      <Button
+        size="icon"
+        aria-label="Send follow-up"
+        disabled={!followUp.trim() || sendingFollowUp}
+        onClick={() => void sendFollowUp()}
+        className="bg-[var(--th-review-accent-edge)] text-[var(--th-review-accent-tint)] hover:bg-[var(--th-review-accent-deep)]"
+      >
+        {sendingFollowUp ? <LoaderCircle className="animate-spin" /> : <ArrowUp />}
+      </Button>
     </div>
   );
 }

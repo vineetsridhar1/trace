@@ -51,8 +51,10 @@ describe("AI conversation actions", () => {
   const button = (label: string) =>
     renderer.root
       .findAllByType("button")
-      .find((node) =>
-        node.children.some((child) => typeof child === "string" && child.trim() === label),
+      .find(
+        (node) =>
+          (label === "Delete" && node.props["aria-label"] === "Delete AI conversation") ||
+          node.children.some((child) => typeof child === "string" && child.trim() === label),
       )!;
   const answerVisible = () =>
     JSON.stringify(renderer.toJSON()).includes("Because access is checked first.");
@@ -237,6 +239,23 @@ describe("AI conversation actions", () => {
     });
     expect(renderer.root.findByType("textarea").props.value).toBe("What if access fails?");
     expect(toast.error).toHaveBeenCalledWith("unavailable");
+  });
+
+  it("sends from the composer button and disables it for empty drafts", async () => {
+    const send = () =>
+      renderer.root.findByProps({ "aria-label": "Send follow-up", "data-slot": "button" });
+    expect(send().props.disabled).toBe(true);
+    act(() => renderer.root.findByType("textarea").props.onChange({ target: { value: "Why?" } }));
+    expect(send().props.disabled).toBe(false);
+    await act(async () => send().props.onClick());
+    expect(mutate).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+      input: expect.objectContaining({
+        question: "Why?",
+        context: expect.objectContaining({ followUpToInquiryId: "question" }),
+      }),
+    });
+    expect(renderer.root.findByType("textarea").props.value).toBe("");
+    expect(send().props.disabled).toBe(true);
   });
 
   it("resolves into a compact row, allows viewing it, and reopens it", async () => {

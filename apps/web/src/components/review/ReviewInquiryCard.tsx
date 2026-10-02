@@ -2,13 +2,14 @@ import { useState } from "react";
 import { gql } from "@urql/core";
 import { useEntityField, useEntityStore } from "@trace/client-core";
 import { useShallow } from "zustand/react/shallow";
-import { CheckCircle2, ChevronDown, Trash2, Sparkles } from "lucide-react";
+import { ChevronDown, Trash2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useReviewUiStore } from "../../stores/review-ui";
 import { mutateReview } from "./review-operations";
 import { inquiryConversationRoot } from "./review-inquiry";
 import { ReviewInquiryTurn } from "./ReviewInquiryTurn";
 import { ReviewInquiryFollowUp } from "./ReviewInquiryFollowUp";
+import { ReviewInquiryHeader } from "./ReviewInquiryHeader";
 
 const RESOLVE_INQUIRY = gql`
   mutation ResolveReviewInquiry($inquiryId: ID!, $resolved: Boolean!) {
@@ -76,8 +77,8 @@ export function ReviewInquiryCard({
   if (deleted || conversationIds.length === 0) return null;
   if (collapsed)
     return (
-      <div className="flex max-w-[720px] items-center gap-2 rounded-[8px] border border-[var(--th-review-ai)]/20 bg-[var(--th-review-ai)]/[0.04] px-3 py-2 text-xs">
-        <Sparkles size={11} className="shrink-0 text-[var(--th-review-ai-light)]" />
+      <div className="flex max-w-[720px] items-center gap-2 rounded-[8px] border border-[var(--th-review-edge-strong)] bg-[var(--th-raised)] px-3 py-2 text-xs">
+        <Sparkles size={11} className="shrink-0 text-[var(--th-review-comment)]" />
         <span className="min-w-0 flex-1 truncate text-[var(--th-review-text-soft)]">
           {question}
         </span>
@@ -89,7 +90,7 @@ export function ReviewInquiryCard({
         <button
           type="button"
           onClick={() => toggleCollapsed(reviewId, inquiryId, resolved)}
-          className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-[var(--th-review-ai-light)] hover:text-[var(--th-review-ai-lighter)]"
+          className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-[var(--th-review-comment)] hover:text-[var(--th-review-text)]"
         >
           <ChevronDown size={11} /> Show
         </button>
@@ -104,47 +105,32 @@ export function ReviewInquiryCard({
       </div>
     );
   return (
-    <article className="max-w-[720px] overflow-hidden rounded-[9px] border border-[var(--th-review-ai)]/30 bg-[var(--th-review-ai)]/[0.055] shadow-[inset_2px_0_0_rgba(167,139,250,.45)]">
-      <div className="flex gap-2.5 p-3.5">
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--th-review-ai)]/20 text-[var(--th-review-ai-light)]">
-          <Sparkles size={12} />
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          {conversationIds.map((id, index) => (
-            <div
-              key={id}
-              className={index > 0 ? "border-t border-[var(--th-review-ai)]/20 pt-3" : undefined}
-            >
-              <ReviewInquiryTurn
-                inquiryId={id}
-                queuedAheadCount={index === 0 ? queuedAheadCount : undefined}
-                blockerLabel={index === 0 ? blockerLabel : undefined}
-              />
-            </div>
-          ))}
-          {finished ? (
-            <ReviewInquiryFollowUp inquiryId={conversationIds[conversationIds.length - 1]!} />
-          ) : null}
-          <div className="mt-0.5 flex items-center justify-end gap-3 border-t border-[var(--th-review-ai)]/15 pt-2">
-            <button
-              type="button"
-              onClick={() => deleteInquiry(inquiryId)}
-              className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--th-review-text-dim)] hover:text-[var(--th-heading)]"
-            >
-              <Trash2 size={11} /> Delete
-            </button>
-            {finished ? (
-              <button
-                type="button"
-                disabled={resolving}
-                onClick={() => void resolve()}
-                className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--th-review-ai-light)] hover:text-[var(--th-review-ai-lighter)] disabled:opacity-50"
-              >
-                <CheckCircle2 size={11} /> {resolved ? "Reopen" : "Resolve"}
-              </button>
-            ) : null}
+    <article className="w-full max-w-[720px] overflow-hidden rounded-xl border border-[var(--th-review-edge-strong)] bg-[var(--th-raised)] shadow-sm">
+      <ReviewInquiryHeader
+        inquiryId={inquiryId}
+        questionCount={conversationIds.length}
+        finished={finished}
+        resolved={resolved}
+        resolving={resolving}
+        onDelete={() => deleteInquiry(inquiryId)}
+        onResolve={() => void resolve()}
+      />
+      <div className="px-4 py-3">
+        {conversationIds.map((id, index) => (
+          <div
+            key={id}
+            className={index > 0 ? "mt-3 border-t border-[var(--th-review-edge)] pt-3" : undefined}
+          >
+            <ReviewInquiryTurn
+              inquiryId={id}
+              queuedAheadCount={index === 0 ? queuedAheadCount : undefined}
+              blockerLabel={index === 0 ? blockerLabel : undefined}
+            />
           </div>
-        </div>
+        ))}
+        {finished ? (
+          <ReviewInquiryFollowUp inquiryId={conversationIds[conversationIds.length - 1]!} />
+        ) : null}
       </div>
     </article>
   );
