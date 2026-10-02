@@ -1,5 +1,6 @@
 import type { Artifact } from "@trace/gql";
 import { MediaArtifact } from "./MediaArtifact";
+import { HtmlArtifact } from "./HtmlArtifact";
 import { VisualPlanArtifact } from "./VisualPlanArtifact";
 
 export function ArtifactContent({
@@ -14,6 +15,9 @@ export function ArtifactContent({
   }
   if (artifact.type === "trace.image.v1" || artifact.type === "trace.video.v1") {
     return <MediaArtifact artifact={artifact} />;
+  }
+  if (artifact.manifest.files.some((file) => file.path === "index.html")) {
+    return <HtmlArtifact artifactId={artifact.id} />;
   }
   return (
     <div className="space-y-2 p-5">

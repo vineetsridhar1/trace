@@ -152,6 +152,7 @@ type Documents = {
   "\n  mutation SaveManualElementEdits($sessionGroupId: ID!, $inputs: [ManualElementEditInput!]!) {\n    saveManualElementEdits(sessionGroupId: $sessionGroupId, inputs: $inputs) {\n      commitSha\n    }\n  }\n": typeof types.SaveManualElementEditsDocument;
   "\n  query OnboardingRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      provider\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": typeof types.OnboardingReposDocument;
   "\n  query OnboardingSessions($organizationId: ID!) {\n    sessions(organizationId: $organizationId) {\n      id\n    }\n  }\n": typeof types.OnboardingSessionsDocument;
+  "\n  query SessionGroupPullRequestStatuses($ids: [ID!]!) {\n    sessionGroupPullRequestStatuses(ids: $ids) {\n      prUrl\n      review\n      checks\n    }\n  }\n": typeof types.SessionGroupPullRequestStatusesDocument;
 };
 const documents: Documents = {
   "\n  query SessionGroupArtifacts($sessionGroupId: ID!) {\n    artifacts(sessionGroupId: $sessionGroupId) {\n      id\n      organizationId\n      sessionId\n      type\n      key\n      bundleDigest\n      byteSize\n      createdAt\n      manifest {\n        schemaVersion\n        files {\n          path\n          mediaType\n          size\n          digest\n        }\n      }\n      session {\n        id\n        name\n        sessionGroupId\n      }\n    }\n  }\n":
@@ -430,6 +431,8 @@ const documents: Documents = {
     types.OnboardingReposDocument,
   "\n  query OnboardingSessions($organizationId: ID!) {\n    sessions(organizationId: $organizationId) {\n      id\n    }\n  }\n":
     types.OnboardingSessionsDocument,
+  "\n  query SessionGroupPullRequestStatuses($ids: [ID!]!) {\n    sessionGroupPullRequestStatuses(ids: $ids) {\n      prUrl\n      review\n      checks\n    }\n  }\n":
+    types.SessionGroupPullRequestStatusesDocument,
 };
 
 /**
@@ -1274,6 +1277,12 @@ export function graphql(
 export function graphql(
   source: "\n  query OnboardingSessions($organizationId: ID!) {\n    sessions(organizationId: $organizationId) {\n      id\n    }\n  }\n",
 ): (typeof documents)["\n  query OnboardingSessions($organizationId: ID!) {\n    sessions(organizationId: $organizationId) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  query SessionGroupPullRequestStatuses($ids: [ID!]!) {\n    sessionGroupPullRequestStatuses(ids: $ids) {\n      prUrl\n      review\n      checks\n    }\n  }\n",
+): (typeof documents)["\n  query SessionGroupPullRequestStatuses($ids: [ID!]!) {\n    sessionGroupPullRequestStatuses(ids: $ids) {\n      prUrl\n      review\n      checks\n    }\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

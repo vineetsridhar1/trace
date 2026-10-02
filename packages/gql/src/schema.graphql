@@ -670,6 +670,26 @@ type ChannelGroup {
   channels: [Channel!]!
 }
 
+enum PullRequestReviewStatus {
+  approved
+  changes_requested
+  pending
+  unknown
+}
+
+enum PullRequestCheckStatus {
+  success
+  failure
+  pending
+  unknown
+}
+
+type SessionPullRequestStatus {
+  prUrl: String!
+  review: PullRequestReviewStatus!
+  checks: PullRequestCheckStatus!
+}
+
 type SessionGroup {
   id: ID!
   name: String!
@@ -2196,6 +2216,8 @@ type Query {
   "Read at most 80 lines from the immutable snapshot head, including files outside the diff."
   reviewCodeExcerpt(snapshotId: ID!, filePath: String!, startLine: Int!, endLine: Int!): ReviewCodeExcerpt!
   reviewDiffFile(snapshotId: ID!, filePath: String!): ReviewDiffFile!
+  sessionGroupPullRequestStatus(id: ID!): SessionPullRequestStatus
+  sessionGroupPullRequestStatuses(ids: [ID!]!): [SessionPullRequestStatus!]!
   hiddenSessionTabs(sessionGroupId: ID!): [HiddenSessionTab!]!
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session

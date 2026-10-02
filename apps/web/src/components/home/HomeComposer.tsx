@@ -15,6 +15,7 @@ import { HomeComposerTextSync } from "./home-composer-sync";
 import { HomeDesignPicker } from "./HomeDesignPicker";
 import { HomeDesignSystemPicker } from "./HomeDesignSystemPicker";
 import type { HomeCreatableKind } from "./home-kinds";
+import { useSessionEnvironmentStore } from "../../stores/session-environment";
 
 export function HomeComposer({
   prompt,
@@ -80,8 +81,9 @@ export function HomeComposer({
   const focusRequest = useHomeComposerStore((state) => state.focusRequest);
   const prefill = useHomeComposerStore((state) => state.prefill);
   const consumePrefill = useHomeComposerStore((state) => state.consumePrefill);
-  const codingSetupComplete = kind !== "coding" || (!!channelTargetKey && !!bridgeId);
-  const runtimeReady = kind !== "general" || !bridgeLoading;
+  const defaultEnvironment = useSessionEnvironmentStore((state) => state.defaultEnvironment);
+  const codingSetupComplete = kind !== "coding" || !!channelTargetKey;
+  const runtimeReady = (kind !== "general" && kind !== "coding") || !bridgeLoading;
   const canSubmit = prompt.trim().length > 0 && codingSetupComplete && runtimeReady && !submitting;
   const effortOptions = getReasoningEffortsForTool(tool);
 
@@ -139,7 +141,10 @@ export function HomeComposer({
                 selectedBridgeId={bridgeId}
                 repoId={selectedChannelRepoId}
                 tool={tool}
+                preferLocal={defaultEnvironment === "local"}
+                fallbackToCloud={false}
                 onSelect={onBridgeChange}
+                onLoadingChange={onBridgeLoadingChange}
               />
               <ComposerInputOptions
                 mode={mode}

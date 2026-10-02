@@ -142,7 +142,7 @@ Start a separate session only for independent or parallel work.
 "$TRACE_CLI" session archive <session-id> --json
 ```
 
-Use `--self` instead of an ID to target the current session. Be careful: stopping or archiving `--self` can end your own ability to continue. If another session is actively running, queueing is normally the least disruptive way to add follow-up work.
+Use `--self` instead of an ID to target the current session. Be careful: stopping or archiving `--self` can end your own ability to continue. Send notifications, results, and corrections without `--queue` by default so they can steer the active conversation. Use `--queue` for separate follow-up work that should wait until the current turn finishes. If the session is already idle, queued work is delivered automatically; sessions waiting for user input keep it queued.
 
 When linking a pull request, Trace validates the session repository, channel repository, and GitHub
 remote before recording the PR. If an association is missing, inspect the relevant repo or channel,

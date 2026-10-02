@@ -398,7 +398,7 @@ class ManagedGitService {
       select: {
         repoId: true,
         connection: true,
-        sessionGroup: { select: { repoId: true } },
+        sessionGroup: { select: { repoId: true, connection: true } },
       },
     });
     if (
@@ -407,14 +407,13 @@ class ManagedGitService {
     ) {
       return false;
     }
-    if (
-      !session.connection ||
-      typeof session.connection !== "object" ||
-      Array.isArray(session.connection)
-    ) {
+    const rawConnection = session.sessionGroup
+      ? session.sessionGroup.connection
+      : session.connection;
+    if (!rawConnection || typeof rawConnection !== "object" || Array.isArray(rawConnection)) {
       return false;
     }
-    const connection = session.connection as Record<string, unknown>;
+    const connection = rawConnection as Record<string, unknown>;
     // A provisioned runtime is authenticated before its workspace preparation
     // begins. During that preparation the session deliberately remains
     // "connecting", so it can perform the initial clone with its managed-git
@@ -553,6 +552,7 @@ class ManagedGitService {
         pdfFormatVersion: true,
         pdfExportKey: true,
         pdfExportPendingKey: true,
+        connection: true,
         sessions: {
           orderBy: { updatedAt: "desc" },
           select: { id: true, connection: true },
@@ -618,15 +618,15 @@ class ManagedGitService {
         if (group.pdfExportPendingKey && group.pdfExportPendingKey !== exportKey) {
           void deletePdfObject(group.pdfExportPendingKey);
         }
-        const session = group.sessions.find((candidate) => {
-          const connection = candidate.connection;
-          return (
-            connection &&
-            typeof connection === "object" &&
-            !Array.isArray(connection) &&
-            (connection as Record<string, unknown>).state === "connected"
-          );
-        });
+        const connection = group.connection;
+        const session =
+          connection &&
+          typeof connection === "object" &&
+          !Array.isArray(connection) &&
+          connection.state === "connected" &&
+          typeof connection.runtimeInstanceId === "string"
+            ? group.sessions[0]
+            : undefined;
         if (!session) {
           await this.completePdfExport({
             organizationId: input.organizationId,
@@ -638,8 +638,10 @@ class ManagedGitService {
           });
           return;
         }
-        const connection = session.connection as Record<string, unknown>;
         const runtimeInstanceId =
+          connection &&
+          typeof connection === "object" &&
+          !Array.isArray(connection) &&
           typeof connection.runtimeInstanceId === "string"
             ? connection.runtimeInstanceId
             : undefined;
@@ -942,6 +944,7 @@ class ManagedGitService {
         id: true,
         branch: true,
         animationPreviewPendingKey: true,
+        connection: true,
         sessions: {
           orderBy: { updatedAt: "desc" },
           select: { id: true, connection: true },
@@ -982,15 +985,15 @@ class ManagedGitService {
         if (group.animationPreviewPendingKey && group.animationPreviewPendingKey !== exportKey) {
           void deleteAnimationObject(group.animationPreviewPendingKey);
         }
-        const session = group.sessions.find((candidate) => {
-          const connection = candidate.connection;
-          return (
-            connection &&
-            typeof connection === "object" &&
-            !Array.isArray(connection) &&
-            (connection as Record<string, unknown>).state === "connected"
-          );
-        });
+        const connection = group.connection;
+        const session =
+          connection &&
+          typeof connection === "object" &&
+          !Array.isArray(connection) &&
+          connection.state === "connected" &&
+          typeof connection.runtimeInstanceId === "string"
+            ? group.sessions[0]
+            : undefined;
         if (!session) {
           await this.completeAnimationExport({
             organizationId: input.organizationId,
@@ -1002,8 +1005,10 @@ class ManagedGitService {
           });
           return;
         }
-        const connection = session.connection as Record<string, unknown>;
         const runtimeInstanceId =
+          connection &&
+          typeof connection === "object" &&
+          !Array.isArray(connection) &&
           typeof connection.runtimeInstanceId === "string"
             ? connection.runtimeInstanceId
             : undefined;
@@ -1251,6 +1256,7 @@ class ManagedGitService {
         id: true,
         branch: true,
         designPreviewPendingKey: true,
+        connection: true,
         sessions: {
           orderBy: { updatedAt: "desc" },
           select: { id: true, connection: true },
@@ -1291,15 +1297,15 @@ class ManagedGitService {
         if (group.designPreviewPendingKey && group.designPreviewPendingKey !== exportKey) {
           void deleteDesignSystemPreviewObject(group.designPreviewPendingKey);
         }
-        const session = group.sessions.find((candidate) => {
-          const connection = candidate.connection;
-          return (
-            connection &&
-            typeof connection === "object" &&
-            !Array.isArray(connection) &&
-            (connection as Record<string, unknown>).state === "connected"
-          );
-        });
+        const connection = group.connection;
+        const session =
+          connection &&
+          typeof connection === "object" &&
+          !Array.isArray(connection) &&
+          connection.state === "connected" &&
+          typeof connection.runtimeInstanceId === "string"
+            ? group.sessions[0]
+            : undefined;
         if (!session) {
           await this.completeDesignSystemExport({
             organizationId: input.organizationId,
@@ -1311,8 +1317,10 @@ class ManagedGitService {
           });
           return;
         }
-        const connection = session.connection as Record<string, unknown>;
         const runtimeInstanceId =
+          connection &&
+          typeof connection === "object" &&
+          !Array.isArray(connection) &&
           typeof connection.runtimeInstanceId === "string"
             ? connection.runtimeInstanceId
             : undefined;

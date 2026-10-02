@@ -109,6 +109,63 @@ describe("ManagedProcessManager", () => {
     expect(result.type === "setup_script_result" ? result.output : "").toContain("setup-ok");
   });
 
+  it("kills setup scripts and rejects new workloads during memory pressure", async () => {
+    const messages: BridgeMessage[] = [];
+    const manager = new ManagedProcessManager(new Map([["session-1", process.cwd()]]), (message) =>
+      messages.push(message),
+    );
+
+    manager.runSetupScript({
+      requestId: "setup-running",
+      sessionId: "session-1",
+      command: `'${process.execPath}' -e "console.log('setup-started'); setInterval(() => {}, 1000)"`,
+      cwd: ".",
+    });
+    await waitFor(
+      messages,
+      (message) => message.type === "setup_script_log" && message.data.includes("setup-started"),
+    );
+
+    manager.destroyAllImmediately();
+    const killed = await waitFor(
+      messages,
+      (message) => message.type === "setup_script_result" && message.requestId === "setup-running",
+    );
+    expect(killed).toMatchObject({
+      type: "setup_script_result",
+      requestId: "setup-running",
+      exitCode: 1,
+    });
+
+    manager.runSetupScript({
+      requestId: "setup-rejected",
+      sessionId: "session-1",
+      command: "printf should-not-run",
+      cwd: ".",
+    });
+    expect(messages).toContainEqual({
+      type: "setup_script_result",
+      requestId: "setup-rejected",
+      exitCode: 1,
+      error: "Runtime is recovering from memory pressure",
+    });
+
+    manager.start({
+      requestId: "start-rejected",
+      processInstanceId: "process-rejected",
+      sessionGroupId: "group-1",
+      sessionId: "session-1",
+      command: "printf should-not-run",
+      cwd: ".",
+    });
+    expect(messages).toContainEqual({
+      type: "app_process_error",
+      requestId: "start-rejected",
+      processInstanceId: "process-rejected",
+      error: "Runtime is recovering from memory pressure",
+    });
+  });
+
   it("starts a managed process, captures logs, and reports exit", async () => {
     const messages: BridgeMessage[] = [];
     const manager = new ManagedProcessManager(new Map([["session-1", process.cwd()]]), (message) =>

@@ -25,7 +25,10 @@ describe("OrganizationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
-    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "user-1" });
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({
+      userId: "user-1",
+      role: "admin",
+    });
   });
 
   it("creates organizations with the creator as admin and emits organization_created", async () => {
@@ -535,7 +538,7 @@ describe("OrganizationService", () => {
     expect(prismaMock.repo.update).not.toHaveBeenCalled();
   });
 
-  it("deletes a repo while detaching records that should be retained", async () => {
+  it("allows an organization admin to delete a repo while retaining linked records", async () => {
     prismaMock.repo.findFirstOrThrow.mockResolvedValueOnce({
       id: "repo-1",
       channels: [{ id: "channel-1" }],
@@ -549,6 +552,15 @@ describe("OrganizationService", () => {
     const service = new OrganizationService();
     await expect(service.deleteRepo("repo-1", "org-1", "user", "user-1")).resolves.toBe(true);
 
+    expect(prismaMock.orgMember.findUniqueOrThrow).toHaveBeenCalledWith({
+      where: {
+        userId_organizationId: {
+          userId: "user-1",
+          organizationId: "org-1",
+        },
+      },
+      select: { userId: true, role: true },
+    });
     expect(prismaMock.channel.updateMany).toHaveBeenCalledWith({
       where: { repoId: "repo-1" },
       data: { repoId: null },
@@ -580,6 +592,23 @@ describe("OrganizationService", () => {
       prismaMock,
     );
     expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "event-delete" });
+  });
+
+  it("rejects repository deletion by a non-admin organization member", async () => {
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      role: "member",
+    });
+
+    const service = new OrganizationService();
+    await expect(
+      service.deleteRepo("repo-1", "org-1", "user", "user-1"),
+    ).rejects.toThrow("Only admins can perform this action");
+
+    expect(prismaMock.repo.findFirstOrThrow).not.toHaveBeenCalled();
+    expect(prismaMock.repo.delete).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+    expect(eventServiceMock.publishCreated).not.toHaveBeenCalled();
   });
 
   it("requires project repos to belong to the project organization", async () => {

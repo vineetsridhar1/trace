@@ -11,6 +11,7 @@ export function HomeBridgePicker({
   repoId,
   tool,
   preferLocal = false,
+  fallbackToCloud = true,
   onSelect,
   onLoadingChange,
 }: {
@@ -18,17 +19,19 @@ export function HomeBridgePicker({
   repoId: string | null;
   tool: string;
   preferLocal?: boolean;
+  fallbackToCloud?: boolean;
   onSelect: (bridgeId: string | null) => void;
   onLoadingChange?: (loading: boolean) => void;
 }) {
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [preferCloud, setPreferCloud] = useState(false);
   const connectedBridges = useMemo(() => runtimes.filter(isAccessibleLocalRuntime), [runtimes]);
   const selected = connectedBridges.find((bridge) => bridge.id === selectedBridgeId) ?? null;
   const preferredBridge = connectedBridges.find(
     (bridge) => !repoId || bridge.registeredRepoIds.includes(repoId),
   );
+  const awaitingLocalBridge = preferLocal && !preferCloud && !selectedBridgeId && !fallbackToCloud;
 
   useEffect(() => {
     let active = true;
@@ -64,7 +67,7 @@ export function HomeBridgePicker({
       onSelect(preferredBridge.id);
       return;
     }
-    onLoadingChange?.(false);
+    onLoadingChange?.(awaitingLocalBridge);
   }, [
     loading,
     onLoadingChange,
@@ -73,6 +76,7 @@ export function HomeBridgePicker({
     preferredBridge,
     preferLocal,
     selectedBridgeId,
+    awaitingLocalBridge,
   ]);
 
   useEffect(() => {
@@ -85,7 +89,7 @@ export function HomeBridgePicker({
 
   return (
     <Select
-      value={selectedBridgeId ?? "cloud"}
+      value={selectedBridgeId ?? (awaitingLocalBridge ? "local" : "cloud")}
       onValueChange={(bridgeId) => {
         const cloud = bridgeId === "cloud";
         setPreferCloud(cloud);
@@ -96,7 +100,7 @@ export function HomeBridgePicker({
         size="sm"
         className="max-w-40 border-transparent bg-transparent hover:border-transparent hover:bg-white/10 data-popup-open:border-transparent"
         aria-label="Choose bridge"
-        title={selected?.label ?? "Cloud"}
+        title={selected?.label ?? (awaitingLocalBridge ? "Local" : "Cloud")}
       >
         <SelectValue placeholder={loading ? "Loading bridges…" : "Choose bridge"}>
           {selected ? (
@@ -105,12 +109,17 @@ export function HomeBridgePicker({
               <span className="truncate">{selected.label}</span>
             </>
           ) : (
-            <span>Cloud</span>
+            <span>{awaitingLocalBridge ? "Local" : "Cloud"}</span>
           )}
         </SelectValue>
       </SelectTrigger>
       <SelectContent className="min-w-56">
         <SelectItem value="cloud">Cloud</SelectItem>
+        {awaitingLocalBridge && (
+          <SelectItem value="local" disabled>
+            Local — connect a compatible bridge
+          </SelectItem>
+        )}
         {connectedBridges.map((bridge) => {
           const lacksRepo = !!repoId && !bridge.registeredRepoIds.includes(repoId);
           return (

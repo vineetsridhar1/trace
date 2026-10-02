@@ -1,10 +1,13 @@
 import { useMemo, type ReactElement } from "react";
-import { AppWindow, Calendar, GitBranch, Laptop } from "lucide-react";
+import { AppWindow, Calendar, GitBranch, GitPullRequest, Laptop } from "lucide-react";
 import { useEntityField, useEntityStore } from "@trace/client-core";
 import type { SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
 import { useAttachedCheckoutsForGroup, useDesktopBridgeInfo } from "../../stores/bridges";
 import { cn } from "../../lib/utils";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
+import { AgentStatusIcon } from "../session/AgentStatusIcon";
+import { agentStatusLabel, agentStatusColor } from "../session/sessionStatus";
+import { SessionPullRequestIndicators } from "../session/SessionPullRequestIndicators";
 
 type SidebarUserRef = {
   id?: string | null;
@@ -51,10 +54,12 @@ type ApplicationDetail = {
 export function SidebarSessionHoverCard({
   sessionGroupId,
   sessionId,
+  agentStatus,
   trigger,
 }: {
   sessionGroupId: string;
   sessionId: string | null;
+  agentStatus: string;
   trigger: ReactElement;
 }) {
   const resolvedSessionId = sessionId ?? "";
@@ -100,9 +105,11 @@ export function SidebarSessionHoverCard({
         align="start"
         sideOffset={10}
         alignOffset={-6}
-        className="pointer-events-none w-80 rounded-xl border border-white/10 !bg-zinc-900/72 p-3.5 text-foreground shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-2xl"
+        className="pointer-events-auto w-80 rounded-xl border border-white/10 !bg-zinc-900/72 p-3.5 text-foreground shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-2xl"
       >
         <SidebarSessionHoverContent
+          sessionGroupId={sessionGroupId}
+          agentStatus={agentStatus}
           branch={branch ?? groupBranch ?? sessionGroup?.branch ?? null}
           createdBy={createdBy}
           lastMessageAt={lastMessageAt ?? groupUpdatedAt}
@@ -116,6 +123,8 @@ export function SidebarSessionHoverCard({
 }
 
 function SidebarSessionHoverContent({
+  sessionGroupId,
+  agentStatus,
   branch,
   createdBy,
   lastMessageAt,
@@ -123,6 +132,8 @@ function SidebarSessionHoverContent({
   spotlightDetails,
   applicationDetails,
 }: {
+  sessionGroupId: string;
+  agentStatus: string;
   branch: string | null;
   createdBy: SidebarUserRef | undefined;
   lastMessageAt: string | null | undefined;
@@ -130,6 +141,8 @@ function SidebarSessionHoverContent({
   spotlightDetails: SpotlightDetail[];
   applicationDetails: ApplicationDetail[];
 }) {
+  const prUrl = useEntityField("sessionGroups", sessionGroupId, "prUrl");
+  const prNumber = prUrl?.match(/\/pull\/(\d+)(?:[/?#]|$)/)?.[1];
   const ownerName = formatOwnerName(createdBy);
   const ownerEmail = createdBy?.email && createdBy.email !== ownerName ? createdBy.email : null;
 
@@ -150,7 +163,36 @@ function SidebarSessionHoverContent({
             <span className="min-w-0 break-words font-mono">{branch}</span>
           </p>
         )}
+        {prNumber && prUrl && (
+          <a
+            href={prUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Open pull request #${prNumber}`}
+            className="inline-flex w-fit items-center gap-1.5 rounded-sm underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <GitPullRequest size={11} className="shrink-0" />
+            <span>PR #{prNumber}</span>
+          </a>
+        )}
       </div>
+
+      {(agentStatus !== "done" || prUrl) && (
+        <div className="mt-3 flex flex-col gap-2 text-xs text-foreground/65">
+          {agentStatus !== "done" && (
+            <p className="flex items-center gap-1.5">
+              <AgentStatusIcon
+                agentStatus={agentStatus}
+                size={12}
+                className={agentStatusColor[agentStatus]}
+              />
+              <span>Agent: {agentStatusLabel[agentStatus] ?? agentStatus}</span>
+            </p>
+          )}
+          <SessionPullRequestIndicators sessionGroupId={sessionGroupId} showDetails />
+        </div>
+      )}
 
       {spotlightDetails.length > 0 && (
         <div className="mt-3 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2">

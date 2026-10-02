@@ -607,6 +607,9 @@ export interface BridgeSessionComplete {
   sessionId: string;
   /** Identifies the dispatched agent run so stale completions can be ignored. */
   invocationId?: string;
+  /** Failed runs remain retryable but must not automatically drain queued work. */
+  outcome?: "failed";
+  reason?: "runtime_memory_pressure";
 }
 
 export interface BridgeWorkspaceReady {

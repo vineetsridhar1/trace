@@ -22,6 +22,7 @@ export type DesktopCodingToolStatus = {
 type NpmTool = CodingToolCli & { packageName: string };
 
 export type PackageManager =
+  | { kind: "native"; executablePath: string }
   | { kind: "homebrew"; packageName: string; cask: boolean }
   | { kind: "npm"; packageName: string };
 
@@ -132,6 +133,15 @@ export function getPackageManager(
   executablePath: string | null,
   resolvePath: (path: string) => string = realpathSync,
 ): PackageManager | null {
+  if (toolId === "claude_code" && executablePath) {
+    try {
+      if (/(?:^|[\\/])claude[\\/]versions[\\/][^\\/]+$/.test(resolvePath(executablePath))) {
+        return { kind: "native", executablePath };
+      }
+    } catch {
+      // Fall back to npm metadata when the executable cannot be resolved.
+    }
+  }
   if (toolId === "codex" && executablePath) {
     try {
       const resolvedPath = resolvePath(executablePath);
@@ -152,6 +162,9 @@ export function getPackageManager(
 
 async function getLatestVersion(packageManager: PackageManager | null): Promise<string | null> {
   if (!packageManager) return null;
+  if (packageManager.kind === "native") {
+    return getLatestNpmVersion(NPM_TOOLS.claude_code.packageName);
+  }
   return packageManager.kind === "homebrew"
     ? getLatestHomebrewVersion(packageManager)
     : getLatestNpmVersion(packageManager.packageName);
@@ -161,7 +174,16 @@ export function getInstallCommand(
   tool: CodingToolCli,
   packageManager: PackageManager | null,
   npmPrefix: string | null,
+  targetVersion: string | null = null,
 ): { executable: string; args: string[] } {
+  if (packageManager?.kind === "native") {
+    if (!targetVersion)
+      throw new Error(
+        "Could not determine the latest Claude Code version. Check your connection, then try again.",
+      );
+    // A named channel would also change Claude's saved auto-update channel.
+    return { executable: packageManager.executablePath, args: ["install", targetVersion] };
+  }
   if (packageManager?.kind === "homebrew") {
     return {
       executable: "brew",
@@ -222,6 +244,7 @@ export async function installOrUpdateCodingTool(toolId: string): Promise<Desktop
     tool,
     packageManager,
     packageManager?.kind === "npm" ? getOwningNpmPrefix(executablePath) : null,
+    packageManager?.kind === "native" ? await getLatestVersion(packageManager) : null,
   );
 
   await new Promise<void>((resolve, reject) => {
@@ -260,15 +283,17 @@ export async function installOrUpdateCodingTool(toolId: string): Promise<Desktop
   });
 
   const statuses = await getCodingToolStatuses();
-  const status =
-    statuses.find((candidate) => candidate.tool === toolId) ?? {
-      tool: tool.tool,
-      label: tool.label,
-      status: "unknown",
-      installedVersion: null,
-      latestVersion: null,
-    };
-  if (packageManager?.kind === "npm" && (!status.installedVersion || !status.latestVersion)) {
+  const status = statuses.find((candidate) => candidate.tool === toolId) ?? {
+    tool: tool.tool,
+    label: tool.label,
+    status: "unknown",
+    installedVersion: null,
+    latestVersion: null,
+  };
+  if (
+    (packageManager?.kind === "npm" || packageManager?.kind === "native") &&
+    (!status.installedVersion || !status.latestVersion)
+  ) {
     throw new Error(
       `${tool.label} was installed, but Trace could not verify its version. Check your connection, then try again.`,
     );
@@ -276,7 +301,9 @@ export async function installOrUpdateCodingTool(toolId: string): Promise<Desktop
   if (status.status === "update_available") {
     throw new Error(
       `${tool.label} is still running ${status.installedVersion ?? "an older version"}. ` +
-        `It may be managed by a different installation. Update it with \`${tool.install}\` in Terminal, then check again.`,
+        (packageManager?.kind === "native"
+          ? `Check the native installation at ${executablePath}, then run \`claude install ${status.latestVersion}\` in Terminal and check again.`
+          : `It may be managed by a different installation. Update it with \`${tool.install}\` in Terminal, then check again.`),
     );
   }
   return status;

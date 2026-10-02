@@ -32,7 +32,7 @@ import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
 import { handleBridgeConnection, type BridgeConnectionRequest } from "./lib/bridge-handler.js";
-import { sessionRouter } from "./lib/session-router.js";
+import { sessionRouter, type StaleRuntimeSnapshot } from "./lib/session-router.js";
 import { authenticateProvisionedRuntimeToken } from "./lib/runtime-adapters.js";
 import { sessionService } from "./services/session.js";
 import { codexCredentialService } from "./services/codex-credential.js";
@@ -81,6 +81,62 @@ const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS = 60 * 60 * 1000;
 const DEFAULT_CLOUD_SESSION_GROUP_ACTIVE_IDLE_CLEANUP_AFTER_MS = 12 * 60 * 60 * 1000;
 const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY = "trace:jobs:cloud-session-group-idle-cleanup";
+
+type PendingStaleRuntimePersistence = {
+  stale: StaleRuntimeSnapshot;
+  affectedSessionIds: string[];
+};
+
+const pendingStaleRuntimePersistence = new Map<string, PendingStaleRuntimePersistence>();
+let staleRuntimePersistenceRunning = false;
+
+function flushStaleRuntimePersistence(): void {
+  if (staleRuntimePersistenceRunning || pendingStaleRuntimePersistence.size === 0) return;
+  staleRuntimePersistenceRunning = true;
+  const flush = (async () => {
+    for (const [key, pending] of pendingStaleRuntimePersistence) {
+      const { stale, affectedSessionIds } = pending;
+      try {
+        await runtimeAccessService.markRuntimeDisconnected(
+          stale.runtimeInstanceId,
+          stale.organizationId,
+          stale.connectedAt,
+        );
+        for (const sessionId of affectedSessionIds) {
+          runtimeDebug("marking session disconnected after stale runtime eviction", {
+            runtimeId: stale.runtimeId,
+            sessionId,
+          });
+          await sessionService.markConnectionLost(
+            sessionId,
+            "runtime_heartbeat_timeout",
+            stale.runtimeInstanceId,
+            undefined,
+            stale.connectionGeneration,
+          );
+        }
+        pendingStaleRuntimePersistence.delete(key);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(
+          `[stale-runtime-monitor] failed to persist eviction for ${stale.runtimeId}; will retry: ${message}`,
+        );
+        logAgentEnvironmentTelemetry("runtime.heartbeat_stale_persist_failed", {
+          runtimeId: stale.runtimeId,
+          sessionIds: affectedSessionIds,
+          error: message,
+        });
+      }
+    }
+  })();
+  const finish = () => {
+    staleRuntimePersistenceRunning = false;
+  };
+  void flush.then(finish, (err: unknown) => {
+    finish();
+    console.error("[stale-runtime-monitor] unexpected persistence failure:", err);
+  });
+}
 const DEPROVISION_RECONCILE_LOCK_KEY = "trace:jobs:deprovision-reconcile";
 const RUNTIME_HARD_DEADLINE_RECONCILE_INTERVAL_MS = 60 * 1000;
 const RUNTIME_HARD_DEADLINE_RECONCILE_LOCK_KEY = "trace:jobs:runtime-hard-deadline-reconcile";
@@ -349,27 +405,15 @@ async function main() {
         lastHeartbeat: stale.lastHeartbeat,
         freshnessMs: Date.now() - stale.lastHeartbeat,
       });
-      if (stale.runtimeId) {
-        void runtimeAccessService.markRuntimeDisconnected(
-          stale.runtimeInstanceId,
-          stale.organizationId,
-          stale.connectedAt,
-        );
-      }
-      for (const sessionId of eviction.affectedSessions) {
-        runtimeDebug("marking session disconnected after stale runtime eviction", {
-          runtimeId: stale.runtimeId,
-          sessionId,
-        });
-        void sessionService.markConnectionLost(
-          sessionId,
-          "runtime_heartbeat_timeout",
-          stale.runtimeInstanceId,
-          undefined,
-          stale.connectionGeneration,
-        );
-      }
+      // Keep failed persistence work after the in-memory eviction. The next
+      // monitor tick retries it serially, while connection-generation fencing
+      // prevents an old disconnect from overwriting a later reconnect.
+      pendingStaleRuntimePersistence.set(`${stale.runtimeId}:${stale.connectionGeneration}`, {
+        stale,
+        affectedSessionIds: eviction.affectedSessions,
+      });
     }
+    flushStaleRuntimePersistence();
   }, 5_000);
 
   const deprovisionReconciler = setInterval(() => {

@@ -92,6 +92,7 @@ export default defineConfig({
       "/graphql": api,
       "/slack": api,
       "/uploads": api,
+      "/artifacts": api,
       "/ws": {
         target: api,
         ws: true,

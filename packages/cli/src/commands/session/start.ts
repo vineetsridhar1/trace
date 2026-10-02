@@ -35,7 +35,7 @@ export const sessionStartCommand = defineCommand({
   output: "The new session, whether an initial run was requested, its UI path, and an idempotency key.",
   nextSteps: [
     'Run "$TRACE_CLI" session events <session-id> --limit 50 --json to monitor progress.',
-    'Use "$TRACE_CLI" session send <session-id> "<message>" --queue --json for follow-up work.',
+    'Use "$TRACE_CLI" session send <session-id> "<message>" --json for notifications or follow-up work.',
   ],
   notes: [
     "A new coding group needs a channel and task prompt; the channel can be inherited from the current session when available.",

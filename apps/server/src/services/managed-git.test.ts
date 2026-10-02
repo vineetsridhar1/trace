@@ -297,6 +297,7 @@ describe("managed git PDF exports", () => {
                 pdfFormatVersion: 0,
                 pdfExportKey: null,
                 pdfExportPendingKey: null,
+                connection: { state: "connected", runtimeInstanceId: "runtime-1" },
                 sessions: [
                   {
                     id: "session-1",
@@ -366,6 +367,7 @@ describe("managed git PDF exports", () => {
                 pdfFormatVersion: 2,
                 pdfExportKey: null,
                 pdfExportPendingKey: null,
+                connection: { state: "connected", runtimeInstanceId: "runtime-1" },
                 sessions: [
                   {
                     id: "session-1",
@@ -447,6 +449,7 @@ describe("managed git PDF exports", () => {
           pdfFormatVersion: 1,
           pdfExportKey: "pdf-exports/org-1/pdf-group-1/old.pdf",
           pdfExportPendingKey: null,
+          connection: { state: "connected", runtimeInstanceId: "runtime-1" },
           sessions: [
             { id: "session-1", connection: { state: "connected", runtimeInstanceId: "runtime-1" } },
           ],
@@ -597,6 +600,7 @@ describe("managed git animation preview exports", () => {
                 id: "animation-group-1",
                 branch: null,
                 animationPreviewPendingKey: null,
+                connection: { state: "connected", runtimeInstanceId: "runtime-1" },
                 sessions: [
                   {
                     id: "session-1",
@@ -721,6 +725,7 @@ describe("managed git design-system preview exports", () => {
                 id: "ds-group-1",
                 branch: null,
                 designPreviewPendingKey: null,
+                connection: { state: "connected", runtimeInstanceId: "runtime-1" },
                 sessions: [
                   {
                     id: "session-1",
@@ -839,8 +844,12 @@ describe("managed git design-system preview exports", () => {
                 id: "ds-group-1",
                 branch: null,
                 designPreviewPendingKey: null,
+                connection: { state: "disconnected", runtimeInstanceId: "runtime-1" },
                 sessions: [
-                  { id: "session-1", connection: { state: "disconnected" } },
+                  {
+                    id: "session-1",
+                    connection: { state: "connected", runtimeInstanceId: "stale-runtime" },
+                  },
                 ],
               },
             ]

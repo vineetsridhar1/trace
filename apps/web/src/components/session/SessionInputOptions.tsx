@@ -33,6 +33,7 @@ import { cn } from "../../lib/utils";
 import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvironmentAvailable";
 import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
+import { useSessionEnvironmentStore } from "../../stores/session-environment";
 import { isGeneratedProjectKind } from "./sessionEmptyState";
 import {
   CREATE_DESIGN_SYSTEM,
@@ -335,6 +336,7 @@ export function SessionInputOptions({
   const showCloudRuntimeOption =
     cloudEnvironmentAvailable || currentRuntimeValue === CLOUD_RUNTIME_ID;
   const autoSelectedRuntimeSessionRef = useRef<string | null>(null);
+  const defaultEnvironment = useSessionEnvironmentStore((state) => state.defaultEnvironment);
 
   const restartFailedCloudSession = useCallback(async () => {
     if (hosting !== "cloud" || !isRecoverableCloudFailure(connection)) return;
@@ -615,6 +617,13 @@ export function SessionInputOptions({
       return;
     }
 
+    if (defaultEnvironment === "cloud") {
+      if (!cloudEnvironmentAvailable || cloudDisabledReason) return;
+      autoSelectedRuntimeSessionRef.current = sessionId;
+      void handleRuntimeChange(CLOUD_RUNTIME_ID);
+      return;
+    }
+
     const ownedRuntime = runtimes.find(
       (r: SessionRuntimeInstance) =>
         isAccessibleLocalRuntime(r) &&
@@ -626,6 +635,9 @@ export function SessionInputOptions({
     autoSelectedRuntimeSessionRef.current = sessionId;
     void handleRuntimeChange(ownedRuntime.id);
   }, [
+    defaultEnvironment,
+    cloudEnvironmentAvailable,
+    cloudDisabledReason,
     channelRepoId,
     canChangeRuntime,
     currentRuntimeValue,

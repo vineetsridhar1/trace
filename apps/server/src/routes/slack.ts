@@ -38,12 +38,10 @@ import { sessionRouter } from "../lib/session-router.js";
 const JWT_SECRET = resolveJwtSecret();
 const INSTALL_STATE_TTL_SECONDS = 10 * 60;
 const BIND_STATE_TTL_SECONDS = 10 * 60;
-const RECENT_MENTION_TTL_MS = 30 * 1000;
 const SLACK_MAX_FILE_COUNT = 4;
 const SLACK_MAX_FILE_BYTES = 10 * 1024 * 1024;
 const SLACK_THREAD_CONTEXT_MAX_MESSAGES = 30;
 const SLACK_THREAD_CONTEXT_MAX_CHARS = 12_000;
-const recentMentionKeys = new Map<string, number>();
 const SLACK_SCOPES = [
   "app_mentions:read",
   "chat:write",
@@ -2047,17 +2045,6 @@ async function openAdvancedStartModal(input: {
   return true;
 }
 
-function claimMentionEvent(teamId: string, channel: string, messageTs: string): boolean {
-  const now = Date.now();
-  for (const [key, expiresAt] of recentMentionKeys) {
-    if (expiresAt <= now) recentMentionKeys.delete(key);
-  }
-
-  const key = `${teamId}:${channel}:${messageTs}`;
-  if (recentMentionKeys.has(key)) return false;
-  recentMentionKeys.set(key, now + RECENT_MENTION_TTL_MS);
-  return true;
-}
 
 async function handleAppMention(input: {
   teamId: string;
@@ -2072,11 +2059,6 @@ async function handleAppMention(input: {
     console.warn("[slack] app_mention missing required fields", { teamId, slackUserId, channel, ts, threadTs });
     return;
   }
-  if (!claimMentionEvent(teamId, channel, ts)) {
-    console.info("[slack] ignoring duplicate mention event", { teamId, channel, threadTs });
-    return;
-  }
-
   const install = await prisma.slackInstall.findUnique({
     where: { slackTeamId: teamId },
     select: { organizationId: true, botUserId: true },
@@ -2500,8 +2482,10 @@ async function handleThreadMessage(input: {
   }
 
   const runtimeInstanceId =
-    connectionRuntimeInstanceId(thread.session.connection) ??
-    connectionRuntimeInstanceId(thread.session.sessionGroup?.connection);
+    connectionRuntimeInstanceId(thread.session.sessionGroup?.connection) ??
+    (!thread.session.sessionGroup
+      ? connectionRuntimeInstanceId(thread.session.connection)
+      : null);
   if (thread.session.hosting === "local" && runtimeInstanceId) {
     const access = await runtimeAccessService.getAccessState({
       userId: traceUserId,
@@ -2746,8 +2730,10 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
   }
 
   const runtimeInstanceId =
-    connectionRuntimeInstanceId(thread.session.connection) ??
-    connectionRuntimeInstanceId(thread.session.sessionGroup?.connection);
+    connectionRuntimeInstanceId(thread.session.sessionGroup?.connection) ??
+    (!thread.session.sessionGroup
+      ? connectionRuntimeInstanceId(thread.session.connection)
+      : null);
   if (!runtimeInstanceId || !thread.session.sessionGroupId) {
     await postSessionAccessRequestFeedback({
       ...value,
@@ -2982,9 +2968,23 @@ async function handleUninstall(teamId: string): Promise<void> {
   await disconnectSlackTeams([teamId]).catch(() => {});
 }
 
+function slackMessageDedupeKey(envelope: SlackEventEnvelope): string | null {
+  const event = envelope.event;
+  if (
+    !envelope.team_id ||
+    !event?.channel ||
+    !event.ts ||
+    (event.type !== "app_mention" && event.type !== "message")
+  ) {
+    return null;
+  }
+  return `${envelope.team_id}:${event.channel}:${event.ts}`;
+}
+
 async function claimSlackEventDelivery(envelope: SlackEventEnvelope): Promise<boolean> {
   const eventId = envelope.event_id;
   if (!eventId) return true;
+  const messageKey = slackMessageDedupeKey(envelope);
 
   await prisma.slackProcessedEvent.deleteMany({
     where: { createdAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
@@ -2995,6 +2995,7 @@ async function claimSlackEventDelivery(envelope: SlackEventEnvelope): Promise<bo
       data: {
         slackEventId: eventId,
         slackTeamId: envelope.team_id ?? null,
+        ...(messageKey ? { slackMessageKey: messageKey } : {}),
       },
     });
     return true;

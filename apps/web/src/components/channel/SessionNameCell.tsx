@@ -1,3 +1,5 @@
+import { SessionListName } from "./SessionListName";
+import { navigateToSessionGroup } from "../../stores/ui";
 import { TerminalSquare } from "lucide-react";
 import { useAttachedCheckoutForGroup } from "../../stores/bridges";
 import { useSessionGroupTerminals } from "../../stores/terminal";
@@ -35,9 +37,11 @@ export function SessionNameCell({
           onSubmit={(name) => renameContext?.onRenameSubmit(row, name)}
         />
       ) : (
-        <span className={`truncate text-sm text-foreground ${hasDoneBadge ? "font-semibold" : ""}`}>
-          {row.name}
-        </span>
+        <SessionListName
+          groupId={row.id}
+          className={`truncate text-sm text-foreground ${hasDoneBadge ? "font-semibold" : ""}`}
+          onOpen={() => navigateToSessionGroup(null, row.id, row.latestSession?.id ?? null)}
+        />
       )}
       {attached && <SpotlightBridgeIndicator attached={attached} />}
       <SessionApplicationRunningIndicator sessionGroupId={row.id} />

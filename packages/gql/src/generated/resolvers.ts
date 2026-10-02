@@ -2050,6 +2050,10 @@ export type Project = {
   tickets: Array<Ticket>;
 };
 
+export type PullRequestCheckStatus = "failure" | "pending" | "success" | "unknown";
+
+export type PullRequestReviewStatus = "approved" | "changes_requested" | "pending" | "unknown";
+
 export type PushPlatform = "android" | "ios";
 
 export type Query = {
@@ -2134,6 +2138,8 @@ export type Query = {
   sessionGroupFileContentWithSource: SessionGroupFileContentResult;
   sessionGroupFileTree: SessionGroupFileTree;
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
+  sessionGroupPullRequestStatus?: Maybe<SessionPullRequestStatus>;
+  sessionGroupPullRequestStatuses: Array<SessionPullRequestStatus>;
   sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
   sessionMessages: Array<SessionMessage>;
@@ -2468,6 +2474,14 @@ export type QuerySessionGroupFileTreeArgs = {
 
 export type QuerySessionGroupFilesArgs = {
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupPullRequestStatusArgs = {
+  id: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupPullRequestStatusesArgs = {
+  ids: Array<Scalars["ID"]["input"]>;
 };
 
 export type QuerySessionGroupWorktreeChangesArgs = {
@@ -3232,6 +3246,13 @@ export type SessionPromptIndexItem = {
   timestamp: Scalars["DateTime"]["output"];
 };
 
+export type SessionPullRequestStatus = {
+  __typename?: "SessionPullRequestStatus";
+  checks: PullRequestCheckStatus;
+  prUrl: Scalars["String"]["output"];
+  review: PullRequestReviewStatus;
+};
+
 export type SessionRuntimeInstance = {
   __typename?: "SessionRuntimeInstance";
   access: BridgeRuntimeAccess;
@@ -3789,6 +3810,8 @@ export type ResolversTypes = ResolversObject<{
   PortEndpoint: ResolverTypeWrapper<PortEndpoint>;
   Priority: Priority;
   Project: ResolverTypeWrapper<Project>;
+  PullRequestCheckStatus: PullRequestCheckStatus;
+  PullRequestReviewStatus: PullRequestReviewStatus;
   PushPlatform: PushPlatform;
   Query: ResolverTypeWrapper<{}>;
   QueuedMessage: ResolverTypeWrapper<QueuedMessage>;
@@ -3859,6 +3882,7 @@ export type ResolversTypes = ResolversObject<{
   SessionMessage: ResolverTypeWrapper<SessionMessage>;
   SessionMessageRole: SessionMessageRole;
   SessionPromptIndexItem: ResolverTypeWrapper<SessionPromptIndexItem>;
+  SessionPullRequestStatus: ResolverTypeWrapper<SessionPullRequestStatus>;
   SessionRuntimeInstance: ResolverTypeWrapper<SessionRuntimeInstance>;
   SessionSearchResults: ResolverTypeWrapper<SessionSearchResults>;
   SessionSetupScriptRun: ResolverTypeWrapper<SessionSetupScriptRun>;
@@ -4031,6 +4055,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionGroupFileTree: SessionGroupFileTree;
   SessionMessage: SessionMessage;
   SessionPromptIndexItem: SessionPromptIndexItem;
+  SessionPullRequestStatus: SessionPullRequestStatus;
   SessionRuntimeInstance: SessionRuntimeInstance;
   SessionSearchResults: SessionSearchResults;
   SessionSetupScriptRun: SessionSetupScriptRun;
@@ -6315,6 +6340,18 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QuerySessionGroupFilesArgs, "sessionGroupId">
   >;
+  sessionGroupPullRequestStatus?: Resolver<
+    Maybe<ResolversTypes["SessionPullRequestStatus"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionGroupPullRequestStatusArgs, "id">
+  >;
+  sessionGroupPullRequestStatuses?: Resolver<
+    Array<ResolversTypes["SessionPullRequestStatus"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionGroupPullRequestStatusesArgs, "ids">
+  >;
   sessionGroupWorktreeChanges?: Resolver<
     ResolversTypes["WorktreeChangesResult"],
     ParentType,
@@ -7066,6 +7103,17 @@ export type SessionPromptIndexItemResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type SessionPullRequestStatusResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionPullRequestStatus"] =
+    ResolversParentTypes["SessionPullRequestStatus"],
+> = ResolversObject<{
+  checks?: Resolver<ResolversTypes["PullRequestCheckStatus"], ParentType, ContextType>;
+  prUrl?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  review?: Resolver<ResolversTypes["PullRequestReviewStatus"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type SessionRuntimeInstanceResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["SessionRuntimeInstance"] =
@@ -7460,6 +7508,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionGroupFileTree?: SessionGroupFileTreeResolvers<ContextType>;
   SessionMessage?: SessionMessageResolvers<ContextType>;
   SessionPromptIndexItem?: SessionPromptIndexItemResolvers<ContextType>;
+  SessionPullRequestStatus?: SessionPullRequestStatusResolvers<ContextType>;
   SessionRuntimeInstance?: SessionRuntimeInstanceResolvers<ContextType>;
   SessionSearchResults?: SessionSearchResultsResolvers<ContextType>;
   SessionSetupScriptRun?: SessionSetupScriptRunResolvers<ContextType>;

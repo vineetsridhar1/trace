@@ -4,6 +4,7 @@ import type { AddressInfo } from "net";
 import express from "express";
 import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
+import { Prisma } from "@prisma/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const slackMocks = vi.hoisted(() => ({
@@ -305,6 +306,100 @@ describe("Slack routes", () => {
         text: expect.stringContaining("not in the connected Trace org"),
       }),
     );
+  });
+
+  it("deduplicates paired app_mention and message deliveries by Slack message", async () => {
+    prismaMock.slackProcessedEvent.deleteMany.mockResolvedValue({ count: 0 });
+    prismaMock.slackProcessedEvent.create
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+          code: "P2002",
+          clientVersion: "test",
+        }),
+      );
+    prismaMock.slackInstall.findUnique.mockResolvedValue({
+      organizationId: "org-1",
+      botUserId: "BTRACE",
+    });
+    prismaMock.slackThreadSession.findUnique.mockResolvedValue(null);
+    prismaMock.slackAccount.findUnique.mockResolvedValue({ userId: "user-1" });
+    prismaMock.orgMember.findUnique.mockResolvedValue({ userId: "user-1" });
+    prismaMock.slackChannelBinding.findUnique.mockResolvedValue({
+      traceChannelId: "channel-1",
+      organizationId: "org-1",
+    });
+    prismaMock.slackSessionDraft.create.mockResolvedValue({ id: "draft-1" });
+    prismaMock.user.findUnique.mockResolvedValue({
+      defaultSessionTool: "codex",
+      defaultSessionModel: null,
+      defaultSessionReasoningEffort: null,
+    });
+    prismaMock.agentEnvironment.findMany.mockResolvedValue([
+      { id: "env-1", name: "Cloud", isDefault: true },
+    ]);
+
+    const event = {
+      user: "U1",
+      channel: "C1",
+      channel_type: "channel",
+      ts: "1710000000.000100",
+      text: "<@BTRACE> do something",
+    };
+    const appMentionBody = JSON.stringify({
+      type: "event_callback",
+      team_id: "T1",
+      event_id: "E_APP_MENTION",
+      event: { ...event, type: "app_mention" },
+    });
+    const messageBody = JSON.stringify({
+      type: "event_callback",
+      team_id: "T1",
+      event_id: "E_MESSAGE",
+      event: { ...event, type: "message" },
+    });
+
+    const appMentionResponse = await fetch(`${baseUrl}/slack/events`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...signedSlackHeaders(appMentionBody),
+      },
+      body: appMentionBody,
+    });
+    const messageResponse = await fetch(`${baseUrl}/slack/events`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...signedSlackHeaders(messageBody),
+      },
+      body: messageBody,
+    });
+
+    expect(appMentionResponse.status).toBe(200);
+    expect(messageResponse.status).toBe(200);
+    await expect(messageResponse.json()).resolves.toEqual({ ok: true, duplicate: true });
+    await waitForDeferredSlackWork();
+    expect(prismaMock.slackProcessedEvent.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          slackEventId: "E_APP_MENTION",
+          slackMessageKey: "T1:C1:1710000000.000100",
+        }),
+      }),
+    );
+    expect(prismaMock.slackProcessedEvent.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          slackEventId: "E_MESSAGE",
+          slackMessageKey: "T1:C1:1710000000.000100",
+        }),
+      }),
+    );
+    expect(prismaMock.slackSessionDraft.create).toHaveBeenCalledTimes(1);
+    expect(slackMocks.postMessage).toHaveBeenCalledTimes(1);
   });
 
   it("includes prior Slack thread messages in new Trace session drafts from reply mentions", async () => {

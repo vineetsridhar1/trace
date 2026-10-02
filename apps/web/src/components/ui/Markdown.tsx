@@ -7,6 +7,7 @@ import {
   type FileOpenHandler,
 } from "../session/FileOpenContext";
 import { SteerableMarkdownBlock } from "./SteerableMarkdownBlock";
+import { MarkdownPre } from "./MarkdownPre";
 import { fileOpenRequestFromHref } from "./markdownFileLinks";
 import {
   createSteerableBlocksPlugin,
@@ -94,7 +95,7 @@ export function Markdown({
 
   const components = useMemo<Components>(() => {
     if (!canSteer) {
-      return { a: linkComponent };
+      return { a: linkComponent, pre: MarkdownPre };
     }
 
     function SteerableDiv({
@@ -128,7 +129,7 @@ export function Markdown({
       );
     }
 
-    return { a: linkComponent, div: SteerableDiv };
+    return { a: linkComponent, pre: MarkdownPre, div: SteerableDiv };
   }, [
     activeBlockId,
     comments,

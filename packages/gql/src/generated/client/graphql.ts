@@ -2049,6 +2049,10 @@ export type Project = {
   tickets: Array<Ticket>;
 };
 
+export type PullRequestCheckStatus = "failure" | "pending" | "success" | "unknown";
+
+export type PullRequestReviewStatus = "approved" | "changes_requested" | "pending" | "unknown";
+
 export type PushPlatform = "android" | "ios";
 
 export type Query = {
@@ -2133,6 +2137,8 @@ export type Query = {
   sessionGroupFileContentWithSource: SessionGroupFileContentResult;
   sessionGroupFileTree: SessionGroupFileTree;
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
+  sessionGroupPullRequestStatus?: Maybe<SessionPullRequestStatus>;
+  sessionGroupPullRequestStatuses: Array<SessionPullRequestStatus>;
   sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
   sessionMessages: Array<SessionMessage>;
@@ -2467,6 +2473,14 @@ export type QuerySessionGroupFileTreeArgs = {
 
 export type QuerySessionGroupFilesArgs = {
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupPullRequestStatusArgs = {
+  id: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupPullRequestStatusesArgs = {
+  ids: Array<Scalars["ID"]["input"]>;
 };
 
 export type QuerySessionGroupWorktreeChangesArgs = {
@@ -3229,6 +3243,13 @@ export type SessionPromptIndexItem = {
   imageCount: Scalars["Int"]["output"];
   preview: Scalars["String"]["output"];
   timestamp: Scalars["DateTime"]["output"];
+};
+
+export type SessionPullRequestStatus = {
+  __typename?: "SessionPullRequestStatus";
+  checks: PullRequestCheckStatus;
+  prUrl: Scalars["String"]["output"];
+  review: PullRequestReviewStatus;
 };
 
 export type SessionRuntimeInstance = {
@@ -6697,6 +6718,20 @@ export type OnboardingSessionsQueryVariables = Exact<{
 export type OnboardingSessionsQuery = {
   __typename?: "Query";
   sessions: Array<{ __typename?: "Session"; id: string }>;
+};
+
+export type SessionGroupPullRequestStatusesQueryVariables = Exact<{
+  ids: Array<Scalars["ID"]["input"]> | Scalars["ID"]["input"];
+}>;
+
+export type SessionGroupPullRequestStatusesQuery = {
+  __typename?: "Query";
+  sessionGroupPullRequestStatuses: Array<{
+    __typename?: "SessionPullRequestStatus";
+    prUrl: string;
+    review: PullRequestReviewStatus;
+    checks: PullRequestCheckStatus;
+  }>;
 };
 
 export const BaseCreationGroupFragmentDoc = {
@@ -17051,3 +17086,56 @@ export const OnboardingSessionsDocument = {
     },
   ],
 } as unknown as DocumentNode<OnboardingSessionsQuery, OnboardingSessionsQueryVariables>;
+export const SessionGroupPullRequestStatusesDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionGroupPullRequestStatuses" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "ids" } },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "ListType",
+              type: {
+                kind: "NonNullType",
+                type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+              },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionGroupPullRequestStatuses" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "ids" },
+                value: { kind: "Variable", name: { kind: "Name", value: "ids" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "review" } },
+                { kind: "Field", name: { kind: "Name", value: "checks" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  SessionGroupPullRequestStatusesQuery,
+  SessionGroupPullRequestStatusesQueryVariables
+>;

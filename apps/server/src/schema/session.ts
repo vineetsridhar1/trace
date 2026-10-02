@@ -9,6 +9,7 @@ import type {
   UpdateSessionDefaultsInput,
 } from "@trace/gql";
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
+import { sessionPullRequestService } from "../services/session-pull-request.js";
 import { sessionService } from "../services/session.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
@@ -28,6 +29,10 @@ import { sessionMessageService } from "../services/session-message.js";
 import { resolveActor } from "../services/actor.js";
 
 export const sessionQueries = {
+  sessionGroupPullRequestStatuses: (_: unknown, args: { ids: string[] }, ctx: Context) =>
+    sessionPullRequestService.getStatuses(args.ids, requireOrgContext(ctx), ctx.userId),
+  sessionGroupPullRequestStatus: (_: unknown, args: { id: string }, ctx: Context) =>
+    sessionPullRequestService.getStatus(args.id, requireOrgContext(ctx), ctx.userId),
   sessionGroups: (
     _: unknown,
     args: {
@@ -353,21 +358,27 @@ export const sessionQueries = {
         workdir: true,
         sessionGroupId: true,
         connection: true,
+        sessionGroup: { select: { connection: true, workdir: true } },
       },
     });
     if (!session || session.tool === "pi") return [];
 
+    const runtimeConnection = session.sessionGroup
+      ? session.sessionGroup.connection
+      : session.connection;
     const runtimeInstanceId =
-      session.connection &&
-      typeof session.connection === "object" &&
-      !Array.isArray(session.connection) &&
-      typeof (session.connection as { runtimeInstanceId?: unknown }).runtimeInstanceId === "string"
-        ? ((session.connection as { runtimeInstanceId?: string }).runtimeInstanceId ?? null)
+      runtimeConnection &&
+      typeof runtimeConnection === "object" &&
+      !Array.isArray(runtimeConnection) &&
+      typeof (runtimeConnection as { runtimeInstanceId?: unknown }).runtimeInstanceId === "string"
+        ? ((runtimeConnection as { runtimeInstanceId?: string }).runtimeInstanceId ?? null)
         : null;
     const boundRuntime = sessionRouter.getRuntimeForSession(args.sessionId);
     const runtime = runtimeInstanceId
       ? sessionRouter.getRuntimeMetadata(runtimeInstanceId, orgId)
-      : boundRuntime;
+      : session.sessionGroup
+        ? null
+        : boundRuntime;
 
     // Try to get skills from bridge
     let skills: BridgeSkillInfo[] = [];
@@ -384,7 +395,7 @@ export const sessionQueries = {
     if (runtime && canUseBridgeSkills) {
       try {
         skills = await sessionRouter.listSkills(runtime.key, args.sessionId, {
-          workdirHint: session.workdir ?? undefined,
+          workdirHint: session.sessionGroup?.workdir ?? session.workdir ?? undefined,
           includeUserSkills: true,
           includeProjectSkills: true,
         });
@@ -1088,6 +1099,24 @@ export const sessionTypeResolvers = {
     },
   },
   Session: {
+    connection: async (
+      session: {
+        connection?: unknown;
+        sessionGroupId?: string | null;
+        sessionGroup?: { connection?: unknown } | null;
+      },
+      _args: unknown,
+      ctx: Context,
+    ) => {
+      if (session.sessionGroup && "connection" in session.sessionGroup) {
+        return session.sessionGroup.connection;
+      }
+      if (!session.sessionGroupId) return session.connection ?? null;
+      const group = (await ctx.sessionGroupLoader.load(session.sessionGroupId)) as {
+        connection?: unknown;
+      } | null;
+      return group?.connection ?? null;
+    },
     projects: async (session: { id: string }, _args: unknown, ctx: Context) => {
       requireOrgContext(ctx);
       return ctx.sessionProjectsLoader.load(session.id);

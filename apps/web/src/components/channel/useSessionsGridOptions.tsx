@@ -30,7 +30,13 @@ export function useSessionsGridOptions({
 }) {
   return {
     context: renameContext,
-    onRowClicked: (event: { data?: SessionGridRow }) => {
+    onRowClicked: (event: { data?: SessionGridRow; event?: Event | null }) => {
+      // AG Grid's native row listener can run before React's click handler.
+      if (
+        event.event?.target instanceof Element &&
+        event.event.target.closest("[data-session-name], input")
+      )
+        return;
       if (isSessionStatusHeaderRow(event.data)) {
         onToggleStatusGroup(event.data._status);
         return;

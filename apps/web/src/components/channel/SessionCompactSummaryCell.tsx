@@ -1,3 +1,5 @@
+import { SessionListName } from "./SessionListName";
+import { navigateToSessionGroup } from "../../stores/ui";
 import { TerminalSquare } from "lucide-react";
 import { timeAgo } from "../../lib/utils";
 import { useAttachedCheckoutForGroup } from "../../stores/bridges";
@@ -39,7 +41,11 @@ export function SessionCompactSummaryCell({
             onSubmit={(name) => renameContext?.onRenameSubmit(row, name)}
           />
         ) : (
-          <span className="truncate text-sm font-medium text-foreground">{row.name}</span>
+          <SessionListName
+            groupId={row.id}
+            className="truncate text-sm font-medium text-foreground"
+            onOpen={() => navigateToSessionGroup(null, row.id, row.latestSession?.id ?? null)}
+          />
         )}
         {attached && <SpotlightBridgeIndicator attached={attached} />}
         <SessionApplicationRunningIndicator sessionGroupId={row.id} />

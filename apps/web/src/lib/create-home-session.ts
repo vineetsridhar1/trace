@@ -37,7 +37,7 @@ export function buildHomeStartInput(input: CreateHomeSessionInput) {
     ...(linkedRepoId ? { repoId: linkedRepoId } : {}),
     ...(codingChannel ? { channelId: codingChannel.id } : {}),
     ...(usesExistingContext && input.projectId ? { projectId: input.projectId } : {}),
-    ...(input.kind === "coding" || (input.kind === "general" && input.runtimeInstanceId)
+    ...(usesExistingContext && input.runtimeInstanceId
       ? {
           hosting: "local" as const,
           ...(input.runtimeInstanceId ? { runtimeInstanceId: input.runtimeInstanceId } : {}),

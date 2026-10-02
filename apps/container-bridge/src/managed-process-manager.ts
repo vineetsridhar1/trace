@@ -135,8 +135,12 @@ function waitForListeningPort(
 
 export class ManagedProcessManager {
   private processes = new Map<string, ManagedProcess>();
+  private setupScripts = new Map<string, ChildProcessWithoutNullStreams>();
+  private terminatingChildren = new Set<ChildProcessWithoutNullStreams>();
   // Per-processInstanceId serialization for start/restart (see start()).
   private startLocks = new Map<string, Promise<void>>();
+  private lifecycleGeneration = 0;
+  private memoryPressureActive = false;
   private readonly endpointForwarder: EndpointForwarder;
 
   constructor(
@@ -176,7 +180,17 @@ export class ManagedProcessManager {
     env?: Record<string, string>;
     ports?: number[];
   }) {
-    this.enqueue(options.processInstanceId, () => this.startReplacing(options));
+    if (this.memoryPressureActive) {
+      this.send({
+        type: "app_process_error",
+        requestId: options.requestId,
+        processInstanceId: options.processInstanceId,
+        error: "Runtime is recovering from memory pressure",
+      });
+      return;
+    }
+    const generation = this.lifecycleGeneration;
+    this.enqueue(options.processInstanceId, () => this.startReplacing(options, generation));
   }
 
   /**
@@ -186,16 +200,20 @@ export class ManagedProcessManager {
    * process's state) and wait for it to die before spawning, so the new child
    * never races the old one for the configured ports.
    */
-  private async startReplacing(options: {
-    requestId: string;
-    processInstanceId: string;
-    sessionGroupId: string;
-    sessionId: string;
-    command: string;
-    cwd: string;
-    env?: Record<string, string>;
-    ports?: number[];
-  }): Promise<void> {
+  private async startReplacing(
+    options: {
+      requestId: string;
+      processInstanceId: string;
+      sessionGroupId: string;
+      sessionId: string;
+      command: string;
+      cwd: string;
+      env?: Record<string, string>;
+      ports?: number[];
+    },
+    generation: number,
+  ): Promise<void> {
+    if (generation !== this.lifecycleGeneration || this.memoryPressureActive) return;
     const baseWorkdir = this.sessionWorkdirs.get(options.sessionId);
     if (!baseWorkdir) {
       this.send({
@@ -213,8 +231,14 @@ export class ManagedProcessManager {
         // (guarded by an identity check) stays silent — the server already
         // accounted for this process when it requested the replacement.
         this.processes.delete(options.processInstanceId);
-        await terminateChild(previous.child);
+        this.terminatingChildren.add(previous.child);
+        try {
+          await terminateChild(previous.child);
+        } finally {
+          this.terminatingChildren.delete(previous.child);
+        }
       }
+      if (generation !== this.lifecycleGeneration || this.memoryPressureActive) return;
       const cwd = safeRelativeCwd(baseWorkdir, options.cwd);
       const child = spawn(options.command, {
         cwd,
@@ -331,7 +355,25 @@ export class ManagedProcessManager {
     for (const key of new Set<string>([...this.processes.keys(), ...this.startLocks.keys()])) {
       this.stop(key);
     }
+    for (const child of this.setupScripts.values()) signalProcessTree(child, "SIGKILL");
+    for (const child of this.terminatingChildren) signalProcessTree(child, "SIGKILL");
     this.endpointForwarder.destroy();
+  }
+
+  /** Immediately shed background workloads when the runtime is close to OOM. */
+  destroyAllImmediately(): void {
+    this.memoryPressureActive = true;
+    this.lifecycleGeneration++;
+    for (const { child } of this.processes.values()) {
+      signalProcessTree(child, "SIGKILL");
+    }
+    for (const child of this.setupScripts.values()) signalProcessTree(child, "SIGKILL");
+    for (const child of this.terminatingChildren) signalProcessTree(child, "SIGKILL");
+    this.endpointForwarder.destroy();
+  }
+
+  recoverFromMemoryPressure(): void {
+    this.memoryPressureActive = false;
   }
 
   runSetupScript(options: {
@@ -341,6 +383,15 @@ export class ManagedProcessManager {
     cwd: string;
     env?: Record<string, string>;
   }) {
+    if (this.memoryPressureActive) {
+      this.send({
+        type: "setup_script_result",
+        requestId: options.requestId,
+        exitCode: 1,
+        error: "Runtime is recovering from memory pressure",
+      });
+      return;
+    }
     const baseWorkdir = this.sessionWorkdirs.get(options.sessionId);
     if (!baseWorkdir) {
       this.send({
@@ -360,11 +411,15 @@ export class ManagedProcessManager {
         // Own process group so a timeout can kill the whole tree.
         detached: true,
       });
+      this.setupScripts.set(options.requestId, child);
       const chunks: Buffer[] = [];
       let settled = false;
       const finish = (result: { exitCode: number; output?: string; error?: string }): void => {
         if (settled) return;
         settled = true;
+        if (this.setupScripts.get(options.requestId) === child) {
+          this.setupScripts.delete(options.requestId);
+        }
         clearTimeout(timeout);
         this.send({ type: "setup_script_result", requestId: options.requestId, ...result });
       };

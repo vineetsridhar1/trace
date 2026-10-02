@@ -23,6 +23,7 @@ async function sendRuntimeCommand(...args: Parameters<typeof sessionRouter.sendT
 }
 
 type Tx = Prisma.TransactionClient;
+type ProcessLogStore = Pick<Prisma.TransactionClient, "sessionApplicationLogEntry">;
 const SETUP_OUTPUT_PREVIEW_LIMIT = 65_536;
 export const PROCESS_LOG_ENTRY_MAX_CHARS = 8_192;
 export const PROCESS_LOG_RETAINED_ROWS = 500;
@@ -43,7 +44,6 @@ type ManagedSessionGroup = {
     id: string;
     hosting: string;
     workdir: string | null;
-    connection: Prisma.JsonValue;
   }>;
   repo: {
     id: string;
@@ -118,16 +118,11 @@ export async function sessionGroupRuntimeInstanceId(
   sessionGroupId: string,
   organizationId: string,
 ): Promise<string | null> {
-  const sessions = await prisma.session.findMany({
-    where: { sessionGroupId, organizationId },
+  const group = await prisma.sessionGroup.findFirst({
+    where: { id: sessionGroupId, organizationId },
     select: { connection: true },
-    orderBy: { updatedAt: "desc" },
   });
-  for (const session of sessions) {
-    const runtimeInstanceId = connectionRuntimeInstanceId(session.connection);
-    if (runtimeInstanceId) return runtimeInstanceId;
-  }
-  return null;
+  return group ? connectionRuntimeInstanceId(group.connection) : null;
 }
 function publicProcess(process: PrismaSessionApplicationProcess) {
   return {
@@ -1134,10 +1129,8 @@ export class SessionApplicationService {
     return process;
   }
 
-  // Log chunks for one process arrive concurrently (stdout + stderr) over a
-  // single runtime connection bound to this server instance. Serialize the
-  // read-then-write sequence assignment per process so concurrent chunks can't
-  // collide on the same sequence number and corrupt pagination.
+  // Preserve chunk arrival and publication order within this server. The
+  // database trigger allocates unique sequences across all server replicas.
   async appendProcessLog(
     processId: string,
     organizationId: string,
@@ -1150,9 +1143,13 @@ export class SessionApplicationService {
       .catch(() => undefined)
       .then(() => this.writeProcessLog(processId, organizationId, stream, data));
     this.logAppendChains.set(processId, next);
-    void next.finally(() => {
+    const clearChain = () => {
       if (this.logAppendChains.get(processId) === next) this.logAppendChains.delete(processId);
-    });
+    };
+    // `finally()` returns a second promise that mirrors `next`'s rejection.
+    // Leaving that promise unhandled turns a recoverable database error into
+    // an uncaught rejection that terminates the backend process.
+    void next.then(clearChain, clearChain);
     return next;
   }
 
@@ -1168,27 +1165,21 @@ export class SessionApplicationService {
     });
     if (!process) return null;
 
-    const entry = await prisma.$transaction(async (tx) => {
-      const last = await tx.sessionApplicationLogEntry.findFirst({
-        where: { processId },
-        orderBy: { sequence: "desc" },
-        select: { sequence: true },
-      });
-      const sequence = (last?.sequence ?? 0) + 1;
-      const created = await tx.sessionApplicationLogEntry.create({
-        data: {
-          organizationId: process.organizationId,
-          processId,
-          stream,
-          data: truncateProcessLogData(data),
-          sequence,
-        },
-      });
-      if (sequence % PROCESS_LOG_PRUNE_INTERVAL === 0) {
-        await pruneProcessLogs(tx, processId);
-      }
-      return created;
+    // The database trigger owns sequence allocation. Supplying zero keeps this
+    // write compatible with both Prisma and rolling old/new server replicas
+    // without holding an interactive transaction connection.
+    const entry = await prisma.sessionApplicationLogEntry.create({
+      data: {
+        organizationId: process.organizationId,
+        processId,
+        stream,
+        data: truncateProcessLogData(data),
+        sequence: 0,
+      },
     });
+    if (entry.sequence % PROCESS_LOG_PRUNE_INTERVAL === 0) {
+      await pruneProcessLogs(prisma, processId);
+    }
     // Publish-only (not persisted): log lines are high-volume and already live
     // in the pruned sessionApplicationLogEntry table. Persisting an Event per
     // chunk would grow the append-only event log without bound.
@@ -1384,7 +1375,7 @@ export class SessionApplicationService {
         connection: true,
         repo: { select: { id: true, setupConfig: true } },
         sessions: {
-          select: { id: true, hosting: true, workdir: true, connection: true },
+          select: { id: true, hosting: true, workdir: true },
           orderBy: { updatedAt: "desc" },
         },
       },
@@ -1400,25 +1391,9 @@ export class SessionApplicationService {
         "Application forwarding is currently only available for cloud sessions",
       );
     }
-    const groupRuntimeId = connectionRuntimeInstanceId(group.connection);
-    const session = groupRuntimeId
-      ? group.sessions.find(
-          (candidate) =>
-            candidate.hosting === "cloud" &&
-            connectionRuntimeInstanceId(candidate.connection) === groupRuntimeId,
-        )
-      : group.sessions.find(
-          (candidate) =>
-            candidate.hosting === "cloud" &&
-            hasReadyWorkspace(candidate.connection, candidate.workdir),
-        );
-    const runtimeId = groupRuntimeId ?? connectionRuntimeInstanceId(session?.connection ?? null);
-    const readinessConnection = groupRuntimeId ? group.connection : session?.connection;
-    if (
-      !session ||
-      !runtimeId ||
-      !hasReadyWorkspace(readinessConnection, group.workdir ?? session.workdir)
-    ) {
+    const runtimeId = connectionRuntimeInstanceId(group.connection);
+    const session = group.sessions.find((candidate) => candidate.hosting === "cloud");
+    if (!session || !runtimeId || !hasReadyWorkspace(group.connection, group.workdir)) {
       throw new ValidationError("Session workspace is not ready yet");
     }
     const resolution = await sessionRouter.resolveRuntime(runtimeId, organizationId);
@@ -1520,7 +1495,7 @@ function truncateProcessLogData(data: string): string {
   return `${data.slice(0, prefixLength)}${PROCESS_LOG_TRUNCATION_SUFFIX}`;
 }
 
-async function pruneProcessLogs(tx: Tx, processId: string): Promise<void> {
+async function pruneProcessLogs(tx: ProcessLogStore, processId: string): Promise<void> {
   const staleEntries = await tx.sessionApplicationLogEntry.findMany({
     where: { processId },
     orderBy: { sequence: "desc" },
