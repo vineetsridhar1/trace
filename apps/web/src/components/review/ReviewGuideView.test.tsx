@@ -53,6 +53,10 @@ describe("Guide Ask about this", () => {
   let renderer: ReactTestRenderer;
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
+      setTimeout(() => callback(0), 0),
+    );
+    vi.stubGlobal("cancelAnimationFrame", clearTimeout);
     useEntityStore.setState({ reviewInquiries: {} });
     useReviewUiStore.setState({ byReviewId: {}, deletedInquiryIds: [] });
     mutate.mockReset();

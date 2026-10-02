@@ -13,6 +13,7 @@ vi.mock("./ReviewThreadBody", () => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { ReviewInquiryCard } from "./ReviewInquiryCard";
 import { GuideChapterInquiries } from "./guide/GuideChapterInquiries";
+import { Accordion } from "../ui/accordion";
 
 describe("AI conversation actions", () => {
   let renderer: ReactTestRenderer;
@@ -31,6 +32,10 @@ describe("AI conversation actions", () => {
   } as ReviewInquiry;
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
+      setTimeout(() => callback(0), 0),
+    );
+    vi.stubGlobal("cancelAnimationFrame", clearTimeout);
     vi.stubGlobal("localStorage", storage);
     storage.setItem.mockClear();
     mutate.mockReset().mockResolvedValue({});
@@ -104,6 +109,54 @@ describe("AI conversation actions", () => {
         },
       }),
     });
+  });
+
+  it("opens the latest question by default and remembers an earlier question across remounts", () => {
+    addFollowUps();
+    const triggers = () =>
+      renderer.root
+        .findAllByType("button")
+        .filter((node) => node.props["data-slot"] === "accordion-trigger");
+    expect(triggers().map((node) => node.props["aria-expanded"])).toEqual([false, false, true]);
+    act(() => renderer.root.findByType(Accordion).props.onValueChange(["question"]));
+    expect(triggers().map((node) => node.props["aria-expanded"])).toEqual([true, false, false]);
+    act(() => {
+      renderer.unmount();
+      renderer = create(
+        <ReviewInquiryCard inquiryId="question" queuedAheadCount={0} blockerLabel={null} />,
+      );
+    });
+    expect(triggers().map((node) => node.props["aria-expanded"])).toEqual([true, false, false]);
+    act(() => renderer.root.findByType(Accordion).props.onValueChange([]));
+    expect(triggers().map((node) => node.props["aria-expanded"])).toEqual([false, false, false]);
+  });
+
+  it("opens a newly sent follow-up after reading an older answer", async () => {
+    addFollowUps();
+    act(() => renderer.root.findByType(Accordion).props.onValueChange(["question"]));
+    act(() => renderer.root.findByType("textarea").props.onChange({ target: { value: "How?" } }));
+    mutate.mockImplementation(async () => {
+      useEntityStore.getState().upsert("reviewInquiries", "new", {
+        ...inquiry,
+        id: "new",
+        position: 4,
+        state: "queued",
+        question: "How?",
+        context: { followUpToInquiryId: "next" },
+      });
+      return {};
+    });
+    await act(async () =>
+      renderer.root
+        .findByProps({ "aria-label": "Send follow-up", "data-slot": "button" })
+        .props.onClick(),
+    );
+    expect(
+      renderer.root
+        .findAllByType("button")
+        .filter((node) => node.props["data-slot"] === "accordion-trigger")
+        .map((node) => node.props["aria-expanded"]),
+    ).toEqual([false, false, false, true]);
   });
 
   it("resolves and reopens the whole conversation with one control", async () => {

@@ -7,8 +7,7 @@ import { toast } from "sonner";
 import { useReviewUiStore } from "../../stores/review-ui";
 import { mutateReview } from "./review-operations";
 import { inquiryConversationRoot } from "./review-inquiry";
-import { ReviewInquiryTurn } from "./ReviewInquiryTurn";
-import { ReviewInquiryFollowUp } from "./ReviewInquiryFollowUp";
+import { ReviewInquiryConversation } from "./ReviewInquiryConversation";
 import { ReviewInquiryHeader } from "./ReviewInquiryHeader";
 
 const RESOLVE_INQUIRY = gql`
@@ -107,7 +106,6 @@ export function ReviewInquiryCard({
   return (
     <article className="w-full max-w-[720px] overflow-hidden rounded-xl border border-[var(--th-review-edge-strong)] bg-[var(--th-raised)] shadow-sm">
       <ReviewInquiryHeader
-        inquiryId={inquiryId}
         questionCount={conversationIds.length}
         finished={finished}
         resolved={resolved}
@@ -115,23 +113,13 @@ export function ReviewInquiryCard({
         onDelete={() => deleteInquiry(inquiryId)}
         onResolve={() => void resolve()}
       />
-      <div className="px-4 py-3">
-        {conversationIds.map((id, index) => (
-          <div
-            key={id}
-            className={index > 0 ? "mt-3 border-t border-[var(--th-review-edge)] pt-3" : undefined}
-          >
-            <ReviewInquiryTurn
-              inquiryId={id}
-              queuedAheadCount={index === 0 ? queuedAheadCount : undefined}
-              blockerLabel={index === 0 ? blockerLabel : undefined}
-            />
-          </div>
-        ))}
-        {finished ? (
-          <ReviewInquiryFollowUp inquiryId={conversationIds[conversationIds.length - 1]!} />
-        ) : null}
-      </div>
+      <ReviewInquiryConversation
+        inquiryId={inquiryId}
+        inquiryIds={conversationIds}
+        finished={finished}
+        queuedAheadCount={queuedAheadCount}
+        blockerLabel={blockerLabel}
+      />
     </article>
   );
 }

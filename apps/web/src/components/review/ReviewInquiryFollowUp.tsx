@@ -14,7 +14,13 @@ const ENQUEUE_FOLLOW_UP = gql`
   }
 `;
 
-export function ReviewInquiryFollowUp({ inquiryId }: { inquiryId: string }) {
+export function ReviewInquiryFollowUp({
+  inquiryId,
+  onSent,
+}: {
+  inquiryId: string;
+  onSent?(): void;
+}) {
   const reviewId = useEntityField("reviewInquiries", inquiryId, "reviewId") ?? "";
   const snapshotId = useEntityField("reviewInquiries", inquiryId, "snapshotId") ?? "";
   const sourceKind = useEntityField("reviewInquiries", inquiryId, "sourceKind");
@@ -45,6 +51,7 @@ export function ReviewInquiryFollowUp({ inquiryId }: { inquiryId: string }) {
         },
       });
       setFollowUp("");
+      onSent?.();
       toast.success("Follow-up added to Review Chat");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not send follow-up");
@@ -54,7 +61,7 @@ export function ReviewInquiryFollowUp({ inquiryId }: { inquiryId: string }) {
   };
 
   return (
-    <div className="mt-4 flex items-end gap-2 rounded-lg border border-[var(--th-review-edge-strong)] bg-[var(--th-surface-deep)] p-2 focus-within:border-[var(--th-review-comment)]/50">
+    <div className="mt-2 flex items-end gap-2 rounded-lg border border-[var(--th-review-edge-strong)] bg-[var(--th-surface-deep)] p-2 focus-within:border-[var(--th-review-comment)]/50">
       <textarea
         value={followUp}
         onChange={(event) => setFollowUp(event.target.value)}
@@ -67,7 +74,7 @@ export function ReviewInquiryFollowUp({ inquiryId }: { inquiryId: string }) {
         disabled={sendingFollowUp}
         rows={1}
         className="field-sizing-content max-h-32 min-h-8 min-w-0 flex-1 resize-none bg-transparent px-1 py-1.5 text-[13px] text-[var(--th-review-text)] outline-none placeholder:text-muted-foreground disabled:cursor-wait disabled:opacity-50"
-        placeholder="Ask a follow-up about this change"
+        placeholder="Ask a follow-up"
         aria-label="Ask a follow-up"
       />
       <Button
@@ -75,7 +82,7 @@ export function ReviewInquiryFollowUp({ inquiryId }: { inquiryId: string }) {
         aria-label="Send follow-up"
         disabled={!followUp.trim() || sendingFollowUp}
         onClick={() => void sendFollowUp()}
-        className="bg-[var(--th-review-accent-edge)] text-[var(--th-review-accent-tint)] hover:bg-[var(--th-review-accent-deep)]"
+        className="bg-[var(--th-review-comment)] text-[var(--th-review-card)] hover:bg-[var(--th-review-accent-tint)]"
       >
         {sendingFollowUp ? <LoaderCircle className="animate-spin" /> : <ArrowUp />}
       </Button>

@@ -20,6 +20,7 @@ interface ReviewUiSelection {
   /** Missing entries use file metadata defaults; explicit choices survive virtualized remounts. */
   fileCollapsedOverrides: Record<string, boolean>;
   inquiryCollapsedOverrides: Record<string, boolean>;
+  inquiryExpandedTurnOverrides: Record<string, string | null>;
   threadCollapsedOverrides: Record<string, boolean>;
 }
 
@@ -37,6 +38,11 @@ interface ReviewUiState {
   toggleFileCollapsed(reviewId: string, filePath: string, defaultCollapsed?: boolean): void;
   setInquiryCollapsed(reviewId: string, inquiryId: string, collapsed: boolean): void;
   toggleInquiryCollapsed(reviewId: string, inquiryId: string, defaultCollapsed?: boolean): void;
+  setInquiryExpandedTurn(
+    reviewId: string,
+    inquiryId: string,
+    turnId: string | null | undefined,
+  ): void;
   setThreadCollapsed(reviewId: string, threadId: string, collapsed: boolean): void;
   toggleThreadCollapsed(reviewId: string, threadId: string, defaultCollapsed?: boolean): void;
 }
@@ -50,6 +56,7 @@ const emptySelection = (): ReviewUiSelection => ({
   highlight: null,
   fileCollapsedOverrides: {},
   inquiryCollapsedOverrides: {},
+  inquiryExpandedTurnOverrides: {},
   threadCollapsedOverrides: {},
 });
 
@@ -171,6 +178,19 @@ export const useReviewUiStore = create<ReviewUiState>((set) => ({
               [inquiryId]: !collapsed,
             },
           },
+        },
+      };
+    }),
+  setInquiryExpandedTurn: (reviewId, inquiryId, turnId) =>
+    set((state) => {
+      const current = state.byReviewId[reviewId] ?? emptySelection();
+      const inquiryExpandedTurnOverrides = { ...current.inquiryExpandedTurnOverrides };
+      if (turnId === undefined) delete inquiryExpandedTurnOverrides[inquiryId];
+      else inquiryExpandedTurnOverrides[inquiryId] = turnId;
+      return {
+        byReviewId: {
+          ...state.byReviewId,
+          [reviewId]: { ...current, inquiryExpandedTurnOverrides },
         },
       };
     }),
