@@ -44,6 +44,8 @@ export function ReviewInquiryCard({
   const error = useEntityField("reviewInquiries", inquiryId, "error");
   const resolvedAt = useEntityField("reviewInquiries", inquiryId, "resolvedAt");
   const answer = useEntityField("reviewInquiries", inquiryId, "responseMessage")?.text?.trim();
+  const anchorFilePath =
+    anchor && typeof anchor.filePath === "string" ? anchor.filePath : undefined;
   const presentation = inquiryPresentation(state, queuedAheadCount === 0);
   const collapsed = useReviewUiStore(
     (store) =>
@@ -178,7 +180,7 @@ export function ReviewInquiryCard({
                 <Sparkles size={11} /> Trace AI
               </div>
               {answer ? (
-                <ReviewThreadBody body={answer} />
+                <ReviewThreadBody body={answer} snapshotId={snapshotId} filePath={anchorFilePath} />
               ) : (
                 <p className="m-0 text-xs text-muted-foreground">Answer completed.</p>
               )}

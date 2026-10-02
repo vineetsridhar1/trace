@@ -1,5 +1,15 @@
+import { GuideSnippetExplanation } from "./guide/GuideSnippetExplanation";
+
 /** Renders a comment body, styling `backticked` spans as the design's inline code chips. */
-export function ReviewThreadBody({ body }: { body: string }) {
+export function ReviewThreadBody({
+  body,
+  snapshotId,
+  filePath,
+}: {
+  body: string;
+  snapshotId?: string;
+  filePath?: string;
+}) {
   return (
     <p className="m-0 text-[13px] leading-[1.55] text-[var(--th-heading)]">
       {body.split(/(`[^`]+`)/).map((part, index) =>
@@ -12,7 +22,11 @@ export function ReviewThreadBody({ body }: { body: string }) {
           </span>
         ) : (
           <span key={index} className="whitespace-pre-wrap">
-            {part}
+            {snapshotId && filePath ? (
+              <GuideSnippetExplanation text={part} snapshotId={snapshotId} filePath={filePath} />
+            ) : (
+              part
+            )}
           </span>
         ),
       )}
