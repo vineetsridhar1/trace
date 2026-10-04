@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image, StyleSheet, View } from "react-native";
 import { Button, Screen, Text, TraceLoader } from "@/components/design-system";
 import { FloatingBackButton } from "@/components/navigation/FloatingBackButton";
-import { artifactFileName, downloadArtifactFile } from "@/lib/artifact-files";
+import { downloadArtifactFile } from "@/lib/artifact-files";
 import { useTheme } from "@/theme";
 
 export default function ArtifactImageScreen() {

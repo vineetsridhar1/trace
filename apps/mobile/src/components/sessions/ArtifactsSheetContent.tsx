@@ -82,7 +82,7 @@ export function ArtifactsSheetContent({ sessionId, onClose }: ArtifactsSheetCont
       <View style={styles.header}>
         <Text variant="headline">Artifacts</Text>
         <Text variant="footnote" color="mutedForeground">
-          HTML opens in Trace. Other files open with an app on your device.
+          HTML and images open in Trace. Other files open with an app on your device.
         </Text>
       </View>
       {files.length === 0 ? (
