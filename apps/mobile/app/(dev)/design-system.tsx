@@ -225,6 +225,17 @@ export default function DesignSystemScreen() {
           style={{ backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg }}
         />
       </Section>
+
+      <Section title="Session">
+        <ListRow
+          title="Artifact cards"
+          subtitle="Developer preview in a chat stream"
+          disclosureIndicator
+          onPress={() => router.push("/(dev)/artifact-cards")}
+          separator={false}
+          style={{ backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg }}
+        />
+      </Section>
     </ScrollView>
   );
 }
