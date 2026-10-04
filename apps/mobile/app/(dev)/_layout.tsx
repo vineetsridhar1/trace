@@ -5,6 +5,7 @@ export default function DevLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="design-system" />
+      <Stack.Screen name="artifact-cards" />
       <Stack.Screen name="sheet-preview" options={{ presentation: "formSheet" }} />
     </Stack>
   );

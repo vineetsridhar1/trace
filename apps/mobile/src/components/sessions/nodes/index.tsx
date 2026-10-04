@@ -22,6 +22,7 @@ import {
 } from "@/hooks/session-events-timeline";
 import type { SessionStreamNode } from "../sessionStreamItems";
 import { AskUserQuestionCard } from "./AskUserQuestionCard";
+import { ArtifactUploadedCard } from "./ArtifactUploadedCard";
 import { CommandExecutionRow } from "./CommandExecutionRow";
 import { PlanReviewCard } from "./PlanReviewCard";
 import { PRCard, type PRCardKind } from "./PRCard";
@@ -317,14 +318,24 @@ const EventNode = memo(function EventNode({ id, context }: EventNodeProps) {
       const artifact = asJsonObject(payload?.artifact);
       const manifest = asJsonObject(artifact?.manifest);
       const files = Array.isArray(manifest?.files) ? manifest.files : [];
-      const filePath = files
+      const artifactFile = files
         .map(asJsonObject)
-        .find((file) => file?.mediaType === "text/html" && typeof file.path === "string")?.path;
-      return artifact?.type === "trace.visual-plan.v1" &&
-        typeof artifact.id === "string" &&
-        typeof filePath === "string" ? (
-        <VisualPlanArtifactCard artifactId={artifact.id} filePath={filePath} />
-      ) : null;
+        .find((file) => typeof file?.path === "string" && typeof file.mediaType === "string");
+      if (!artifactFile || typeof artifact?.id !== "string") return null;
+      const file = {
+        path: artifactFile.path as string,
+        mediaType: artifactFile.mediaType as string,
+        size:
+          typeof artifactFile.size === "number"
+            ? artifactFile.size
+            : typeof artifact.byteSize === "number"
+              ? artifact.byteSize
+              : 0,
+      };
+      if (artifact.type === "trace.visual-plan.v1" && file.mediaType === "text/html") {
+        return <VisualPlanArtifactCard artifactId={artifact.id} filePath={file.path} />;
+      }
+      return <ArtifactUploadedCard artifactId={artifact.id} file={file} />;
     }
 
     case "session_pr_opened":

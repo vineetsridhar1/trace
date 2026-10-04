@@ -329,15 +329,16 @@ export const SessionMessage = memo(function SessionMessage({
       const manifest = asJsonObject(artifact?.manifest);
       const files = Array.isArray(manifest?.files) ? manifest.files : [];
       const artifactType = str(artifact?.type);
-      const artifactFile = files.map(asJsonObject).find((file) => {
-        if (!file || typeof file.path !== "string" || typeof file.mediaType !== "string") {
-          return false;
-        }
-        if (artifactType === "trace.visual-plan.v1") {
-          return file.mediaType === "text/html";
-        }
-        return file.mediaType.startsWith(artifactType === "trace.image.v1" ? "image/" : "video/");
-      });
+      const artifactFile =
+        files.map(asJsonObject).find((file) => {
+          if (!file || typeof file.path !== "string" || typeof file.mediaType !== "string") {
+            return false;
+          }
+          if (artifactType === "trace.visual-plan.v1") {
+            return file.mediaType === "text/html";
+          }
+          return file.mediaType.startsWith(artifactType === "trace.image.v1" ? "image/" : "video/");
+        }) ?? files.map(asJsonObject).find((file) => typeof file?.path === "string");
       return typeof artifact?.type === "string" && typeof artifact.id === "string" ? (
         <ArtifactUploadedCard
           artifactId={artifact.id}

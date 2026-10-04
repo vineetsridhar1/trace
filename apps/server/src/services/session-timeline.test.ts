@@ -697,7 +697,7 @@ describe("SessionTimelineService", () => {
     ]);
   });
 
-  it.each(["trace.visual-plan.v1", "trace.image.v1", "trace.video.v1"])(
+  it.each(["trace.visual-plan.v1", "trace.image.v1", "trace.video.v1", "mobile-pdf-preview"])(
     "keeps %s uploads visible in compact timelines",
     async (artifactType) => {
       const userEvent = event({

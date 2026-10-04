@@ -23,4 +23,24 @@ describe("ArtifactUploadedCard", () => {
     expect(markup).not.toContain("Interactive preview");
     expect(markup).not.toContain('target="_blank"');
   });
+
+  it("renders an explicit upload card for a generic artifact", () => {
+    const markup = renderToStaticMarkup(
+      <ArtifactOpenContext.Provider value={() => {}}>
+        <ArtifactUploadedCard
+          artifactId="artifact-pdf"
+          artifactType="mobile-pdf-preview"
+          filePath="mobile-preview.pdf"
+          mediaType="application/pdf"
+          byteSize={1744}
+          timestamp="2026-08-01T12:00:00.000Z"
+        />
+      </ArtifactOpenContext.Provider>,
+    );
+
+    expect(markup).toContain("Artifact uploaded");
+    expect(markup).toContain("mobile-preview.pdf");
+    expect(markup).toContain("PDF");
+    expect(markup).toContain("Open artifact");
+  });
 });

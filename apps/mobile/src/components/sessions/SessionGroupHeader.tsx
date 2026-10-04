@@ -14,6 +14,7 @@ import { DesignPickerSheetContent } from "./DesignPickerSheetContent";
 import { SessionMovePickerSheetContent } from "./SessionMovePickerSheetContent";
 import { SessionTabSwitcherSheet } from "./SessionTabSwitcherSheet";
 import { SessionGroupTitleMenu } from "./SessionGroupTitleMenu";
+import { ArtifactsSheetContent } from "./ArtifactsSheetContent";
 import { SessionComposerBottomSheet } from "./session-input-composer/SessionComposerBottomSheet";
 
 interface SessionGroupHeaderProps {
@@ -98,6 +99,7 @@ export function SessionGroupHeader({
   const [tabSwitcherOpen, setTabSwitcherOpen] = useState(false);
   const [moveSheetOpen, setMoveSheetOpen] = useState(false);
   const [designPickerOpen, setDesignPickerOpen] = useState(false);
+  const [artifactsOpen, setArtifactsOpen] = useState(false);
   const handleRowLayout = useCallback((e: LayoutChangeEvent) => {
     setRowWidth(e.nativeEvent.layout.width);
   }, []);
@@ -157,14 +159,14 @@ export function SessionGroupHeader({
   const handleOpenDesignPicker = useCallback(() => {
     setDesignPickerOpen(true);
   }, []);
+  const handleOpenArtifacts = useCallback(() => {
+    setArtifactsOpen(true);
+  }, []);
   const setupBlocking = Boolean(setupScript) && setupStatus === "running";
   const canRunScripts =
     runScripts.length > 0 && !!sessionId && !sessionOptimistic && !setupBlocking;
   const canImplementDesign =
-    sessionGroupKind === "coding" &&
-    !!sessionId &&
-    !sessionOptimistic &&
-    !mergedUnavailable;
+    sessionGroupKind === "coding" && !!sessionId && !sessionOptimistic && !mergedUnavailable;
   const handleRunScripts = useCallback(() => {
     if (!sessionId || runScripts.length === 0) return;
     if (setupBlocking) {
@@ -194,6 +196,11 @@ export function SessionGroupHeader({
         title: "Tabs & terminals",
         systemIcon: "rectangle.on.rectangle",
         onPress: handleOpenTabSwitcher,
+      });
+      items.push({
+        title: "Artifacts",
+        systemIcon: "shippingbox",
+        onPress: handleOpenArtifacts,
       });
     }
     items.push({
@@ -255,6 +262,7 @@ export function SessionGroupHeader({
     handleArchive,
     handleOpenMoveSheet,
     handleOpenDesignPicker,
+    handleOpenArtifacts,
     handleOpenApplications,
     handleOpenWorkspace,
     handleOpenTabSwitcher,
@@ -312,6 +320,11 @@ export function SessionGroupHeader({
             sessionId={sessionId}
             onClose={() => setMoveSheetOpen(false)}
           />
+        </SessionComposerBottomSheet>
+      ) : null}
+      {sessionId ? (
+        <SessionComposerBottomSheet visible={artifactsOpen} onClose={() => setArtifactsOpen(false)}>
+          <ArtifactsSheetContent sessionId={sessionId} onClose={() => setArtifactsOpen(false)} />
         </SessionComposerBottomSheet>
       ) : null}
       {sessionId ? (
