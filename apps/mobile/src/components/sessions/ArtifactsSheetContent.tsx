@@ -30,16 +30,17 @@ function iconForMediaType(mediaType: string): SFSymbol {
 export function ArtifactsSheetContent({ sessionId, onClose }: ArtifactsSheetContentProps) {
   const theme = useTheme();
   const router = useRouter();
-  const artifacts = useEntityStore((state) =>
-    Object.values(state.artifacts).filter((artifact) => artifact.sessionId === sessionId),
+  const artifactTable = useEntityStore((state) => state.artifacts);
+  const artifacts = useMemo(
+    () => Object.values(artifactTable).filter((artifact) => artifact.sessionId === sessionId),
+    [artifactTable, sessionId],
   ) as Artifact[];
   const [opening, setOpening] = useState<string | null>(null);
   const files = useMemo(
     () =>
-      artifacts
-        .flatMap((artifact) =>
-          artifact.manifest.files.map((file) => ({ artifactId: artifact.id, ...file })),
-        ),
+      artifacts.flatMap((artifact) =>
+        artifact.manifest.files.map((file) => ({ artifactId: artifact.id, ...file })),
+      ),
     [artifacts],
   );
 
