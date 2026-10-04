@@ -7,6 +7,7 @@ import {
   artifactFileName,
   formatArtifactFileSize,
   isHtmlArtifactFile,
+  isImageArtifactFile,
   shareArtifactFile,
   type MobileArtifactFile,
 } from "@/lib/artifact-files";
@@ -37,6 +38,10 @@ export function ArtifactUploadedCard({ artifactId, file }: ArtifactUploadedCardP
     void haptic.light();
     if (isHtmlArtifactFile(file)) {
       router.push(`/plans/${artifactId}?filePath=${encodeURIComponent(file.path)}`);
+      return;
+    }
+    if (isImageArtifactFile(file)) {
+      router.push(`/artifacts/${artifactId}?filePath=${encodeURIComponent(file.path)}`);
       return;
     }
     setOpening(true);

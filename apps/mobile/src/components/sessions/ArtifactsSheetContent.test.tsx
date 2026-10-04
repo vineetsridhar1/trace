@@ -17,7 +17,15 @@ const artifactTable = {
       files: [{ path: "reports/status.pdf", mediaType: "application/pdf", size: 1024 }],
     },
   },
+  "artifact-2": {
+    id: "artifact-2",
+    sessionId: "session-1",
+    manifest: {
+      files: [{ path: "previews/status.png", mediaType: "image/png", size: 2048 }],
+    },
+  },
 };
+const pushMock = vi.fn();
 
 vi.mock("react-native", () => ({
   Alert: { alert: vi.fn() },
@@ -36,7 +44,7 @@ vi.mock("expo-symbols", () => ({
 }));
 
 vi.mock("expo-router", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: pushMock }),
 }));
 
 vi.mock("@trace/client-core", () => ({
@@ -47,7 +55,7 @@ vi.mock("@trace/client-core", () => ({
 vi.mock("@/components/design-system", () => ({
   EmptyState: ({ title }: { title: string }) => React.createElement("Text", null, title),
   ListRow: ({ title, onPress }: { title: string; onPress: () => void }) =>
-    React.createElement("ListRow", { onPress }, title),
+    React.createElement("View", { onPress, title }, title),
   Text: ({ children }: { children: React.ReactNode }) =>
     React.createElement("Text", null, children),
   TraceLoader: () => React.createElement("TraceLoader"),
@@ -57,6 +65,7 @@ vi.mock("@/lib/artifact-files", () => ({
   artifactFileName: (path: string) => path.split("/").pop(),
   formatArtifactFileSize: () => "1 KB",
   isHtmlArtifactFile: () => false,
+  isImageArtifactFile: (file: { mediaType: string }) => file.mediaType.startsWith("image/"),
   shareArtifactFile: vi.fn(),
 }));
 
@@ -84,5 +93,20 @@ describe("ArtifactsSheetContent", () => {
     });
 
     expect(JSON.stringify(renderer.toJSON())).toContain("status.pdf");
+  });
+
+  it("opens image artifacts in Trace instead of the share sheet", () => {
+    const onClose = vi.fn();
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(
+        <ArtifactsSheetContent sessionId="session-1" onClose={onClose} />,
+      );
+    });
+    renderer.root.findByProps({ title: "status.png" }).props.onPress();
+
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(pushMock).toHaveBeenCalledWith("/artifacts/artifact-2?filePath=previews%2Fstatus.png");
   });
 });

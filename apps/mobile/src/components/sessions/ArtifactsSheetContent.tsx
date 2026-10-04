@@ -9,6 +9,7 @@ import {
   artifactFileName,
   formatArtifactFileSize,
   isHtmlArtifactFile,
+  isImageArtifactFile,
   shareArtifactFile,
   type MobileArtifactFile,
 } from "@/lib/artifact-files";
@@ -49,6 +50,11 @@ export function ArtifactsSheetContent({ sessionId, onClose }: ArtifactsSheetCont
       if (isHtmlArtifactFile(file)) {
         onClose();
         router.push(`/plans/${artifactId}?filePath=${encodeURIComponent(file.path)}`);
+        return;
+      }
+      if (isImageArtifactFile(file)) {
+        onClose();
+        router.push(`/artifacts/${artifactId}?filePath=${encodeURIComponent(file.path)}`);
         return;
       }
       const key = `${artifactId}:${file.path}`;

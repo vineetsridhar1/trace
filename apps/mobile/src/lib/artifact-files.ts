@@ -28,14 +28,15 @@ export function isHtmlArtifactFile(file: Pick<MobileArtifactFile, "mediaType">):
   return file.mediaType === "text/html";
 }
 
-/** Downloads an authenticated artifact to cache before invoking the native share/open sheet. */
-export async function shareArtifactFile(
+export function isImageArtifactFile(file: Pick<MobileArtifactFile, "mediaType">): boolean {
+  return file.mediaType.startsWith("image/");
+}
+
+/** Downloads an authenticated artifact to the app cache for native preview or sharing. */
+export async function downloadArtifactFile(
   artifactId: string,
   file: MobileArtifactFile,
-): Promise<void> {
-  if (!(await Sharing.isAvailableAsync())) {
-    throw new Error("Sharing isn't available on this device.");
-  }
+): Promise<string> {
   const response = await fetch(artifactFileUrl(artifactId, file.path), {
     headers: getAuthHeaders(),
   });
@@ -46,7 +47,19 @@ export async function shareArtifactFile(
     `artifact-${artifactId}-${Date.now()}-${artifactFileName(file.path)}`,
   );
   cacheFile.write(new Uint8Array(await response.arrayBuffer()));
-  await Sharing.shareAsync(cacheFile.uri, {
+  return cacheFile.uri;
+}
+
+/** Downloads an authenticated artifact to cache before invoking the native share/open sheet. */
+export async function shareArtifactFile(
+  artifactId: string,
+  file: MobileArtifactFile,
+): Promise<void> {
+  if (!(await Sharing.isAvailableAsync())) {
+    throw new Error("Sharing isn't available on this device.");
+  }
+  const uri = await downloadArtifactFile(artifactId, file);
+  await Sharing.shareAsync(uri, {
     dialogTitle: `Open ${artifactFileName(file.path)}`,
     mimeType: file.mediaType,
   });
