@@ -13,7 +13,6 @@ import { ReviewHeader } from "./ReviewHeader";
 import { ReviewLoadingState } from "./ReviewLoadingState";
 import { ReviewSubmissionSheet } from "./ReviewSubmissionSheet";
 import { fetchReview, mutateReview } from "./review-operations";
-import { useSidebar } from "../ui/sidebar";
 import { isPendingGitHubThread } from "./review-delivery";
 import { selectReviewGuide } from "./guide/review-guide-selection";
 
@@ -45,22 +44,19 @@ export function ReviewTab({
   const patchUi = useReviewUiStore((state) => state.patch);
   const navigate = useReviewUiStore((state) => state.navigate);
   const openFilesSidebar = useWorkspaceSidebarStore((state) => state.openFiles);
-  const closeFilesSidebar = useWorkspaceSidebarStore((state) => state.closeFiles);
-  const { isMobile, setOpen, setOpenMobile } = useSidebar();
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [submissionOpen, setSubmissionOpen] = useState(false);
 
   const snapshot = review?.currentSnapshot ?? null;
   const snapshotId = snapshot?.id ?? "";
-  const view = ui?.view ?? "changes";
   const threads = useMemo(
     () =>
       (Object.values(reviewThreads) as ReviewThreadType[]).filter(
         (thread) => thread.reviewId === reviewId,
       ),
     [reviewId, reviewThreads],
-  );
+    );
   // Memoized rather than derived in the render body: this array is the `threads` prop of every
   // file card, so a fresh identity each render would invalidate their own memos.
   const snapshotThreads = useMemo(
@@ -96,27 +92,8 @@ export function ReviewTab({
     [reviewGuides, reviewId, snapshotId],
   );
   useEffect(() => {
-    if (!active) return;
-    if (view === "guide") {
-      closeFilesSidebar();
-      if (isMobile) setOpenMobile(false);
-      else setOpen(false);
-      return;
-    }
-    openFilesSidebar(sessionGroupId, "changes", reviewId);
-    if (isMobile) setOpenMobile(true);
-    else setOpen(true);
-  }, [
-    active,
-    closeFilesSidebar,
-    isMobile,
-    openFilesSidebar,
-    reviewId,
-    sessionGroupId,
-    setOpen,
-    setOpenMobile,
-    view,
-  ]);
+    if (active) openFilesSidebar(sessionGroupId, "changes", reviewId);
+  }, [active, openFilesSidebar, reviewId, sessionGroupId]);
 
   useEffect(() => {
     void fetchReview(reviewId).catch((reason: unknown) =>
@@ -158,6 +135,7 @@ export function ReviewTab({
     );
   if (!review || !snapshot) return <ReviewLoadingState label="Loading review…" />;
 
+  const view = ui?.view ?? "changes";
   const guideGenerating = guideInquiries.some(
     (inquiry) =>
       inquiry.snapshotId === snapshot.id &&
