@@ -348,7 +348,6 @@ function OwnedSessionGroupItem({
           <SidebarSessionHoverCard
             sessionGroupId={record.id}
             sessionId={record.latestSessionId}
-            agentStatus={record.row.displayAgentStatus}
             trigger={row}
           />
         </ContextMenuTrigger>
