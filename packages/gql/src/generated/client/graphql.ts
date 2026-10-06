@@ -2049,10 +2049,6 @@ export type Project = {
   tickets: Array<Ticket>;
 };
 
-export type PullRequestCheckStatus = "failure" | "pending" | "success" | "unknown";
-
-export type PullRequestReviewStatus = "approved" | "changes_requested" | "pending" | "unknown";
-
 export type PushPlatform = "android" | "ios";
 
 export type Query = {
@@ -2137,8 +2133,6 @@ export type Query = {
   sessionGroupFileContentWithSource: SessionGroupFileContentResult;
   sessionGroupFileTree: SessionGroupFileTree;
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
-  sessionGroupPullRequestStatus?: Maybe<SessionPullRequestStatus>;
-  sessionGroupPullRequestStatuses: Array<SessionPullRequestStatus>;
   sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
   sessionMessages: Array<SessionMessage>;
@@ -2473,14 +2467,6 @@ export type QuerySessionGroupFileTreeArgs = {
 
 export type QuerySessionGroupFilesArgs = {
   sessionGroupId: Scalars["ID"]["input"];
-};
-
-export type QuerySessionGroupPullRequestStatusArgs = {
-  id: Scalars["ID"]["input"];
-};
-
-export type QuerySessionGroupPullRequestStatusesArgs = {
-  ids: Array<Scalars["ID"]["input"]>;
 };
 
 export type QuerySessionGroupWorktreeChangesArgs = {
@@ -3243,13 +3229,6 @@ export type SessionPromptIndexItem = {
   imageCount: Scalars["Int"]["output"];
   preview: Scalars["String"]["output"];
   timestamp: Scalars["DateTime"]["output"];
-};
-
-export type SessionPullRequestStatus = {
-  __typename?: "SessionPullRequestStatus";
-  checks: PullRequestCheckStatus;
-  prUrl: Scalars["String"]["output"];
-  review: PullRequestReviewStatus;
 };
 
 export type SessionRuntimeInstance = {
@@ -4072,6 +4051,23 @@ export type ReviewDiffFileQuery = {
   };
 };
 
+export type ReviewHiddenDiffLinesQueryVariables = Exact<{
+  snapshotId: Scalars["ID"]["input"];
+  filePath: Scalars["String"]["input"];
+  startLine: Scalars["Int"]["input"];
+  endLine: Scalars["Int"]["input"];
+}>;
+
+export type ReviewHiddenDiffLinesQuery = {
+  __typename?: "Query";
+  reviewCodeExcerpt: {
+    __typename?: "ReviewCodeExcerpt";
+    startLine: number;
+    endLine: number;
+    content: string;
+  };
+};
+
 export type CreateReviewGuideThreadMutationVariables = Exact<{
   input: CreateReviewThreadInput;
 }>;
@@ -4105,6 +4101,15 @@ export type ResolveReviewInquiryMutation = {
   resolveReviewInquiry: { __typename?: "ReviewInquiry"; id: string };
 };
 
+export type EnqueueReviewFollowUpMutationVariables = Exact<{
+  input: EnqueueReviewInquiryInput;
+}>;
+
+export type EnqueueReviewFollowUpMutation = {
+  __typename?: "Mutation";
+  enqueueReviewInquiry: { __typename?: "ReviewInquiry"; id: string };
+};
+
 export type SubmitReviewMutationVariables = Exact<{
   input: SubmitReviewInput;
 }>;
@@ -4129,16 +4134,6 @@ export type RefreshReviewSnapshotMutation = {
   refreshReviewSnapshot: { __typename?: "Review"; id: string };
 };
 
-export type ReplyToReviewThreadMutationVariables = Exact<{
-  threadId: Scalars["ID"]["input"];
-  body: Scalars["String"]["input"];
-}>;
-
-export type ReplyToReviewThreadMutation = {
-  __typename?: "Mutation";
-  replyToReviewThread: { __typename?: "ReviewComment"; id: string };
-};
-
 export type ResolveReviewThreadMutationVariables = Exact<{
   threadId: Scalars["ID"]["input"];
   resolved: Scalars["Boolean"]["input"];
@@ -4147,6 +4142,16 @@ export type ResolveReviewThreadMutationVariables = Exact<{
 export type ResolveReviewThreadMutation = {
   __typename?: "Mutation";
   resolveReviewThread: { __typename?: "ReviewThread"; id: string };
+};
+
+export type ReplyToReviewThreadMutationVariables = Exact<{
+  threadId: Scalars["ID"]["input"];
+  body: Scalars["String"]["input"];
+}>;
+
+export type ReplyToReviewThreadMutation = {
+  __typename?: "Mutation";
+  replyToReviewThread: { __typename?: "ReviewComment"; id: string };
 };
 
 export type GenerateReviewGuideMutationVariables = Exact<{
@@ -6720,20 +6725,6 @@ export type OnboardingSessionsQuery = {
   sessions: Array<{ __typename?: "Session"; id: string }>;
 };
 
-export type SessionGroupPullRequestStatusesQueryVariables = Exact<{
-  ids: Array<Scalars["ID"]["input"]> | Scalars["ID"]["input"];
-}>;
-
-export type SessionGroupPullRequestStatusesQuery = {
-  __typename?: "Query";
-  sessionGroupPullRequestStatuses: Array<{
-    __typename?: "SessionPullRequestStatus";
-    prUrl: string;
-    review: PullRequestReviewStatus;
-    checks: PullRequestCheckStatus;
-  }>;
-};
-
 export const BaseCreationGroupFragmentDoc = {
   kind: "Document",
   definitions: [
@@ -8552,6 +8543,89 @@ export const ReviewDiffFileDocument = {
     },
   ],
 } as unknown as DocumentNode<ReviewDiffFileQuery, ReviewDiffFileQueryVariables>;
+export const ReviewHiddenDiffLinesDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "ReviewHiddenDiffLines" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "snapshotId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "startLine" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "endLine" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "reviewCodeExcerpt" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "snapshotId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "snapshotId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "filePath" },
+                value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "startLine" },
+                value: { kind: "Variable", name: { kind: "Name", value: "startLine" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "endLine" },
+                value: { kind: "Variable", name: { kind: "Name", value: "endLine" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "startLine" } },
+                { kind: "Field", name: { kind: "Name", value: "endLine" } },
+                { kind: "Field", name: { kind: "Name", value: "content" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ReviewHiddenDiffLinesQuery, ReviewHiddenDiffLinesQueryVariables>;
 export const CreateReviewGuideThreadDocument = {
   kind: "Document",
   definitions: [
@@ -8692,6 +8766,46 @@ export const ResolveReviewInquiryDocument = {
     },
   ],
 } as unknown as DocumentNode<ResolveReviewInquiryMutation, ResolveReviewInquiryMutationVariables>;
+export const EnqueueReviewFollowUpDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "EnqueueReviewFollowUp" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "EnqueueReviewInquiryInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "enqueueReviewInquiry" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<EnqueueReviewFollowUpMutation, EnqueueReviewFollowUpMutationVariables>;
 export const SubmitReviewDocument = {
   kind: "Document",
   definitions: [
@@ -8777,59 +8891,6 @@ export const RefreshReviewSnapshotDocument = {
     },
   ],
 } as unknown as DocumentNode<RefreshReviewSnapshotMutation, RefreshReviewSnapshotMutationVariables>;
-export const ReplyToReviewThreadDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "ReplyToReviewThread" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "threadId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "body" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "replyToReviewThread" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "threadId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "threadId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "body" },
-                value: { kind: "Variable", name: { kind: "Name", value: "body" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<ReplyToReviewThreadMutation, ReplyToReviewThreadMutationVariables>;
 export const ResolveReviewThreadDocument = {
   kind: "Document",
   definitions: [
@@ -8883,6 +8944,59 @@ export const ResolveReviewThreadDocument = {
     },
   ],
 } as unknown as DocumentNode<ResolveReviewThreadMutation, ResolveReviewThreadMutationVariables>;
+export const ReplyToReviewThreadDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ReplyToReviewThread" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "threadId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "body" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "replyToReviewThread" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "threadId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "threadId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "body" },
+                value: { kind: "Variable", name: { kind: "Name", value: "body" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ReplyToReviewThreadMutation, ReplyToReviewThreadMutationVariables>;
 export const GenerateReviewGuideDocument = {
   kind: "Document",
   definitions: [
@@ -17086,56 +17200,3 @@ export const OnboardingSessionsDocument = {
     },
   ],
 } as unknown as DocumentNode<OnboardingSessionsQuery, OnboardingSessionsQueryVariables>;
-export const SessionGroupPullRequestStatusesDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "SessionGroupPullRequestStatuses" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "ids" } },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "ListType",
-              type: {
-                kind: "NonNullType",
-                type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-              },
-            },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "sessionGroupPullRequestStatuses" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "ids" },
-                value: { kind: "Variable", name: { kind: "Name", value: "ids" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "prUrl" } },
-                { kind: "Field", name: { kind: "Name", value: "review" } },
-                { kind: "Field", name: { kind: "Name", value: "checks" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  SessionGroupPullRequestStatusesQuery,
-  SessionGroupPullRequestStatusesQueryVariables
->;
