@@ -9,7 +9,6 @@ import type {
   UpdateSessionDefaultsInput,
 } from "@trace/gql";
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
-import { sessionPullRequestService } from "../services/session-pull-request.js";
 import { sessionService } from "../services/session.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
@@ -29,10 +28,6 @@ import { sessionMessageService } from "../services/session-message.js";
 import { resolveActor } from "../services/actor.js";
 
 export const sessionQueries = {
-  sessionGroupPullRequestStatuses: (_: unknown, args: { ids: string[] }, ctx: Context) =>
-    sessionPullRequestService.getStatuses(args.ids, requireOrgContext(ctx), ctx.userId),
-  sessionGroupPullRequestStatus: (_: unknown, args: { id: string }, ctx: Context) =>
-    sessionPullRequestService.getStatus(args.id, requireOrgContext(ctx), ctx.userId),
   sessionGroups: (
     _: unknown,
     args: {

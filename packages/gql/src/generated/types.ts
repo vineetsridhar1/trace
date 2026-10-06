@@ -2047,10 +2047,6 @@ export type Project = {
   tickets: Array<Ticket>;
 };
 
-export type PullRequestCheckStatus = "failure" | "pending" | "success" | "unknown";
-
-export type PullRequestReviewStatus = "approved" | "changes_requested" | "pending" | "unknown";
-
 export type PushPlatform = "android" | "ios";
 
 export type Query = {
@@ -2135,8 +2131,6 @@ export type Query = {
   sessionGroupFileContentWithSource: SessionGroupFileContentResult;
   sessionGroupFileTree: SessionGroupFileTree;
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
-  sessionGroupPullRequestStatus?: Maybe<SessionPullRequestStatus>;
-  sessionGroupPullRequestStatuses: Array<SessionPullRequestStatus>;
   sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
   sessionMessages: Array<SessionMessage>;
@@ -2471,14 +2465,6 @@ export type QuerySessionGroupFileTreeArgs = {
 
 export type QuerySessionGroupFilesArgs = {
   sessionGroupId: Scalars["ID"]["input"];
-};
-
-export type QuerySessionGroupPullRequestStatusArgs = {
-  id: Scalars["ID"]["input"];
-};
-
-export type QuerySessionGroupPullRequestStatusesArgs = {
-  ids: Array<Scalars["ID"]["input"]>;
 };
 
 export type QuerySessionGroupWorktreeChangesArgs = {
@@ -3241,13 +3227,6 @@ export type SessionPromptIndexItem = {
   imageCount: Scalars["Int"]["output"];
   preview: Scalars["String"]["output"];
   timestamp: Scalars["DateTime"]["output"];
-};
-
-export type SessionPullRequestStatus = {
-  __typename?: "SessionPullRequestStatus";
-  checks: PullRequestCheckStatus;
-  prUrl: Scalars["String"]["output"];
-  review: PullRequestReviewStatus;
 };
 
 export type SessionRuntimeInstance = {

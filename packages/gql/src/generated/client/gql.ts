@@ -33,13 +33,15 @@ type Documents = {
   "\n  mutation CreateReviewThread($input: CreateReviewThreadInput!) {\n    createReviewThread(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateReviewThreadDocument;
   "\n  mutation EnqueueReviewInquiry($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n    }\n  }\n": typeof types.EnqueueReviewInquiryDocument;
   "\n  query ReviewDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      status\n      additions\n      deletions\n      patch\n      truncated\n    }\n  }\n": typeof types.ReviewDiffFileDocument;
+  "\n  query ReviewHiddenDiffLines($snapshotId: ID!, $filePath: String!, $startLine: Int!, $endLine: Int!) {\n    reviewCodeExcerpt(\n      snapshotId: $snapshotId\n      filePath: $filePath\n      startLine: $startLine\n      endLine: $endLine\n    ) {\n      startLine\n      endLine\n      content\n    }\n  }\n": typeof types.ReviewHiddenDiffLinesDocument;
   "\n  mutation CreateReviewGuideThread($input: CreateReviewThreadInput!) {\n    createReviewThread(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateReviewGuideThreadDocument;
   "\n  mutation EnqueueGuideInquiry($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n      state\n      position\n    }\n  }\n": typeof types.EnqueueGuideInquiryDocument;
   "\n  mutation ResolveReviewInquiry($inquiryId: ID!, $resolved: Boolean!) {\n    resolveReviewInquiry(inquiryId: $inquiryId, resolved: $resolved) {\n      id\n    }\n  }\n": typeof types.ResolveReviewInquiryDocument;
+  "\n  mutation EnqueueReviewFollowUp($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n    }\n  }\n": typeof types.EnqueueReviewFollowUpDocument;
   "\n  mutation SubmitReview($input: SubmitReviewInput!) {\n    submitReviewToProvider(input: $input) {\n      id\n      status\n      error\n      providerReviewId\n    }\n  }\n": typeof types.SubmitReviewDocument;
   "\n  mutation RefreshReviewSnapshot($reviewId: ID!) {\n    refreshReviewSnapshot(reviewId: $reviewId) {\n      id\n    }\n  }\n": typeof types.RefreshReviewSnapshotDocument;
-  "\n  mutation ReplyToReviewThread($threadId: ID!, $body: String!) {\n    replyToReviewThread(threadId: $threadId, body: $body) {\n      id\n    }\n  }\n": typeof types.ReplyToReviewThreadDocument;
   "\n  mutation ResolveReviewThread($threadId: ID!, $resolved: Boolean!) {\n    resolveReviewThread(threadId: $threadId, resolved: $resolved) {\n      id\n    }\n  }\n": typeof types.ResolveReviewThreadDocument;
+  "\n  mutation ReplyToReviewThread($threadId: ID!, $body: String!) {\n    replyToReviewThread(threadId: $threadId, body: $body) {\n      id\n    }\n  }\n": typeof types.ReplyToReviewThreadDocument;
   "\n  mutation GenerateReviewGuide($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n    }\n  }\n": typeof types.GenerateReviewGuideDocument;
   "\n  query GuideCodeExcerpt($snapshotId: ID!, $filePath: String!, $startLine: Int!, $endLine: Int!) {\n    reviewCodeExcerpt(\n      snapshotId: $snapshotId\n      filePath: $filePath\n      startLine: $startLine\n      endLine: $endLine\n    ) {\n      snapshotId\n      path\n      startLine\n      endLine\n      content\n      addedLines\n    }\n  }\n": typeof types.GuideCodeExcerptDocument;
   "\n  fragment ReviewWorkspaceFields on Review {\n    id\n    organizationId\n    repositoryId\n    channelId\n    sourceSessionGroupId\n    attachedSessionId\n    provider\n    remotePullRequestId\n    pullRequestNumber\n    pullRequestUrl\n    title\n    description\n    status\n    currentSnapshotId\n    createdAt\n    updatedAt\n    repository {\n      id\n      name\n      remoteUrl\n    }\n    currentSnapshot {\n      id\n      reviewId\n      baseSha\n      headSha\n      status\n      files {\n        path\n        previousPath\n        status\n        additions\n        deletions\n        patchAvailable\n        viewed\n        commentCount\n      }\n      patchChecksum\n      patchByteLength\n      diffFormatVersion\n      providerMetadata\n      createdById\n      createdAt\n    }\n    snapshots {\n      id\n      reviewId\n      baseSha\n      headSha\n      status\n      files {\n        path\n        previousPath\n        status\n        additions\n        deletions\n        patchAvailable\n        viewed\n        commentCount\n      }\n      patchChecksum\n      patchByteLength\n      diffFormatVersion\n      providerMetadata\n      createdById\n      createdAt\n    }\n    threads {\n      id\n      reviewId\n      originSnapshotId\n      authorId\n      scope\n      guideChapterId\n      resolvedAt\n      resolvedById\n      deliveryStatus\n      providerReviewId\n      providerCommentId\n      deliveredAt\n      deliveryError\n      createdAt\n      updatedAt\n      author {\n        id\n        name\n        email\n        avatarUrl\n      }\n      anchor {\n        snapshotId\n        filePath\n        side\n        startLine\n        endLine\n        originalLine\n        selectedText\n        context\n        hunkId\n        baseBlobId\n        headBlobId\n        status\n      }\n      comments {\n        id\n        threadId\n        authorId\n        body\n        editedAt\n        deletedAt\n        providerCommentId\n        createdAt\n        updatedAt\n        author {\n          id\n          name\n          email\n          avatarUrl\n        }\n      }\n    }\n    inquiries {\n      id\n      reviewId\n      snapshotId\n      sessionId\n      sourceKind\n      question\n      anchor\n      context\n      sessionMessageId\n      responseMessageId\n      position\n      state\n      error\n      structuredResult\n      createdAt\n      startedAt\n      completedAt\n      resolvedAt\n      resolvedById\n      responseMessage {\n        id\n        sessionId\n        role\n        text\n        content\n        attachments\n        sourceEventId\n        createdAt\n      }\n    }\n    guides {\n      id\n      reviewId\n      snapshotId\n      generationInquiryId\n      status\n      title\n      intent\n      content\n      version\n      createdAt\n    }\n  }\n": typeof types.ReviewWorkspaceFieldsFragmentDoc;
@@ -152,7 +154,6 @@ type Documents = {
   "\n  mutation SaveManualElementEdits($sessionGroupId: ID!, $inputs: [ManualElementEditInput!]!) {\n    saveManualElementEdits(sessionGroupId: $sessionGroupId, inputs: $inputs) {\n      commitSha\n    }\n  }\n": typeof types.SaveManualElementEditsDocument;
   "\n  query OnboardingRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      provider\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": typeof types.OnboardingReposDocument;
   "\n  query OnboardingSessions($organizationId: ID!) {\n    sessions(organizationId: $organizationId) {\n      id\n    }\n  }\n": typeof types.OnboardingSessionsDocument;
-  "\n  query SessionGroupPullRequestStatuses($ids: [ID!]!) {\n    sessionGroupPullRequestStatuses(ids: $ids) {\n      prUrl\n      review\n      checks\n    }\n  }\n": typeof types.SessionGroupPullRequestStatusesDocument;
 };
 const documents: Documents = {
   "\n  query SessionGroupArtifacts($sessionGroupId: ID!) {\n    artifacts(sessionGroupId: $sessionGroupId) {\n      id\n      organizationId\n      sessionId\n      type\n      key\n      bundleDigest\n      byteSize\n      createdAt\n      manifest {\n        schemaVersion\n        files {\n          path\n          mediaType\n          size\n          digest\n        }\n      }\n      session {\n        id\n        name\n        sessionGroupId\n      }\n    }\n  }\n":
@@ -193,20 +194,24 @@ const documents: Documents = {
     types.EnqueueReviewInquiryDocument,
   "\n  query ReviewDiffFile($snapshotId: ID!, $filePath: String!) {\n    reviewDiffFile(snapshotId: $snapshotId, filePath: $filePath) {\n      snapshotId\n      path\n      status\n      additions\n      deletions\n      patch\n      truncated\n    }\n  }\n":
     types.ReviewDiffFileDocument,
+  "\n  query ReviewHiddenDiffLines($snapshotId: ID!, $filePath: String!, $startLine: Int!, $endLine: Int!) {\n    reviewCodeExcerpt(\n      snapshotId: $snapshotId\n      filePath: $filePath\n      startLine: $startLine\n      endLine: $endLine\n    ) {\n      startLine\n      endLine\n      content\n    }\n  }\n":
+    types.ReviewHiddenDiffLinesDocument,
   "\n  mutation CreateReviewGuideThread($input: CreateReviewThreadInput!) {\n    createReviewThread(input: $input) {\n      id\n    }\n  }\n":
     types.CreateReviewGuideThreadDocument,
   "\n  mutation EnqueueGuideInquiry($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n      state\n      position\n    }\n  }\n":
     types.EnqueueGuideInquiryDocument,
   "\n  mutation ResolveReviewInquiry($inquiryId: ID!, $resolved: Boolean!) {\n    resolveReviewInquiry(inquiryId: $inquiryId, resolved: $resolved) {\n      id\n    }\n  }\n":
     types.ResolveReviewInquiryDocument,
+  "\n  mutation EnqueueReviewFollowUp($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n    }\n  }\n":
+    types.EnqueueReviewFollowUpDocument,
   "\n  mutation SubmitReview($input: SubmitReviewInput!) {\n    submitReviewToProvider(input: $input) {\n      id\n      status\n      error\n      providerReviewId\n    }\n  }\n":
     types.SubmitReviewDocument,
   "\n  mutation RefreshReviewSnapshot($reviewId: ID!) {\n    refreshReviewSnapshot(reviewId: $reviewId) {\n      id\n    }\n  }\n":
     types.RefreshReviewSnapshotDocument,
-  "\n  mutation ReplyToReviewThread($threadId: ID!, $body: String!) {\n    replyToReviewThread(threadId: $threadId, body: $body) {\n      id\n    }\n  }\n":
-    types.ReplyToReviewThreadDocument,
   "\n  mutation ResolveReviewThread($threadId: ID!, $resolved: Boolean!) {\n    resolveReviewThread(threadId: $threadId, resolved: $resolved) {\n      id\n    }\n  }\n":
     types.ResolveReviewThreadDocument,
+  "\n  mutation ReplyToReviewThread($threadId: ID!, $body: String!) {\n    replyToReviewThread(threadId: $threadId, body: $body) {\n      id\n    }\n  }\n":
+    types.ReplyToReviewThreadDocument,
   "\n  mutation GenerateReviewGuide($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n    }\n  }\n":
     types.GenerateReviewGuideDocument,
   "\n  query GuideCodeExcerpt($snapshotId: ID!, $filePath: String!, $startLine: Int!, $endLine: Int!) {\n    reviewCodeExcerpt(\n      snapshotId: $snapshotId\n      filePath: $filePath\n      startLine: $startLine\n      endLine: $endLine\n    ) {\n      snapshotId\n      path\n      startLine\n      endLine\n      content\n      addedLines\n    }\n  }\n":
@@ -431,8 +436,6 @@ const documents: Documents = {
     types.OnboardingReposDocument,
   "\n  query OnboardingSessions($organizationId: ID!) {\n    sessions(organizationId: $organizationId) {\n      id\n    }\n  }\n":
     types.OnboardingSessionsDocument,
-  "\n  query SessionGroupPullRequestStatuses($ids: [ID!]!) {\n    sessionGroupPullRequestStatuses(ids: $ids) {\n      prUrl\n      review\n      checks\n    }\n  }\n":
-    types.SessionGroupPullRequestStatusesDocument,
 };
 
 /**
@@ -567,6 +570,12 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
+  source: "\n  query ReviewHiddenDiffLines($snapshotId: ID!, $filePath: String!, $startLine: Int!, $endLine: Int!) {\n    reviewCodeExcerpt(\n      snapshotId: $snapshotId\n      filePath: $filePath\n      startLine: $startLine\n      endLine: $endLine\n    ) {\n      startLine\n      endLine\n      content\n    }\n  }\n",
+): (typeof documents)["\n  query ReviewHiddenDiffLines($snapshotId: ID!, $filePath: String!, $startLine: Int!, $endLine: Int!) {\n    reviewCodeExcerpt(\n      snapshotId: $snapshotId\n      filePath: $filePath\n      startLine: $startLine\n      endLine: $endLine\n    ) {\n      startLine\n      endLine\n      content\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
   source: "\n  mutation CreateReviewGuideThread($input: CreateReviewThreadInput!) {\n    createReviewThread(input: $input) {\n      id\n    }\n  }\n",
 ): (typeof documents)["\n  mutation CreateReviewGuideThread($input: CreateReviewThreadInput!) {\n    createReviewThread(input: $input) {\n      id\n    }\n  }\n"];
 /**
@@ -585,6 +594,12 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
+  source: "\n  mutation EnqueueReviewFollowUp($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n    }\n  }\n",
+): (typeof documents)["\n  mutation EnqueueReviewFollowUp($input: EnqueueReviewInquiryInput!) {\n    enqueueReviewInquiry(input: $input) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
   source: "\n  mutation SubmitReview($input: SubmitReviewInput!) {\n    submitReviewToProvider(input: $input) {\n      id\n      status\n      error\n      providerReviewId\n    }\n  }\n",
 ): (typeof documents)["\n  mutation SubmitReview($input: SubmitReviewInput!) {\n    submitReviewToProvider(input: $input) {\n      id\n      status\n      error\n      providerReviewId\n    }\n  }\n"];
 /**
@@ -597,14 +612,14 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  mutation ReplyToReviewThread($threadId: ID!, $body: String!) {\n    replyToReviewThread(threadId: $threadId, body: $body) {\n      id\n    }\n  }\n",
-): (typeof documents)["\n  mutation ReplyToReviewThread($threadId: ID!, $body: String!) {\n    replyToReviewThread(threadId: $threadId, body: $body) {\n      id\n    }\n  }\n"];
+  source: "\n  mutation ResolveReviewThread($threadId: ID!, $resolved: Boolean!) {\n    resolveReviewThread(threadId: $threadId, resolved: $resolved) {\n      id\n    }\n  }\n",
+): (typeof documents)["\n  mutation ResolveReviewThread($threadId: ID!, $resolved: Boolean!) {\n    resolveReviewThread(threadId: $threadId, resolved: $resolved) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  mutation ResolveReviewThread($threadId: ID!, $resolved: Boolean!) {\n    resolveReviewThread(threadId: $threadId, resolved: $resolved) {\n      id\n    }\n  }\n",
-): (typeof documents)["\n  mutation ResolveReviewThread($threadId: ID!, $resolved: Boolean!) {\n    resolveReviewThread(threadId: $threadId, resolved: $resolved) {\n      id\n    }\n  }\n"];
+  source: "\n  mutation ReplyToReviewThread($threadId: ID!, $body: String!) {\n    replyToReviewThread(threadId: $threadId, body: $body) {\n      id\n    }\n  }\n",
+): (typeof documents)["\n  mutation ReplyToReviewThread($threadId: ID!, $body: String!) {\n    replyToReviewThread(threadId: $threadId, body: $body) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -1277,12 +1292,6 @@ export function graphql(
 export function graphql(
   source: "\n  query OnboardingSessions($organizationId: ID!) {\n    sessions(organizationId: $organizationId) {\n      id\n    }\n  }\n",
 ): (typeof documents)["\n  query OnboardingSessions($organizationId: ID!) {\n    sessions(organizationId: $organizationId) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(
-  source: "\n  query SessionGroupPullRequestStatuses($ids: [ID!]!) {\n    sessionGroupPullRequestStatuses(ids: $ids) {\n      prUrl\n      review\n      checks\n    }\n  }\n",
-): (typeof documents)["\n  query SessionGroupPullRequestStatuses($ids: [ID!]!) {\n    sessionGroupPullRequestStatuses(ids: $ids) {\n      prUrl\n      review\n      checks\n    }\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};
