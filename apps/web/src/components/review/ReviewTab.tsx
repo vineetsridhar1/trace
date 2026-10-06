@@ -132,7 +132,7 @@ export function ReviewTab({
           );
         }}
       />
-  );
+    );
   if (!review || !snapshot) return <ReviewLoadingState label="Loading review…" />;
 
   const view = ui?.view ?? "changes";
