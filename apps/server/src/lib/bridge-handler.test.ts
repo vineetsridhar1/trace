@@ -1045,6 +1045,75 @@ describe("bridge handler auth", () => {
     expect(mocks.registerRuntime).toHaveBeenCalled();
   });
 
+  it("repairs a stale replica-local binding after a cloud-to-local move", async () => {
+    const ws = createMockWs();
+    const staleCloudWs = createMockWs();
+    mocks.registerLocalRuntimeConnection.mockResolvedValue({
+      connectedAt: new Date(),
+      label: "Laptop",
+    });
+    mocks.getRuntimeForSession.mockReturnValue({
+      id: "runtime_cloud",
+      key: "runtime_cloud",
+      organizationId: "org-1",
+      ws: staleCloudWs,
+    });
+    mocks.sessionFindFirst.mockResolvedValue({
+      id: "session-1",
+      sessionGroup: {
+        connection: { state: "preparing", runtimeInstanceId: "runtime_local" },
+      },
+    });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "local",
+        instanceId: "runtime_local",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "runtime_local",
+      hostingMode: "local",
+    });
+    await vi.waitFor(() => expect(mocks.registerRuntime).toHaveBeenCalled());
+
+    ws.emitMessage({
+      type: "workspace_ready",
+      sessionId: "session-1",
+      workdir: "/workspaces/session-1",
+    });
+
+    await vi.waitFor(() => {
+      expect(vi.mocked(sessionService.workspaceReady)).toHaveBeenCalledWith(
+        "session-1",
+        "/workspaces/session-1",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          runtimeInstanceId: "runtime_local",
+          connectionGeneration: "generation-1",
+        },
+      );
+    });
+    expect(mocks.sessionFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: "session-1",
+          sessionGroup: {
+            connection: { path: ["runtimeInstanceId"], equals: "runtime_local" },
+          },
+        }),
+      }),
+    );
+    expect(mocks.bindSession).toHaveBeenCalledWith("session-1", "org-1:runtime_local");
+  });
+
   it("routes memory-pressure completion as a failed run without draining queued work", async () => {
     const ws = createMockWs();
     mocks.sessionFindFirst.mockResolvedValue({
