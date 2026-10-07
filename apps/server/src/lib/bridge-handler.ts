@@ -343,19 +343,16 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     // reconnect may have replaced this socket while an earlier event drained.
     if (!sessionRouter.getCurrentRuntimeConnectionGeneration(runtimeKey, ws)) return null;
     const runtime = sessionRouter.getRuntimeForSession(sessionId);
-    if (runtime) {
-      const allowed =
-        runtime.key === runtimeKey &&
-        runtime.ws === ws &&
-        (!bridgeAuth?.organizationId || runtime.organizationId === bridgeAuth.organizationId);
-      if (!allowed) {
-        runtimeDebug("bridge ignored message for session bound to another runtime", {
-          runtimeId,
-          sessionId,
-          boundRuntimeId: runtime.id,
-        });
-        return null;
-      }
+    if (
+      runtime?.key === runtimeKey &&
+      (runtime.ws !== ws ||
+        (bridgeAuth?.organizationId && runtime.organizationId !== bridgeAuth.organizationId))
+    ) {
+      runtimeDebug("bridge ignored message from stale runtime connection", {
+        runtimeId,
+        sessionId,
+      });
+      return null;
     }
 
     const persisted = await prisma.session.findFirst({
@@ -378,7 +375,14 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       return null;
     }
 
-    if (!runtime) sessionRouter.bindSession(sessionId, runtimeKey);
+    if (runtime?.key !== runtimeKey) {
+      runtimeDebug("repaired stale session runtime binding", {
+        runtimeId,
+        sessionId,
+        previousRuntimeId: runtime?.id,
+      });
+      sessionRouter.bindSession(sessionId, runtimeKey);
+    }
     return sessionId;
   }
 
