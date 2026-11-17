@@ -16,6 +16,7 @@ export interface ReasoningEffortOption {
 }
 
 const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
+  { value: "claude-fable-5-2", label: "Fable 5.2" },
   { value: "claude-fable-5-1", label: "Fable 5.1" },
   { value: "claude-fable-5", label: "Fable 5" },
   { value: "claude-sonnet-5", label: "Sonnet 5" },
@@ -27,6 +28,7 @@ const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
 
 const CODEX_MODELS: readonly ModelOption[] = [
   { value: "gpt-6-astra", label: "GPT-6 Astra" },
+  { value: "gpt-6.1-terra", label: "GPT-6.1 Terra" },
   { value: "gpt-6.1-sol", label: "GPT-6.1 Sol" },
   { value: "gpt-6-sol", label: "GPT-6 Sol" },
   { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },

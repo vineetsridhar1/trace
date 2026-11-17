@@ -11,9 +11,10 @@ import {
 } from "../src/models.js";
 
 describe("model catalog", () => {
-  it("exposes Fable 5.1 while defaulting Claude Code to Opus 5.5 (1M)", () => {
+  it("exposes Fable 5.2 while defaulting Claude Code to Opus 5.5 (1M)", () => {
     expect(getDefaultModel("claude_code")).toBe("claude-opus-5-5[1m]");
     expect(getModelsForTool("claude_code")).toEqual([
+      { value: "claude-fable-5-2", label: "Fable 5.2" },
       { value: "claude-fable-5-1", label: "Fable 5.1" },
       { value: "claude-fable-5", label: "Fable 5" },
       { value: "claude-sonnet-5", label: "Sonnet 5" },
@@ -23,6 +24,7 @@ describe("model catalog", () => {
       { value: "claude-haiku-4-5", label: "Haiku 4.5" },
     ]);
     expect(isSupportedModel("claude_code", "gpt-6-astra")).toBe(false);
+    expect(isSupportedModel("claude_code", "claude-fable-5-2")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-fable-5-1")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-fable-5")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-opus-5-5")).toBe(true);
@@ -36,6 +38,10 @@ describe("model catalog", () => {
     expect(getModelsForTool("codex")).toContainEqual({
       value: "gpt-6-astra",
       label: "GPT-6 Astra",
+    });
+    expect(getModelsForTool("codex")).toContainEqual({
+      value: "gpt-6.1-terra",
+      label: "GPT-6.1 Terra",
     });
     expect(getModelsForTool("codex")).toContainEqual({
       value: "gpt-6.1-sol",
@@ -54,6 +60,7 @@ describe("model catalog", () => {
       label: "GPT-6 Luna",
     });
     expect(isSupportedModel("codex", "gpt-6.1-sol")).toBe(true);
+    expect(isSupportedModel("codex", "gpt-6.1-terra")).toBe(true);
     expect(isSupportedModel("codex", "gpt-6-sol")).toBe(true);
     expect(isSupportedModel("codex", "gpt-6-luna")).toBe(true);
     expect(isSupportedModel("codex", "gpt-5.6-sol")).toBe(false);
