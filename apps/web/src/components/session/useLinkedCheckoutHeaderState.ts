@@ -44,6 +44,7 @@ export interface LinkedCheckoutHeaderState {
   lastSyncError: string | null | undefined;
   canShowControls: boolean;
   syncConflictOpen: boolean;
+  syncConflictSource: "main worktree" | "Trace worktree";
   syncConflictError: string | null;
   onSelectTarget: (runtimeInstanceId: string) => void;
   onLinkRepo: () => Promise<void>;
@@ -164,6 +165,9 @@ export function useLinkedCheckoutHeaderState({
   } = useLinkedCheckoutStatus(repoId ?? null, sessionGroupId, effectiveRuntimeInstanceId, enabled);
   const [linking, setLinking] = useState(false);
   const [syncConflictError, setSyncConflictError] = useState<string | null>(null);
+  const [syncConflictSource, setSyncConflictSource] = useState<"main worktree" | "Trace worktree">(
+    "main worktree",
+  );
 
   const isAttachedToThisGroup = status?.attachedSessionGroupId === sessionGroupId;
   const isAttachedElsewhere = !!status?.isAttached && !isAttachedToThisGroup;
@@ -260,7 +264,13 @@ export function useLinkedCheckoutHeaderState({
       if (!result) return;
 
       if (!result.ok) {
-        if (result.errorCode === "DIRTY_ROOT_CHECKOUT") {
+        if (
+          result.errorCode === "DIRTY_ROOT_CHECKOUT" ||
+          result.errorCode === "DIRTY_WORKTREE"
+        ) {
+          setSyncConflictSource(
+            result.errorCode === "DIRTY_WORKTREE" ? "Trace worktree" : "main worktree",
+          );
           setSyncConflictError(result.error);
           return;
         }
@@ -401,12 +411,16 @@ export function useLinkedCheckoutHeaderState({
     lastSyncError: status?.lastSyncError,
     canShowControls,
     syncConflictOpen: syncConflictError !== null,
+    syncConflictSource,
     syncConflictError,
     onSelectTarget: setSelectedTargetRuntimeId,
     onLinkRepo,
     onSync,
     onResolveSyncConflict,
-    onCloseSyncConflict: () => setSyncConflictError(null),
+    onCloseSyncConflict: () => {
+      setSyncConflictError(null);
+      setSyncConflictSource("main worktree");
+    },
     onRestore,
     onToggleAutoSync,
   };

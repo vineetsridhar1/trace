@@ -2388,6 +2388,7 @@ type LinkedCheckoutActionResult {
 
 enum LinkedCheckoutErrorCode {
   DIRTY_ROOT_CHECKOUT
+  DIRTY_WORKTREE
 }
 
 # --- Mutations ---
@@ -2493,8 +2494,17 @@ type Mutation {
   reorderQueuedMessages(sessionId: ID!, ids: [ID!]!): [QueuedMessage!]!
   retrySessionConnection(sessionId: ID!): Session!
   retrySessionGroupSetup(id: ID!): SessionGroup!
-  moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!
-  moveSessionToCloud(sessionId: ID!): Session!
+  moveSessionToRuntime(
+    sessionId: ID!
+    runtimeInstanceId: ID!
+    conflictStrategy: SessionMoveConflictStrategy
+    commitMessage: String
+  ): Session!
+  moveSessionToCloud(
+    sessionId: ID!
+    conflictStrategy: SessionMoveConflictStrategy
+    commitMessage: String
+  ): Session!
   saveSessionGroupFile(sessionGroupId: ID!, filePath: String!, content: String!): Boolean!
   updatePdfSessionFormat(
     sessionGroupId: ID!
@@ -2687,6 +2697,11 @@ enum LinkedCheckoutSyncConflictStrategy {
   COMMIT
   REBASE
   STASH
+}
+
+enum SessionMoveConflictStrategy {
+  DISCARD
+  COMMIT
 }
 
 # --- Subscriptions ---

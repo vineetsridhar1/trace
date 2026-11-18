@@ -96,7 +96,7 @@ declare global {
     ok: boolean;
     status: DesktopLinkedCheckoutStatus;
     error: string | null;
-    errorCode?: "DIRTY_ROOT_CHECKOUT" | null;
+    errorCode?: "DIRTY_ROOT_CHECKOUT" | "DIRTY_WORKTREE" | null;
   };
 
   type DesktopLinkedCheckoutSyncInput = {

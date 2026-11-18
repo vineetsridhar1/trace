@@ -47,6 +47,7 @@ vi.mock("./linked-checkout.js", () => ({
     if (branch === "main") return "a".repeat(40);
     throw new Error(`Branch not found: ${branch}`);
   }),
+  hasUncommittedTargetWorktreeChanges: vi.fn(async () => false),
 }));
 
 vi.mock("./runtime-debug.js", () => ({
@@ -77,6 +78,7 @@ const linkedCheckoutMock = linkedCheckout as unknown as {
   refreshTargetBranchForSync: ReturnType<typeof vi.fn>;
   resolveTargetCommitSha: ReturnType<typeof vi.fn>;
   resolveSyncTargetCommitSha: ReturnType<typeof vi.fn>;
+  hasUncommittedTargetWorktreeChanges: ReturnType<typeof vi.fn>;
 };
 const runtimeDebugMock = runtimeDebug as ReturnType<typeof vi.fn>;
 
@@ -106,6 +108,7 @@ function makeDeps(overrides: Partial<LinkedCheckoutAutoSyncDeps> = {}): LinkedCh
   return {
     revParseHead: vi.fn(async () => "a".repeat(40)),
     hasTrackedChanges: vi.fn(async () => false),
+    hasTargetWorktreeChanges: vi.fn(async () => false),
     switchDetached: vi.fn(async () => undefined),
     getCurrentBranch: vi.fn(async () => null),
     hasInProgressOperation: vi.fn(async () => false),
@@ -136,6 +139,7 @@ beforeEach(() => {
   linkedCheckoutMock.refreshTargetBranchForSync.mockClear();
   linkedCheckoutMock.resolveTargetCommitSha.mockClear();
   linkedCheckoutMock.resolveSyncTargetCommitSha.mockClear();
+  linkedCheckoutMock.hasUncommittedTargetWorktreeChanges.mockClear();
   runtimeDebugMock.mockClear();
   linkedCheckoutMock.resolveSyncTargetCommitSha.mockImplementation(
     async (_repoPath: string, branch: string) => {
@@ -202,6 +206,22 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     expect(deps.switchDetached).not.toHaveBeenCalled();
     expect(configMock.setRepoLinkedCheckout).not.toHaveBeenCalled();
+  });
+
+  it("pauses instead of reporting success when the target worktree has local changes", async () => {
+    seedAttachment("repo-1");
+    const deps = makeDeps({
+      hasTargetWorktreeChanges: vi.fn(async () => true),
+    });
+    const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
+
+    await manager.reconcileAll();
+
+    expect(linkedCheckoutMock.pauseExistingAttachment).toHaveBeenCalledWith(
+      "repo-1",
+      expect.stringContaining("Trace worktree has local changes"),
+    );
+    expect(deps.switchDetached).not.toHaveBeenCalled();
   });
 
   it("clears stale lastSyncError on successful no-op tick", async () => {

@@ -9,6 +9,7 @@ import { LinkedCheckoutDiffViewer } from "./LinkedCheckoutDiffViewer";
 interface LinkedCheckoutSyncConflictDialogProps {
   open: boolean;
   error: string | null;
+  source: "main worktree" | "Trace worktree";
   changedFiles: DesktopLinkedCheckoutChangedFile[];
   changedFilesTotalCount: number;
   changedFilesTruncated: boolean;
@@ -26,6 +27,7 @@ interface LinkedCheckoutSyncConflictDialogProps {
 export function LinkedCheckoutSyncConflictDialog({
   open,
   error,
+  source,
   changedFiles,
   changedFilesTotalCount,
   changedFilesTruncated,
@@ -36,15 +38,14 @@ export function LinkedCheckoutSyncConflictDialog({
   onClose,
   onResolve,
 }: LinkedCheckoutSyncConflictDialogProps) {
-  const [commitMessage, setCommitMessage] = useState("Save local main-worktree changes");
+  const defaultCommitMessage = `Save local ${source === "Trace worktree" ? "worktree" : "main-worktree"} changes`;
+  const [commitMessage, setCommitMessage] = useState(defaultCommitMessage);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) {
-      setCommitMessage("Save local main-worktree changes");
-      setSelectedPath(null);
-    }
-  }, [open]);
+    setCommitMessage(defaultCommitMessage);
+    if (!open) setSelectedPath(null);
+  }, [defaultCommitMessage, open]);
 
   useEffect(() => {
     if (!open || selectedPath) return;
@@ -73,11 +74,14 @@ export function LinkedCheckoutSyncConflictDialog({
         <DialogHeader className="border-b border-border px-5 py-4">
           <DialogTitle className="flex items-center gap-2">
             <TriangleAlert size={16} className="text-amber-500" />
-            Resolve Main Worktree Changes
+            {source === "Trace worktree"
+              ? "Worktree Has Local Changes"
+              : "Resolve Main Worktree Changes"}
           </DialogTitle>
           <DialogDescription>
-            Sync stopped because the main worktree has local changes. Review the files, then choose
-            how Trace should handle them before syncing this session.
+            {source === "Trace worktree"
+              ? "The worktree for this session has uncommitted changes. Choose how you want to handle them before spotlighting."
+              : "Sync stopped because the main worktree has local changes. Review the files, then choose how Trace should handle them before syncing this session."}
           </DialogDescription>
         </DialogHeader>
 
@@ -95,7 +99,7 @@ export function LinkedCheckoutSyncConflictDialog({
               {changedFilesTruncated ? (
                 <div className="border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
                   Some files are hidden to keep the preview bounded. The selected action still
-                  applies to all main worktree changes.
+                  applies to all {source} changes.
                 </div>
               ) : null}
               <div className="max-h-52 overflow-auto p-2 lg:max-h-none">
@@ -137,12 +141,18 @@ export function LinkedCheckoutSyncConflictDialog({
                 ) : null}
               </div>
               <div className="h-[40dvh] lg:h-[calc(100dvh-9.75rem)]">
-                <LinkedCheckoutDiffViewer
-                  file={selectedFile}
-                  repoId={repoId}
-                  sessionGroupId={sessionGroupId}
-                  runtimeInstanceId={runtimeInstanceId}
-                />
+                {source === "main worktree" ? (
+                  <LinkedCheckoutDiffViewer
+                    file={selectedFile}
+                    repoId={repoId}
+                    sessionGroupId={sessionGroupId}
+                    runtimeInstanceId={runtimeInstanceId}
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center bg-[#1e1e1e] px-4 text-center font-mono text-xs text-white/60">
+                    Preview the agent worktree in its session before choosing an action.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -160,9 +170,9 @@ export function LinkedCheckoutSyncConflictDialog({
                 Commit The Changes
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Save the current main-worktree changes as a commit on the session branch, then sync
-                your checkout to that new commit. Trace also pushes the commit to origin when the
-                remote is configured.
+                Save the current {source} changes as a commit on the session branch, then spotlight
+                that new commit. Trace also pushes the commit to origin when the remote is
+                configured.
               </p>
               <Textarea
                 className="mt-3 min-h-20"
@@ -178,7 +188,7 @@ export function LinkedCheckoutSyncConflictDialog({
                   }
                   disabled={commitDisabled}
                 >
-                  Commit And Sync
+                  Commit And {source === "Trace worktree" ? "Spotlight" : "Sync"}
                 </Button>
               </div>
             </div>
@@ -189,7 +199,7 @@ export function LinkedCheckoutSyncConflictDialog({
                 Stash The Changes
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Save these main-worktree edits to the git stash, then sync cleanly. The stash entry
+                Save these {source} edits to the git stash, then spotlight cleanly. The stash entry
                 stays available in the checkout for later manual apply.
               </p>
               <div className="mt-3 flex justify-end">
@@ -198,7 +208,7 @@ export function LinkedCheckoutSyncConflictDialog({
                   onClick={() => void onResolve({ strategy: "STASH" })}
                   disabled={pending}
                 >
-                  Stash And Sync
+                  Stash And {source === "Trace worktree" ? "Spotlight" : "Sync"}
                 </Button>
               </div>
             </div>
@@ -209,7 +219,7 @@ export function LinkedCheckoutSyncConflictDialog({
                 Reapply As Local Edits
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Sync to the session commit first, then apply these same file edits back on top of
+                Spotlight the session commit first, then apply these same file edits back on top of
                 it. Use this when the changes are still work in progress and should stay
                 uncommitted.
               </p>
@@ -219,7 +229,7 @@ export function LinkedCheckoutSyncConflictDialog({
                   onClick={() => void onResolve({ strategy: "REBASE" })}
                   disabled={pending}
                 >
-                  Reapply And Sync
+                  Reapply And {source === "Trace worktree" ? "Spotlight" : "Sync"}
                 </Button>
               </div>
             </div>
@@ -230,7 +240,7 @@ export function LinkedCheckoutSyncConflictDialog({
                 Discard All Changes
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Reset the main worktree to HEAD, remove untracked files, then sync cleanly. This
+                Reset the {source} to HEAD, remove untracked files, then spotlight cleanly. This
                 deletes every file change shown on the left.
               </p>
               <div className="mt-3 flex justify-end">
@@ -239,7 +249,7 @@ export function LinkedCheckoutSyncConflictDialog({
                   onClick={() => void onResolve({ strategy: "DISCARD" })}
                   disabled={pending}
                 >
-                  Discard And Sync
+                  Discard And {source === "Trace worktree" ? "Spotlight" : "Sync"}
                 </Button>
               </div>
             </div>
