@@ -763,6 +763,48 @@ describe("coding tool adapter process exit fallback", () => {
     expect(spawnedChildren[2].stdin.read()?.toString()).toBe("- fix this bug");
   });
 
+  it("attaches the invocation-scoped Trace MCP server to Codex and Claude Code", () => {
+    const runtimeEnv = {
+      TRACE_SERVER_URL: "https://trace.example/",
+      TRACE_INVOCATION_TOKEN: "invocation-token",
+    };
+    const callbacks = { onOutput: vi.fn(), onComplete: vi.fn() };
+
+    new CodexAdapter().run({
+      prompt: "use integrations",
+      cwd: "/tmp",
+      runtimeEnv,
+      ...callbacks,
+    });
+    expect(spawn).toHaveBeenLastCalledWith(
+      "codex",
+      expect.arrayContaining([
+        "--config",
+        'mcp_servers.trace.url="https://trace.example/agent/mcp"',
+        'mcp_servers.trace.bearer_token_env_var="TRACE_INVOCATION_TOKEN"',
+      ]),
+      expect.objectContaining({ cwd: "/tmp" }),
+    );
+
+    new ClaudeCodeAdapter().run({
+      prompt: "use integrations",
+      cwd: "/tmp",
+      runtimeEnv,
+      ...callbacks,
+    });
+    const claudeArgs = vi.mocked(spawn).mock.calls.at(-1)?.[1] as string[];
+    const configIndex = claudeArgs.indexOf("--mcp-config");
+    expect(JSON.parse(claudeArgs[configIndex + 1] ?? "{}")).toEqual({
+      mcpServers: {
+        trace: {
+          type: "http",
+          url: "https://trace.example/agent/mcp",
+          headers: { Authorization: "Bearer ${TRACE_INVOCATION_TOKEN}" },
+        },
+      },
+    });
+  });
+
   it("marks Pi runs as failed when assistant events report an error stop reason", () => {
     const adapter = new PiAdapter();
     const onOutput = vi.fn();
